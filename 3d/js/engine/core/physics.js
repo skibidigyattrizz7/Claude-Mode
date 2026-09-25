@@ -3,7 +3,7 @@
 import { BALL_R, GOAL, PITCH, G } from './constants.js';
 
 export const PHYS = {
-  drag: 0.0125,        // quadratic drag coefficient (1/m): a = -k|v|v
+  drag: 0.0105,        // quadratic drag coefficient (1/m): a = -k|v|v (drag-crisis average)
   magnus: 0.0042,      // Magnus coefficient: a = k (w x v)
   spinDecay: 0.35,     // 1/s in air
   restHi: 0.62,        // restitution for hard impacts on grass

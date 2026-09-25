@@ -203,14 +203,14 @@ export function bestLineup(pool, formation, { benchSize = 7, score = null } = {}
  * Chemistry-aware auto builder (Ultimate Team). Tries several "core" preferences and keeps the best
  * score = team rating + chemistry weight.
  */
-export function autoBuildSquad(pool, formation) {
+export function autoBuildSquad(pool, formation, { chemWeight = 0.15 } = {}) {
   const candidates = [];
   const tryBuild = (bonusFn) => {
     const { slots, bench } = bestLineup(pool, formation, { score: (p, pos) => effectiveOvr(p, pos) + bonusFn(p) });
     if (slots.some((s) => !s)) return;
     const chem = calcChemistry(formation, slots);
     const rating = teamRating(slots);
-    candidates.push({ slots, bench, rating, chem: chem.scaled, score: rating + chem.scaled * 0.12 });
+    candidates.push({ slots, bench, rating, chem: chem.scaled, score: rating + chem.scaled * chemWeight });
   };
   tryBuild(() => 0);
   const count = (key) => {
@@ -222,7 +222,43 @@ export function autoBuildSquad(pool, formation) {
   for (const nat of count('nat')) for (const b of [4, 8]) tryBuild((p) => (p.nat === nat ? b : 0));
   for (const lg of count('league').slice(0, 2)) for (const nat of count('nat').slice(0, 2)) tryBuild((p) => (p.league === lg ? 5 : 0) + (p.nat === nat ? 4 : 0));
   candidates.sort((a, b) => b.score - a.score);
-  return candidates[0] || bestLineup(pool, formation);
+  if (!candidates.length) return bestLineup(pool, formation);
+  // local search on the best few candidates: single replacements and pairwise swaps
+  const f = FORMATIONS[formation];
+  const W = chemWeight;
+  const scoreOf = (sl) => teamRating(sl) + calcChemistry(formation, sl).scaled * W;
+  const shortlist = pool.slice().sort((a, b) => b.ovr - a.ovr).slice(0, 70);
+  let best = null;
+  for (const cand of candidates.slice(0, 3)) {
+    let cur = cand.slots.slice(), cs = scoreOf(cur);
+    for (let it = 0; it < 4; it++) {
+      let improved = false;
+      for (let i = 0; i < 11; i++) {
+        const pos = f.slots[i].pos;
+        for (const p of shortlist) {
+          if (cur.includes(p) || (i === 0) !== (p.pos === 'GK')) continue;
+          if (positionFit(p, pos) === 0) continue;
+          const next = cur.slice(); next[i] = p;
+          const s = scoreOf(next);
+          if (s > cs + 1e-9) { cur = next; cs = s; improved = true; }
+        }
+      }
+      for (let i = 1; i < 11; i++) for (let j = i + 1; j < 11; j++) {
+        const next = cur.slice(); [next[i], next[j]] = [next[j], next[i]];
+        const s = scoreOf(next);
+        if (s > cs + 1e-9) { cur = next; cs = s; improved = true; }
+      }
+      if (!improved) break;
+    }
+    if (!best || cs > best.score) best = { slots: cur, score: cs };
+  }
+  const used = new Set(best.slots.map((p) => p.id));
+  const rest = pool.filter((p) => !used.has(p.id)).sort((a, b) => b.ovr - a.ovr);
+  const bench = [];
+  const bgk = rest.find((p) => p.pos === 'GK');
+  if (bgk) bench.push(bgk);
+  for (const p of rest) { if (bench.length >= 7) break; if (p !== bgk && p.pos !== 'GK') bench.push(p); }
+  return { slots: best.slots, bench, rating: teamRating(best.slots), chem: calcChemistry(formation, best.slots).scaled, score: best.score };
 }
 
 // ---------- national teams ----------

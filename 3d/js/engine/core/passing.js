@@ -75,7 +75,7 @@ function flight(from, vel, spin, maxT = 6) {
     stepBall(b, dt);
     t += dt;
     maxY = Math.max(maxY, b.p.y);
-    if (b.p.y <= BALL_R + 1e-3 && vy0 < 0 && t > 0.05) break;
+    if (t > 0.05 && vy0 < 0 && (b.v.y >= 0 || b.p.y <= BALL_R + 1e-3)) break;
   }
   return { x: b.p.x, z: b.p.z, t, maxY };
 }
@@ -118,12 +118,18 @@ export function solveLob(from, to, elev = 0.6, spinY = 0) {
  */
 export function solveShot(from, target, speed, spin = { x: 0, y: 0, z: 0 }) {
   const aim = { x: target.x, y: target.y, z: target.z };
+  {
+    // ballistic first guess: compensate gravity drop over the estimated flight time
+    const d0 = Math.hypot(target.x - from.x, target.z - from.z);
+    const te = d0 / (speed * 0.82);
+    aim.y += 0.5 * 9.81 * te * te;
+  }
   let vel = null;
   const planeN = { x: target.x - from.x, z: target.z - from.z };
   const nl = Math.hypot(planeN.x, planeN.z) || 1e-3;
   planeN.x /= nl; planeN.z /= nl;
   const planeD = target.x * planeN.x + target.z * planeN.z;
-  for (let it = 0; it < 6; it++) {
+  for (let it = 0; it < 10; it++) {
     const dx = aim.x - from.x, dy = aim.y - (from.y ?? BALL_R), dz = aim.z - from.z;
     const l = Math.hypot(dx, dy, dz) || 1e-3;
     vel = { x: (dx / l) * speed, y: (dy / l) * speed, z: (dz / l) * speed };

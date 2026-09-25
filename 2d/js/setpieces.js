@@ -241,13 +241,13 @@ export function executeSetPiece(m, kind, aim, power, curve) {
     m.pass = { from: taker, receiver, target, team: sp.team, kind: 'throw', t: m.time, eta: v.t };
     m.stats[sp.team].passAtt++;
     if (receiver && h) m.setHumanPlayer(h, receiver);
-    m.emit('setpieceTaken', { type: sp.type, kind });
+    m.emit('setpieceTaken', { sp: sp.type, kind });
     return;
   }
   if (kind === 'short') {
     m.owner = taker;           // doPass requires the taker to be on the ball
     m.doPass(taker, 'ground', null, aimDir);
-    m.emit('setpieceTaken', { type: sp.type, kind });
+    m.emit('setpieceTaken', { sp: sp.type, kind });
     return;
   }
   const hs = 13 + power * 17;
@@ -261,7 +261,7 @@ export function executeSetPiece(m, kind, aim, power, curve) {
     receiver.ai.decT = 0.1;
     if (h) m.setHumanPlayer(h, receiver);
   }
-  m.emit('setpieceTaken', { type: sp.type, kind });
+  m.emit('setpieceTaken', { sp: sp.type, kind });
 }
 
 function nearestMate(m, team, pt, exclude) {

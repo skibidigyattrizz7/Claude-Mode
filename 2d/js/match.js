@@ -499,7 +499,7 @@ export class Match {
     this.kick(p, v.vx, v.vy, Math.min(v.vz, 16), v.spin || 0, 0, 0.35 + 0.65 * o.power);
     this.shot = { team: p.team, side, shooter: p, t: this.time, plan, counted: false };
     this.stats[p.team].shots++;
-    this.emit('shot', { p, type: o.type });
+    this.emit('shot', { p, kind: o.type });
   }
 
   aiShoot(p) {
@@ -545,7 +545,7 @@ export class Match {
     if (victim && victim === this.owner && type === 'stand' && isEvading(victim)) p.tk.evaded = true;
     p.tackleCD = type === 'slide' ? 1.3 : 0.55;
     p.stamina = Math.max(0, p.stamina - 0.03);
-    this.emit('tackleStart', { p, type });
+    this.emit('tackleStart', { p, kind: type });
   }
 
   tackleContacts() {
@@ -572,7 +572,7 @@ export class Match {
         if (Math.hypot(foot.x - b.x, foot.y - b.y) < (slide ? 0.62 : 0.56)) {
           tk.first = 'ball';
           const victim = this.owner;
-          this.emit('tackleWon', { p, type: tk.type });
+          this.emit('tackleWon', { p, kind: tk.type });
           if (slide) {
             this.owner = null; this.pass = null;
             const a = tk.dir + (Math.random() - 0.5) * 0.8;

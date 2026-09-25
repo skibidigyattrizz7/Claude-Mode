@@ -35,6 +35,7 @@ export const input = {
   capture: null,          // rebinding callback: receives the next key code
   gameActive: false,      // prevent default browser behaviour for game keys
   anyPressed: false,
+  raw: new Set(),         // raw key codes pressed this step
   codeMap: new Map(),
 };
 
@@ -63,6 +64,7 @@ export function clearEdges() {
   for (const c of input.ctrls) { c.pressed.clear(); c.released.clear(); }
   input.mouse.pressed = false; input.mouse.released = false;
   input.anyPressed = false;
+  input.raw.clear();
 }
 
 export function touchPress(idx, a) {
@@ -96,6 +98,7 @@ export function initInput(canvas) {
       return;
     }
     input.anyPressed = true;
+    if (!e.repeat) input.raw.add(e.code);
     const m = input.codeMap.get(e.code);
     if (m) {
       for (const { idx, action } of m) {

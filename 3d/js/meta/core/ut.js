@@ -314,20 +314,29 @@ export function grantReward(state, reward, from = '') {
   return out;
 }
 
-/** Fill an SBC with the cheapest players that satisfy simple tier requirements (convenience). */
+/** Fill an SBC from the club, preferring players outside the active squad, trying to satisfy every requirement. */
 export function sbcAutoFill(state, sbc, formation) {
   const inSquad = new Set(state.squad.slots.concat(state.squad.bench).filter(Boolean));
-  let pool = clubPlayers(state).filter((p) => !inSquad.has(p.id));
   const maxTier = sbc.reqs.find((r) => r.t === 'maxTier');
   const minTier = sbc.reqs.find((r) => r.t === 'minTier');
-  const ratingReq = sbc.reqs.find((r) => r.t === 'rating');
-  if (maxTier) pool = pool.filter((p) => !p.special && TIER_RANK[p.tier] <= TIER_RANK[maxTier.v]);
-  if (minTier) pool = pool.filter((p) => TIER_RANK[p.tier] >= TIER_RANK[minTier.tier]);
-  if (pool.length < 11) pool = pool.concat(clubPlayers(state).filter((p) => inSquad.has(p.id) && (!maxTier || TIER_RANK[p.tier] <= TIER_RANK[maxTier.v]) && (!minTier || TIER_RANK[p.tier] >= TIER_RANK[minTier.tier])));
-  let res;
-  if (ratingReq || sbc.reqs.some((r) => r.t === 'chem' || r.t.startsWith('same'))) res = autoBuildSquad(pool, formation);
-  else res = bestLineup(pool.slice().sort((a, b) => a.ovr - b.ovr).slice(0, 30), formation, { benchSize: 0 });
-  return res.slots.map((p) => (p ? p.id : null));
+  const tierOk = (p) => (!maxTier || (!p.special && TIER_RANK[p.tier] <= TIER_RANK[maxTier.v])) && (!minTier || TIER_RANK[p.tier] >= TIER_RANK[minTier.tier]);
+  const all = clubPlayers(state).filter(tierOk);
+  const reserves = all.filter((p) => !inSquad.has(p.id));
+  const needsQuality = sbc.reqs.some((r) => ['rating', 'chem', 'sameLeague', 'sameNation', 'sameClub', 'rare', 'nations'].includes(r.t));
+  let best = null;
+  for (const pool of [reserves, all]) {
+    if (pool.length < 11) continue;
+    const tries = needsQuality
+      ? [0.15, 0.5, 1.5].map((w) => autoBuildSquad(pool, formation, { chemWeight: w }).slots)
+      : [bestLineup(pool.slice().sort((a, b) => a.ovr - b.ovr).slice(0, 30), formation, { benchSize: 0 }).slots];
+    for (const slots of tries) {
+      const ev = evaluateSbc(sbc, formation, slots);
+      const met = ev.checks.filter((c) => c.ok).length;
+      if (!best || met > best.met) best = { slots, met };
+      if (ev.ok) return slots.map((p) => (p ? p.id : null));
+    }
+  }
+  return best ? best.slots.map((p) => (p ? p.id : null)) : new Array(11).fill(null);
 }
 
 // ---------- objectives ----------
