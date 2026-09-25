@@ -205,7 +205,7 @@ function miniTable(s, rows, tier) {
   return h('table', { class: 'pm-table pm-table--compact' },
     h('thead', null, h('tr', null, h('th', null, '#'), h('th', { class: 'l' }, 'Club'), h('th', null, 'P'), h('th', null, 'GD'), h('th', null, 'Pts'))),
     h('tbody', null, rows.map((r) => h('tr', { class: r.club === s.userClub ? 'me' : '' },
-      h('td', null, full.indexOf(r) + 1), h('td', { class: 'l' }, h('span', { class: 'pm-clubcell' }, crest(s, r.club, 'pm-crest pm-crest--xs'), s.clubs[r.club].name)), h('td', null, r.P), h('td', null, r.GD > 0 ? `+${r.GD}` : r.GD), h('td', null, h('b', null, r.Pts))))));
+      h('td', null, full.findIndex((x) => x.club === r.club) + 1), h('td', { class: 'l' }, h('span', { class: 'pm-clubcell' }, crest(s, r.club, 'pm-crest pm-crest--xs'), s.clubs[r.club].name)), h('td', null, r.P), h('td', null, r.GD > 0 ? `+${r.GD}` : r.GD), h('td', null, h('b', null, r.Pts))))));
 }
 
 function careerPlayerModal(app, s, p) {

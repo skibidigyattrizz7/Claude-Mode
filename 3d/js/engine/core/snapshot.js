@@ -1,5 +1,58 @@
 // Compact snapshot encoding (host -> guest) and interpolation into a render "view". DOM-free.
 // A view is the uniform structure the renderer/HUD consume, for local, host, guest and replay.
+//
+// ============================ VIEW FORMAT (renderer contract) ============================
+// World frame: x along pitch length (-52.5..52.5), z across (-34..34), y up, metres.
+// Broadcast camera sits on the +z side looking toward -z (screen right = +x).
+// Facing angle `face`: direction (cos face, sin face) in (x, z). A model whose local forward
+// is +z needs rotation.y = PI/2 - face.
+//   v      1
+//   t      sim time (s)
+//   ph     phase: PHASE.* from constants.js (KICKOFF 0, PLAY 1, STOP 2, SETPIECE 3, GOAL 4,
+//          REPLAY 5, HALFTIME 6, FULLTIME 7)
+//   spt    active set-piece type (SP.* : KICKOFF 0, THROW 1, CORNER 2, GOALKICK 3, FREEKICK 4,
+//          PENALTY 5) or -1;  spk = team taking it (0 home / 1 away) or -1
+//   h      half (1|2); cl clock seconds within half; ad added minutes (0 until shown)
+//   sc     [homeGoals, awayGoals];  dir = attack direction of HOME (+1 => home attacks +x)
+//   b      ball [px, py, pz, vx, vy, vz];  bo = owner player index or -1;  bh = 1 if in keeper's hands
+//   p      players, stride 7: [x, z, face, anim, animT, animP, speed] * 22
+//          index 0..10 = home (0 = GK), 11..21 = away (11 = GK), same order as team.players
+//          anim = ANIM.* code (constants.js); animT = seconds since the action started;
+//          animP = action parameter:
+//            KICK: 0.4 pass / 0.7 lofted / 1 shot   WINDUP: power 0..1   HEAD/WALL: jump height (m)
+//            DIVE: sign = world-z side of the dive (+1 => toward +z), |animP|-1 = hand height (m)
+//                  (flight ~0.28-0.5 s, then lying on the ground until the action ends ~1.3 s)
+//            CELEB: variant 0 arms up / 1 airplane / 2 knee slide
+//            SKILL: kind%10 (0 step-over, 1 roulette, 2 ball roll, 3 heel-to-heel), +10 => to the left
+//            SLIDE: animT continues past 0.72 s while getting up (to ~1.22 s)
+//   so     bitmask of sent-off players (hide them);  yc = string of yellow-card counts per player
+//   c      [homeCtrlIdx, awayCtrlIdx] human-controlled player per side (-1 if AI side)
+//   stm    stamina 0..1 of the controlled players
+//   st     [possHome%, shotsH, shotsA, onTargetH, onTargetA, passesH, passesA]
+//   fx     recent effects (last 1.5 s), each {id, t, k, ...}; ids increase monotonically:
+//          k='kick' {s: speed} | 'touch' | 'post' {s} | 'net' {x,y,z,s} (net ripple at impact point)
+//          | 'goal' {team, pi, og} | 'save' {pi} | 'parry' {pi} | 'foul' {pi, pen} | 'card' {pi, c:'y'|'r'}
+//          | 'offside' {pi} | 'whistle' {n: 0 start/1 stop/2 half/3 full} | 'cut' (teleport/camera cut)
+//          | 'setpiece' {type, team} | 'sub' {team, i, bi} | 'added' {n} | 'halftime' | 'fulltime' | 'out'
+//   subs   [[team, playerSlotIndex, benchIndex], ...] substitutions so far (bench = team.bench);
+//          rv increments on every roster change (rebuild shirt number / name)
+//   scr    scorers [[playerId, team, minute, ownGoal]];  gt time of last goal;  pt phase start time
+//   fin    final result object (only at full time)
+// Local-only fields added by index.js before calling renderer.render(view, dt) (not in snapshots):
+//   aim     [ {x,z} | null, {x,z} | null ]  unit aim direction of each LOCAL human's controlled
+//           player (draw a faint ground arrow), null when not applicable
+//   pw      [0..1, 0..1] power of the kick button currently held by each local human (0 = none)
+//   traj    null | flat [x,y,z, x,y,z, ...] predicted set-piece ball path (draw dotted line)
+//   penAim  null | {x,y,z} penalty target point on the goal line (draw a reticle)
+//   replay  true when this view is a replay frame (use the replay camera)
+//   local   [ 'p1'|'p2'|null, 'p1'|'p2'|null ] which local human (if any) controls home / away on
+//           THIS machine (colour the controlled-player indicator: p1 blue, p2 red)
+// Optional renderer hooks used by the HUD if present (feature-detected):
+//   renderer.project(x, y, z) -> {x, y, visible} CSS pixels relative to the container
+//          (places the power bar / name label under/above the controlled player)
+//   renderer.getCameraYaw() -> horizontal camera forward angle (rad, same convention as `face`)
+//          used to make controls camera-relative in the pro camera
+// ==========================================================================================
 import { PHASE } from './constants.js';
 import { r2, r1, wrapAngle, lerp } from './mathx.js';
 
