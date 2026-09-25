@@ -1,24 +1,24 @@
 // Keybinding model (pure — no DOM). Bindings use KeyboardEvent.code values.
 
-export const ACTIONS = ['up', 'down', 'left', 'right', 'shoot', 'pass', 'through', 'lob', 'sprint', 'tackle', 'slide', 'switch', 'skill', 'pause'];
+export const ACTIONS = ['up', 'down', 'left', 'right', 'shoot', 'pass', 'through', 'lob', 'sprint', 'tackle', 'slide', 'switch', 'skill', 'jockey', 'pause'];
 
 export const ACTION_LABELS = {
   up: 'Move up', down: 'Move down', left: 'Move left', right: 'Move right',
   shoot: 'Shoot (hold / release)', pass: 'Pass', through: 'Through ball', lob: 'Lob / lofted pass',
   sprint: 'Sprint', tackle: 'Standing tackle', slide: 'Slide tackle', switch: 'Switch player',
-  skill: 'Skill move', pause: 'Pause',
+  skill: 'Skill move', jockey: 'Jockey / shield (hold)', pause: 'Pause',
 };
 
 export const DEFAULT_BINDS = Object.freeze({
   p1: Object.freeze({
     up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
     shoot: 'Space', pass: 'KeyJ', through: 'KeyE', lob: 'KeyQ', sprint: 'ShiftLeft',
-    tackle: 'KeyF', slide: 'KeyC', switch: 'Tab', skill: 'KeyR', pause: 'Escape',
+    tackle: 'KeyF', slide: 'KeyC', switch: 'Tab', skill: 'KeyR', jockey: 'KeyV', pause: 'Escape',
   }),
   p2: Object.freeze({
     up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
     shoot: 'Numpad0', pass: 'Numpad1', through: 'Numpad2', lob: 'Numpad3', sprint: 'ShiftRight',
-    tackle: 'Numpad4', slide: 'Numpad5', switch: 'Numpad6', skill: 'Numpad7', pause: 'NumpadAdd',
+    tackle: 'Numpad4', slide: 'Numpad5', switch: 'Numpad6', skill: 'Numpad7', jockey: 'Numpad8', pause: 'NumpadAdd',
   }),
 });
 
@@ -58,12 +58,20 @@ export function setBind(binds, player, action, code) {
 export function sanitizeBinds(data) {
   const out = defaultBinds();
   if (!data || typeof data !== 'object') return out;
+  const missing = [];
   for (const pl of ['p1', 'p2']) {
     if (!data[pl] || typeof data[pl] !== 'object') continue;
     for (const a of ACTIONS) {
       const c = data[pl][a];
       if (typeof c === 'string' && c.length > 0 && c.length < 32) out[pl][a] = c;
+      else missing.push([pl, a]);
     }
+  }
+  // An action added in a newer version keeps its default key unless the player already uses
+  // that key for something else (then it is left unbound rather than clashing).
+  for (const [pl, a] of missing) {
+    const c = out[pl][a];
+    if (c && findBinding(out, c, pl, a)) out[pl][a] = '';
   }
   return out;
 }

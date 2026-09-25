@@ -117,3 +117,11 @@ export const online = {
 `mountMeta(container, { startMatch, startOnlineMatch, online, onExit })`:
 - `startOnlineMatch({ mode:'ut', team }) -> Promise<result>` provided by main.js (runs matchmaking + online match).
 - `online` is the services object above (meta uses `online.market.*`, `online.coins`, `online.admin.verify`).
+
+## V2.1 — player physique + PlayStyles (added to every player object in Team.players / bench)
+```js
+height: 1.62..2.02,            // metres; GKs mostly 1.86–2.00; affects reach, headers, GK dive reach, stride, and render scale
+weight: 58..100,               // kg; affects shoulder challenges/shielding with phy
+playstyles: [{ id: 'finesse', plus: false }, ...]   // 0..4 total, count scales with OVR (<70: 0–1, 70–79: 1–2, 80–86: 2–3, 87+: 3–4); at most 1–2 'plus' for 85+
+```
+PlayStyle ids (FC-style): attack `finesse, power, chip, deadball, trivela, lowdriven, powerheader, acrobatic`; passing `incisive, tikitaka, pinged, longball, whipped`; ball control `firsttouch, technical, rapid, flair, trickster, pressproven`; defending `anticipate, intercept, block, jockey, slidetackle, bruiser, aerial`; physical `quickstep, relentless, longthrow`; GK `farreach, footwork, rushout, crossclaimer, quickreflexes, deflector`. Plus version = stronger effect. Engine: missing fields → defaults (height 1.80, weight 75, playstyles []).

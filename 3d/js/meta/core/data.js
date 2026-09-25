@@ -50,10 +50,25 @@ const NATION_ROWS = [
   ['CZE', 'Czechia', 'sl', 2, { t: 'czech', c: ['#FFFFFF', '#D7141A', '#11457E'] }, ['#D7141A', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#11457E'], ['#FFFFFF', '#D7141A', '#D7141A', '#FFFFFF', '#FFFFFF'], '3-5-2'],
 ];
 
-export const NATIONS = NATION_ROWS.map(([code, name, region, str, flag, home, away, formation]) => ({
+// Extra nations (V2): only used for real players' nationality and extra national teams. They are kept
+// OUT of NATIONS so the deterministic generated database (and every existing save) stays identical.
+const EXTRA_NATION_ROWS = [
+  ['HUN', 'Hungary', 'hu', 3, { t: 'h', c: ['#CE2939', '#FFFFFF', '#477050'] }, ['#CE2939', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#477050'], ['#FFFFFF', '#CE2939', '#CE2939', '#FFFFFF', '#FFFFFF'], '4-2-3-1'],
+  ['PER', 'Peru', 'es', 3, { t: 'v', c: ['#D91023', '#FFFFFF', '#D91023'] }, ['#FFFFFF', '#D91023', '#D91023', '#FFFFFF', '#FFFFFF'], ['#D91023', '#FFFFFF', '#FFFFFF', '#D91023', '#D91023'], '4-3-3'],
+  ['ROU', 'Romania', 'ro', 3, { t: 'v', c: ['#002B7F', '#FCD116', '#CE1126'] }, ['#FCD116', '#002B7F', '#002B7F', '#FCD116', '#FCD116'], ['#CE1126', '#FCD116', '#FFFFFF', '#CE1126', '#CE1126'], '4-2-3-1'],
+  ['BUL', 'Bulgaria', 'sl', 3, { t: 'h', c: ['#FFFFFF', '#00966E', '#D62612'] }, ['#FFFFFF', '#00966E', '#00966E', '#00966E', '#FFFFFF'], ['#D62612', '#FFFFFF', '#FFFFFF', '#D62612', '#D62612'], '4-4-2'],
+  ['IRN', 'Iran', 'fa', 3, { t: 'h', c: ['#239F40', '#FFFFFF', '#DA0000'] }, ['#FFFFFF', '#DA0000', '#DA0000', '#FFFFFF', '#FFFFFF'], ['#DA0000', '#FFFFFF', '#FFFFFF', '#DA0000', '#DA0000'], '4-2-3-1'],
+  ['RUS', 'Russia', 'sl', 3, { t: 'h', c: ['#FFFFFF', '#0039A6', '#D52B1E'] }, ['#D52B1E', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#D52B1E'], ['#FFFFFF', '#0039A6', '#0039A6', '#0039A6', '#FFFFFF'], '4-2-3-1'],
+  ['NIR', 'Northern Ireland', 'en', 2, { t: 'cross', c: ['#FFFFFF', '#CE1124'] }, ['#00843D', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#00843D'], ['#FFFFFF', '#00843D', '#00843D', '#00843D', '#FFFFFF'], '4-4-2'],
+];
+const toNation = ([code, name, region, str, flag, home, away, formation]) => ({
   code, name, region, str, flag, formation, kit: K(home), away: K(away),
-}));
-export const NATION_BY_CODE = Object.fromEntries(NATIONS.map((n) => [n.code, n]));
+});
+export const NATIONS = NATION_ROWS.map(toNation);
+export const EXTRA_NATIONS = EXTRA_NATION_ROWS.map((r) => ({ ...toNation(r), extra: true }));
+/** Every nation that can field a national team (base generated nations + V2 extras). */
+export const ALL_NATIONS = NATIONS.concat(EXTRA_NATIONS);
+export const NATION_BY_CODE = Object.fromEntries(ALL_NATIONS.map((n) => [n.code, n]));
 
 // ---------- name material (all syllable-generated; no real people) ----------
 export const NAME_REGIONS = {
@@ -129,6 +144,21 @@ export const NAME_REGIONS = {
     roots: ['Ta', 'Na', 'Ka', 'Mo', 'Hi', 'Yama', 'Saka', 'Mori', 'Ishi', 'Ki', 'Fuji', 'Mura', 'Naka', 'Matsu', 'Ino', 'Ko', 'Ha', 'Su', 'Aki', 'Oka'],
     suf: ['moto', 'kawa', 'da', 'ta', 'no', 'mura', 'shita', 'zawa', 'guchi', 'hara', 'uchi', 'saki', 'bayashi', 'oka', 'shima'],
   },
+  hu: {
+    first: ['Bence', 'Dániel', 'Ádám', 'Levente', 'Máté', 'Balázs', 'Gergő', 'Zsolt', 'Tamás', 'Péter', 'Attila', 'Krisztián', 'Dominik', 'Roland', 'Norbert'],
+    roots: ['Nagy', 'Kov', 'Szab', 'Tót', 'Hor', 'Varg', 'Kis', 'Mol', 'Farkas', 'Balog', 'Pap', 'Luk', 'Simon', 'Fekete'],
+    suf: ['', 'ács', 'ó', 'h', 'váth', 'a', 'nár', 'ai', 'os', 'ics'],
+  },
+  ro: {
+    first: ['Andrei', 'Alexandru', 'Ionuț', 'Cristian', 'Florin', 'Răzvan', 'Mihai', 'Vlad', 'Bogdan', 'Adrian', 'Ciprian', 'Nicolae', 'Dorin', 'Marius', 'Denis'],
+    roots: ['Pop', 'Ion', 'Dumitr', 'Stoic', 'Stan', 'Radu', 'Munt', 'Mar', 'Cost', 'Chir', 'Moldov', 'Vlăd', 'Tănas', 'Olar'],
+    suf: ['escu', 'eanu', 'ache', 'ici', 'an', 'oiu', 'ea', 'ciuc', 'aru'],
+  },
+  fa: {
+    first: ['Ali', 'Reza', 'Mehdi', 'Hossein', 'Saeid', 'Milad', 'Sardar', 'Alireza', 'Morteza', 'Ehsan', 'Karim', 'Javad', 'Majid', 'Omid', 'Vahid'],
+    roots: ['Kar', 'Ahm', 'Moh', 'Rez', 'Heid', 'Tar', 'Jah', 'Nour', 'Hos', 'Gol', 'Rah', 'Sad', 'Kazem', 'Shoj'],
+    suf: ['imi', 'adi', 'ammadi', 'aei', 'ari', 'emi', 'anbakhsh', 'ollahi', 'zadeh', 'ani', 'pour'],
+  },
   kr: {
     first: ['Min-jun', 'Seo-jun', 'Ji-ho', 'Hyun-woo', 'Do-yun', 'Jun-seo', 'Woo-jin', 'Sung-min', 'Tae-hyun', 'Dong-hyun', 'Jae-won', 'Young-ho', 'Ji-hun', 'Sang-woo', 'Kyu-ri', 'Seung-ho'],
     surnames: ['Kim', 'Lee', 'Park', 'Choi', 'Jung', 'Kang', 'Cho', 'Yoon', 'Jang', 'Lim', 'Han', 'Oh', 'Seo', 'Shin', 'Kwon', 'Hwang', 'Ahn', 'Song', 'Yoo', 'Hong', 'Baek', 'Nam'],
@@ -152,7 +182,12 @@ export const SKIN = {
   gr: ['#eec09c', '#d9a37b', '#c08a62'],
   jp: ['#f1d0b1', '#e8c29f', '#dcb48f'],
   kr: ['#f1d0b1', '#e8c29f', '#dcb48f'],
+  hu: ['#f3cdb0', '#eec09c', '#e6b08c'],
+  ro: ['#eec09c', '#e6b08c', '#d9a37b'],
+  fa: ['#e6b08c', '#d9a37b', '#c08a62'],
 };
+/** Explicit skin-tone scale used by real-player cards (index 0 light .. 5 dark). */
+export const SKIN_TONES = ['#f3cdb0', '#e6b08c', '#d09a70', '#a86f47', '#7a4b2c', '#4d2f1c'];
 
 // ---------- fictional leagues & clubs ----------
 // Each league: tier-1 (10 clubs) + tier-2 (8 clubs). Clubs listed strongest-first.
@@ -280,11 +315,15 @@ export const CLUB_BY_ID = Object.fromEntries(CLUBS.map((c) => [c.id, c]));
 export const SPECIAL_CLUBS = {
   LEG: { id: 'LEG', name: 'Pitchside Legends', short: 'LEG', league: 'LEG', tier: 0, rep: 5, colors: { primary: '#F4E8C1', secondary: '#B8860B' } },
   HER: { id: 'HER', name: 'Pitchside Heroes', short: 'HER', league: 'HER', tier: 0, rep: 5, colors: { primary: '#3A1C71', secondary: '#27E1C1' } },
+  ICN: { id: 'ICN', name: 'Pitchside Icons', short: 'ICN', league: 'ICN', tier: 0, rep: 5, colors: { primary: '#FFFDF4', secondary: '#C9A227' } },
 };
+/** Pseudo clubs that never give club chemistry. */
+export const SPECIAL_CLUB_IDS = new Set(Object.keys(SPECIAL_CLUBS));
 export function clubById(id) { return CLUB_BY_ID[id] || SPECIAL_CLUBS[id] || null; }
 export function leagueName(id) {
   if (id === 'LEG') return 'Legends';
   if (id === 'HER') return 'Heroes';
+  if (id === 'ICN') return 'Icons';
   return LEAGUE_BY_ID[id] ? LEAGUE_BY_ID[id].name : id;
 }
 
