@@ -205,7 +205,7 @@ export function runGameplayTests(test) {
   test('keepers attack loose balls in the box (claim / dive on them before the attacker)', () => {
     let claimed = 0;
     for (let k = 0; k < 8; k++) {
-      const { sim } = scenario({}, { seed: 300 + k, x0: -20, z0: 20 });
+      const { sim } = scenario({}, { seed: 300 + k, x0: -20, z0: 20, oppX: -45 });
       const g = sim.gk(1);
       sim._teleport(g, 51.5, 0);
       const b = sim.ball;

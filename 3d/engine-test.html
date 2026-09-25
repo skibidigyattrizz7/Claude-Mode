@@ -24,6 +24,7 @@
   //   ?half=N      real minutes/half  ?night=1  night stadium   ?diff=amateur|pro|world|legendary
   //   ?net=1       host + guest side by side in one page (snapshot/input roundtrip test)
   //   ?away=1      human plays the away side    ?speed=N  dev-only time scale    ?q=low|med|high
+  //   ?ko=1 knockout (extra time + pens)  ?weather=rain|snow  ?cam=pro  ?vol=0..1  ?assist=manual|semi  ?seed=N
   import { createMatch } from './js/engine/index.js';
   import { BRAZIL, FRANCE } from './js/engine/tests/sampleTeams.mjs';
   const q = new URLSearchParams(location.search);
@@ -31,6 +32,9 @@
   const stadium = q.get('night') ? 'night' : 'day';
   const difficulty = q.get('diff') || 'pro';
   const timeScale = +(q.get('speed') || 1); // dev only: simulate faster than real time
+  const assist = q.get('assist');
+  const gpSide = assist ? { passAssist: assist, throughAssist: assist, lobAssist: assist, shotAssist: assist === 'semi' ? 'precision' : assist } : {};
+  const extra = { knockout: !!q.get('ko'), weather: q.get('weather') || undefined, camera: q.get('cam') || undefined, volume: q.get('vol') != null ? +q.get('vol') : undefined, gameplay: { home: gpSide, away: gpSide }, seed: q.get('seed') ? +q.get('seed') : undefined };
   const controllers = q.get('ai') ? { home: 'ai', away: 'ai' } : q.get('p2') ? { home: 'p1', away: 'p2' } : q.get('away') ? { home: 'ai', away: 'p1' } : { home: 'p1', away: 'ai' };
   const events = [];
   window.__events = events;
@@ -44,8 +48,8 @@
   if (q.get('net')) {
     const wrap = document.getElementById('wrap');
     const p2 = document.createElement('div'); p2.className = 'pane'; p2.id = 'p2'; wrap.appendChild(p2);
-    const host = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, netRole: 'host', controllers: { home: q.get('ai') ? 'ai' : 'p1', away: 'remote' }, onEvent, onEnd, timeScale });
-    const guest = createMatch(p2, { home: BRAZIL, away: FRANCE, halfMinutes: half, stadium, netRole: 'guest', controllers: { home: 'remote', away: 'p2' }, onEvent: (e) => console.log('[guest-event]', e.type), onEnd: (r) => console.log('[guest-end]', JSON.stringify(r).slice(0, 200)) });
+    const host = createMatch(document.getElementById('p1'), { ...extra, home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, netRole: 'host', controllers: { home: q.get('ai') ? 'ai' : 'p1', away: 'remote' }, onEvent, onEnd, timeScale });
+    const guest = createMatch(p2, { home: BRAZIL, away: FRANCE, halfMinutes: half, stadium, weather: extra.weather, netRole: 'guest', controllers: { home: 'remote', away: 'p2' }, onEvent: (e) => console.log('[guest-event]', e.type), onEnd: (r) => console.log('[guest-end]', JSON.stringify(r).slice(0, 200)) });
     window.__host = host; window.__guest = guest;
     let maxSize = 0;
     setInterval(() => {
@@ -57,7 +61,7 @@
     }, 50);
     window.__match = host;
   } else {
-    window.__match = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, controllers, onEvent, onEnd, timeScale, quality: q.get('q') || undefined });
+    window.__match = createMatch(document.getElementById('p1'), { ...extra, home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, controllers, onEvent, onEnd, timeScale, quality: q.get('q') || undefined });
   }
   // fps meter
   const dbg = document.getElementById('dbg');
