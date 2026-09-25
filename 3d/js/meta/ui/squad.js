@@ -209,6 +209,17 @@ export function squadEditor(opts) {
     if (opts.allowFormation !== false) {
       toolbar.appendChild(h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Formation'),
         select(FORMATION_NAMES, st.formation, (v) => {
+          // keep the same XI, re-seat players into the new shape by best positional fit
+          const xi = st.slots.map(player).filter(Boolean);
+          const nf = FORMATIONS[v];
+          const seats = new Array(11).fill(null);
+          const order = nf.slots.map((sl, i) => i);
+          for (const i of order) {
+            let bi = -1, bs = -Infinity;
+            xi.forEach((p, k) => { if (!p) return; const s = effectiveOvr(p, nf.slots[i].pos); if (s > bs) { bs = s; bi = k; } });
+            if (bi >= 0) { seats[i] = xi[bi].id; xi[bi] = null; }
+          }
+          st.slots = seats;
           st.formation = v; st.sel = null;
           render(); emit();
         }, { 'aria-label': 'Formation' })));

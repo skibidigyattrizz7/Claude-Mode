@@ -317,7 +317,7 @@ export function updateKeeper(m, gk, dt, prof) {
     const P = path[path.length - 1];
     if (P && (P.x - lineX) * inward <= 0.05 && Math.abs(P.y - CY) < GOAL.W / 2 + 1.2 && P.z < GOAL.H + 0.6) {
       const react = clamp(0.24 - 0.12 * kp, 0.06, 0.3) + Math.random() * 0.06;
-      gk.ai.pendingDive = { at: m.time + react, P, tHit: m.time + P.t, kick: b.kickId, speed };
+      gk.ai.pendingDive = { at: m.time + react, P, tHit: m.time + P.t, kick: b.kickId, speed, lineX };
     } else gk.ai.pendingDive = null;
   }
   const pd = gk.ai.pendingDive;
@@ -340,7 +340,7 @@ export function updateKeeper(m, gk, dt, prof) {
       gk.saveKick = pd.kick;
       const s = Math.sign(P.y - gk.y) || 1;
       const bodyY = gk.saveIntent ? P.y - s * Math.min(D, reach * 0.7) : P.y - s * (reach + 0.9);
-      const bodyX = lineX + inward * 0.15;
+      const bodyX = pd.lineX + inward * 0.15;
       if (D > 0.9) {
         gk.state = 'dive'; gk.stateT = 0; gk.stateDur = 0.75;
         gk.dive = { dir: s, z: P.z };

@@ -300,6 +300,9 @@ export function getDB() {
   return _db;
 }
 
+/** Test helper: drop the cached database so the next getDB() regenerates it. */
+export function _resetDB() { _db = null; }
+
 export function getPlayer(id) { return getDB().byId.get(id) || null; }
 
 /** Generate a fresh youth prospect (career academy / regens). */
