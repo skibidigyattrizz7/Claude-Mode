@@ -25,9 +25,8 @@ export const CATEGORIES = {
   inform: { label: 'In-Form', test: (p) => p.special === 'inform' },
   hero: { label: 'Hero', test: (p) => p.special === 'hero' },
   legend: { label: 'Legend', test: (p) => p.special === 'legend' },
-  star: { label: 'Star (real player)', test: (p) => p.special === 'star' },
   totw: { label: 'Team of the Week', test: () => false },
-  icon: { label: 'Icon (real legend)', test: (p) => p.special === 'icon' },
+  lotg: { label: 'Legend of the Game', test: (p) => p.special === 'lotg' },
 };
 
 let _pools = null;
@@ -53,32 +52,29 @@ export const PACKS = [
   {
     id: 'gold', name: 'Gold Pack', price: 7500, look: 'gold', desc: '12 players, mostly gold, 1 rare',
     slots: [{ n: 11, odds: { silver: 0.25, gold: 0.62, goldRare: 0.1, gold83: 0.025, inform: 0.004, hero: 0.001 } },
-      { n: 1, odds: { goldRare: 0.856, gold83: 0.1, gold86: 0.03, inform: 0.008, hero: 0.002, star: 0.004 } }],
+      { n: 1, odds: { goldRare: 0.8595, gold83: 0.1, gold86: 0.03, inform: 0.008, hero: 0.002, lotg: 0.0005 } }],
   },
   {
     id: 'premium', name: 'Premium Gold Pack', price: 15000, look: 'premium', desc: '12 gold players incl. 3 rares',
-    slots: [{ n: 9, odds: { gold: 0.746, goldRare: 0.2, gold83: 0.04, inform: 0.008, hero: 0.002, star: 0.004 } },
-      { n: 3, odds: { goldRare: 0.785, gold83: 0.14, gold86: 0.04, inform: 0.015, hero: 0.004, legend: 0.001, star: 0.014, icon: 0.001 } }],
+    slots: [{ n: 9, odds: { gold: 0.75, goldRare: 0.2, gold83: 0.04, inform: 0.008, hero: 0.002 } },
+      { n: 3, odds: { goldRare: 0.797, gold83: 0.14, gold86: 0.04, inform: 0.015, hero: 0.004, legend: 0.001, lotg: 0.003 } }],
   },
   {
     id: 'rare', name: 'Rare Players Pack', price: 30000, look: 'rare', desc: '12 rare gold players',
-    slots: [{ n: 12, odds: { goldRare: 0.7675, gold83: 0.15, gold86: 0.045, inform: 0.02, hero: 0.004, legend: 0.001, star: 0.012, icon: 0.0005 } }],
+    slots: [{ n: 12, odds: { goldRare: 0.776, gold83: 0.15, gold86: 0.045, inform: 0.02, hero: 0.004, legend: 0.001, lotg: 0.004 } }],
   },
   {
     id: 'totw', name: 'TOTW Pack', price: 25000, look: 'totw', desc: '1 guaranteed Team of the Week card + 6 golds',
     slots: [{ n: 1, odds: { totw: 1 } }, { n: 6, odds: { gold: 0.62, goldRare: 0.3, gold83: 0.08 } }],
   },
-  {
-    id: 'stars', name: 'Real Stars Pack', price: 60000, look: 'stars', desc: '1 guaranteed Star (real player) + 5 rare golds',
-    slots: [{ n: 1, odds: { star: 1 } }, { n: 5, odds: { goldRare: 0.8, gold83: 0.17, gold86: 0.03 } }],
-  },
+
   {
     id: 'legend', name: 'Legend Pack', price: 250000, look: 'legend', desc: '1 guaranteed Legend + 4 rare golds',
     slots: [{ n: 1, odds: { legend: 1 } }, { n: 4, odds: { goldRare: 0.7, gold83: 0.25, gold86: 0.05 } }],
   },
   {
-    id: 'icon', name: 'Icon Pack', price: 400000, look: 'icon', desc: '1 guaranteed Icon (all-time great) + 4 rare golds',
-    slots: [{ n: 1, odds: { icon: 1 } }, { n: 4, odds: { goldRare: 0.6, gold83: 0.3, gold86: 0.08, star: 0.02 } }],
+    id: 'lotg', name: 'Legend of the Game Pack', price: 200000, look: 'lotg', desc: '1 guaranteed Legend of the Game (real player) + 4 rare golds',
+    slots: [{ n: 1, odds: { lotg: 1 } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
   },
 ];
 export const PACK_BY_ID = Object.fromEntries(PACKS.map((p) => [p.id, p]));
@@ -110,7 +106,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   return items;
 }
 export function itemScore(p) {
-  return p.ovr + ({ icon: 40, legend: 30, hero: 20, star: 12, inform: 10 }[p.special] || 0) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
+  return p.ovr + ({ lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || 0) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
 }
 /** 'bronze' | 'silver' | 'gold' | 'walkout' */
 export function packFlare(items) {
@@ -281,25 +277,23 @@ export const SBCS = [
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 83 }, { t: 'chem', v: 80 }], reward: { pack: 'legend' } },
   { id: 'pick-83', name: 'Player Pick: 83+', group: 'Player Picks', repeatable: true, desc: 'Choose 1 of 3 gold players rated 83+.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 79 }, { t: 'rare', v: 3 }], reward: { pick: { pool: 'gold83', n: 3, label: '83+ Player Pick' } } },
-  { id: 'pick-star', name: 'Player Pick: Star', group: 'Player Picks', desc: 'Choose 1 of 3 real Star players.',
-    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 83 }, { t: 'chem', v: 70 }], reward: { pick: { pool: 'star', n: 3, label: 'Star Player Pick' } } },
+  { id: 'pick-lotg', name: 'Player Pick: Legend of the Game', group: 'Player Picks', desc: 'Choose 1 of 3 Legends of the Game.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 84 }, { t: 'chem', v: 75 }], reward: { pick: { pool: 'lotg', n: 3, label: 'LOTG Player Pick' } } },
   { id: 'posmod-sbc', name: 'Position Modifier', group: 'Upgrades', repeatable: true, desc: 'Earn a Position Modifier: add a new alternate position to a player.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 70 }], reward: { item: 'posmod', n: 1 } },
-  { id: 'star-search', name: 'Star Search', group: 'Stars', repeatable: true, desc: 'Trade a strong rare squad for a Real Stars pack.',
-    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 78 }, { t: 'rare', v: 4 }], reward: { pack: 'stars' } },
-  { id: 'star-salah', name: 'Star Signing: Mohamed Salah', group: 'Stars', desc: 'Bring the Egyptian King to your club.',
+  { id: 'lotg-trial', name: 'Legend Trial', group: 'Legends of the Game', repeatable: true, desc: 'An elite squad earns a guaranteed Legend of the Game pack.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 83 }, { t: 'chem', v: 75 }, { t: 'rare', v: 6 }], reward: { pack: 'lotg' } },
+  { id: 'lotg-salah', name: 'Legend: Mohamed Salah', group: 'Legends of the Game', desc: 'Bring the Egyptian King to your club.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 80 }, { t: 'chem', v: 70 }], reward: { player: 'rs_salah' } },
-  { id: 'icon-trial', name: 'Icon Trial', group: 'Icons', repeatable: true, desc: 'An elite squad earns a guaranteed Icon pack.',
-    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 84 }, { t: 'chem', v: 75 }, { t: 'rare', v: 6 }], reward: { pack: 'icon' } },
-  { id: 'icon-maldini', name: 'Icon: Paolo Maldini', group: 'Icons', desc: 'The complete defender. Build a rock-solid squad.',
+  { id: 'lotg-maldini', name: 'Legend: Paolo Maldini', group: 'Legends of the Game', desc: 'The complete defender. Build a rock-solid squad.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 85 }, { t: 'chem', v: 80 }], reward: { player: 'ic_maldini' } },
-  { id: 'icon-zidane', name: 'Icon: Zinedine Zidane', group: 'Icons', desc: 'Elegance on the ball. A world-class midfield is required.',
+  { id: 'lotg-zidane', name: 'Legend: Zinedine Zidane', group: 'Legends of the Game', desc: 'Elegance on the ball. A world-class midfield is required.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 86 }, { t: 'chem', v: 85 }, { t: 'sameNation', v: 3 }], reward: { player: 'ic_zidane' } },
-  { id: 'icon-pele', name: 'Icon: Pelé', group: 'Icons', desc: 'The King. The hardest challenge in Pitchside.',
+  { id: 'lotg-pele', name: 'Legend: Pelé', group: 'Legends of the Game', desc: 'The King. The hardest challenge in Pitchside.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 88 }, { t: 'chem', v: 90 }], reward: { player: 'ic_pele' } },
 ];
 export const ITEM_NAMES = { posmod: 'Position Modifier' };
-export const SPECIAL_NAME = { icon: 'Icon', star: 'Star', legend: 'Legend', hero: 'Hero', inform: 'In-Form' };
+export const SPECIAL_NAME = { lotg: 'Legend of the Game', legend: 'Classic', hero: 'Hero', inform: 'In-Form', objective: 'Pathfinder' };
 export const SBC_BY_ID = Object.fromEntries(SBCS.map((s) => [s.id, s]));
 
 export function reqLabel(r) {
@@ -373,8 +367,8 @@ export function submitSbc(state, sbcId, formation, slotIds) {
 const PICK_POOLS = {
   gold83: { label: '83+ Gold', test: (p) => !p.special && p.ovr >= 83 },
   gold80: { label: '80+ Gold', test: (p) => !p.special && p.ovr >= 80 },
-  star: { label: 'Star', test: (p) => p.special === 'star' },
-  icon: { label: 'Icon', test: (p) => p.special === 'icon' },
+  lotg: { label: 'Legend of the Game', test: (p) => p.special === 'lotg' },
+  lotg90: { label: '90+ Legend of the Game', test: (p) => p.special === 'lotg' && p.ovr >= 90 },
   inform: { label: 'In-Form', test: (p) => p.special === 'inform' && !p.totw },
 };
 /** Draw pick options (avoids owned cards where possible). */
@@ -462,7 +456,7 @@ export const OBJECTIVES = [
   { id: 'goals50', label: 'Score 50 goals', stat: 'goals', target: 50, reward: { coins: 20000 } },
   { id: 'win10', label: 'Win 10 matches', stat: 'wins', target: 10, reward: { pick: { pool: 'gold83', n: 3, label: '83+ Player Pick' } } },
   { id: 'packs10', label: 'Open 10 packs', stat: 'packsOpened', target: 10, reward: { item: 'posmod', n: 1 } },
-  { id: 'sbc10', label: 'Complete 10 SBCs', stat: 'sbcDone', target: 10, reward: { pick: { pool: 'star', n: 3, label: 'Star Player Pick' } } },
+  { id: 'sbc10', label: 'Complete 10 SBCs', stat: 'sbcDone', target: 10, reward: { pick: { pool: 'lotg', n: 3, label: 'LOTG Player Pick' } } },
 ];
 export function objectiveProgress(state, o) { return Math.min(o.target, state.stats[o.stat] || 0); }
 export function claimObjective(state, id) {
@@ -565,9 +559,9 @@ export function marketSearch({ pos = '', minOvr = 0, maxOvr = 99, tier = '', nat
   let pool = db.all.filter((p) => p.ovr >= minOvr && p.ovr <= maxOvr
     && (!pos || p.pos === pos) && (!nat || p.nat === nat) && (!league || p.league === league)
     && (!q || p.name.toLowerCase().includes(q) || p.last.toLowerCase().includes(q))
-    && (!tier || (tier === 'special' ? !!p.special : ['icon', 'star'].includes(tier) ? p.special === tier : tier === 'rare' ? p.rare && !p.special : p.tier === tier && !p.special)));
+    && (!tier || (tier === 'special' ? !!p.special : tier === 'lotg' ? p.special === 'lotg' : tier === 'rare' ? p.rare && !p.special : p.tier === tier && !p.special)));
   // specials rarely listed
-  pool = pool.filter((p) => !p.special || (tier && tier === p.special) || rng.chance(p.special === 'icon' ? 0.2 : 0.35));
+  pool = pool.filter((p) => p.special !== 'objective' && (!p.special || (tier && tier === p.special) || rng.chance(p.special === 'lotg' ? 0.2 : 0.35)));
   rng.shuffle(pool);
   const out = [];
   for (const p of pool) {

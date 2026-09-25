@@ -313,13 +313,123 @@ test('services never throw when offline / unconfigured', async () => {
       assert.equal(r.ok, false);
     }
     assert.equal(await o.admin.verify('x'), false);
+    for (const r of [await o.rivals.status(), await o.rivals.claimWeekly(), await o.friends.list(), await o.friends.add('ABCDEFGH'),
+      await o.friends.pollInvites(), await o.friends.challenge(UUID, 'ut'), await o.friends.acceptInvite(UUID), await o.friends.block(UUID)]) {
+      assert.equal(r.ok, false);
+    }
   }
+});
+
+// ------------------------------------------------------------------ friends + invites + rivals
+test('friends: code add -> accept -> challenge -> accept invite -> token link; block hides', async () => {
+  const be = createMockBackend(memoryStore());
+  const mk = (name) => createOnline({ rpc: (f, a) => be.call(f, a), storage: memStorage(), transportKind: 'loopback', getName: () => name, invitePollMs: 10 });
+  const A = mk('Ann'), B = mk('Ben'), C = mk('Cy');
+  const pa = await A.profile(), pb = await B.profile();
+  await C.profile();
+  assert.match(pb.friendCode, /^[A-Z2-9]{8}$/);
+  assert.equal(A.hasIdentity(), true);
+  assert.equal((await A.friends.add('bad')).error, 'bad_code');
+  assert.equal((await A.friends.add(pa.friendCode)).error, 'self');
+  assert.equal((await A.friends.add(pb.friendCode.toLowerCase())).status, 'outgoing');
+  assert.equal((await A.friends.add(pb.friendCode)).error, 'already_requested');
+  let lb = await B.friends.list();
+  assert.equal(lb.items[0].status, 'incoming');
+  assert.equal(lb.items[0].rating, null);
+  assert.equal((await A.friends.challenge(pb.id, 'ut')).error, 'not_friends');
+  assert.equal((await B.friends.accept(pa.id)).ok, true);
+  lb = await B.friends.list();
+  assert.equal(lb.items[0].status, 'friend');
+  assert.equal(lb.items[0].online, false); // A has not sent a heartbeat yet
+  assert.equal((await A.friends.heartbeat()).ok, true);
+  assert.equal((await B.friends.list()).items[0].online, true);
+  // challenge: A invites, B polls, accepts, both linked with the invite token
+  const chal = A.friends.challenge(pb.id, 'ut');
+  let inc = null;
+  for (let i = 0; i < 50 && !inc; i++) { await sleep(10); const p = await B.friends.pollInvites(); inc = p.ok && p.incoming[0]; }
+  assert.ok(inc, 'invite arrived');
+  assert.equal(inc.mode, 'ut');
+  assert.equal(inc.from.name, 'Ann');
+  assert.equal('peerId' in inc, false); // peer id only revealed on accept
+  assert.equal((await C.friends.acceptInvite(inc.inviteId)).ok, false);
+  const acc = await B.friends.acceptInvite(inc.inviteId);
+  assert.equal(acc.ok, true);
+  const host = await chal;
+  assert.equal(host.ok, true);
+  assert.equal(host.role, 'host');
+  assert.equal(host.token, acc.token);
+  const hs = new NetSession(host.transport, { name: 'Ann', matchToken: host.token });
+  const hl = hs.attach('host', 3000);
+  const gs = new NetSession(acc.transport, { name: 'Ben', matchToken: acc.token });
+  await gs.attach('guest', 3000);
+  await hl;
+  assert.equal(hs.peerName, 'Ben');
+  hs.close(); gs.close();
+  // decline path + cancel path
+  const chal2 = A.friends.challenge(pb.id, 'friendly');
+  let inc2 = null;
+  for (let i = 0; i < 50 && !inc2; i++) { await sleep(10); const p = await B.friends.pollInvites(); inc2 = p.ok && p.incoming[0]; }
+  assert.equal((await B.friends.declineInvite(inc2.inviteId)).ok, true);
+  assert.equal((await chal2).error, 'declined');
+  const chal3 = A.friends.challenge(pb.id, 'friendly');
+  await sleep(30);
+  A.friends.cancelChallenge();
+  assert.equal((await chal3).error, 'cancelled');
+  // block: hidden from the blocked player, cannot re-add, cannot challenge
+  assert.equal((await B.friends.block(pa.id)).ok, true);
+  assert.equal((await A.friends.list()).items.length, 0);
+  assert.equal((await A.friends.add(pb.friendCode)).error, 'not_found');
+  assert.equal((await A.friends.challenge(pb.id, 'ut')).error, 'not_friends');
+  assert.equal((await B.friends.list()).items[0].status, 'blocked');
+  assert.equal((await B.friends.unblock(pa.id)).ok, true);
+  assert.equal((await B.friends.list()).items.length, 0);
+});
+test('rivals: matchmade wins earn points, promotion, weekly claim once, packs whitelisted', async () => {
+  const be = createMockBackend(memoryStore());
+  let clock = Date.now();
+  const mk = (name) => createOnline({ rpc: (f, a) => be.call(f, a), storage: memStorage(), transportKind: 'loopback', getName: () => name, matchmakerConfig: { pollMs: 10 } });
+  const A = mk('Ann'), B = mk('Ben');
+  const st0 = await A.rivals.status();
+  assert.equal(st0.division, 10);
+  assert.equal(st0.divisionName, 'Division 10');
+  assert.equal(st0.claimable, false);
+  assert.equal((await A.rivals.claimWeekly()).error, 'nothing_to_claim');
+  // a rivals result without a matchmade game gives coins but no rivals points
+  const solo = await A.reportResult({ mode: 'rivals', won: true, goalsFor: 1, goalsAgainst: 0 });
+  assert.equal(solo.rivals, null);
+  const pa = A.matchmaking.quickSearch({ mode: 'rivals' });
+  await sleep(30);
+  const rb = await B.matchmaking.quickSearch({ mode: 'rivals' });
+  const ra = await pa;
+  assert.equal(ra.ok && rb.ok, true);
+  ra.transport.close(); rb.transport.close();
+  const rep = await B.reportResult({ mode: 'rivals', won: true, goalsFor: 3, goalsAgainst: 0 });
+  assert.deepEqual({ d: rep.rivals.division, p: rep.rivals.points }, { d: 10, p: 3 });
+  const pb = await B.profile();
+  await be.call('_rivals_end_week', { p_id: pb.id });
+  const st = await B.rivals.status();
+  assert.equal(st.claimable, true);
+  assert.equal(st.reward.coins, 1500 + 300);
+  assert.deepEqual(st.reward.packs, ['silver']);
+  const cl = await B.rivals.claimWeekly();
+  assert.equal(cl.ok, true);
+  assert.equal(cl.coins, 1800);
+  assert.equal((await B.rivals.claimWeekly()).error, 'already_claimed');
+  assert.equal(sanitizeReport({ ok: true, rivals: { division: 0, points: 5, threshold: null, promoted: true } }).rivals.threshold, null);
+  void clock;
+});
+test('startOnlineMatch-style rivals timeout reports reason no_opponent', async () => {
+  const be = createMockBackend(memoryStore());
+  const A = createOnline({ rpc: (f, a) => be.call(f, a), storage: memStorage(), transportKind: 'loopback', matchmakerConfig: { pollMs: 5, timeoutMs: 60 } });
+  const r = await A.matchmaking.quickSearch({ mode: 'rivals' });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'no_opponent');
 });
 
 // ------------------------------------------------------------------ run
 for (const [name, fn] of queue) {
   try { await fn(); passed++; console.log(`  ok  ${name}`); }
-  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${(e && e.stack || String(e)).split('\n').slice(0, 4).join('\n       ')}`); }
+  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${(e && e.stack || String(e)).split("\n").slice(0, 8).join('\n       ')}`); }
 }
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

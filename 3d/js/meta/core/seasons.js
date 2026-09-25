@@ -13,10 +13,10 @@ export function seasonEnds(season) { return EPOCH + season * SEASON_WEEKS * 7 * 
 
 /** Reward for reaching `level` (1..30). Every 10th level is a highlight. */
 export function levelReward(level) {
-  if (level === 30) return { pick: { pool: 'icon', n: 3, label: 'Icon Player Pick' } };
-  if (level === 20) return { pick: { pool: 'star', n: 3, label: 'Star Player Pick' } };
+  if (level === 30) return { pick: { pool: 'lotg90', n: 3, label: '90+ LOTG Player Pick' } };
+  if (level === 20) return { pick: { pool: 'lotg', n: 3, label: 'LOTG Player Pick' } };
   if (level === 10) return { pack: 'premium', coins: 5000 };
-  if (level === 25) return { pack: 'stars' };
+  if (level === 25) return { pack: 'lotg' };
   if (level === 15) return { pack: 'rare' };
   if (level % 5 === 0) return { pack: 'premium' };
   if (level % 2 === 0) return { coins: 750 + level * 150 };

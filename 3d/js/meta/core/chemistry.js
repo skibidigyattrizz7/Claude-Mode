@@ -2,8 +2,8 @@
 import { FORMATIONS, positionFit } from './formations.js';
 import { SPECIAL_CLUB_IDS } from './data.js';
 
-/** Icons and Legends link to every league (and Icons are always green with their own nation). */
-const linksAll = (p) => p.special === 'legend' || p.special === 'icon';
+/** Legends of the Game (and classic Legends) link to every league; LOTG are always green with their nation. */
+const linksAll = (p) => p.special === 'legend' || p.special === 'lotg';
 
 /** Link strength between two players: 0 (red), 1 (orange), 2 (green). */
 export function linkStrength(a, b) {
@@ -44,7 +44,8 @@ export function calcChemistry(formation, slots) {
       const avg = sum[i] / cnt[i];
       base = avg >= 1.5 ? 3 : avg >= 0.9 ? 2 : avg >= 0.4 ? 1 : 0;
     }
-    if (p.special === 'legend' || p.special === 'hero' || p.special === 'icon') base = Math.min(3, base + 1);
+    if (p.special === 'legend' || p.special === 'hero') base = Math.min(3, base + 1);
+    if (p.special === 'lotg') base = 3; // LOTG perk: full chemistry in any of their positions
     const chem = fit >= 1 ? base : 0; // any listed position counts as in-position; out of position = 0
     players.push(chem);
     total += chem;

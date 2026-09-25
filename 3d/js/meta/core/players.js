@@ -100,13 +100,12 @@ export function utPrice(p) {
   if (p.special === 'inform') v *= 1.9;
   if (p.special === 'hero') v *= 2.4;
   if (p.special === 'legend') v *= 3.2;
-  if (p.special === 'star') v *= 1.6;
-  if (p.special === 'icon') v *= 4.5;
+  if (p.special === 'lotg') v *= p.era === 'prime' ? 4.5 : 2.6;
   return niceRound(v);
 }
 export function quickSellValue(p) {
   const base = p.ovr < 65 ? 40 + (p.ovr - 45) * 3 : p.ovr < 75 ? 150 + (p.ovr - 65) * 15 : 400 + Math.max(0, p.ovr - 75) * 90;
-  const spec = p.special ? 2.5 : 1;
+  const spec = p.special === 'lotg' ? (p.era === 'prime' ? 9 : 6) : p.special ? 2.5 : 1;
   return Math.round((base * (p.rare ? 1.3 : 1) * spec) / 10) * 10;
 }
 
@@ -308,6 +307,25 @@ export function getDB() {
   for (const p of real.stars) players.push(p);
   for (const p of real.icons) specials.push(p);
 
+  // V2 "Pathfinder" cards: exclusive objective rewards (boosted versions of generated players, private RNG).
+  const prng = new Rng('pathfinder-v1');
+  const pfBase = players.filter((p) => !p.real && p.ovr >= 76 && p.ovr <= 82 && p.age <= 29);
+  const pfPos = ['ST', 'CAM', 'CB', 'RW', 'CM', 'LB', 'GK', 'LW'];
+  for (let i = 0; i < pfPos.length; i++) {
+    const cands = pfBase.filter((p) => p.pos === pfPos[i]);
+    const b = cands[prng.int(0, cands.length - 1)];
+    if (!b) continue;
+    const p = structuredClone(b);
+    p.id = `ob${i + 1}`; p.baseId = b.id;
+    adjustOvr(p, prng.int(6, 9));
+    p.special = 'objective'; p.rare = true; p.tier = 'gold'; p.pot = Math.max(p.pot, p.ovr);
+    const extra = genPhysique({ ...p, id: `${p.id}-x` }).playstyles;
+    p.playstyles = (b.playstyles || []).slice(0, 2).concat(extra.filter((x) => !(b.playstyles || []).some((y) => y.id === x.id))).slice(0, 3);
+    if (p.playstyles[0]) p.playstyles[0] = { ...p.playstyles[0], plus: p.ovr >= 85 };
+    p.value = marketValue(p);
+    specials.push(p);
+  }
+
   const all = players.concat(specials);
   const byId = new Map(all.map((p) => [p.id, p]));
   _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars) };
@@ -343,7 +361,8 @@ export function sanitizeCard(c) {
   p.wr = Array.isArray(c.wr) && c.wr.length === 2 ? c.wr.map((x) => (['Low', 'Med', 'High'].includes(x) ? x : 'Med')) : ['Med', 'Med'];
   p.height = num(c.height, 150, 210, 180);
   p.rare = !!c.rare;
-  p.special = ['inform', 'hero', 'legend', 'icon', 'star'].includes(c.special) ? c.special : null;
+  p.special = ['inform', 'hero', 'legend', 'lotg', 'objective'].includes(c.special) ? c.special : null;
+  if (p.special === 'lotg') p.era = c.era === 'prime' ? 'prime' : 'current';
   p.tier = p.special ? 'gold' : tierOf(p.ovr);
   if (c.real) p.real = true;
   if (Number.isInteger(c.skin) && c.skin >= 0 && c.skin <= 5) p.skin = c.skin;

@@ -693,7 +693,7 @@ export class Match {
   /** Hoof it clear: long and high towards the wing, sometimes deliberately into touch. */
   clearBall(p) {
     const b = this.ball, dir = this.attackDir(p.team);
-    const touch = Math.random() < 0.4;
+    const touch = Math.random() < 0.5;
     const up = b.y < CY;
     const ty = touch ? (up ? -5 : PITCH.W + 5) : (up ? 4 + Math.random() * 7 : PITCH.W - 4 - Math.random() * 7);
     const tx = clamp(b.x + dir * (24 + Math.random() * 16), 3, PITCH.L - 3);
@@ -1024,6 +1024,15 @@ export class Match {
     }
     const trapLimit = 15 + 6 * p.attrs.dribbling;
     if (relSpeed < trapLimit) {
+      // cutting out a firm pass often only gets a toe to it: the ball deflects away
+      if (this.pass && this.pass.team !== p.team && relSpeed > 9 && b.z < 0.6 && Math.random() < 0.3 + (relSpeed - 9) * 0.04 - p.attrs.tackling * 0.15) {
+        const a = Math.atan2(b.vy, b.vx) + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.9);
+        const sp = relSpeed * (0.35 + Math.random() * 0.25);
+        b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.vz = Math.random() * 1.5; b.spin = 0;
+        this.lastTouch = p; p.kickCD = 0.25; b.kickId++; this.pass = null;
+        this.emit('deflect', { p, block: true });
+        return;
+      }
       // contextual first touch: fast balls, sprinting and pressure make it heavier
       const assistedPass = this.pass && this.pass.receiver === p && this.pass.mode === 'Assisted';
       if (!assistedPass) {

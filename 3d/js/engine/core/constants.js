@@ -14,7 +14,7 @@ export const DT = 1 / SIM_HZ;
 // Animation codes (sim -> renderer, also encoded in snapshots)
 export const ANIM = {
   RUN: 0, KICK: 1, WINDUP: 2, SLIDE: 3, HEAD: 4, DIVE: 5, CELEB: 6, THROW: 7,
-  FALL: 8, HOLD: 9, TACKLE: 10, SKILL: 11, WALL: 12, CHEST: 13, GKREADY: 14, SENTOFF: 15,
+  FALL: 8, HOLD: 9, TACKLE: 10, SKILL: 11, WALL: 12, CHEST: 13, GKREADY: 14, SENTOFF: 15, GKJUMP: 16,
 };
 
 export const PHASE = {

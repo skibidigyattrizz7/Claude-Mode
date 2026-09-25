@@ -304,7 +304,10 @@ export function buildRealPlayers(helpers) {
     p.playstyles = parseStyles(ph[1]);
     p.rare = true;
     p.tier = 'gold';
-    p.special = icon ? 'icon' : 'star';
+    // V2: every real player is a "Legend of the Game" (LOTG) card; `era` separates retired prime
+    // versions from current active versions (Messi and Ronaldo have both).
+    p.special = 'lotg';
+    p.era = icon ? 'prime' : 'current';
     p.real = true;
     p.skin = skin;
     if (extra.hs !== undefined) p.hair = extra.hs;

@@ -11,15 +11,23 @@
 // BroadcastChannel so two tabs can matchmake without network. ?mockOnline=1&mockDown=1 = offline.
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { createTransport } from './transport.js';
-import { createMatchmaker } from './matchmaker.js';
+import { createMatchmaker, randomPeerId } from './matchmaker.js';
 import { createMockBackend, webStore } from './mockbackend.js';
 import { cleanStr } from './protocol.js';
 import {
   SECRET_RE, UUID_RE, validateListingInput, normalizeSearch, sanitizeListingItem, sanitizeMyListing, sanitizeList,
   sanitizeProfile, sanitizeReport, normalizeReport, sanitizeCard, errorText,
+  sanitizeRivalsStatus, sanitizeRivalsClaim, sanitizeFriend, sanitizeIncomingInvite, sanitizeOutgoingInvite, parseInviteAccept,
+  normalizeFriendCode, FRIEND_CODE_RE, INVITE_MODES, TOKEN_RE,
 } from './validate.js';
 
 const RPC_TIMEOUT_MS = 8000;
+const INVITE_TTL_MS = 60000;
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+function withTimeout(p, ms, msg) {
+  let t;
+  return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
+}
 const AVAILABLE_TTL_MS = 20000;
 
 function randomSecret() {
@@ -157,9 +165,14 @@ export function createOnline(deps) {
   const matchmaker = createMatchmaker({
     rpc, identity: () => identity(), createTransport: makeTransport, config: deps.matchmakerConfig,
   });
+  const invitePollMs = deps.invitePollMs || 2000;
+  let challengeJob = null;
 
   const online = {
     available: () => isAvailable().catch(() => false),
+
+    /** true once this device has an online profile (no network; used to avoid creating profiles just by browsing). */
+    hasIdentity() { const v = readIdent(); return !!(v && v.id); },
 
     async profile() {
       const r = dataOr(await authed('get_profile'));
@@ -240,7 +253,10 @@ export function createOnline(deps) {
       async quickSearch({ mode, team, onProgress } = {}) {
         if (!(await isAvailable())) return fail(SUPABASE_KEY || deps.mock ? 'offline' : 'not_configured');
         const r = await matchmaker.search({ mode, onProgress });
-        if (!r.ok) return { ...r, message: r.cancelled ? 'Search cancelled.' : r.error === 'timeout' ? 'No opponent found. Try again in a moment.' : r.message || errorText(r.error) };
+        if (!r.ok) {
+          const reason = r.cancelled ? 'cancelled' : r.error === 'timeout' ? 'no_opponent' : r.error;
+          return { ...r, reason, message: r.cancelled ? 'Search cancelled.' : r.error === 'timeout' ? 'No opponent found. Try again in a moment.' : r.message || errorText(r.error) };
+        }
         return { ...r, mode, team };
       },
       cancelSearch() { matchmaker.cancel(); return Promise.resolve({ ok: true }); },
@@ -261,6 +277,134 @@ export function createOnline(deps) {
       const v = normalizeReport(x);
       if (!v.ok) return fail(v.error);
       return sanitizeReport(dataOr(await authed('report_result', v.args)));
+    },
+
+    // ---------------------------------------------------------------- Rivals (ranked UT)
+    rivals: {
+      async status() {
+        const r = dataOr(await authed('rivals_status'));
+        return sanitizeRivalsStatus(r) || fail(r.error || 'bad_response');
+      },
+      /** Once per finished week. -> { ok, coins (already added server-side), packs:[packId], balance } */
+      async claimWeekly() {
+        const r = dataOr(await authed('rivals_claim_weekly'));
+        return sanitizeRivalsClaim(r) || fail(r.error || 'bad_response');
+      },
+    },
+
+    // ---------------------------------------------------------------- friends + challenges
+    friends: {
+      /** -> { ok, code, items:[{ id, name, status:'friend'|'incoming'|'outgoing'|'blocked', online, rating, division, rivalsDivision }] } */
+      async list() {
+        const r = dataOr(await authed('list_friends'));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        return { ok: true, code: typeof r.code === 'string' && FRIEND_CODE_RE.test(r.code) ? r.code : null, items: sanitizeList(r.items, sanitizeFriend, 250) };
+      },
+      async code() {
+        const p = await online.profile();
+        return p.ok ? { ok: true, code: p.friendCode } : p;
+      },
+      /** Send a request by friend code (or accept theirs if they already asked). */
+      async add(code) {
+        const c = normalizeFriendCode(code);
+        if (!FRIEND_CODE_RE.test(c)) return fail('bad_code');
+        const r = dataOr(await authed('add_friend', { p_code: c }));
+        if (r.ok !== true) return { ...fail(r.error || 'bad_response'), ...(r.error === 'not_found' ? { message: 'No player has that friend code.' } : {}) };
+        return { ok: true, status: r.status === 'friend' ? 'friend' : 'outgoing', name: cleanStr(r.friend && r.friend.name, 16, 'Player') };
+      },
+      async respond(friendId, action) {
+        if (typeof friendId !== 'string' || !UUID_RE.test(friendId)) return fail('not_found');
+        if (!['accept', 'decline', 'remove', 'block', 'unblock'].includes(action)) return fail('bad_action');
+        const r = dataOr(await authed('respond_friend', { p_friend: friendId, p_action: action }));
+        return r.ok === true ? { ok: true } : fail(r.error || 'bad_response');
+      },
+      accept(id) { return online.friends.respond(id, 'accept'); },
+      decline(id) { return online.friends.respond(id, 'decline'); },
+      remove(id) { return online.friends.respond(id, 'remove'); },
+      block(id) { return online.friends.respond(id, 'block'); },
+      unblock(id) { return online.friends.respond(id, 'unblock'); },
+      async heartbeat() {
+        const r = dataOr(await authed('heartbeat'));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        const n = (v) => (Number.isInteger(v) && v >= 0 ? Math.min(v, 999) : 0);
+        return { ok: true, invites: n(r.invites), requests: n(r.requests) };
+      },
+      /** Heartbeat + incoming invites + my outgoing invite statuses. */
+      async pollInvites() {
+        const r = dataOr(await authed('poll_invites'));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        return {
+          ok: true, incoming: sanitizeList(r.incoming, sanitizeIncomingInvite, 10), outgoing: sanitizeList(r.outgoing, sanitizeOutgoingInvite, 20),
+          requests: Number.isInteger(r.requests) && r.requests >= 0 ? Math.min(r.requests, 999) : 0,
+        };
+      },
+      /**
+       * Challenge a friend (inviter = host). Opens a listening peer, sends the invite and waits up to 60 s.
+       * -> { ok, transport, role:'host', token, opponent:{name, rating}, mode } | { ok:false, error:'declined'|'expired'|'cancelled'|... }
+       */
+      async challenge(friendId, mode = 'friendly', { onProgress } = {}) {
+        if (typeof friendId !== 'string' || !UUID_RE.test(friendId)) return fail('not_found');
+        if (!INVITE_MODES.includes(mode)) return fail('bad_mode');
+        if (challengeJob) challengeJob.cancelled = true;
+        const job = { cancelled: false };
+        challengeJob = job;
+        const emit = (state, extra) => { if (onProgress) try { onProgress({ state, ...extra }); } catch { /* ignore */ } };
+        let t = makeTransport();
+        const done = (res) => { if (!res.ok && t) { try { t.close(); } catch { /* ignore */ } } if (challengeJob === job) challengeJob = null; return res; };
+        try {
+          emit('opening');
+          await withTimeout(t.listen(randomPeerId()), 15000, 'Could not reach the connection server.');
+          if (job.cancelled) return done(fail('cancelled'));
+          const r = dataOr(await authed('send_invite', { p_friend: friendId, p_mode: mode, p_peer_id: t.code }));
+          if (r.ok !== true || typeof r.inviteId !== 'string' || !UUID_RE.test(r.inviteId) || typeof r.token !== 'string' || !TOKEN_RE.test(r.token)) return done(fail(r.error || 'bad_response'));
+          const t0 = Date.now();
+          let errors = 0;
+          while (Date.now() - t0 < INVITE_TTL_MS + 3000) {
+            emit('waiting', { elapsedMs: Date.now() - t0, ttlMs: INVITE_TTL_MS });
+            await sleepMs(invitePollMs);
+            if (job.cancelled) { await authed('cancel_invite', { p_invite: r.inviteId }); return done(fail('cancelled')); }
+            const pr = await online.friends.pollInvites();
+            if (!pr.ok) { if (++errors >= 5) return done(fail(pr.error)); continue; }
+            errors = 0;
+            const mine = pr.outgoing.find((i) => i.inviteId === r.inviteId);
+            if (!mine) continue;
+            if (mine.status === 'accepted') {
+              const f = await online.friends.list();
+              const fr = f.ok ? f.items.find((x) => x.id === friendId) : null;
+              const out = { ok: true, transport: t, role: 'host', token: r.token, mode, opponent: { name: fr ? fr.name : 'Friend', rating: fr ? fr.rating : null } };
+              t = null;
+              return done(out);
+            }
+            if (mine.status === 'declined') return done(fail('declined'));
+            if (mine.status !== 'pending') return done(fail('expired'));
+          }
+          await authed('cancel_invite', { p_invite: r.inviteId });
+          return done({ ...fail('expired'), message: 'Your friend did not answer in time.' });
+        } catch (e) {
+          return done({ ok: false, error: 'connect_failed', message: String((e && e.message) || e) });
+        }
+      },
+      cancelChallenge() { if (challengeJob) challengeJob.cancelled = true; return Promise.resolve({ ok: true }); },
+      /** Accept an incoming invite and connect to the inviter. -> { ok, transport, role:'guest', token, mode, opponent } */
+      async acceptInvite(inviteId) {
+        if (typeof inviteId !== 'string' || !UUID_RE.test(inviteId)) return fail('not_found');
+        const r = parseInviteAccept(dataOr(await authed('respond_invite', { p_invite: inviteId, p_accept: true })));
+        if (!r.ok) return fail(r.error);
+        if (!r.accepted) return fail('unavailable');
+        const t = makeTransport();
+        try {
+          await withTimeout(t.connectTo(r.peerId), 20000, 'Could not connect to your friend.');
+        } catch (e) {
+          try { t.close(); } catch { /* ignore */ }
+          return { ok: false, error: 'connect_failed', message: e.message };
+        }
+        return { ok: true, transport: t, role: 'guest', token: r.token, mode: r.mode, opponent: r.from };
+      },
+      async declineInvite(inviteId) {
+        if (typeof inviteId !== 'string' || !UUID_RE.test(inviteId)) return fail('not_found');
+        const r = dataOr(await authed('respond_invite', { p_invite: inviteId, p_accept: false }));
+        return r.ok === true ? { ok: true } : fail(r.error || 'bad_response');
+      },
     },
 
     admin: {
@@ -312,6 +456,7 @@ function browserOnline() {
     },
     getName: () => netPrefs().name || 'Player',
     matchmakerConfig: mock && Q.get('mmTimeout') ? { timeoutMs: Number(Q.get('mmTimeout')) * 1000 } : undefined,
+    invitePollMs: mock ? 700 : 2000,
   });
 }
 
@@ -322,6 +467,12 @@ const unavailable = () => {
     market: { list: f, search: f, buy: f, mine: f, cancel: f, claimSales: f },
     coins: { get: f, add: f }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
     hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, addCoins: f, verified: false, forget() {} }, errorText,
+    hasIdentity: () => false,
+    rivals: { status: f, claimWeekly: f },
+    friends: {
+      list: f, code: f, add: f, respond: f, accept: f, decline: f, remove: f, block: f, unblock: f, heartbeat: f, pollInvites: f,
+      challenge: f, cancelChallenge: f, acceptInvite: f, declineInvite: f,
+    },
   };
 };
 

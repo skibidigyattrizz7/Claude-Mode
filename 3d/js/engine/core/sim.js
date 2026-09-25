@@ -73,6 +73,8 @@ export class MatchSim {
     this.passLink = [null, null];
     this.lastLoss = [null, null];
     this.nextAuto = 0;
+    this.lastShotKind = [null, null];
+    this.lastAssist = null;
     this.gameRate = 2700 / (this.halfMinutes * 60);
     this.players = [];
     this.pstats = {};
@@ -228,7 +230,7 @@ export class MatchSim {
   }
   _jumpH(p) {
     const a = p.act;
-    if (!a || (a.type !== 'head' && a.type !== 'wall')) return 0;
+    if (!a || (a.type !== 'head' && a.type !== 'wall' && a.type !== 'gkjump')) return 0;
     const u = clamp((this.t - a.t0) / 0.6, 0, 1);
     return (a.jh || 0.45) * Math.sin(Math.PI * u);
   }
@@ -302,6 +304,7 @@ export class MatchSim {
 
   _stepPlay(dt) {
     const t = this.t, b = this.ball;
+    if (this.shootout) { KO.stepPlay(this, dt); return; }
     if (b.owner < 0 && (!this.path || t >= this.nextPredict)) {
       this.path = predictBall(b, 3, 0.05);
       this.nextPredict = t + 0.1;
@@ -309,8 +312,20 @@ export class MatchSim {
     if (t >= this.nextTeamThink) {
       AI.teamThink(this, 0); AI.teamThink(this, 1);
       this.nextTeamThink = t + 0.1;
+      for (let team = 0; team < 2; team++) {
+        if (!this.human[team]) continue;
+        this._autoSwitch(team);
+        this.nextSw[team] = this._switchCandidate(team);
+      }
     }
-    for (let team = 0; team < 2; team++) if (this.human[team]) this._human(team, dt, this.inputs[team] || EMPTY_IN);
+    for (let team = 0; team < 2; team++) {
+      if (!this.human[team]) continue;
+      const inp = this.inputs[team] || EMPTY_IN;
+      this._human(team, dt, inp);
+      // headers: a kick key near a dropping ball makes the controlled player attack it
+      const c = this.players[this.ctrl[team]];
+      if (c && !c.isGK && b.owner < 0 && b.p.y > 1.1 && (inp.shoot || inp.pass || inp.lob || inp.through || inp.finesse)) AI.headerCheck(this, c);
+    }
     for (const p of this.players) {
       if (p.sentOff) { this._walkOff(p); continue; }
       if (!this.isHumanCtrl(p)) AI.think(this, p, dt);
@@ -341,6 +356,18 @@ export class MatchSim {
     }
     this._movePlayers(dt);
     this._collide();
+    // quick restart: the human side taps pass during the whistle for a quick throw / free kick
+    const pd0 = this.pending;
+    if (pd0 && !pd0.shootout && this.t - this.phaseT > 0.25 && this._quickAllowed(pd0)) {
+      const tm = pd0.team;
+      if (this.human[tm]) {
+        const inp = this.inputs[tm] || EMPTY_IN, prev = this.prevIn[tm] || EMPTY_IN;
+        if (inp.pass && !prev.pass) { this._setupSetPiece({ ...pd0, quick: true }); return; }
+      } else if (!pd0.aiQuick) {
+        pd0.aiQuick = true;
+        if (this.rng() < 0.3) { this._setupSetPiece({ ...pd0, quick: true }); return; }
+      }
+    }
     if (this.t - this.phaseT >= this.stopDur) {
       const pd = this.pending;
       const over = !this.shootout && this.addedSet && this.clock >= halfLen(this.half) + this.added * 60;
@@ -1163,8 +1190,9 @@ export class MatchSim {
       this.shotTracker.onShot(p.team, t, p.idx);
       this.stats.shots[p.team]++;
       p.st.shots++;
+      this.lastShotKind[p.team] = { idx: p.idx, kind: k, t };
       const lk = this.passLink[p.team];
-      if (lk && lk.to === p.idx && lk.from !== p.idx && t - lk.t < 8) { this.players[lk.from].st.kp++; this.passLink[p.team] = null; }
+      if (lk && lk.to === p.idx && lk.from !== p.idx && t - lk.t < 8) this.players[lk.from].st.kp++;
       const pr = predictBall(b, 3, 0.02);
       const side = this.dir[p.team];
       for (const s of pr) {
@@ -1200,6 +1228,7 @@ export class MatchSim {
             case 'skill': if (this.ball.owner === p.idx) { this._skillMove(p, a, at); locked = true; } break;
             case 'kick': mul = 0.55; break;
             case 'head': case 'chest': mul = 0.6; break;
+            case 'gkjump': mul = 0.4; break;
           }
         }
       }
@@ -1347,14 +1376,14 @@ export class MatchSim {
     if (c.type === 'touch') {
       const x = clamp(b.p.x, -HL + 1, HL - 1);
       this.fxPush('out');
-      this._stop(SP.THROW, 1 - b.lastTeam, x, c.side * HW, 1.2);
+      this._stop(SP.THROW, 1 - b.lastTeam, x, c.side * HW, 0.9);
     } else {
       const defTeam = this.dir[0] === -c.side ? 0 : 1;
       if (b.lastTeam === defTeam) {
         this.stats.corners[1 - defTeam]++;
-        this._stop(SP.CORNER, 1 - defTeam, c.side * HL, Math.sign(b.p.z || 1) * HW, 1.6);
+        this._stop(SP.CORNER, 1 - defTeam, c.side * HL, Math.sign(b.p.z || 1) * HW, 1.3);
       } else {
-        this._stop(SP.GOALKICK, defTeam, c.side * HL, Math.sign(b.p.z || 1), 1.6);
+        this._stop(SP.GOALKICK, defTeam, c.side * HL, Math.sign(b.p.z || 1), 1.2);
       }
     }
   }
@@ -1370,16 +1399,28 @@ export class MatchSim {
     const og = toucher.team !== scoring;
     this.shotTracker.onGoal();
     const minute = this.goalMinute();
+    this.lastAssist = null;
     if (!og) {
       toucher.st.goals++;
       const lk = this.passLink[scoring];
-      if (lk && lk.to === toucher.idx && lk.from !== toucher.idx && t - lk.t < 12) this.players[lk.from].st.assists++;
+      if (lk && lk.to === toucher.idx && lk.from !== toucher.idx && t - lk.t < 8) { this.players[lk.from].st.assists++; this.lastAssist = lk; }
     } else toucher.st.og++;
     const ll = this.lastLoss[1 - scoring];
     if (ll && t - ll.t < 10 && !og) this.players[ll.idx].st.err++;
     this.passLink = [null, null]; this.lastLoss = [null, null];
     this.gk(1 - scoring).st.conceded++;
-    this.scorers.push({ playerId: toucher.data.id, team: this.sideName(scoring), minute, ownGoal: og, name: toucher.data.name });
+    let assistId = null;
+    if (!og) {
+      const lk = this.lastAssist;
+      if (lk && lk.to === toucher.idx) assistId = this.players[lk.from].data.id;
+      const ls = this.lastShotKind[scoring];
+      if (ls && ls.idx === toucher.idx && t - ls.t < 5) {
+        if (ls.kind === 'header') toucher.st.hg = (toucher.st.hg || 0) + 1;
+        if (ls.kind === 'finesse' || ls.kind === 'trivela') toucher.st.fg = (toucher.st.fg || 0) + 1;
+      }
+    }
+    this.lastAssist = null;
+    this.scorers.push({ playerId: toucher.data.id, team: this.sideName(scoring), minute, ownGoal: og, name: toucher.data.name, assistId });
     this.emit({ type: 'goal', team: this.sideName(scoring), playerId: toucher.data.id, playerName: toucher.data.name, minute, ownGoal: og, score: [...this.score] });
     this.fxPush('goal', { team: scoring, pi: toucher.idx, og: og ? 1 : 0 });
     this.phase = PHASE.GOAL; this.phaseT = t; this.goalT = t; this.skipReq = false;
@@ -1978,7 +2019,7 @@ export class MatchSim {
     if (card === 'yellow' && !this._lastMan(victim, off) && this.rng() < 0.55) card = null;
     if (card) this._card(off, card);
     this.stoppage += 0.15;
-    this._stop(pen ? SP.PENALTY : SP.FREEKICK, victim.team, victim.x, victim.z, pen ? 2.2 : 1.8);
+    this._stop(pen ? SP.PENALTY : SP.FREEKICK, victim.team, victim.x, victim.z, pen ? 2.2 : 1.5);
   }
 
   _card(p, card) {
@@ -1997,7 +2038,13 @@ export class MatchSim {
     this.fxPush('offside', { pi: p.idx });
     this.fxPush('whistle', { n: 1 });
     this.pendingOffside = null;
-    this._stop(SP.FREEKICK, 1 - p.team, p.x, p.z, 1.4, { indirect: true });
+    this._stop(SP.FREEKICK, 1 - p.team, p.x, p.z, 1.2, { indirect: true });
+  }
+
+  _quickAllowed(pd) {
+    if (pd.type === SP.THROW) return true;
+    if (pd.type !== SP.FREEKICK) return false;
+    return pd.indirect || this.X(pd.team, pd.x) < 68;
   }
 
   _stop(type, team, x, z, dur = 1.3, extra = {}) {
@@ -2111,12 +2158,25 @@ export class MatchSim {
     const d = this.dir[team], t = this.t;
     const opp = 1 - team;
     const b = this.ball;
-    this.fxPush('cut');
-    const sp = { type, team, t0: t, taker: -1, aim: 0, curve: 0, aimZ: 0, aimY: 1.2, aiDelay: 1.1 + this.rng() * 0.9, ball: { x: 0, y: BALL_R, z: 0 }, indirect: !!pd.indirect, wall: [] };
+    const quick = !!pd.quick;
+    if (!quick) this.fxPush('cut');
+    const aiDelay = quick ? 0.35 + this.rng() * 0.3 : type === SP.THROW || type === SP.GOALKICK ? 0.7 + this.rng() * 0.5 : 1.0 + this.rng() * 0.7;
+    const sp = { type, team, t0: t, taker: -1, aim: 0, curve: 0, aimZ: 0, aimY: 1.2, aiDelay, ball: { x: 0, y: BALL_R, z: 0 }, indirect: !!pd.indirect, wall: [], quick };
     let spot, taker;
+    const tk = this.tac ? this.tac[team] && this.tac[team].setPieceTakers : null;
+    const named = (key) => { const id = tk && tk[key]; if (id == null) return null; return this.teamList[team].find((m) => m.data.id === id && !m.isGK && !m.sentOff) || null; };
     switch (type) {
       case SP.THROW: {
         spot = { x: clamp(pd.x, -HL + 1, HL - 1), z: Math.sign(pd.z) * HW };
+        if (quick) {
+          taker = null; let bd = 1e9;
+          for (const m of this.teamList[team]) { if (m.isGK) continue; const dd = Math.hypot(m.x - spot.x, m.z - spot.z); if (dd < bd) { bd = dd; taker = m; } }
+          this._teleport(taker, spot.x, spot.z + Math.sign(spot.z) * 0.35);
+          this._pushAway(opp, spot.x, spot.z, 2.5);
+          sp.aim = Math.atan2(-Math.sign(spot.z), d * 0.6);
+          sp.ball = { x: spot.x, y: 2.05, z: spot.z };
+          break;
+        }
         this._arrangeShape(team, spot.x);
         taker = null; let bd = 1e9;
         for (const m of this.teamList[team]) { if (m.isGK) continue; const dd = Math.hypot(m.x - spot.x, m.z - spot.z) - (m.group === 'DEF' ? 4 : 0); if (dd < bd) { bd = dd; taker = m; } }
@@ -2134,7 +2194,8 @@ export class MatchSim {
         const s = Math.sign(pd.x), zs = Math.sign(pd.z);
         spot = { x: s * (HL - 0.4), z: zs * (HW - 0.4) };
         this._arrangeShape(team, spot.x);
-        taker = this._bestTaker(team, (m) => m.a.pas + (['LW', 'RW', 'LM', 'RM', 'CAM'].includes(m.role) ? 6 : 0) - (m.group === 'DEF' && Math.abs(m.sd.l) < 0.5 ? 20 : 0));
+        taker = named(zs * d < 0 ? 'cornerL' : 'cornerR') || named('cornerL') || named('cornerR') ||
+          this._bestTaker(team, (m) => m.a.pas + ps(m, 'deadball') * 8 + ps(m, 'whipped') * 5 + (['LW', 'RW', 'LM', 'RM', 'CAM'].includes(m.role) ? 6 : 0) - (m.group === 'DEF' && Math.abs(m.sd.l) < 0.5 ? 20 : 0));
         this._teleport(taker, spot.x + s * 0.6, spot.z + zs * 0.6);
         const attackers = this.teamList[team].filter((m) => m !== taker && !m.isGK).sort((a1, a2) => (a2.a.phy + (a2.group === 'FWD' ? 10 : 0) + (a2.role === 'CB' ? 8 : 0)) - (a1.a.phy + (a1.group === 'FWD' ? 10 : 0) + (a1.role === 'CB' ? 8 : 0)));
         const spots = [[99, zs * 3], [95, 0.5], [97.5, -zs * 3.5], [92, zs * 5], [91, -zs * 6], [87, 0], [74, zs * 12]];
@@ -2173,11 +2234,21 @@ export class MatchSim {
       }
       case SP.FREEKICK: {
         spot = { x: clamp(pd.x, -HL + 1, HL - 1), z: clamp(pd.z, -HW + 1, HW - 1) };
-        this._arrangeShape(team, spot.x);
         const gx = this.goalX(team);
         const D = Math.hypot(gx - spot.x, spot.z);
         const X = this.X(team, spot.x);
-        if (X > 55 && !pd.indirect) taker = this._bestTaker(team, (m) => m.a.sho * 0.6 + m.a.pas * 0.4 - Math.hypot(m.x - spot.x, m.z - spot.z) * 0.1);
+        if (quick) {
+          taker = null; let bd = 1e9;
+          for (const m of this.teamList[team]) { const dd = Math.hypot(m.x - spot.x, m.z - spot.z) + (m.isGK && X > 20 ? 50 : 0); if (dd < bd) { bd = dd; taker = m; } }
+          const ux = (gx - spot.x) / D, uz = -spot.z / D;
+          this._teleport(taker, spot.x - ux * 0.7, spot.z - uz * 0.7);
+          this._pushAway(opp, spot.x, spot.z, 4);
+          sp.aim = Math.atan2(uz, ux);
+          sp.ball = { x: spot.x, y: BALL_R, z: spot.z };
+          break;
+        }
+        this._arrangeShape(team, spot.x);
+        if (X > 55 && !pd.indirect) taker = named('fk') || this._bestTaker(team, (m) => m.a.sho * 0.6 + m.a.pas * 0.4 + ps(m, 'deadball') * 10 + ps(m, 'finesse') * 3 - Math.hypot(m.x - spot.x, m.z - spot.z) * 0.1);
         else { taker = null; let bd = 1e9; for (const m of this.teamList[team]) { const dd = Math.hypot(m.x - spot.x, m.z - spot.z) + (m.isGK && X > 20 ? 50 : 0); if (dd < bd) { bd = dd; taker = m; } } }
         const ux = (gx - spot.x) / D, uz = -spot.z / D;
         this._teleport(taker, spot.x - ux * 0.7, spot.z - uz * 0.7);
@@ -2208,7 +2279,7 @@ export class MatchSim {
       }
       case SP.PENALTY: {
         spot = { x: this.wx(team, 105 - PEN_SPOT), z: 0 };
-        taker = this._bestTaker(team, (m) => m.a.sho);
+        taker = pd.taker != null ? this.players[pd.taker] : named('pen') || this._bestTaker(team, (m) => m.a.sho + ps(m, 'deadball') * 8);
         this._teleport(taker, spot.x - d * 1.6, -0.6);
         const g = this.gk(opp);
         this._teleport(g, this.wx(team, 104.7), 0);
@@ -2216,8 +2287,11 @@ export class MatchSim {
         for (const m of this.players) {
           if (m.sentOff || m === taker || m === g) continue;
           const i = k++;
-          this._teleport(m, this.wx(team, 83 - (i % 3) * 2), -18 + (i / 20) * 36);
+          // shootout: everybody else waits in the centre circle
+          if (pd.shootout) this._teleport(m, (m.team === 0 ? -1 : 1) * (1.5 + (i % 3) * 1.2), -6 + (i % 10) * 1.3);
+          else this._teleport(m, this.wx(team, 83 - (i % 3) * 2), -18 + (i / 20) * 36);
         }
+        if (this.human[opp]) this.ctrl[opp] = g.idx;
         sp.aim = Math.atan2(0, d);
         sp.aimZ = 0; sp.aimY = 1.0;
         sp.ball = { x: spot.x, y: BALL_R, z: spot.z };
@@ -2229,6 +2303,7 @@ export class MatchSim {
     taker.face = sp.aim;
     sp.taker = taker.idx;
     this.sp = sp;
+    HSP.initSetPiece(this, sp, taker);
     b.owner = taker.idx; b.inHands = false; b.intended = -1;
     b.p.x = sp.ball.x; b.p.y = sp.ball.y; b.p.z = sp.ball.z;
     b.v.x = b.v.y = b.v.z = 0; b.w.x = b.w.y = b.w.z = 0;
@@ -2236,9 +2311,9 @@ export class MatchSim {
     this.path = null;
     this.phase = PHASE.SETPIECE; this.phaseT = t;
     if (this.human[team]) this.ctrl[team] = taker.idx;
-    if (this.human[opp]) { const n = this.nearestToBall(opp); if (n) this.ctrl[opp] = n.idx; }
+    if (this.human[opp] && type !== SP.PENALTY) { const n = this.nearestToBall(opp); if (n) this.ctrl[opp] = n.idx; }
     this.holds = [{}, {}];
-    if (type !== SP.THROW && type !== SP.GOALKICK) this.fxPush('whistle', { n: 0 });
+    if (type !== SP.THROW && type !== SP.GOALKICK && !quick) this.fxPush('whistle', { n: 0 });
     this.fxPush('setpiece', { type, team });
   }
 
@@ -2305,8 +2380,9 @@ export class MatchSim {
     taker.face = sp.aim; taker.faceBall = sp.aim;
     const el = t - sp.t0;
     const humanTaker = this.human[sp.team] && this.ctrl[sp.team] === sp.taker;
+    if (sp.type === SP.PENALTY && this.human[1 - sp.team]) HSP.keeperPenaltyInput(this, sp, 1 - sp.team, this.inputs[1 - sp.team] || EMPTY_IN);
     if (humanTaker) {
-      this._humanSetPiece(sp.team, dt, this.inputs[sp.team] || EMPTY_IN, el);
+      HSP.step(this, sp.team, dt, this.inputs[sp.team] || EMPTY_IN, el);
       if (this.phase === PHASE.SETPIECE || this.phase === PHASE.KICKOFF) {
         if (el > 12) { this.aimInfo[sp.team] = null; AI.takeSetPiece(this, sp); }
       }
@@ -2315,47 +2391,11 @@ export class MatchSim {
     }
     // non-taker human: allow switching only
     for (let team = 0; team < 2; team++) {
-      if (!this.human[team] || (humanTaker && team === sp.team)) continue;
+      if (!this.human[team] || (humanTaker && team === sp.team) || sp.type === SP.PENALTY) continue;
       const inp = this.inputs[team] || EMPTY_IN, prev = this.prevIn[team] || EMPTY_IN;
       if (inp.switchP && !prev.switchP) this._switch(team, null);
     }
     this._movePlayers(dt);
-  }
-
-  _humanSetPiece(team, dt, inp, el) {
-    const sp = this.sp, p = this.players[sp.taker];
-    const prev = this.prevIn[team] || EMPTY_IN;
-    const H = this.holds[team];
-    for (const k of HOLD_KEYS) if (inp[k]) H[k] = (H[k] || 0) + dt;
-    const released = (k) => !inp[k] && !!prev[k] && (H[k + 'Start'] ?? 0) >= 0;
-    const mv = this._worldMove(inp);
-    const d = this.dir[team];
-    if (sp.type === SP.PENALTY) {
-      sp.aimZ = clamp(sp.aimZ + mv.z * 3.2 * dt, -GOAL.HW + 0.2, GOAL.HW - 0.2);
-      sp.aimY = clamp(sp.aimY + mv.x * d * 1.8 * dt, 0.2, GOAL.H - 0.2);
-      sp.aim = Math.atan2(sp.aimZ - sp.ball.z, this.goalX(team) - sp.ball.x);
-    } else {
-      if (mv.l > 0.2) sp.aim = wrapAngle(angleTo(sp.aim, Math.atan2(mv.z, mv.x), 1.3 * dt));
-      if (inp.switchP) sp.curve = clamp(sp.curve - 1.4 * dt, -1, 1);
-      if (inp.tackle) sp.curve = clamp(sp.curve + 1.4 * dt, -1, 1);
-    }
-    const heldKey = KICK_KEYS.find((k) => inp[k]);
-    const power = heldKey ? clamp(H[heldKey] / 1, 0.05, 1) : 0.6;
-    this.aimInfo[team] = { setPiece: true, type: sp.type, aim: sp.aim, curve: sp.curve, aimZ: sp.aimZ, aimY: sp.aimY, power, held: !!heldKey };
-    // preview trajectory (no error)
-    const pk = this._setPiecePlan(p, sp, heldKey || this._defaultSpKey(sp), power);
-    this.aimInfo[team].preview = pk ? { vel: pk.vel, spin: pk.spin, from: pk.from || { ...this.ball.p } } : null;
-    if (el < 0.5) { for (const k of HOLD_KEYS) if (!inp[k]) H[k] = 0; return; }
-    for (const k of KICK_KEYS) {
-      if (released(k) && (H[k] || 0) > 0) {
-        const pw = clamp(H[k] / 1, 0.05, 1);
-        const plan = this._setPiecePlan(p, sp, k, pw);
-        this.aimInfo[team] = null;
-        if (plan) this._execute(p, plan);
-        break;
-      }
-    }
-    for (const k of HOLD_KEYS) if (!inp[k]) H[k] = 0;
   }
 
   _defaultSpKey(sp) {
@@ -2368,12 +2408,11 @@ export class MatchSim {
     return 'pass';
   }
 
-  _setPiecePlan(p, sp, key, power) {
+  _setPiecePlan(p, sp, key, power, ringV) {
     const dir = { x: Math.cos(sp.aim), z: Math.sin(sp.aim) };
     const team = p.team;
-    if (sp.type === SP.PENALTY) {
-      return this._plan(p, 'penalty', { tz: sp.aimZ, ty: sp.aimY, power });
-    }
+    if (sp.type === SP.PENALTY) return HSP.crosshairPlan(this, p, sp, key, power, ringV);
+    if (sp.cross && (key === 'shoot' || key === 'finesse')) return HSP.crosshairPlan(this, p, sp, key, power, ringV);
     if (sp.type === SP.THROW) {
       return this._plan(p, 'throw', { dir, power: key === 'lob' ? Math.max(0.6, power) : power * 0.7 });
     }
@@ -2388,7 +2427,9 @@ export class MatchSim {
       const dist = sp.type === SP.CORNER ? 14 + power * 26 : sp.type === SP.GOALKICK ? 25 + power * 40 : 12 + power * 38;
       const pt = { x: sp.ball.x + dir.x * dist, z: sp.ball.z + dir.z * dist };
       const kind = sp.type === SP.CORNER || (sp.type === SP.FREEKICK && this.X(team, pt.x) > 85) ? 'cross' : sp.type === SP.GOALKICK ? 'punt' : 'lob';
-      return this._plan(p, kind, { point: pt, power, curve: sp.curve, fromGround: true, elev: sp.type === SP.GOALKICK ? 0.6 : undefined });
+      const pl = this._plan(p, kind, { point: pt, power, curve: sp.curve, fromGround: true, elev: sp.type === SP.GOALKICK ? 0.6 : undefined });
+      if (pl && ringV != null) pl.info.errMul = 0.6 + ringV * 0.8;
+      return pl;
     }
     // direct free-kick shot: yaw from aim, power sets pace and elevation, curve = sidespin
     const sho = p.a.sho;
@@ -2415,8 +2456,13 @@ export class MatchSim {
       const g = this.gk(1 - sp.team);
       this.path = predictBall(this.ball, 2, 0.02);
       const plan = this.planSave(g);
-      if (plan) {
-        const pc = clamp(0.34 + (g.a.ref - 70) * 0.006, 0.22, 0.5);
+      if (plan && this.human[1 - sp.team]) {
+        HSP.keeperPenaltyPlan(this, g, sp, plan);
+        plan.pen = true; g.gkPlan = plan;
+        if (!plan.step) this.startDive(g, plan);
+        plan.acted = true;
+      } else if (plan) {
+        const pc = clamp(0.34 + (g.a.ref - 70) * 0.006 + ps(g, 'quickreflexes') * 0.04, 0.22, 0.52);
         const r = this.rng();
         if (r > pc) {
           if (r > 0.88) { plan.z = 0; plan.y = 1.2; }
@@ -2489,11 +2535,12 @@ export class MatchSim {
     const ratings = this.ratings();
     const res = {
       homeGoals: this.score[0], awayGoals: this.score[1],
-      scorers: this.scorers.map((s) => ({ playerId: s.playerId, team: s.team, minute: s.minute, ...(s.ownGoal ? { ownGoal: true } : {}) })),
+      scorers: this.scorers.map((s) => ({ playerId: s.playerId, team: s.team, minute: s.minute, ...(s.ownGoal ? { ownGoal: true } : {}), ...(s.assistId != null ? { assistId: s.assistId } : {}) })),
       stats: {
         possession: [ph, 100 - ph], shots: [...this.stats.shots], shotsOnTarget: [...this.stats.sot], passes: [...this.stats.passes],
       },
       playerRatings: ratings,
+      playerStats: this.playerStats(),
       motm: playerOfMatch(ratings, this.pstats),
     };
     if (this.shootout && this.shootout.done) res.pens = KO.tally(this.shootout);
@@ -2503,6 +2550,20 @@ export class MatchSim {
   }
 
   ratings() { return computeRatings(this.pstats, this.score); }
+
+  playerStats() {
+    const out = {};
+    for (const id in this.pstats) {
+      const s = this.pstats[id];
+      if (s.mins < 0.5 && !s.touches) continue;
+      out[id] = {
+        goals: s.goals, assists: s.assists, shots: s.shots, shotsOnTarget: s.sot, passes: s.passAtt, passesCompleted: s.passes,
+        tackles: s.tackles, interceptions: s.int, saves: s.saves, headerGoals: s.hg || 0, finesseGoals: s.fg || 0,
+        cleanSheet: !!((s.gk || s.def) && s.mins >= 30 && this.score[1 - s.team] === 0), minutes: Math.round(s.mins),
+      };
+    }
+    return out;
+  }
 
   // ------------------------------------------------------------------ anim state
   _updateAnims() {
@@ -2520,6 +2581,7 @@ export class MatchSim {
           case 'head': code = ANIM.HEAD; pp = a.jh || 0.4; break;
           case 'wall': code = ANIM.WALL; pp = a.jh || 0.4; break;
           case 'dive': code = ANIM.DIVE; pp = p.animP; break;
+          case 'gkjump': code = ANIM.GKJUMP; pp = a.punch ? 1 : 0; break;
           case 'celeb': code = ANIM.CELEB; pp = p.celebKind ?? 0; break;
           case 'throw': code = ANIM.THROW; break;
           case 'fall': code = ANIM.FALL; break;

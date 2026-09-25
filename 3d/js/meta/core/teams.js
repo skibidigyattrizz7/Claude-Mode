@@ -243,7 +243,7 @@ export function autoBuildSquad(pool, formation, { chemWeight = 0.15 } = {}) {
     for (const p of pool) m.set(p[key], (m.get(p[key]) || 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map((e) => e[0]);
   };
-  for (const lg of count('league')) for (const b of [4, 8]) tryBuild((p) => (p.league === lg || p.special === 'legend' || p.special === 'icon' ? b : 0));
+  for (const lg of count('league')) for (const b of [4, 8]) tryBuild((p) => (p.league === lg || p.special === 'legend' || p.special === 'lotg' ? b : 0));
   for (const nat of count('nat')) for (const b of [4, 8]) tryBuild((p) => (p.nat === nat ? b : 0));
   for (const lg of count('league').slice(0, 2)) for (const nat of count('nat').slice(0, 2)) tryBuild((p) => (p.league === lg ? 5 : 0) + (p.nat === nat ? 4 : 0));
   candidates.sort((a, b) => b.score - a.score);

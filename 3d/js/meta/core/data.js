@@ -315,7 +315,7 @@ export const CLUB_BY_ID = Object.fromEntries(CLUBS.map((c) => [c.id, c]));
 export const SPECIAL_CLUBS = {
   LEG: { id: 'LEG', name: 'Pitchside Legends', short: 'LEG', league: 'LEG', tier: 0, rep: 5, colors: { primary: '#F4E8C1', secondary: '#B8860B' } },
   HER: { id: 'HER', name: 'Pitchside Heroes', short: 'HER', league: 'HER', tier: 0, rep: 5, colors: { primary: '#3A1C71', secondary: '#27E1C1' } },
-  ICN: { id: 'ICN', name: 'Pitchside Icons', short: 'ICN', league: 'ICN', tier: 0, rep: 5, colors: { primary: '#FFFDF4', secondary: '#C9A227' } },
+  ICN: { id: 'ICN', name: 'Legends of the Game', short: 'LOG', league: 'ICN', tier: 0, rep: 5, colors: { primary: '#111111', secondary: '#D4AF37' } },
 };
 /** Pseudo clubs that never give club chemistry. */
 export const SPECIAL_CLUB_IDS = new Set(Object.keys(SPECIAL_CLUBS));
@@ -323,7 +323,7 @@ export function clubById(id) { return CLUB_BY_ID[id] || SPECIAL_CLUBS[id] || nul
 export function leagueName(id) {
   if (id === 'LEG') return 'Legends';
   if (id === 'HER') return 'Heroes';
-  if (id === 'ICN') return 'Icons';
+  if (id === 'ICN') return 'Legends of the Game';
   return LEAGUE_BY_ID[id] ? LEAGUE_BY_ID[id].name : id;
 }
 

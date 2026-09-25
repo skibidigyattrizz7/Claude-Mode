@@ -7,11 +7,13 @@ import { NetSession, driveHost, driveGuest } from './session.js';
 import { sanitizeTeam, sanitizeConfig, sanitizeResult, dedupeTeams, normalizeRoomCode, cleanStr } from './protocol.js';
 import { loadGameplay } from '../shared/gameplay.js';
 import { sanitizeGameplay } from './gameplaymeta.js';
+import { normalizeFriendCode } from './validate.js';
 
 const NET_KEY = 'pitchside.net';
 const HALVES = [2, 3, 4, 6, 8];
 const QUICK_KEY = 'pitchside.quick';
-const MODE_LABEL = { friendly: 'Friendly', ut: 'Ultimate Team' };
+const MODE_LABEL = { friendly: 'Friendly', ut: 'Ultimate Team', rivals: 'Rivals' };
+const divName = (d) => (d === 0 ? 'Elite' : `Division ${d}`);
 const fmtClock = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fmtNum = (n) => Number(n || 0).toLocaleString('en-US');
 function loadQuickPrefs() { try { return { mode: 'friendly', teamId: '', ...(JSON.parse(localStorage.getItem(QUICK_KEY) || '{}') || {}) }; } catch { return { mode: 'friendly', teamId: '' }; } }
@@ -26,7 +28,9 @@ function saveNetPrefs(p) { try { localStorage.setItem(NET_KEY, JSON.stringify(p)
  * @param {HTMLElement} root
  * @param {object} ctx  helpers from main.js: h, nav, toast, getTeams, getSavedUT, openMatch, renderResult,
  *                      teamPicker, teamOvr, shirtSVG, loadSettings, transportKind, dcTimeoutMs, autoAction, setBack,
- *                      online (services.js), autoQuick ({mode, team} -> start searching at once), onResult(result, info)
+ *                      online (services.js), autoQuick ({mode, team} -> start searching at once), onResult(result, info),
+ *                      onAutoEnd(res) (autoQuick search failed/cancelled), autoInvite (accepted friend invite, see acceptPreconnected)
+ * @returns {{ destroy(), isBusy(): boolean, acceptPreconnected(res) }}
  */
 export function mountOnline(root, ctx) {
   const { h } = ctx;
@@ -34,7 +38,8 @@ export function mountOnline(root, ctx) {
   const qprefs = loadQuickPrefs();
   const services = ctx.online;
   const st = {
-    quick: null, qmode: qprefs.mode === 'ut' ? 'ut' : 'friendly', qTeam: null, searchTimer: null,
+    quick: null, qmode: ['ut', 'rivals'].includes(qprefs.mode) ? qprefs.mode : 'friendly', qTeam: null, searchTimer: null,
+    friendMatch: null, challengeMode: 'friendly', friends: null, rivals: null,
     myGp: sanitizeGameplay(loadGameplay()), peerGp: null, reported: new Set(), status: null,
     phase: 'home', session: null, role: null, code: null,
     teams: null, ut: null, myIdx: 1, myTeam: null, peerTeam: null, myReady: false, peerReady: false,
@@ -57,6 +62,7 @@ export function mountOnline(root, ctx) {
     teardownSession();
     stopSearchClock();
     st.quick = null;
+    st.friendMatch = null;
     setPhase('home');
     const nameIn = h('input', { class: 'input', id: 'net-name', maxlength: '16', placeholder: 'Your name', value: prefs.name || '', autocomplete: 'nickname' });
     const codeIn = h('input', { class: 'input code-input', id: 'net-code', maxlength: '5', placeholder: 'CODE', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', inputmode: 'text', 'aria-label': 'Room code' });
@@ -91,10 +97,10 @@ export function mountOnline(root, ctx) {
     const quickNote = h('p', { class: 'hint quick-note', id: 'quick-note' });
     const findBtn = h('button', { class: 'btn btn--primary btn--xl', type: 'button', id: 'quick-find', 'data-autofocus': '1', disabled: true, onclick: () => {
       saveName(); saveAdv();
-      const team = st.qmode === 'ut' ? st.ut : st.qTeam;
+      const team = st.qmode === 'friendly' ? st.qTeam : st.ut;
       if (team) doQuickSearch(st.qmode, team);
     } }, 'Find opponent');
-    const modeSeg = seg('Mode', [['friendly', 'Friendly'], ['ut', 'Ultimate Team']], st.qmode, (v) => {
+    const modeSeg = seg('Mode', [['friendly', 'Friendly'], ['ut', 'Ultimate Team'], ['rivals', 'Rivals']], st.qmode, (v) => {
       st.qmode = v; qprefs.mode = v; saveQuickPrefs(qprefs); renderTeamSlot();
     });
     modeSeg.querySelector('.seg').dataset.name = 'quick-mode';
@@ -113,20 +119,23 @@ export function mountOnline(root, ctx) {
 
     function updateFind() {
       const online = st.status && st.status.online;
-      const team = st.qmode === 'ut' ? st.ut : st.qTeam;
+      const team = st.qmode === 'friendly' ? st.qTeam : st.ut;
       findBtn.disabled = !(online && team);
       quickNote.textContent = !st.status ? 'Checking matchmaking…'
         : !online ? 'Matchmaking is offline right now — you can still play a friend with a code.'
-          : st.qmode === 'ut' && !st.ut ? 'Build a complete squad in Ultimate Team first.' : '';
+          : st.qmode !== 'friendly' && !st.ut ? 'Build a complete squad in Ultimate Team first.'
+            : st.qmode === 'rivals' ? 'Ranked: wins earn 3 Rivals points, draws 1. Weekly rewards by peak division.' : '';
       quickNote.classList.toggle('warn', !!(st.status && !online));
     }
     function renderTeamSlot() {
       if (!st.teams) { updateFind(); return; }
-      if (st.qmode === 'ut') {
+      if (st.qmode !== 'friendly') {
         const t = st.ut;
+        const rv = st.qmode === 'rivals' && st.rivals && st.rivals.ok ? st.rivals : null;
         teamSlot.replaceChildren(t
           ? h('div', { class: 'quick-ut', style: { '--kit1': t.kit.primary, '--kit2': t.kit.secondary } },
-            ctx.shirtSVG(t.kit, 10, 56), h('div', null, h('b', { class: 'quick-ut-name' }, t.name), h('div', { class: 'hint' }, `${ctx.teamOvr(t)} OVR · ${t.formation}`)))
+            ctx.shirtSVG(t.kit, 10, 56), h('div', null, h('b', { class: 'quick-ut-name' }, t.name), h('div', { class: 'hint' }, `${ctx.teamOvr(t)} OVR · ${t.formation}`)),
+            rv ? h('div', { class: 'rivals-chip', id: 'rivals-chip' }, h('b', null, divName(rv.division)), h('small', null, rv.threshold ? `${rv.points}/${rv.threshold} pts` : `${rv.points} pts`)) : null)
           : h('div', { class: 'quick-ut empty' }, h('b', null, 'No Ultimate Team squad'), h('div', { class: 'hint' }, 'Open Ultimate Team from the main menu to build one.')));
       } else {
         const idx = Math.max(0, st.teams.findIndex((t) => t.id === qprefs.teamId));
@@ -140,6 +149,9 @@ export function mountOnline(root, ctx) {
       updateFind();
     }
 
+    const friendsPanel = h('section', { class: 'panel friends', id: 'friends-panel' },
+      h('div', { class: 'friends-top' }, h('div', null, h('div', { class: 'kicker' }, 'Option 3'), h('h2', null, 'Friends')), h('div', { class: 'friends-code', id: 'friends-code' })),
+      h('div', { class: 'friends-body', id: 'friends-body' }, h('p', { class: 'hint' }, 'Checking online services…')));
     const profileBar = h('div', { class: 'net-profile', id: 'net-profile', role: 'status' }, h('span', { class: 'pill pill--wait' }, h('i', { class: 'dot' }), 'Checking online services…'));
     function renderStatus() {
       const s2 = st.status;
@@ -164,6 +176,7 @@ export function mountOnline(root, ctx) {
       err ? h('div', { class: 'alert', role: 'alert', id: 'net-error' }, err) : null,
       profileBar,
       h('div', { class: 'online-cards' }, quickCard, codeCard),
+      friendsPanel,
       h('div', { class: 'panel online-extra' },
         h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'net-name' }, 'Display name'), nameIn),
         h('details', { class: 'adv' },
@@ -191,8 +204,129 @@ export function mountOnline(root, ctx) {
       const profile = onlineNow ? await services.profile() : null;
       if (st.destroyed) return;
       st.status = { online: onlineNow && !!(profile && profile.ok), profile: profile && profile.ok ? profile : null };
-      if (st.homeToken === token && st.phase === 'home') renderStatus();
+      if (st.homeToken === token && st.phase === 'home') { renderStatus(); loadFriends(token); }
+      if (st.status.online) {
+        st.rivals = await services.rivals.status();
+        if (st.homeToken === token && st.phase === 'home' && st.qmode === 'rivals') renderTeamSlot();
+      }
     })();
+  }
+
+  // ---------------------------------------------------------------- friends
+  async function loadFriends(token = st.homeToken) {
+    const body = root.querySelector('#friends-body');
+    if (!body) return;
+    if (!st.status || !st.status.online) {
+      body.replaceChildren(h('p', { class: 'hint' }, 'Friends, challenges and presence need the online service.'));
+      return;
+    }
+    const r = await services.friends.list();
+    if (st.homeToken !== token || st.phase !== 'home') return;
+    st.friends = r.ok ? r : null;
+    renderFriends(r);
+  }
+
+  function renderFriends(r) {
+    const body = root.querySelector('#friends-body');
+    const codeEl = root.querySelector('#friends-code');
+    if (!body || !codeEl) return;
+    if (!r.ok) { body.replaceChildren(h('p', { class: 'hint warn' }, 'Friends could not be loaded.')); return; }
+    const code = r.code || (st.status && st.status.profile && st.status.profile.friendCode) || '—';
+    codeEl.replaceChildren(h('small', null, 'Your friend code'), h('b', { id: 'my-friend-code' }, code),
+      h('button', { class: 'btn btn--ghost btn--sm', type: 'button', id: 'copy-friend-code', onclick: async () => {
+        try { await navigator.clipboard.writeText(code); ctx.toast('Friend code copied'); } catch { ctx.toast(`Your code: ${code}`); }
+      } }, 'Copy'));
+    const addIn = h('input', { class: 'input', id: 'friend-code-input', maxlength: '9', placeholder: 'FRIEND CODE', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Friend code' });
+    addIn.addEventListener('input', () => { const v = normalizeFriendCode(addIn.value); if (v !== addIn.value) addIn.value = v; });
+    const addBtn = h('button', { class: 'btn', type: 'button', id: 'friend-add', onclick: async () => {
+      addBtn.disabled = true;
+      const res = await services.friends.add(addIn.value);
+      addBtn.disabled = false;
+      if (res.ok) { ctx.toast(res.status === 'friend' ? `You and ${res.name} are now friends` : `Friend request sent to ${res.name}`); loadFriends(); }
+      else ctx.toast(res.message || 'Could not add friend', 'bad');
+    } }, 'Add');
+    addIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
+    const act = (f, action, label, cls = 'btn--ghost') => h('button', { class: `btn btn--sm ${cls}`, type: 'button', 'data-friend-action': action, onclick: async (e) => {
+      if ((action === 'block' || action === 'remove') && !confirmAction(`${action === 'block' ? 'Block' : 'Remove'} ${f.name}?`)) return;
+      e.currentTarget.disabled = true;
+      const res = await services.friends.respond(f.id, action);
+      if (!res.ok) ctx.toast(res.message || 'Something went wrong', 'bad');
+      loadFriends();
+    } }, label);
+    const groups = { incoming: [], friend: [], outgoing: [], blocked: [] };
+    for (const f of r.items) groups[f.status].push(f);
+    const row = (f, ...kids) => h('li', { class: `friend friend--${f.status} ${f.online ? 'is-online' : ''}`, 'data-friend-id': f.id },
+      h('span', { class: 'friend-dot', 'aria-hidden': 'true' }),
+      h('span', { class: 'friend-name' }, f.name,
+        f.status === 'friend' ? h('small', null, f.online ? 'Online' : 'Offline', f.rating != null ? ` · ${f.rating}` : '', f.rivalsDivision != null ? ` · Rivals ${f.rivalsDivision === 0 ? 'Elite' : `D${f.rivalsDivision}`}` : '') : null),
+      h('span', { class: 'friend-actions' }, ...kids));
+    const modeSeg = seg('Challenge mode', [['friendly', 'Friendly'], ['ut', 'Ultimate Team']], st.challengeMode, (v) => { st.challengeMode = v; });
+    modeSeg.classList.add('challenge-mode');
+    body.replaceChildren(
+      h('div', { class: 'friend-add' }, addIn, addBtn),
+      groups.incoming.length ? h('div', { class: 'friend-group' }, h('h3', null, `Requests (${groups.incoming.length})`),
+        h('ul', { class: 'friend-list' }, groups.incoming.map((f) => row(f, act(f, 'accept', 'Accept', 'btn--primary'), act(f, 'decline', 'Decline'))))) : null,
+      h('div', { class: 'friend-group' }, h('h3', null, `Friends (${groups.friend.length})`),
+        groups.friend.length ? [modeSeg, h('ul', { class: 'friend-list' }, groups.friend.map((f) => row(f,
+          h('button', { class: 'btn btn--sm btn--primary', type: 'button', 'data-friend-action': 'challenge', disabled: !f.online || null, title: f.online ? null : 'Your friend is offline', onclick: () => doChallenge(f, st.challengeMode) }, 'Challenge'),
+          act(f, 'remove', 'Remove'), act(f, 'block', 'Block', 'btn--ghost btn--danger'))))]
+          : h('p', { class: 'hint' }, 'No friends yet — share your friend code or add theirs above.')),
+      groups.outgoing.length ? h('div', { class: 'friend-group' }, h('h3', null, 'Sent requests'),
+        h('ul', { class: 'friend-list' }, groups.outgoing.map((f) => row(f, h('span', { class: 'hint' }, 'Pending'), act(f, 'remove', 'Cancel'))))) : null,
+      groups.blocked.length ? h('details', { class: 'friend-group' }, h('summary', null, `Blocked (${groups.blocked.length})`),
+        h('ul', { class: 'friend-list' }, groups.blocked.map((f) => row(f, act(f, 'unblock', 'Unblock'))))) : null,
+    );
+  }
+  function confirmAction(msg) { try { return window.confirm(msg); } catch { return true; } }
+
+  /** Challenge a friend: we host (our peer id travels in the invite), they join on accept. */
+  async function doChallenge(friend, mode) {
+    teardownSession();
+    setPhase('inviting');
+    const t0 = Date.now();
+    const left = h('b', { class: 'search-time', id: 'invite-left' }, '60');
+    const cancel = h('button', { class: 'btn btn--lg', type: 'button', id: 'invite-cancel', 'data-autofocus': '1', onclick: () => { services.friends.cancelChallenge(); } }, 'Cancel challenge');
+    view(h('div', { class: 'panel center-panel searching', id: 'inviting' },
+      h('div', { class: 'radar', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')),
+      h('div', { class: 'kicker' }, `Friend challenge · ${MODE_LABEL[mode]}`),
+      h('h2', null, `Waiting for ${friend.name}`),
+      h('div', { class: 'search-clock' }, h('small', null, 'Invite expires in'), left),
+      h('p', { class: 'search-status' }, 'They will see your challenge in Pitchside while the game is open.'),
+      h('div', { class: 'row center' }, cancel)));
+    cancel.focus({ preventScroll: true });
+    stopSearchClock();
+    st.searchTimer = setInterval(() => { left.textContent = String(Math.max(0, 60 - Math.floor((Date.now() - t0) / 1000))); }, 250);
+    const res = await services.friends.challenge(friend.id, mode);
+    stopSearchClock();
+    if (st.destroyed || st.phase !== 'inviting') { if (res.ok) try { res.transport.close(); } catch { /* ignore */ } return; }
+    if (!res.ok) { renderHome(res.error === 'cancelled' ? '' : res.message || 'The challenge failed.'); return; }
+    acceptPreconnected({ ...res, opponent: { name: friend.name, rating: friend.rating } });
+  }
+
+  /** Enter the code-room lobby over a transport that is already paired (friend challenge / accepted invite). */
+  async function acceptPreconnected(res) {
+    if (!res || !res.ok || !res.transport) return;
+    teardownSession();
+    st.quick = null;
+    st.friendMatch = { mode: res.mode === 'ut' ? 'ut' : 'friendly', opponent: res.opponent || { name: 'Friend' } };
+    st.role = res.role === 'host' ? 'host' : 'guest';
+    st.code = null;
+    setPhase('joining');
+    view(h('div', { class: 'panel center-panel' }, h('div', { class: 'spinner' }), h('p', null, `Connecting to ${st.friendMatch.opponent.name}…`)));
+    if (!st.teams) {
+      try { st.teams = await ctx.getTeams(); } catch { /* lobby shows the error */ }
+      st.ut = await ctx.getSavedUT();
+    }
+    if (st.friendMatch.mode === 'ut' && st.ut) { st.myIdx = 0; st.myTeam = st.ut; }
+    const s = newSession(res.transport, { matchToken: res.token });
+    try {
+      await s.attach(st.role, 25000); // same tick as newSession (buffered hello)
+    } catch (e) {
+      if (st.session === s) renderHome(`Could not connect: ${e.message}`);
+      return;
+    }
+    if (st.session !== s) return;
+    enterLobby();
   }
 
   // ---------------------------------------------------------------- quick search
@@ -239,6 +373,7 @@ export function mountOnline(root, ctx) {
     stopSearchClock();
     if (st.destroyed || st.phase !== 'searching' || !st.quick) { if (res.ok) try { res.transport.close(); } catch { /* ignore */ } return; }
     if (!res.ok) {
+      if (ctx.autoQuick && ctx.onAutoEnd) { renderHome(res.cancelled ? '' : res.message || ''); ctx.onAutoEnd(res); return; }
       if (res.cancelled) renderHome();
       else renderHome(res.message || 'Quick search failed.');
       return;
@@ -373,7 +508,7 @@ export function mountOnline(root, ctx) {
     return h('div', { class: `net-status ${up ? 'up' : 'down'}` },
       h('span', { class: 'dot', 'aria-hidden': 'true' }),
       h('span', { class: 'net-status-text' }, up ? `Connected to ${st.session.peerName}` : 'Reconnecting…'),
-      h('span', { class: 'net-room' }, st.quick ? `Quick match · ${MODE_LABEL[st.quick.mode]}` : `Room ${st.code}`),
+      h('span', { class: 'net-room' }, st.quick ? `Quick match · ${MODE_LABEL[st.quick.mode]}` : st.friendMatch ? `Friend match · ${MODE_LABEL[st.friendMatch.mode]}` : `Room ${st.code}`),
       h('span', { class: 'net-ping' }, 'Ping ', h('b', { class: 'ping-val' }, st.ping != null ? `${st.ping} ms` : '—')));
   }
 
@@ -742,7 +877,7 @@ export function mountOnline(root, ctx) {
     const quick = st.quick;
     const el = ctx.renderResult({
       home, away, result, title: gf > ga ? 'Victory' : gf < ga ? 'Defeat' : 'Draw',
-      kicker: quick ? `Online · Quick Search · ${MODE_LABEL[quick.mode]}` : `Online · Room ${st.code}`,
+      kicker: quick ? `Online · Quick Search · ${MODE_LABEL[quick.mode]}` : st.friendMatch ? `Online · Friend match · ${MODE_LABEL[st.friendMatch.mode]}` : `Online · Room ${st.code}`,
       actions: [
         { id: 'rematch', label: 'Rematch', primary: true, onClick: () => { st.wantRematch = !st.wantRematch; st.session && st.session.send('rematch', { want: st.wantRematch }); updateRematch(); if (st.role === 'host' && st.wantRematch && st.peerRematch) hostStart(); } },
         quick ? { id: 'again', label: 'New opponent', onClick: () => { const q = st.quick; teardownSession(); doQuickSearch(q.mode, q.team); } }
@@ -753,7 +888,7 @@ export function mountOnline(root, ctx) {
     const reward = h('div', { class: 'reward', id: 'reward-line', role: 'status' });
     view(statusBar(), reward, el, h('p', { class: 'hint center rematch-note', id: 'rematch-note' }));
     updateRematch();
-    if (ctx.onResult) { try { ctx.onResult(result, { userSide: mine, mode: quick ? quick.mode : 'friendly', online: true }); } catch (e) { console.error(e); } }
+    if (ctx.onResult) { try { ctx.onResult(result, { userSide: mine, mode: quick ? quick.mode : st.friendMatch ? st.friendMatch.mode : 'friendly', online: true }); } catch (e) { console.error(e); } }
     reportOnce({ won: gf > ga, drawn: gf === ga, goalsFor: gf, goalsAgainst: ga }, reward);
   }
 
@@ -763,7 +898,7 @@ export function mountOnline(root, ctx) {
     if (!services || st.reported.has(key)) return;
     st.reported.add(key);
     if (el) el.replaceChildren(h('span', { class: 'hint' }, 'Updating coins & rating…'));
-    const res = await services.reportResult({ mode: st.quick ? st.quick.mode : 'friendly', ...r });
+    const res = await services.reportResult({ mode: st.quick ? st.quick.mode : st.friendMatch ? st.friendMatch.mode : 'friendly', ...r });
     if (!el || !el.isConnected) return;
     if (!res.ok) { el.replaceChildren(h('span', { class: 'hint' }, res.error === 'not_configured' || res.error === 'offline' ? 'Offline — this match did not earn coins.' : 'Coins could not be updated for this match.')); return; }
     if (res.capped) { el.replaceChildren(h('span', { class: 'hint' }, `Reward limit reached for now — no coins for this match. Rating ${res.rating}.`)); return; }
@@ -771,7 +906,10 @@ export function mountOnline(root, ctx) {
     el.replaceChildren(
       h('span', { class: 'reward-coins' }, h('b', null, `+${fmtNum(res.coinsAwarded)}`), ' coins'),
       h('span', { class: `reward-rating ${d > 0 ? 'up' : d < 0 ? 'down' : ''}` }, 'Rating ', h('b', null, res.rating), d ? ` (${d > 0 ? '+' : ''}${d})` : ''),
-      h('span', { class: 'reward-div' }, `Division ${res.division}`),
+      res.rivals
+        ? h('span', { class: `reward-rivals ${res.rivals.promoted ? 'up' : ''}`, id: 'reward-rivals' }, res.rivals.promoted ? 'Promoted! ' : 'Rivals ',
+          h('b', null, divName(res.rivals.division)), res.rivals.threshold ? ` · ${res.rivals.points}/${res.rivals.threshold} pts` : ` · ${res.rivals.points} pts`)
+        : h('span', { class: 'reward-div' }, `Division ${res.division}`),
       h('span', { class: 'reward-bal' }, `Balance ${fmtNum(res.coins)}`));
   }
   function reportForfeitWin() {
@@ -821,7 +959,8 @@ export function mountOnline(root, ctx) {
 
   ctx.setBack(() => {
     if (st.phase === 'home') { ctx.nav.back(); return; }
-    if (st.phase === 'searching') { cancelSearch(); return; }
+    if (st.phase === 'searching') { cancelSearch(); if (ctx.autoQuick && ctx.onAutoEnd) ctx.onAutoEnd({ ok: false, cancelled: true, reason: 'cancelled' }); return; }
+    if (st.phase === 'inviting') { services.friends.cancelChallenge(); return; }
     if ((st.phase === 'lobby' || st.phase === 'hosting' || st.phase === 'result') && st.session && !confirmLeave()) return;
     renderHome();
   });
@@ -834,12 +973,16 @@ export function mountOnline(root, ctx) {
   window.addEventListener('pagehide', onPageHide);
 
   renderHome();
-  if (ctx.autoQuick && ctx.autoQuick.team) doQuickSearch(ctx.autoQuick.mode === 'ut' ? 'ut' : 'friendly', ctx.autoQuick.team);
+  if (ctx.autoInvite) acceptPreconnected(ctx.autoInvite);
+  else if (ctx.autoQuick && ctx.autoQuick.team) doQuickSearch(['ut', 'rivals'].includes(ctx.autoQuick.mode) ? ctx.autoQuick.mode : 'friendly', ctx.autoQuick.team);
   else if (ctx.autoAction === 'host') doHost();
   else if (ctx.autoAction && ctx.autoAction.startsWith('join:')) doJoin(ctx.autoAction.slice(5));
 
   return {
+    isBusy: () => !['home', 'ended'].includes(st.phase),
+    acceptPreconnected,
     destroy() {
+      if (st.phase === 'inviting' && services) services.friends.cancelChallenge();
       if (st.phase === 'searching' && services) services.matchmaking.cancelSearch();
       stopSearchClock();
       st.destroyed = true;

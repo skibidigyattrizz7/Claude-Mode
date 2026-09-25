@@ -14,8 +14,7 @@ export function priceRange(p) {
   let band = BANDS[0];
   for (const b of BANDS) if (p.ovr >= b[0]) band = b;
   let [, min, max] = band;
-  if (p.special === 'icon') { min *= 4; max = 15000000; }
-  else if (p.special === 'star') { min *= 2; max *= 2; }
+  if (p.special === 'lotg') { min *= p.era === 'prime' ? 4 : 2; max = p.era === 'prime' ? 15000000 : Math.max(max * 3, 1000000); }
   else if (p.special) { min = Math.round(min * 1.5); }
   return { min: snapPrice(min), max: snapPrice(max) };
 }

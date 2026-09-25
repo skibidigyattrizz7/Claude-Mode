@@ -317,12 +317,15 @@ export class TeamAI {
       moveTo(p, f.x, f.y, 3);
       return;
     }
-    // come short to help a team-mate under pressure
-    const press = Math.min(...m.opps(this.team).map((o) => dist(o, carrier)));
-    if (!globalThis.__noShort && press < 2.8 && p.role === 'MF' && dist(p, carrier) < 16 && p === this.nearestSupport(carrier)) {
-      const away = norm(p.x - carrier.x, p.y - carrier.y);
-      f = { x: carrier.x + away.x * 7 - dir * 2, y: clamp(carrier.y + away.y * 7, 3, PITCH.W - 3) };
-      moveTo(p, f.x, f.y, 4);
+    // offer an angle to a team-mate under pressure: square of him, away from the presser
+    let presser = null, pd = 2.8;
+    for (const o of m.opps(this.team)) { const d = dist(o, carrier); if (d < pd) { pd = d; presser = o; } }
+    if (!globalThis.__noShort && presser && p.role === 'MF' && dist(p, carrier) < 18 && p === this.nearestSupport(carrier)) {
+      const u = norm(carrier.x - presser.x, carrier.y - presser.y);            // away from the presser
+      const side = Math.sign((p.x - carrier.x) * -u.y + (p.y - carrier.y) * u.x) || 1;
+      const px = -u.y * side, py = u.x * side;                               // perpendicular, on my side
+      f = { x: carrier.x + (px * 0.8 + u.x * 0.6) * 9, y: clamp(carrier.y + (py * 0.8 + u.y * 0.6) * 9, 3, PITCH.W - 3) };
+      moveTo(p, f.x, f.y, 5);
       return;
     }
     if (p.role === 'FW' && prog > PITCH.L * 0.3) {

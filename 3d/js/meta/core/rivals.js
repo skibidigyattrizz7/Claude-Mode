@@ -49,11 +49,11 @@ export function weeklyReward(division, wins) {
   const rank = 10 - (division === ELITE ? -1 : division); // 0 (div 10) .. 11 (Elite)
   const coins = Math.round((1000 + rank * 650) * [0.5, 1, 1.5, 2.2][tier] / 50) * 50;
   const packs = [];
-  const packTier = rank >= 11 ? ['premium', 'rare', 'rare', 'icon'] : rank >= 9 ? ['gold', 'premium', 'rare', 'stars'] : rank >= 6 ? ['gold', 'gold', 'premium', 'rare'] : rank >= 3 ? ['silver', 'gold', 'gold', 'premium'] : ['bronze', 'silver', 'gold', 'gold'];
+  const packTier = rank >= 11 ? ['premium', 'rare', 'rare', 'lotg'] : rank >= 9 ? ['gold', 'premium', 'rare', 'rare'] : rank >= 6 ? ['gold', 'gold', 'premium', 'rare'] : rank >= 3 ? ['silver', 'gold', 'gold', 'premium'] : ['bronze', 'silver', 'gold', 'gold'];
   packs.push(packTier[tier]);
   if (tier >= 2) packs.push(rank >= 6 ? 'premium' : 'gold');
   const out = { coins, packs };
-  if (tier >= 3) out.pick = { pool: rank >= 9 ? 'star' : 'gold83', n: 3, label: rank >= 9 ? 'Star Player Pick' : '83+ Player Pick' };
+  if (tier >= 3) out.pick = { pool: rank >= 9 ? 'lotg' : 'gold83', n: 3, label: rank >= 9 ? 'LOTG Player Pick' : '83+ Player Pick' };
   return out;
 }
 
