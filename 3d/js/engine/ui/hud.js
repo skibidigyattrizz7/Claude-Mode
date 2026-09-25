@@ -87,7 +87,7 @@ const CSS = `
 .ps3d-contact{position:absolute;right:24px;bottom:150px;width:92px;height:118px;display:none;text-align:center;font-size:10px;font-weight:800;color:#cfd8ea}
 .ps3d-contact .ball{position:relative;width:78px;height:78px;margin:0 auto 4px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8dde6 60%,#9aa3b3);box-shadow:0 2px 10px rgba(0,0,0,.5)}
 .ps3d-contact .dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#ff4d4d;box-shadow:0 0 0 2px #fff}
-.ps3d-ticker{position:absolute;left:50%;top:108px;transform:translateX(-50%);max-width:70%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;font-style:italic;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps3d-ticker{position:absolute;left:18px;bottom:84px;max-width:46%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;font-style:italic;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ps3d-ticker.show{opacity:1}
 .ps3d-pens{position:absolute;left:18px;top:56px;background:rgba(10,16,34,.82);border-radius:5px;padding:5px 10px;font-size:12px;font-weight:800;display:none}
 .ps3d-pens .row{display:flex;align-items:center;gap:5px;margin:2px 0}
