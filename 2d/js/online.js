@@ -5,15 +5,14 @@
 import { Match, STATE_CODES } from './match.js';
 import { TEAMS, teamByCode } from './data.js';
 import { makeCamera, updateCamera, drawMatch, drawHUD, s2w } from './render.js';
-import { input } from './input.js';
-import { mouseAimActive } from './input.js';
+import { input, mouseAimActive } from './input.js';
 import { setTouchMode } from './touch.js';
 import { initAudio, sfx, setMuted, crowdAmbience } from './audio.js';
 import { settings } from './settings.js';
 import { angDiff, lerp as lerpNum } from './util.js';
 import * as UI from './ui.js';
 import {
-  createTransport, PeerTransport, encode, decode, MAX_MSG_BYTES,
+  createTransport,
   packInput, unpackInput, INPUT_BOOL, sanitizeTeamPick, packSnapshot, sanitizeSnapshot, sanitizeEvent,
   normalizeRoomCode,
 } from './net.js';
