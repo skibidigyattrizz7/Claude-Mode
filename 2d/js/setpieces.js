@@ -170,7 +170,10 @@ function humanAim(m, sp, dt) {
   const pressedPass = c.wasPressed('pass') || (h.ctrl === 0 && m.mouseClick);
   if (c.isHeld('shoot') && sp.shootArmed) { sp.charging = true; sp.power = Math.min(1, sp.power + dt / 1.1); }
   else if (sp.charging) { executeSetPiece(m, 'long', sp.aim, sp.power, sp.curve); return; }
-  if (pressedPass && !sp.charging) executeSetPiece(m, 'short', sp.aim, 0.5, 0);
+  if (pressedPass && !sp.charging) { executeSetPiece(m, 'short', sp.aim, 0.5, 0); return; }
+  // nobody touched the controls for a long time: take it short automatically (no stuck game)
+  if (mv.x || mv.y || c.isHeld('shoot') || aw) sp.idleT = 0; else sp.idleT = (sp.idleT || 0) + dt;
+  if (sp.idleT > 12 && !sp.charging) executeSetPiece(m, 'short', sp.aim, 0.5, 0);
 }
 
 function aiExecute(m, sp) {

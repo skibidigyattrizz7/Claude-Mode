@@ -1,14 +1,14 @@
 // Pure-logic tests. Run with: node 2d/tests/logic.test.mjs
 import { PITCH, CY, GOAL, BALL_R, PHYS, POST_R } from '../js/constants.js';
 import { makeBall, stepBallWorld, integrate, solveKick } from '../js/physics.js';
-import { goalScored, keeperMaySave, resolveKeeperContact, outOfPlay, restartFor, judgeTackle, isFromBehind, applyCard } from '../js/rules.js';
-import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget } from '../js/passing.js';
+import { goalScored, keeperMaySave, resolveKeeperContact, outOfPlay, restartFor, judgeTackle, isFromBehind, applyCard, tackleSweep } from '../js/rules.js';
+import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk } from '../js/passing.js';
 import { planShot, shotVelocity, isOnTarget } from '../js/shooting.js';
 import { defaultBinds, setBind, saveBinds, loadBinds, STORAGE_KEY, keyLabel } from '../js/keybinds.js';
 import { makeRng } from '../js/util.js';
 import { chooseKits, TEAMS, teamByCode, kitsClash } from '../js/data.js';
 import { newTournament, recordUserResult, nextUserFixture, standings } from '../js/tournament.js';
-import { penaltyOutcomeSim } from '../js/kickphys.js';
+import { penaltyOutcomeSim, KeeperModel, buildWall, makeKickState, launch, stepKick, kickError, freeKickSpeed, aiFreeKickDive } from '../js/kickphys.js';
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -269,6 +269,87 @@ test('AI penalty takers convert roughly 65-88%', () => {
   for (let i = 0; i < N; i++) if (penaltyOutcomeSim(rng, 0.75, 0.7) === 'goal') goals++;
   const r = goals / N;
   assert(r > 0.65 && r < 0.88, 'conversion ' + r.toFixed(3));
+});
+
+console.log('Regression tests (browser QA fixes)');
+test('front-on standing tackle meets the ball before the man (clean)', () => {
+  // attacker at x=40 facing -x with the ball 0.55 m in front; defender 0.72 m away facing him
+  const victim = { x: 40, y: 27, facing: Math.PI };
+  const ball = { x: 39.45, y: 27, z: 0 };
+  for (const dy of [0, 0.15, -0.2]) {
+    const tackler = { x: 39.28, y: 27 + dy };
+    const dir = Math.atan2(ball.y - tackler.y, ball.x - tackler.x);   // lunge at the ball
+    const sw = tackleSweep(tackler, dir, 0.9, ball, [victim]);
+    assert(sw.first === 'ball', 'front-on tackle should be clean, got ' + sw.first);
+    assert(!judgeTackle({ type: 'stand', firstContact: 'ball', bodyContact: true, fromBehind: false }).foul);
+  }
+});
+test('tackle through the man from behind hits the body first (foul)', () => {
+  const victim = { x: 40, y: 27, facing: 0 };             // running +x, ball ahead of him
+  const ball = { x: 40.6, y: 27, z: 0 };
+  const tackler = { x: 39.3, y: 27 };
+  const sw = tackleSweep(tackler, 0, 0.9, ball, [victim]);
+  assert(sw.first === 'body', 'expected body first, got ' + sw.first);
+  assert(isFromBehind(tackler, victim));
+  assert(judgeTackle({ type: 'stand', firstContact: 'body', bodyContact: true, fromBehind: true }).foul);
+});
+test('shoulder-to-shoulder challenge for the ball is not a body foul', () => {
+  const victim = { x: 40, y: 27, facing: 0 };
+  const ball = { x: 40.6, y: 27.1, z: 0 };
+  const tackler = { x: 40.0, y: 27.72 };                  // alongside
+  const sw = tackleSweep(tackler, Math.atan2(ball.y - tackler.y, ball.x - tackler.x), 0.9, ball, [victim]);
+  assert(sw.first !== 'body', 'side-on challenge reached the ball, got ' + sw.first);
+});
+test('through ball is played into reachable space, not 40 m ahead', () => {
+  const from = { x: 30, y: 27 };
+  const runner = { x: 45, y: 20, vx: 6, vy: 0 };
+  const lt = leadTarget(from, runner, 'through', 1);
+  const lead = Math.hypot(lt.target.x - runner.x, lt.target.y - runner.y);
+  assert(lead >= 3 && lead <= 14.5, 'lead ' + lead.toFixed(1));
+  assert(lt.target.x > runner.x, 'ahead of the runner');
+});
+test('lane risk: blocked lane is risky, open lane is safe', () => {
+  const a = { x: 30, y: 27 }, b = { x: 45, y: 27 };
+  assert(laneRisk(a, b, [{ x: 38, y: 27.3 }]) > 0.8, 'blocked');
+  assert(laneRisk(a, b, [{ x: 36, y: 45 }]) < 0.2, 'open');
+});
+test('pass with nobody in the 45° cone still finds a teammate slightly wider', () => {
+  const passer = { x: 30, y: 27 };
+  const m = { x: 40, y: 37, vx: 0, vy: 0 };               // 45°+ off a straight-ahead aim
+  const r = choosePassTarget(passer, [m], [], { x: 1, y: -0.12 });
+  assert(r && r.mate === m, 'wide-cone fallback');
+});
+test('long lofted kicks reach their target (drag-corrected solver)', () => {
+  for (const [d, hs] of [[35, 23], [45, 23], [45, 30], [30, 15]]) {
+    const from = { x: 5, y: 27, z: 0.11 }, target = { x: 5 + d, y: 30, z: 0.4 };
+    const v = solveKick(from, target, hs, { loft: true });
+    const b = makeBall(from.x, from.y); Object.assign(b, { z: from.z, vx: v.vx, vy: v.vy, vz: v.vz });
+    let best = 1e9, t = 0;
+    while (t < 6) { integrate(b, PHYS.DT); t += PHYS.DT; best = Math.min(best, Math.hypot(b.x - target.x, b.y - target.y, b.z - target.z)); if (b.z <= 0 && t > 0.3) break; }
+    assert(best < 0.3, `d=${d} hs=${hs} miss ${best.toFixed(2)}`);
+  }
+});
+test('free kicks: a well-struck kick into the corner beats a Normal keeper sometimes (20-70%)', () => {
+  const rng = makeRng(21);
+  let goals = 0, saves = 0; const N = 400;
+  for (let i = 0; i < N; i++) {
+    const pos = { x: PITCH.L - (18 + rng() * 10), y: CY + (rng() - 0.5) * 20 };
+    const keeper = new KeeperModel(CY + (pos.y < CY ? 1 : -1) * 0.8, 0.65, PITCH.L - 0.6);
+    const wall = buildWall(pos, 4, rng);
+    const s = makeKickState(pos, keeper, wall);
+    const far = pos.y < CY ? 1 : -1;
+    const tgt = kickError({ y: CY + far * (GOAL.W / 2 - 0.6), z: 1.6 }, 0.7, 0.75, rng, 1.2);
+    launch(s, tgt, freeKickSpeed(0.7), { spin: far * 0.7 });
+    const dv = aiFreeKickDive(s.ball, keeper, true, rng);
+    let dived = false;
+    for (let k = 0; k < 800 && !s.done; k++) { if (!dived && s.t >= dv.at) { keeper.dive(dv.y, dv.z, dv.dur); dived = true; } stepKick(s, PHYS.DT); }
+    if (s.result === 'goal') goals++; if (s.result === 'save') saves++;
+    // a kick recorded as saved must never have ended inside the goal
+    if (s.result === 'save') assert(goalScored(s.ball) === -1, 'saved ball is in the goal');
+  }
+  const r = goals / N;
+  assert(r > 0.2 && r < 0.7, 'FK goal rate ' + r.toFixed(2));
+  assert(saves > 0, 'keeper still makes saves');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

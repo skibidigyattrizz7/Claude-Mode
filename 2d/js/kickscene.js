@@ -298,6 +298,8 @@ export class KickScene {
         return;
       }
       if (c.wasPressed('pass') || (hs === 0 && input.ctrls[0].wasPressed('pass'))) this.startRunup(this.sliderPower);
+      // in a match the kick can't wait forever: after a long idle spell it is taken at slider power
+      else if ((this.mode === 'penalty' || this.mode === 'freekick') && this.phaseT > 15 && !this.charging) this.startRunup(this.sliderPower);
     } else {
       // AI shooter: human keeper chooses a spot and dives; AI steps up after a pause
       if (hk != null) {
