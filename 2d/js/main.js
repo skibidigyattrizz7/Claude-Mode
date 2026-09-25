@@ -4,6 +4,7 @@ import { TEAMS, teamByCode } from './data.js';
 import { Match } from './match.js';
 import { KickScene } from './kickscene.js';
 import { Tutorial } from './tutorial.js';
+import { CornerPractice } from './cornerpractice.js';
 import { drawMatch, drawHUD, makeCamera, updateCamera, s2w } from './render.js';
 import { input, initInput, clearEdges, mouseAimActive, releaseAll } from './input.js';
 import { initTouch, setTouchMode, isTouchDevice } from './touch.js';
@@ -43,6 +44,7 @@ class MatchScene {
     this.paused = false;
     this.snapCam = true;
     if (this.tut) { this.m.noClock = true; }
+    this.cp = opts.cornerPractice ? new CornerPractice(this.m) : null;
   }
   update(dt) {
     if (this.paused) return;
@@ -57,8 +59,10 @@ class MatchScene {
     for (const e of m.events) {
       if (!this.demo) handleSound(e);
       if (this.tut) this.tut.onEvent(e);
+      if (this.cp) this.cp.onEvent(e);
     }
     m.events.length = 0;
+    if (this.cp) { this.cp.update(dt); showInfoBox(this.cp.html()); }
     if (this.tut) {
       this.tut.update(dt, input);
       updateTutorialBox(this.tut);
@@ -134,6 +138,11 @@ function updateTutorialBox(t) {
   const s = t.step; if (!s) return;
   el.classList.remove('hidden');
   const html = `<div class="tstep">TUTORIAL ${Math.min(t.i + 1, t.steps.length)}/${t.steps.length}${t.doneT >= 0 ? ' <b class="ok">✓ Nice!</b>' : ''}</div><div class="ttext">${s.text}</div>${s.id === 'done' ? '<div class="tskip">Press any key / tap to return to the menu</div>' : '<div class="tskip">Enter = skip step</div>'}`;
+  if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+}
+function showInfoBox(html) {
+  const el = document.getElementById('tut');
+  el.classList.remove('hidden');
   if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
 }
 function hideTutorialBox() { const el = document.getElementById('tut'); el.classList.add('hidden'); el.dataset.h = ''; }
@@ -242,6 +251,14 @@ function fkPractice() {
   }, () => app.toMenu());
 }
 
+function cornerPractice() {
+  UI.showTeamSelect('cornerpractice', ({ home }) => {
+    const opp = TEAMS.find((t) => t !== home && t.code === 'ENG') || TEAMS.find((t) => t !== home);
+    const opts = { home, away: opp, humans: [{ ctrl: 0, team: 0 }], mode: 'cornerpractice', cornerPractice: true };
+    app.startMatch(opts);
+  }, () => app.toMenu());
+}
+
 // World Cup
 function loadWC() { const t = store.get(WC_KEY, null); return t && t.v === 1 && t.groups ? t : null; }
 function saveWC(t) { store.set(WC_KEY, t); }
@@ -301,7 +318,7 @@ function wcPlay(t, nf) {
 }
 
 const menuHandlers = {
-  quick: quickMatch, worldcup: worldCup, shootout, fkpractice: fkPractice, versus, tutorial,
+  quick: quickMatch, worldcup: worldCup, shootout, fkpractice: fkPractice, cornerpractice: cornerPractice, versus, tutorial,
   howto: () => UI.showHowTo(() => app.toMenu()),
   settings: () => UI.showSettings(() => app.toMenu()),
 };

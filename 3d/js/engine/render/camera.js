@@ -70,7 +70,7 @@ export class CameraDirector {
       const dist = Math.hypot(px - bx, pz - bz);
       fov = clamp((2 * Math.atan(7 / Math.max(dist, 1)) * 180) / Math.PI, 12, 55);
       wLook = 6; wPos = 1.5;
-    }    } else {
+    } else {
       // broadcast tele camera on the near-side gantry
       const lead = 0.35;
       let fx = bx + bvx * lead, fz = bz * 0.45 + bvz * lead * 0.3;

@@ -61,6 +61,7 @@ export function showMenu(h) {
         <button data-go="worldcup">World Cup</button>
         <button data-go="shootout">Penalty Shootout</button>
         <button data-go="fkpractice">Free-Kick Practice</button>
+        <button data-go="cornerpractice">Corner Practice</button>
         <button data-go="versus">Local 2 Players</button>
         <button data-go="tutorial">Tutorial</button>
         <button data-go="howto">How to Play</button>
@@ -77,12 +78,12 @@ export function showMenu(h) {
  * cb({home, away, coop}) with team objects.
  */
 export function showTeamSelect(mode, cb, back) {
-  const sides = mode === 'worldcup' || mode === 'fkpractice' ? 1 : 2;
+  const sides = mode === 'worldcup' || mode === 'fkpractice' || mode === 'cornerpractice' ? 1 : 2;
   let sel = [TEAMS[0], TEAMS[1]];
   let active = 0;
   let coop = false;
   const labels = mode === 'versus' ? ['P1', 'P2'] : ['YOU', 'CPU'];
-  const title = { quick: 'Quick Match', versus: 'Local 2 Players', worldcup: 'World Cup — pick your nation', shootout: 'Penalty Shootout', fkpractice: 'Free-Kick Practice — pick your kit', coop: 'Co-op' }[mode];
+  const title = { quick: 'Quick Match', versus: 'Local 2 Players', worldcup: 'World Cup — pick your nation', shootout: 'Penalty Shootout', fkpractice: 'Free-Kick Practice — pick your kit', cornerpractice: 'Corner Practice — pick your team', coop: 'Co-op' }[mode];
   const render = () => {
     const k = chooseKits(sel[0], sel[1]);
     const panel = (i) => `
