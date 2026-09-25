@@ -71,7 +71,7 @@ function buildGeometry() {
     g.torso.computeVertexNormals();
   }
   g.shoulderCap = new THREE.SphereGeometry(0.078, 10, 8);
-  g.neck = new THREE.CylinderGeometry(0.052, 0.06, 0.13, 10);
+  g.neck = new THREE.CylinderGeometry(0.058, 0.066, 0.12, 10);
   g.neck.translate(0, 0.045, 0);
   // head with face features (vertex colours: white skin areas get skin tint from material colour)
   {
@@ -93,19 +93,25 @@ function buildGeometry() {
   }
   // hair styles
   g.hair = [];
-  { const h = new THREE.SphereGeometry(0.112, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.42); h.scale(0.92, 1.05, 1.02); h.translate(0, 0.1, -0.008); g.hair.push(h); } // short crop
-  { const h = new THREE.SphereGeometry(0.118, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62); h.scale(0.95, 1.08, 1.08); h.rotateX(-0.35); h.translate(0, 0.1, -0.012); g.hair.push(h); } // longer
-  { const h = new THREE.SphereGeometry(0.14, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55); h.scale(1, 0.95, 1.0); h.translate(0, 0.11, -0.02); g.hair.push(h); } // afro
-  { const h = new THREE.SphereGeometry(0.108, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.3); h.scale(0.92, 1.1, 1.0); h.translate(0, 0.106, -0.004); g.hair.push(h); } // buzz
-  { const h = new THREE.SphereGeometry(0.115, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.45); h.scale(0.9, 1.05, 1.05); h.translate(0, 0.108, -0.01);
-    const bun = new THREE.SphereGeometry(0.045, 8, 6); bun.translate(0, 0.19, -0.08);
+  // cap tilted backwards: hairline high at the front, low at the nape
+  const cap = (r, T, tilt, sx, sy, sz, dy, dz) => {
+    const h = new THREE.SphereGeometry(r, 16, 10, 0, Math.PI * 2, 0, T);
+    h.rotateX(-tilt); h.scale(sx, sy, sz); h.translate(0, 0.1 + dy, dz);
+    return h;
+  };
+  g.hair.push(cap(0.111, 1.35, 0.45, 0.93, 1.1, 1.03, 0.004, -0.004)); // short crop
+  g.hair.push(cap(0.118, 1.5, 0.5, 0.97, 1.1, 1.08, 0.0, -0.012)); // longer
+  g.hair.push(cap(0.138, 1.4, 0.45, 1.0, 1.0, 1.0, 0.018, -0.02)); // afro
+  g.hair.push(cap(0.108, 1.05, 0.3, 0.92, 1.1, 1.0, 0.006, -0.004)); // buzz
+  { const h = cap(0.112, 1.3, 0.45, 0.93, 1.1, 1.03, 0.004, -0.004);
+    const bun = new THREE.SphereGeometry(0.045, 8, 6); bun.translate(0, 0.2, -0.085);
     g.hair.push(mergeColored([{ geo: h, color: [1, 1, 1] }, { geo: bun, color: [1, 1, 1] }])); } // top bun
   g.sleeve = new THREE.CylinderGeometry(0.07, 0.064, 0.19, 10); g.sleeve.translate(0, -0.07, 0);
-  g.upperArm = new THREE.CapsuleGeometry(0.046, 0.22, 4, 8); g.upperArm.translate(0, -0.15, 0);
-  g.foreArm = new THREE.CapsuleGeometry(0.04, 0.2, 4, 8); g.foreArm.translate(0, -0.13, 0);
-  g.gkSleeve = new THREE.CylinderGeometry(0.05, 0.043, 0.24, 8); g.gkSleeve.translate(0, -0.12, 0);
-  g.hand = new THREE.SphereGeometry(0.045, 8, 6); g.hand.scale(0.75, 1.15, 0.95); g.hand.translate(0, -0.29, 0.005);
-  g.glove = new THREE.SphereGeometry(0.058, 8, 6); g.glove.scale(0.8, 1.2, 1.0); g.glove.translate(0, -0.3, 0.005);
+  g.upperArm = new THREE.CapsuleGeometry(0.047, 0.24, 4, 8); g.upperArm.translate(0, -0.16, 0);
+  g.foreArm = new THREE.CapsuleGeometry(0.04, 0.21, 4, 8); g.foreArm.translate(0, -0.145, 0);
+  g.gkSleeve = new THREE.CylinderGeometry(0.05, 0.043, 0.26, 8); g.gkSleeve.translate(0, -0.13, 0);
+  g.hand = new THREE.SphereGeometry(0.045, 8, 6); g.hand.scale(0.72, 1.45, 0.95); g.hand.translate(0, -0.315, 0.005);
+  g.glove = new THREE.SphereGeometry(0.058, 8, 6); g.glove.scale(0.8, 1.35, 1.05); g.glove.translate(0, -0.32, 0.005);
   g.thighShort = new THREE.CylinderGeometry(0.098, 0.088, 0.2, 12); g.thighShort.translate(0, -0.075, 0);
   g.thigh = new THREE.CapsuleGeometry(0.068, 0.3, 4, 10); g.thigh.translate(0, -0.23, 0);
   g.knee = new THREE.SphereGeometry(0.056, 8, 6);
@@ -203,7 +209,7 @@ export class PlayerRig {
     this.mTorso.scale.set(1, 1, 0.64);
     this.neck = new THREE.Group(); this.neck.position.set(0, TORSO_H - 0.01, 0); this.spine.add(this.neck);
     this.mNeck = mesh(geo.neck, shared.skins[0], this.neck, false);
-    this.head = new THREE.Group(); this.head.position.y = 0.08; this.neck.add(this.head);
+    this.head = new THREE.Group(); this.head.position.y = 0.055; this.neck.add(this.head);
     this.mHead = mesh(geo.head, shared.heads[0], this.head);
     this.mHair = mesh(geo.hair[0], shared.hairs[0], this.head, false);
     // arms
@@ -213,7 +219,7 @@ export class PlayerRig {
       const cap = mesh(geo.shoulderCap, kitMats.shirt, sh0, false); cap.position.y = -0.01;
       const sleeve = mesh(geo.sleeve, kitMats.shirt, sh0);
       const upper = mesh(geo.upperArm, shared.skins[0], sh0, false);
-      const elbow = new THREE.Group(); elbow.position.y = -0.29; sh0.add(elbow);
+      const elbow = new THREE.Group(); elbow.position.y = -0.32; sh0.add(elbow);
       const fore = mesh(geo.foreArm, shared.skins[0], elbow, false);
       const gks = this.isGK ? mesh(geo.gkSleeve, kitMats.shirt, elbow, false) : null;
       const hand = mesh(this.isGK ? geo.glove : geo.hand, this.isGK ? kitMats.glove : shared.skins[0], elbow, false);

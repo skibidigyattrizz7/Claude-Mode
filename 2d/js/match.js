@@ -371,12 +371,19 @@ export class Match {
       if (pressed('switch')) { this.switchPlayer(h, false); continue; }
 
       // movement (with receiver assist when the player isn't steering)
-      if (mag < 0.15 && this.pass && this.pass.receiver === p && !this.owner) {
+      let assisted = false;
+      if (this.pass && this.pass.receiver === p && !this.owner) {
+        // receiver assist: run onto the ball unless the player clearly steers somewhere else
         const ip = this.ai[p.team].interceptPoint(p);
         const dx = ip.x - p.x, dy = ip.y - p.y, d = Math.hypot(dx, dy);
-        const sp = Math.min(topSpeed(p, d > 5), d * 2.5);
-        p.want.x = d > 0.2 ? (dx / d) * sp : 0; p.want.y = d > 0.2 ? (dy / d) * sp : 0; p.sprint = d > 5;
-      } else {
+        const agrees = mag < 0.15 || d < 0.3 || (mv.x * dx + mv.y * dy) / (mag * d) > 0.35;
+        if (agrees) {
+          assisted = true;
+          const sp = Math.min(topSpeed(p, d > 5 || sprint), d * 2.5);
+          p.want.x = d > 0.2 ? (dx / d) * sp : 0; p.want.y = d > 0.2 ? (dy / d) * sp : 0; p.sprint = d > 5 || (sprint && d > 1);
+        }
+      }
+      if (!assisted) {
         const sp = topSpeed(p, sprint);
         p.want.x = mv.x * sp; p.want.y = mv.y * sp; p.sprint = sprint && mag > 0.2;
       }
@@ -517,7 +524,7 @@ export class Match {
     else if (d > 11 && d < 24 && Math.random() < 0.35) type = 'finesse';
     const power = clamp(0.45 + d / 55 + Math.random() * 0.2, 0.4, type === 'chip' ? 0.7 : 0.92);
     const aimDir = norm(gc.x - b.x, ty - b.y);
-    this.doShot(p, { aimDir, power, type, mode: 'Manual', sprinting: p.sprint, errMul: 1.55 - prof.acc * 0.75 });
+    this.doShot(p, { aimDir, power, type, mode: 'Manual', sprinting: p.sprint, errMul: 2.6 - prof.acc * 1.2 });
   }
 
   startSkillMove(p, mx, my, sprint) {
@@ -738,7 +745,7 @@ export class Match {
       const isGK = p.role === 'GK' && inPenaltyArea(b, this.ownSide(p.team));
       let reach;
       if (isGK) reach = b.z < 2.4 ? (p.state === 'dive' ? 1.1 : 0.9) : 0;
-      else reach = b.z < 0.6 ? 0.58 : b.z < 1.6 ? 0.5 : b.z < 2.3 ? 0.48 : 0;
+      else reach = b.z < 0.6 ? (this.pass && this.pass.receiver === p ? 0.8 : 0.58) : b.z < 1.6 ? 0.5 : b.z < 2.3 ? 0.48 : 0;
       if (d < reach && d < bd) {
         // keepers that did not read a hard shot cannot magically stop it
         if (isGK && bs > 12 && this.shot && this.shot.team !== p.team && !(p.saveIntent && p.saveKick === b.kickId)) continue;

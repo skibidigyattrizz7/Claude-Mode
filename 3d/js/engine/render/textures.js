@@ -55,7 +55,7 @@ export function pitchTexture(size, aniso) {
       // subtle cross-mow checker
       const cz = Math.floor((zm + PITCH.HW) / (PITCH.W / 10));
       let shade = (s & 1) ? 1 : 0;
-      const chk = ((s + cz) & 1) ? 0.035 : -0.035;
+      const chk = ((s + cz) & 1) ? 0.016 : -0.016;
       const base = shade ? light : dark;
       const n1 = valueNoise(xm * 0.35, zm * 0.35) - 0.5; // large patches
       const n2 = valueNoise(xm * 3.1, zm * 3.1) - 0.5; // mid

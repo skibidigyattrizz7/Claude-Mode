@@ -11,13 +11,15 @@ import { keyLabel } from './keybinds.js';
 const SKIN = ['#f1c7a5', '#d9a47c', '#b07850', '#8a5a3c', '#5e3d27'];
 const HAIR = ['#2b1d14', '#4a3222', '#111111', '#7a5230', '#c9a15a'];
 export const P_COLORS = ['#35e0ff', '#ff9f1c'];
+/** Sprites are drawn larger than life so players read clearly from the broadcast camera. */
+const PS = 1.55, BS = 1.3;
 
 // ---------- camera ----------
 export function makeCamera() { return { x: CX, y: CY, scale: 20, w: 1, h: 1 }; }
 
 export function updateCamera(cam, target, dt, w, h, zoom, snap = false) {
   cam.w = w; cam.h = h;
-  cam.scale = clamp((Math.sqrt(w * h) / 40) * zoom, 7, 48);
+  cam.scale = clamp((Math.sqrt(w * h) / 36) * zoom, 7, 52);
   const k = snap ? 1 : 1 - Math.exp(-dt * 4);
   cam.x += (target.x - cam.x) * k;
   cam.y += (target.y - cam.y) * k;
@@ -180,6 +182,7 @@ function drawPlayer(ctx, m, p) {
   const skin = SKIN[(p.id * 7) % SKIN.length], hair = HAIR[(p.id * 3) % HAIR.length];
   ctx.save();
   ctx.translate(p.x, p.y);
+  ctx.scale(PS, PS);
   // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath(); ctx.ellipse(0.16, 0.2, 0.5, 0.36, 0, 0, TAU); ctx.fill();
@@ -237,10 +240,10 @@ function drawPlayer(ctx, m, p) {
 }
 
 function drawBall(ctx, b) {
-  const r = 0.21 + b.z * 0.025;
+  const r = (0.21 + b.z * 0.025) * BS;
   // shadow on the ground
   ctx.fillStyle = `rgba(0,0,0,${clamp(0.35 - b.z * 0.04, 0.08, 0.35)})`;
-  ctx.beginPath(); ctx.ellipse(b.x + 0.05 + b.z * 0.25, b.y + 0.06 + b.z * 0.3, 0.2, 0.15, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(b.x + 0.05 + b.z * 0.25, b.y + 0.06 + b.z * 0.3, 0.2 * BS, 0.15 * BS, 0, 0, TAU); ctx.fill();
   const y = b.y - b.z * 0.55;
   ctx.fillStyle = '#ffffff';
   ctx.beginPath(); ctx.arc(b.x, y, r, 0, TAU); ctx.fill();
@@ -300,7 +303,7 @@ function drawAim(ctx, m, h, settings) {
   const sel = choosePassTarget(p, m.mates(p.team), m.opps(p.team), aim, 'ground', m.attackDir(p.team));
   if (sel) {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 0.07;
-    ctx.beginPath(); ctx.arc(sel.mate.x, sel.mate.y, 0.75, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sel.mate.x, sel.mate.y, 0.75 * PS, 0, TAU); ctx.stroke();
   }
 }
 
@@ -345,7 +348,7 @@ export function drawMatch(ctx, m, cam, settings) {
   for (const hh of m.humans) {
     const p = hh.player; if (!p || p.sentOff) continue;
     ctx.strokeStyle = P_COLORS[hh.ctrl]; ctx.lineWidth = 0.1;
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.05, 0.7, 0.55, 0, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.05, 0.7 * PS, 0.55 * PS, 0, 0, TAU); ctx.stroke();
   }
   // pass target marker
   if (m.pass && m.pass.receiver && m.state === 'play') {
@@ -365,7 +368,7 @@ export function drawMatch(ctx, m, cam, settings) {
 
   // ---- screen-space overlays on players: numbers, markers, bars ----
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const fs = Math.max(8, Math.round(s * 0.42));
+  const fs = Math.max(9, Math.round(s * 0.42 * PS * 0.85));
   ctx.font = `bold ${fs}px Arial, sans-serif`;
   for (const p of m.players) {
     if (p.state === 'down' || p.state === 'dive' || p.state === 'slide') continue;
@@ -374,25 +377,25 @@ export function drawMatch(ctx, m, cam, settings) {
     const kit = m.kitOf(p);
     ctx.lineWidth = Math.max(2, fs * 0.18);
     ctx.strokeStyle = luminance(kit.num) > 0.5 ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)';
-    ctx.strokeText(String(p.num), q.x - s * 0.06, q.y);
+    ctx.strokeText(String(p.num), q.x - s * 0.06 * PS, q.y);
     ctx.fillStyle = kit.num;
-    ctx.fillText(String(p.num), q.x - s * 0.06, q.y);
-    if (p.yellows > 0 && !p.sentOff) { ctx.fillStyle = '#ffd60a'; ctx.fillRect(q.x + s * 0.35, q.y - s * 0.6, s * 0.18, s * 0.25); }
+    ctx.fillText(String(p.num), q.x - s * 0.06 * PS, q.y);
+    if (p.yellows > 0 && !p.sentOff) { ctx.fillStyle = '#ffd60a'; ctx.fillRect(q.x + s * 0.35 * PS, q.y - s * 0.6 * PS, s * 0.18 * PS, s * 0.25 * PS); }
   }
   for (const hh of m.humans) {
     const p = hh.player; if (!p || p.sentOff) continue;
     const q = w2s(cam, p.x, p.y);
     const col = P_COLORS[hh.ctrl];
-    const top = q.y - s * 1.05;
+    const top = q.y - s * 1.05 * PS;
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.moveTo(q.x, top + 7); ctx.lineTo(q.x - 7, top - 3); ctx.lineTo(q.x + 7, top - 3); ctx.closePath(); ctx.fill();
     ctx.font = 'bold 11px Arial, sans-serif';
     ctx.fillText('P' + (hh.ctrl + 1), q.x, top - 11);
     // stamina bar
     const bw = 34;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(q.x - bw / 2, q.y + s * 0.75, bw, 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(q.x - bw / 2, q.y + s * 0.75 * PS, bw, 4);
     ctx.fillStyle = p.stamina > 0.3 ? '#8cff66' : '#ff6b6b';
-    ctx.fillRect(q.x - bw / 2, q.y + s * 0.75, bw * p.stamina, 4);
+    ctx.fillRect(q.x - bw / 2, q.y + s * 0.75 * PS, bw * p.stamina, 4);
     // power bar
     if (p.charging) {
       const pw = 56, ph = 9, px = q.x - pw / 2, py = top - 32;
@@ -427,6 +430,7 @@ export function drawScoreboard(ctx, m, x = 14, y = 14) {
   ctx.fillStyle = '#e8eefc';
   // home
   chip(ctx, x + 6, y + 5, m.kits[0]);
+  ctx.fillStyle = '#e8eefc';
   ctx.textAlign = 'left'; ctx.fillText(m.teams[0].code, x + 26, y + H / 2 + 1);
   // score
   ctx.fillStyle = '#ffffff'; ctx.fillRect(x + segW[0], y, segW[1], H);

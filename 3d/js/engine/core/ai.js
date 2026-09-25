@@ -348,6 +348,8 @@ function decideCarrier(sim, p, pressure) {
   opts.push({ type: 'dribble', s: ds + noise() });
   // --- clearance
   if (X < 22 && pressure < 2.2) opts.push({ type: 'clear', s: 0.75 + noise() });
+  // --- under pressure near the touchline: put it out of play
+  if (Math.abs(p.z) > HW - 7 && pressure < 1.5 && X < 75) opts.push({ type: 'touch', s: 0.5 + (70 - a.dri) / 150 + noise() });
   opts.sort((u, v) => v.s - u.s);
   const o = opts[0];
   switch (o.type) {
@@ -357,6 +359,11 @@ function decideCarrier(sim, p, pressure) {
       else sim.aiKick(p, 'ground', { target: o.m.idx, power: 0.6 });
       break;
     case 'through': sim.aiKick(p, 'through', { target: o.m.idx, power: 0.6 }); break;
+    case 'touch': {
+      const pt = { x: p.x + d * (6 + rng() * 14), z: Math.sign(p.z) * (HW + 6) };
+      sim.aiKick(p, 'lob', { point: pt, power: 0.7, elev: 0.35, noClamp: true });
+      break;
+    }
     case 'cross': sim.aiKick(p, 'cross', { power: 0.7 }); break;
     case 'clear': {
       const z = clamp(p.z * 1.4 + (rng() - 0.5) * 44, -40, 40);
@@ -462,7 +469,7 @@ function gkThink(sim, p, dt) {
   p.ready = dist < 30;
 }
 
-function gkDistribute(sim, p) {
+export function gkDistribute(sim, p) {
   const t = sim.t, team = p.team, rng = sim.rng;
   if (p.holdStart == null) p.holdStart = t;
   p.des.x = 0; p.des.z = 0;

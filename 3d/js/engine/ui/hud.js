@@ -71,6 +71,11 @@ const CSS = `
 .ps3d-hud.compact .ps3d-sb{transform:scale(.8);transform-origin:left top}
 .ps3d-hud.compact .ps3d-banner .big{font-size:40px}
 .ps3d-hud.compact .ps3d-stats{transform:translate(-50%,-50%) scale(.8)}
+.ps3d-hud.touch .ps3d-panel.p1{top:62px;bottom:auto;transform-origin:left top}
+.ps3d-hud.touch .ps3d-radar{bottom:6px}
+.ps3d-root.compact-touch .ps3d-btns{grid-template-columns:repeat(3,54px);gap:7px}
+.ps3d-root.compact-touch .ps3d-btns button{width:54px;height:54px;font-size:10px}
+.ps3d-root.compact-touch .ps3d-btns button.wide{height:38px}
 @media (max-width:700px){.ps3d-banner .big{font-size:40px}.ps3d-sb{transform:scale(.85);transform-origin:left top}.ps3d-hint{bottom:210px;font-size:12px}}
 `;
 
@@ -102,11 +107,12 @@ const el = (tag, cls, parent, html) => {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Hud {
-  constructor(root, { home, away, binds, slots, onResume, onCamera, onQuit }) {
+  constructor(root, { home, away, binds, slots, onResume, onCamera, onQuit, touch = false }) {
     addStyle();
     this.root = root;
+    this.touch = touch;
     this.home = home; this.away = away; this.binds = binds; this.slots = slots;
-    const h = (this.el = el('div', 'ps3d-hud', root));
+    const h = (this.el = el('div', 'ps3d-hud' + (touch ? ' touch' : ''), root));
     const sb = el('div', 'ps3d-sb', h);
     el('div', 'bar', sb).style.background = home.kit.primary;
     this.hCode = el('div', 'code', sb, esc(home.short || home.id));
@@ -180,16 +186,21 @@ export class Hud {
   update(view, ctx) {
     const dt = ctx.dt;
     const compact = this.root.clientHeight < 560 || this.root.clientWidth < 760;
-    if (compact !== this.compact) { this.compact = compact; this.el.classList.toggle('compact', compact); }
+    if (compact !== this.compact) {
+      this.compact = compact;
+      this.el.classList.toggle('compact', compact);
+      this.root.classList.toggle('compact-touch', compact && this.touch);
+    }
     if (!view) return;
-    // scoreboard
-    const sc = `${view.sc[0]} - ${view.sc[1]}`;
+    // scoreboard (always the live state, also during replays)
+    const lv = ctx.live || view;
+    const sc = `${lv.sc[0]} - ${lv.sc[1]}`;
     if (sc !== this.lastScore) { this.scoreEl.textContent = sc; this.lastScore = sc; }
-    const total = (view.h - 1) * 2700 + view.cl;
+    const total = (lv.h - 1) * 2700 + lv.cl;
     const mm = Math.floor(total / 60), ss = Math.floor(total % 60);
     const clk = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
     if (clk !== this.lastClock) { this.clockEl.textContent = clk; this.lastClock = clk; }
-    if (view.ad > 0 && view.cl >= 2700 - 1) { this.addedEl.style.display = 'flex'; this.addedEl.textContent = '+' + view.ad; }
+    if (lv.ad > 0 && lv.cl >= 2700 - 1) { this.addedEl.style.display = 'flex'; this.addedEl.textContent = '+' + lv.ad; }
     else this.addedEl.style.display = 'none';
     // banners
     if (this.bannerT > 0) {
@@ -225,12 +236,8 @@ export class Hud {
       if (nm.dataset.v !== label) { nm.children[0].textContent = slot === 'p2' ? 'PLAYER 2' : 'PLAYER 1'; nm.children[1].textContent = label; nm.dataset.v = label; }
       panel.children[1].firstChild.style.width = Math.round((view.stm ? view.stm[s] : 1) * 100) + '%';
       const x = view.p[idx * 7], z = view.p[idx * 7 + 1];
-      const pr = ctx.project && live ? ctx.project(x, 2.25, z) : null;
-      if (pr && pr.visible) {
-        tag.style.display = 'block';
-        tag.style.left = pr.x + 'px'; tag.style.top = pr.y + 'px';
-        if (tag.dataset.v !== pd.name) { tag.textContent = pd.name || ''; tag.dataset.v = pd.name; }
-      } else tag.style.display = 'none';
+      // the renderer draws the name / indicator above the controlled player itself
+      tag.style.display = 'none';
       const pw = ctx.power ? ctx.power[s] : 0;
       if (pw > 0 && live) {
         const pf = ctx.project ? ctx.project(x, -0.1, z) : null;

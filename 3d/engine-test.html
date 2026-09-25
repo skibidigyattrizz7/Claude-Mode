@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Pitchside 3D — engine test</title>
+<link rel="icon" href="data:,">
 <style>
   html,body{margin:0;height:100%;background:#05070d;color:#cfd8ea;font-family:system-ui,sans-serif;overflow:hidden}
   #wrap{position:absolute;inset:0;display:flex}
@@ -43,7 +44,7 @@
   if (q.get('net')) {
     const wrap = document.getElementById('wrap');
     const p2 = document.createElement('div'); p2.className = 'pane'; p2.id = 'p2'; wrap.appendChild(p2);
-    const host = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, netRole: 'host', controllers: { home: q.get('ai') ? 'ai' : 'p1', away: 'remote' }, onEvent, onEnd });
+    const host = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, netRole: 'host', controllers: { home: q.get('ai') ? 'ai' : 'p1', away: 'remote' }, onEvent, onEnd, timeScale });
     const guest = createMatch(p2, { home: BRAZIL, away: FRANCE, halfMinutes: half, stadium, netRole: 'guest', controllers: { home: 'remote', away: 'p2' }, onEvent: (e) => console.log('[guest-event]', e.type), onEnd: (r) => console.log('[guest-end]', JSON.stringify(r).slice(0, 200)) });
     window.__host = host; window.__guest = guest;
     let maxSize = 0;

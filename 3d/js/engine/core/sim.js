@@ -359,6 +359,7 @@ export class MatchSim {
       const pw = (k, full = 1) => clamp((H[k] || 0) / full, 0.05, 1);
       if (b.inHands) {
         p.des.x *= 0.5; p.des.z *= 0.5;
+        if (t - p.gainT > 6) { p.holdStart = t - 10; AI.gkDistribute(this, p); return; }
         if (released('pass') || released('through')) this._humanKick(p, 'gkthrow', aim, pw('pass', 0.9));
         else if (released('lob') || released('shoot') || released('finesse')) this._humanKick(p, 'punt', aim, pw(released('lob') ? 'lob' : 'shoot'));
       } else if (!locked) {
@@ -688,7 +689,7 @@ export class MatchSim {
     const turn = Math.abs(wrapAngle(kdir - p.face)) > 1.2 ? 1.5 : 1;
     const k = info.kind;
     if (k === 'ground' || k === 'through' || k === 'gkthrow') {
-      const s = (0.012 + (100 - a.pas) * 0.0012) * (1 + fatigue * 0.6) * turn * press * em;
+      const s = (0.009 + (100 - a.pas) * 0.001) * (1 + fatigue * 0.6) * turn * press * em;
       vel = this._applyErr(vel, s, 0, 0.03 + (100 - a.pas) * 0.0012, true);
     } else if (k === 'lob' || k === 'cross' || k === 'throw' || k === 'punt') {
       const pa = k === 'punt' ? (a.kic + a.pas) / 2 : a.pas;
@@ -1388,6 +1389,8 @@ export class MatchSim {
     this.emit({ type: 'foul', team: this.sideName(off.team), playerId: off.data.id, playerName: off.data.name, victimId: victim.data.id, minute: this.minute(), penalty: pen });
     this.fxPush('foul', { pi: off.idx, pen: pen ? 1 : 0 });
     this.fxPush('whistle', { n: 1 });
+    // referee discretion: most non-last-man bookable fouls only get a warning
+    if (card === 'yellow' && !this._lastMan(victim, off) && this.rng() < 0.55) card = null;
     if (card) this._card(off, card);
     this.stoppage += 0.15;
     this._stop(pen ? SP.PENALTY : SP.FREEKICK, victim.team, victim.x, victim.z, pen ? 2.2 : 1.8);
@@ -1700,7 +1703,7 @@ export class MatchSim {
     const taker = this.players[sp.taker];
     // hold ball at spot
     if (b.owner === taker.idx) {
-      if (sp.type === SP.THROW) { b.p.x = taker.x; b.p.z = taker.z - Math.sign(taker.z) * 0.1; b.p.y = 2.05; }
+      if (sp.type === SP.THROW) { b.p.x = taker.x; b.p.z = Math.sign(taker.z) * (HW - 0.05); b.p.y = 2.05; }
       else { b.p.x = sp.ball.x; b.p.y = sp.ball.y; b.p.z = sp.ball.z; }
       b.v.x = b.v.y = b.v.z = 0;
       if (sp.type !== SP.THROW) {
@@ -1788,6 +1791,10 @@ export class MatchSim {
     }
     if (sp.type === SP.THROW) {
       return this._plan(p, 'throw', { dir, power: key === 'lob' ? Math.max(0.6, power) : power * 0.7 });
+    }
+    if (sp.type === SP.GOALKICK || sp.type === SP.CORNER) {
+      // no shooting from a goal kick / corner: every other key means a lofted delivery
+      if (key !== 'pass' && key !== 'through') key = 'lob';
     }
     if (key === 'pass') return this._plan(p, 'ground', { dir, power, human: true });
     if (key === 'through') return this._plan(p, 'through', { dir, power });

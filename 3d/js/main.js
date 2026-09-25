@@ -43,7 +43,7 @@ const SETTINGS_KEY = 'pitchside.settings';
 const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day' };
 const DIFFICULTIES = [['amateur', 'Amateur'], ['pro', 'Pro'], ['world', 'World Class'], ['legendary', 'Legendary']];
 const HALF_LENGTHS = [2, 3, 4, 6, 8];
-const CAMERAS = [['broadcast', 'Broadcast'], ['tele', 'Tele'], ['pro', 'Player Lock'], ['wide', 'Wide']];
+const CAMERAS = [['broadcast', 'Broadcast'], ['pro', 'Pro (player lock)']];
 const QUALITIES = [['low', 'Low'], ['med', 'Medium'], ['high', 'High']];
 const STADIUMS = [['day', 'Day'], ['night', 'Night']];
 
@@ -63,10 +63,14 @@ function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
 // ------------------------------------------------------------------ module loading
 let enginePromise = null;
 let metaPromise = null;
+let engineTries = 0;
+let metaTries = 0;
+// A failed dynamic import is cached by the browser, so retries use a fresh URL.
+const retryUrl = (path, n) => (n > 1 ? `${path}?retry=${n}` : path);
 
 function loadEngine() {
   if (!enginePromise) {
-    enginePromise = (STUB_ENGINE ? Promise.resolve({ createMatch: stubCreateMatch }) : import('./engine/index.js'))
+    enginePromise = (STUB_ENGINE ? Promise.resolve({ createMatch: stubCreateMatch }) : import(retryUrl('./engine/index.js', ++engineTries)))
       .then((m) => {
         if (typeof m.createMatch !== 'function') throw new Error('engine/index.js does not export createMatch()');
         return m;
@@ -77,7 +81,7 @@ function loadEngine() {
 }
 function loadMeta() {
   if (!metaPromise) {
-    metaPromise = import('./meta/index.js')
+    metaPromise = import(retryUrl('./meta/index.js', ++metaTries))
       .then((m) => {
         for (const fn of ['mountMeta', 'getNationalTeams', 'getSavedUltimateTeam']) {
           if (typeof m[fn] !== 'function') throw new Error(`meta/index.js does not export ${fn}()`);
@@ -334,6 +338,7 @@ export async function openMatch(opts) {
     onEnd: (r) => { if (userOnEnd) try { userOnEnd(r); } catch (err) { console.error(err); } resolve(r); },
   };
   delete full.userSide;
+  if (Q.get('timeScale')) full.timeScale = Number(Q.get('timeScale')); // dev/testing: fast-forward the sim
   let handle = null;
   let closed = false;
   const close = () => {
@@ -730,6 +735,7 @@ function controlsScreen() {
   function showConflict(player, action, code, conflicts) {
     const old = binds[player][action];
     const other = conflicts[0];
+    status.textContent = `${keyLabel(code)} is already used by ${who(other.player, other.action)}.`;
     const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); table.querySelector(`[data-player="${player}"][data-action="${action}"]`)?.focus(); };
     const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); status.textContent = 'Cancelled.'; close(); } };
     const swapBtn = h('button', { class: 'btn btn--primary', type: 'button', 'data-conflict': 'swap', onclick: () => {

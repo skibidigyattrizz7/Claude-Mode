@@ -77,7 +77,7 @@ export function createMatch(container, opts = {}) {
 
   const audio = new MatchAudio();
   const hud = new Hud(root, {
-    home, away, binds, slots: local,
+    home, away, binds, slots: local, touch,
     onResume: () => resume(),
     onCamera: () => toggleCamera(),
     onQuit: () => quit(),
@@ -367,7 +367,7 @@ export function createMatch(container, opts = {}) {
       try { R.render(out, dt); } catch (e) { if (!frame.warned) { frame.warned = true; console.error('[pitchside-engine] render error', e); } }
     }
     hud.update(out, {
-      dt, local, replay: !!rv, power: out.pw || [0, 0], playerData,
+      dt, local, replay: !!rv, power: out.pw || [0, 0], playerData, live: view,
       project: R && typeof R.project === 'function' ? (x, y, z) => R.project(x, y, z) : null,
     });
     audio.update(dt, excitement(view), paused || menuOpen);

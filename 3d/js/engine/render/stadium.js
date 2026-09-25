@@ -14,7 +14,7 @@ const LOW_END = { d: LOW.d0 + LOW.rows * LOW.dep, y: LOW.y0 + LOW.rows * LOW.ris
 const UP_END = { d: UP.d0 + UP.rows * UP.dep, y: UP.y0 + UP.rows * UP.rise };
 const ROOF = { front: 3.5, back: UP_END.d + 2.5, yF: 30.5, yB: 28.5 };
 const SIDE_LEN = 2 * (END_X + ROOF.back); // side stands run the full length incl. corners
-const END_LEN = 2 * SIDE_Z;
+const END_LEN = 2 * (SIDE_Z + ROOF.back); // ends also run into the corners (mitred bowl)
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
@@ -222,7 +222,7 @@ export function buildStadium(scene, opts, q, track) {
     vertexShader: crowdVS, fragmentShader: crowdFS,
     uniforms: {
       uMap: { value: atlas }, uTime: { value: 0 }, uExcite: { value: new THREE.Vector3(0, 0, 0) }, uCols: { value: COLS },
-      uLight: { value: night ? 0.72 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
+      uLight: { value: night ? 0.62 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
     },
   }));
   const cgeo = track(new THREE.PlaneGeometry(0.62, 1.24));
@@ -245,6 +245,9 @@ export function buildStadium(scene, opts, q, track) {
         for (let x = -L / 2 + 0.6; x < L / 2 - 0.6; x += q.crowdSpacing) {
           if (rnd() > q.crowdFill) continue;
           // skip seats behind corners that are hidden by end stands
+          // corner overlap: keep the fan only if this stand's surface is the visible (higher) one here
+          const other = st.name === 'near' || st.name === 'far' ? Math.abs(x) - END_X : Math.abs(x) - SIDE_Z;
+          if (other > -0.5 && d < other) continue;
           items.push([x + (rnd() - 0.5) * 0.15, y - 0.1, d]);
         }
       }

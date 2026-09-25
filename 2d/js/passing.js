@@ -110,6 +110,7 @@ export function laneRisk(a, b, opps, kind = 'ground') {
 }
 
 const CONES = { ground: 45 * DEG, through: 55 * DEG, lob: 50 * DEG };
+const WIDE_CONE = 80 * DEG;
 
 const RUN_SPEED = 6.8;   // how fast a receiver sprints onto a through ball
 
@@ -157,24 +158,27 @@ export function leadTarget(from, mate, kind, attackDir = 1) {
  * Returns {mate, target, score} or null if nobody is in the cone.
  */
 export function choosePassTarget(passer, mates, opps, aimDir, kind = 'ground', attackDir = 1) {
-  const cone = CONES[kind] || CONES.ground;
   const maxD = kind === 'lob' ? 60 : kind === 'through' ? 45 : 40;
-  let best = null;
-  for (const m of mates) {
-    if (m === passer || m.sentOff) continue;
-    const dx = m.x - passer.x, dy = m.y - passer.y;
-    const d = Math.hypot(dx, dy);
-    if (d < 2.5 || d > maxD) continue;
-    const ang = angleBetween(aimDir.x, aimDir.y, dx, dy);
-    if (ang > cone) continue;
-    const plan = leadTarget(passer, m, kind, attackDir);
-    const risk = laneRisk(passer, plan.target, opps, kind);
-    let score = 1.8 * (1 - ang / cone) - 0.014 * d - 1.5 * risk;
-    if (kind === 'through') score += 0.3 * clamp(((m.vx || 0) * attackDir) / 6, -1, 1);
-    if (kind === 'lob' && d < 12) score -= 0.5;
-    if (!best || score > best.score) best = { mate: m, target: plan.target, t: plan.t, score };
-  }
-  return best;
+  const scan = (cone) => {
+    let best = null;
+    for (const m of mates) {
+      if (m === passer || m.sentOff) continue;
+      const dx = m.x - passer.x, dy = m.y - passer.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 2.5 || d > maxD) continue;
+      const ang = angleBetween(aimDir.x, aimDir.y, dx, dy);
+      if (ang > cone) continue;
+      const plan = leadTarget(passer, m, kind, attackDir);
+      const risk = laneRisk(passer, plan.target, opps, kind);
+      let score = 1.8 * (1 - ang / cone) - 0.014 * d - 1.5 * risk;
+      if (kind === 'through') score += 0.3 * clamp(((m.vx || 0) * attackDir) / 6, -1, 1);
+      if (kind === 'lob' && d < 12) score -= 0.5;
+      if (!best || score > best.score) best = { mate: m, target: plan.target, t: plan.t, score };
+    }
+    return best;
+  };
+  // Nobody inside the normal cone: look a little wider rather than passing to nobody.
+  return scan(CONES[kind] || CONES.ground) || scan(WIDE_CONE);
 }
 
 /**
