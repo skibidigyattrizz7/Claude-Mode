@@ -164,7 +164,7 @@ export class Match {
       case 'foul':
       case 'out':
         this.idlePlayers(dt, 0.4);
-        if (!this.owner) stepBallWorld(this.ball, dt, []);
+        if (!this.owner) { stepBallWorld(this.ball, dt, []); this.adBoards(); }
         if (this.stateT > 1.3) beginSetPiece(this, this.pendingRestart);
         break;
       case 'setpiece': updateSetPiece(this, dt); break;
@@ -175,6 +175,16 @@ export class Match {
       default: break;
     }
     this.skipRequest = false;
+  }
+
+  /** A ball that has left the field bounces off the advertising boards around the pitch. */
+  adBoards() {
+    const b = this.ball, M = 5.6;
+    if (b.z > 1) return;
+    if (b.x < -M) { b.x = -M; b.vx = Math.abs(b.vx) * 0.3; }
+    if (b.x > PITCH.L + M) { b.x = PITCH.L + M; b.vx = -Math.abs(b.vx) * 0.3; }
+    if (b.y < -M) { b.y = -M; b.vy = Math.abs(b.vy) * 0.3; }
+    if (b.y > PITCH.W + M) { b.y = PITCH.W + M; b.vy = -Math.abs(b.vy) * 0.3; }
   }
 
   idlePlayers(dt, speedFrac) {
@@ -841,13 +851,13 @@ export class Match {
       p.stamina = Math.min(1, p.stamina + dt * 0.1);
     }
     if (this.stateT > 2.9 || (this.skipRequest && this.stateT > 1)) {
-      if (this.noReplay || !this.replay.begin(4.6)) this.afterGoal();
+      if (this.noReplay || !this.replay.begin(2.8)) this.afterGoal();
       else { this.state = 'replay'; this.stateT = 0; this.emit('replayStart'); }
     }
   }
 
   updateReplay(dt) {
-    this.replay.pos = Math.min(this.replay.frames - 1, this.replay.pos + dt * 60 * 0.55);
+    this.replay.pos = Math.min(this.replay.frames - 1, this.replay.pos + dt * 60 * 0.7);   // ~4 s slow-motion replay
     this.replay.apply(this);
     if (this.replay.done || (this.skipRequest && this.stateT > 0.3)) { this.emit('replayEnd'); this.afterGoal(); }
   }

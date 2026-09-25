@@ -193,7 +193,7 @@ export function showHowTo(back) {
           <h3>Attacking</h3>
           <ul>
             <li><b>Aim</b> with the mouse. If you haven't moved the mouse recently, aim follows your movement direction (keyboard-only play).</li>
-            <li><b>Pass</b> picks the best teammate inside a ~45° cone in the aim direction and leads him. Control switches to the receiver.</li>
+            <li><b>Pass</b> picks the best teammate inside a ~45° cone in the aim direction (a little wider if nobody is there), weighs up interceptions and leads him. Control switches to the receiver, who runs onto the ball unless you steer elsewhere.</li>
             <li><b>Through ball</b> plays into space ahead of a runner; <b>Lob</b> lofts it over the defence.</li>
             <li><b>Shoot</b>: hold to fill the power bar, release. Past the white mark = <b>Rocket</b> (fast but wild). While holding, tap <b>Lob</b> for a <b>chip</b> or <b>Through</b> for a <b>finesse</b> curler. Hold shoot as a ball arrives for a first-time <b>volley / header</b>.</li>
             <li>The dashed line + reticle on the goal mouth show where the shot will go (green = on target).</li>
@@ -206,7 +206,7 @@ export function showHowTo(back) {
           <h3>Defending</h3>
           <ul>
             <li><b>Standing tackle</b>: short poke. <b>Slide tackle</b>: long reach, you're committed and need time to get up.</li>
-            <li>Win the ball first from the front = always clean. Hitting the man first, or tackling from behind (&gt;120°) and missing the ball = foul. Slide from behind = yellow card; two yellows = red.</li>
+            <li>Win the ball first from the front = always clean, and shoulder-to-shoulder challenges are fair. Going through the man before the ball, or lunging in from behind (&gt;120°) on the player in possession and missing the ball = foul. Slide from behind = yellow card; two yellows = red.</li>
             <li><b>Switch</b> selects the teammate closest to the ball.</li>
           </ul>
           <h3>Set pieces</h3>
@@ -217,6 +217,11 @@ export function showHowTo(back) {
           </ul>
           <h3>Mobile</h3>
           <ul><li>Drag anywhere on the left half for the joystick. Buttons on the right: hold SHOOT to charge. Aim follows the joystick. In penalty / free-kick views drag to aim and use HOLD or the slider.</li></ul>
+          <h3>Modes</h3>
+          <ul>
+            <li><b>Quick Match</b> vs the CPU, <b>World Cup</b> (16 nations, groups + knockouts, saved automatically), <b>Local 2 Players</b> (versus or co-op on one keyboard).</li>
+            <li><b>Penalty Shootout</b>: first-person, you shoot and you keep. <b>Free-Kick Practice</b>: N = new spot, P = place the ball, curve + type, streaks. <b>Corner Practice</b>: endless corners against a live defence.</li>
+          </ul>
           <h3>Other</h3>
           <ul><li>Stamina drains while sprinting. Esc pauses. A replay of the last seconds plays after each goal (any key skips).</li></ul>
         </div>
