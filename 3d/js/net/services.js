@@ -741,7 +741,7 @@ function browserOnline() {
     identityKey: mock ? 'pitchside.mock.identity' : 'pitchside.online.identity',
     accountKey: mock ? 'pitchside.mock.account' : 'pitchside.account',
     volatileStorage,
-    requireAccount: !mock || Q.get('requireAccount') === '1', // mock keeps anonymous device profiles for dev tests
+    requireAccount: Q.get('requireAccount') === '1', // TEMP: accounts migration (002) not live yet — device profiles until then // mock keeps anonymous device profiles for dev tests
     transportKind: ['bc', 'loopback', 'peer'].includes(net) ? net : mock ? 'bc' : 'peer',
     peerCfg: () => {
       const p = netPrefs();
