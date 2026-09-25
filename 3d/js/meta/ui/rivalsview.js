@@ -174,7 +174,7 @@ async function playOnline(app, view, ui) {
   finished = true; clearTimeout(t); busy.remove();
   if (app.destroyed) return;
   if (offerAi || !res || res.ok === false || res.abandoned || res.cancelled) {
-    const why = res && res.error ? String(res.error) : 'No online match was played.';
+    const why = res && (res.error || res.reason) ? String(res.error || res.reason).replace('no_opponent', 'No opponent found') : 'No online match was played.';
     if (offerAi || /opponent|timeout|no match|unavailable|offline/i.test(why)) {
       if (offerAi || await confirmBox(app.root, 'No opponent found', `${why} Play an AI Rival instead? (local ladder only)`, 'Play AI Rival')) playAi(app, view, ui);
     } else app.toast(why, 'warn');
