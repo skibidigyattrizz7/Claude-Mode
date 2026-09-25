@@ -6,6 +6,7 @@ import { parsePlaystyles, ps } from './playstyles.js';
 import { computeRatings, playerOfMatch } from './ratings.js';
 import * as KO from './knockout.js';
 import * as HSP from './humansp.js';
+import { normTactics, applyTactic } from './tactics.js';
 import { clamp, lerp, wrapAngle, angleTo, mulberry32, segDist } from './mathx.js';
 import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine } from './physics.js';
 import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
@@ -60,6 +61,11 @@ export class MatchSim {
     this.halfMinutes = o.halfMinutes || 3;
     this.gp = [mergeGameplay(o.gameplay && o.gameplay.home), mergeGameplay(o.gameplay && o.gameplay.away)];
     this.knockout = !!o.knockout;
+    this.tac = [normTactics(o.home.tactics), normTactics(o.away.tactics)];
+    this.formation = [o.home.formation || '4-3-3', o.away.formation || '4-3-3'];
+    this.subReq = [[], []];
+    this.subWindows = [0, 0];
+    this.maxSubs = o.maxSubs ?? 5;
     this.shootout = null;
     this.breakNext = 'half';
     this.switchT = [-9, -9];
@@ -214,7 +220,7 @@ export class MatchSim {
     if (!ic) return false;
     return inOwnPenaltyArea(ic.x, ic.z, this.dir[g.team]) && this.X(g.team, ic.x) > 0.5;
   }
-  intercept(p, maxH = 2.2) {
+  intercept(p, maxH = p.isGK ? p.h + 0.75 : p.h + p.jump + 0.25) {
     const path = this.path;
     const b = this.ball.p;
     if (!path || !path.length) return { t: Math.hypot(b.x - p.x, b.z - p.z) / p.vmax, x: b.x, z: b.z };
@@ -2081,10 +2087,54 @@ export class MatchSim {
     }
   }
 
+  // queue a substitution (slot index i within the team, bench index bi); applied at the next stoppage
+  requestSub(team, i, bi) {
+    const p = this.players[team * 11 + i];
+    const bench = this.bench[team];
+    if (!p || p.sentOff || !bench[bi] || this.benchUsed[team].has(bi)) return false;
+    if (this.subsMade[team] + this.subReq[team].length >= this.maxSubs) return false;
+    if (this.subReq[team].some((r) => r.i === i || r.bi === bi)) return false;
+    this.subReq[team].push({ i, bi });
+    if (this.phase === PHASE.STOP || this.phase === PHASE.SETPIECE || this.phase === PHASE.HALFTIME || this.phase === PHASE.KICKOFF) this._applySubReqs();
+    return true;
+  }
+
+  _doSub(team, p, bi) {
+    const bench = this.bench[team];
+    this.benchUsed[team].add(bi);
+    const outP = p.data, inP = bench[bi];
+    this._applyData(p, inP, this.teamsData[team].chemistry);
+    p.stam = 1; p.stamMax = 1; p.yellow = 0;
+    this.subsMade[team]++; this.lastSubT[team] = this.clock;
+    this.subs.push([team, p.i, bi]);
+    this.rosterVer++;
+    this.stoppage += 0.25;
+    this.emit({ type: 'sub', team: this.sideName(team), outId: outP.id, inId: inP.id, outName: outP.name, inName: inP.name, minute: this.minute() });
+    this.fxPush('sub', { team, i: p.i, bi });
+  }
+
+  _applySubReqs() {
+    for (let team = 0; team < 2; team++) {
+      const q = this.subReq[team];
+      if (!q.length) continue;
+      if (this.subWindows[team] >= 3 && this.half <= 2) { this.subReq[team] = []; continue; }
+      this.subWindows[team]++;
+      for (const r of q) {
+        const p = this.players[team * 11 + r.i];
+        if (p && !p.sentOff && !this.benchUsed[team].has(r.bi) && this.subsMade[team] < this.maxSubs) this._doSub(team, p, r.bi);
+      }
+      this.subReq[team] = [];
+    }
+  }
+
+  applyTactic(team, cmd) { return applyTactic(this, team, cmd); }
+
   _autoSubs() {
+    this._applySubReqs();
     if (this.half < 2 || this.clock < 15 * 60) return;
     for (let team = 0; team < 2; team++) {
-      if (this.subsMade[team] >= 3 || this.clock - this.lastSubT[team] < 6 * 60) continue;
+      if (this.human[team] && !this.opts.autoSubsHuman) continue;
+      if (this.subsMade[team] >= Math.min(3, this.maxSubs) || this.clock - this.lastSubT[team] < 6 * 60) continue;
       const bench = this.bench[team];
       if (!bench.length) continue;
       let worst = null;
@@ -2100,17 +2150,7 @@ export class MatchSim {
         if (roleGroup(bench[i].pos) === worst.group) { bi = i; break; }
       }
       if (bi < 0) continue;
-      this.benchUsed[team].add(bi);
-      const outP = worst.data, inP = bench[bi];
-      const keepYellow = 0;
-      this._applyData(worst, inP, this.teamsData[team].chemistry);
-      worst.stam = 1; worst.stamMax = 1; worst.yellow = keepYellow;
-      this.subsMade[team]++; this.lastSubT[team] = this.clock;
-      this.subs.push([team, worst.i, bi]);
-      this.rosterVer++;
-      this.stoppage += 0.25;
-      this.emit({ type: 'sub', team: this.sideName(team), outId: outP.id, inId: inP.id, outName: outP.name, inName: inP.name, minute: this.minute() });
-      this.fxPush('sub', { team, i: worst.i, bi });
+      this._doSub(team, worst, bi);
     }
   }
 
