@@ -1,5 +1,5 @@
 // National teams, kits, fictional squads and formations (pure data + helpers).
-import { makeRng, hashStr, colorDist, mixHex, clamp } from './util.js';
+import { makeRng, hashStr, colorDist, mixHex, clamp, luminance } from './util.js';
 
 // [code, name, rating, homeKit, awayKit, nameStyle]
 // kit = [shirt, secondary, shorts, socks, numberColour, pattern]
