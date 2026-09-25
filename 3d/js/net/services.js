@@ -226,6 +226,9 @@ export function createOnline(deps) {
     return avail.pending;
   }
 
+  /** Like isAvailable(), but re-pings when the cached answer is "down" (user actions / retries). */
+  const freshAvailable = () => { if (!avail.value && !avail.pending) avail.at = -Infinity; return isAvailable().catch(() => false); };
+
   const makeTransport = () => createTransport(deps.transportKind || 'peer', (deps.transportKind || 'peer') === 'peer' && deps.peerCfg ? deps.peerCfg() : undefined);
   const matchmaker = createMatchmaker({
     rpc, identity: () => identity(), createTransport: makeTransport, config: deps.matchmakerConfig,
@@ -560,7 +563,7 @@ export function createOnline(deps) {
         if (e) return fail(e);
         const code = typeof adminCode === 'string' ? adminCode.slice(0, 128) : '';
         if (isReservedName(u) && !code) return fail('reserved_username');
-        if (!(await isAvailable())) {
+        if (!(await freshAvailable())) {
           pendingCreds = { username: u, password, remember, adminCode: code };
           sset(storage, PENDING_KEY, JSON.stringify({ username: u, at: Date.now() }));
           emitAcc();
@@ -616,7 +619,7 @@ export function createOnline(deps) {
       /** Retry a queued offline sign-up (password kept in memory for this visit only). */
       async retryPending() {
         if (!pendingCreds || readAcc()) return { ok: false, error: 'nothing_pending' };
-        if (!(await isAvailable())) return fail('offline');
+        if (!(await freshAvailable())) return fail('offline');
         const c = pendingCreds;
         return online.account.signup({ username: c.username, password: c.password, confirm: c.password, remember: c.remember, adminCode: c.adminCode });
       },

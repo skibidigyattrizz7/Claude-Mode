@@ -608,7 +608,7 @@ test('offline sign-up is queued (no password stored) and completes when online i
   await sleep(20);
   const B = mkAcc(be, { storage: disk }); // next launch: only the username survived
   assert.equal(B.account.pending().username, 'Late Joiner');
-  assert.equal(B.hasPendingCreds, undefined);
+  assert.equal(B.account.hasPendingCreds, false);
   const done = await (async () => { for (let i = 0; i < 30; i++) { const x = await A.account.retryPending(); if (x.error !== 'offline') return x; await sleep(10); } return null; })();
   assert.equal(done.ok, true);
   assert.equal(A.account.current().state, 'account');
@@ -621,9 +621,7 @@ test('expired session logs the account out instead of creating an anonymous prof
   await A.account.signup({ username: 'Sleepy', password: 'password1', confirm: 'password1' });
   let events = 0;
   A.account.onChange(() => { events++; });
-  const acc = A.account.current();
-  await be.call('logout', { p_id: acc.id, p_token: JSON.parse(A._peekAccount ? '{}' : '{}').token || 'x' }); // no-op
-  be.reset();
+  be.reset(); // server forgot the session (expired / revoked)
   const r = await A.profile();
   assert.equal(r.error, 'auth');
   assert.equal(A.account.current().state, 'none');
