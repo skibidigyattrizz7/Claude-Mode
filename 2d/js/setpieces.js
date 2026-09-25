@@ -1,7 +1,7 @@
 // Set pieces in the top-down view: throw-ins, corners, goal kicks and indirect free kicks,
 // with a human aiming UI (reticle, power bar, curve) or AI execution. Penalties and direct
 // free kicks near goal are handed to the first-person KickScene via match.kickRequest.
-import { PITCH, CY, GOAL, BALL_R, PEN_SPOT } from './constants.js';
+import { PITCH, CX, CY, GOAL, BALL_R, PEN_SPOT } from './constants.js';
 import { placeBall, solveKick } from './physics.js';
 import { choosePassTarget, clampToPitch } from './passing.js';
 import { formationPos } from './ai.js';
@@ -151,9 +151,14 @@ function humanAim(m, sp, dt) {
   const aw = m.aimWorld[h.ctrl];
   if (aw) sp.aim = { x: aw.x, y: aw.y };
   else { sp.aim.x += mv.x * 16 * dt; sp.aim.y += mv.y * 16 * dt; }
-  const maxD = sp.type === 'throw' ? 26 : 60;
+  const maxD = sp.type === 'throw' ? 26 : 60, minD = sp.type === 'throw' ? 3 : 6;
   const dx = sp.aim.x - sp.x, dy = sp.aim.y - sp.y, d = Math.hypot(dx, dy);
   if (d > maxD) { sp.aim.x = sp.x + (dx / d) * maxD; sp.aim.y = sp.y + (dy / d) * maxD; }
+  else if (d < minD) {
+    // keep the target a sensible distance away (towards the pitch if the aim sits on the ball)
+    const u = d > 0.2 ? { x: dx / d, y: dy / d } : norm(CX - sp.x, CY - sp.y);
+    sp.aim.x = sp.x + u.x * minD; sp.aim.y = sp.y + u.y * minD;
+  }
   sp.aim = clampToPitch(sp.aim, 0.5, 0.5);
   if (sp.type !== 'throw') {
     if (c.isHeld('lob')) sp.curve = clamp(sp.curve - dt * 1.6, -1, 1);
@@ -285,10 +290,12 @@ export function predictSetPiece(m) {
   if (sp.type === 'throw') {
     const hs = 9 + power * 10;
     const v = solveKick({ x: b.x, y: b.y, z: 2 }, { x: sp.aim.x, y: sp.aim.y, z: 0.5 }, hs, { loft: true });
+    v.vz = Math.min(v.vz, 12);
     return { v, from: { x: b.x, y: b.y, z: 2 }, spin: 0 };
   }
   const hs = 13 + power * 17;
   const tz = sp.type === 'corner' ? 1.3 : 0.4;
   const v = solveKick({ x: b.x, y: b.y, z: BALL_R }, { x: sp.aim.x, y: sp.aim.y, z: tz }, hs, { spin: sp.curve * 1.3, loft: true });
+  v.vz = Math.min(v.vz, 17);
   return { v, from: { x: b.x, y: b.y, z: BALL_R }, spin: sp.curve * 1.3 };
 }

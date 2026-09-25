@@ -185,7 +185,7 @@ export class View3D {
     this.polyline(ctx, arc, lw, st);
     // penalty spot
     const ps = this.project({ x: L - PEN_SPOT, y: CY, z: 0 });
-    if (ps) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(ps.x, ps.y, ps.s * 0.2, ps.s * 0.07, 0, 0, TAU); ctx.fill(); }
+    if (ps) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(ps.x, ps.y, ps.s * 0.12, ps.s * 0.04, 0, 0, TAU); ctx.fill(); }
   }
 
   /** Back net, side nets and roof (drawn before the posts / keeper). */

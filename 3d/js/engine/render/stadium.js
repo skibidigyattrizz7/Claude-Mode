@@ -156,7 +156,7 @@ export function buildStadium(scene, opts, q, track) {
   const concrete = stdMat(0x8d9096);
   const darkM = stdMat(0x1a1d24);
   const roofTop = stdMat(0xb8bcc2, { metalness: 0.3, roughness: 0.6 });
-  const roofUnder = stdMat(0x5c6068, { side: THREE.DoubleSide });
+  const roofUnder = stdMat(0x5c6068, { side: THREE.DoubleSide, emissive: night ? 0x14161c : 0x30343b });
   const seatsMat = track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, color: night ? 0x777777 : 0xffffff }));
   const steelM = stdMat(0x9aa1ab, { metalness: 0.6, roughness: 0.4 });
   const home = opts.home?.kit?.primary || '#c00';
@@ -300,43 +300,44 @@ export function buildStadium(scene, opts, q, track) {
   const BH = 0.95;
   const STRIP_M = 8 * 7.3; // world metres per strip texture repeat
   const boards = [];
-  const addBoard = (x0, z0, x1, z1, mat) => {
-    const len = Math.hypot(x1 - x0, z1 - z0);
+  // boards are listed as a loop (a -> b runs left-to-right as seen from the pitch); `s0` is the
+  // perimeter coordinate of `a`, so the scrolling text runs continuously from board to board.
+  const addBoard = (a, b, s0, mat) => {
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const len = Math.hypot(dx, dz);
     const g = new THREE.Group();
     const face = new THREE.Mesh(track(new THREE.PlaneGeometry(len, BH)), mat);
-    // uv scale per board for consistent panel size
     const uv = face.geometry.attributes.uv;
-    const off = (x0 + z0) / STRIP_M;
-    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len / STRIP_M + off);
+    for (let i = 0; i < uv.count; i++) uv.setX(i, (s0 + uv.getX(i) * len) / STRIP_M);
     face.position.y = BH / 2 + 0.02;
     g.add(face);
     const back = new THREE.Mesh(track(new THREE.BoxGeometry(len, BH + 0.04, 0.25)), boardBack);
     back.position.set(0, BH / 2 + 0.02, -0.14);
     back.castShadow = q.shadows; back.receiveShadow = q.shadows;
     g.add(back);
-    // brace
     const br = new THREE.Mesh(track(new THREE.BoxGeometry(len, 0.08, 0.7)), boardBack); br.position.set(0, 0.04, -0.5); g.add(br);
-    g.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
-    // orient face normal toward pitch centre
-    const ang = Math.atan2(x1 - x0, z1 - z0); // direction along board
-    g.rotation.y = ang - Math.PI / 2;
-    // ensure the face points toward the pitch centre
-    const nrm = new THREE.Vector3(0, 0, 1).applyEuler(g.rotation);
-    if (nrm.x * -g.position.x + nrm.z * -g.position.z < 0) g.rotation.y += Math.PI;
+    g.position.set((a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2);
+    g.rotation.y = Math.atan2(-dz, dx); // local +x along a->b, local +z (LED face) toward the pitch
     group.add(g);
     boards.push(g);
   };
-  const BZ = HW + 4.2, BX = HL + 5.2;
-  addBoard(-HL - 1, -BZ, HL + 1, -BZ, boardMat);             // far side
-  addBoard(-HL - 1, BZ, -15, BZ, boardMat);                  // near side (gap for dugouts)
-  addBoard(15, BZ, HL + 1, BZ, boardMat);
-  for (const s of [-1, 1]) {
-    addBoard(s * BX, -BZ + 3, s * BX, -6, boardMat2);
-    addBoard(s * BX, 6, s * BX, BZ - 3, boardMat2);
-    addBoard(s * BX, -5.2, s * BX, 5.2, boardMat2);
-    // angled corner boards
-    addBoard(s * (HL + 1), -BZ, s * BX, -BZ + 3, boardMat2);
-    addBoard(s * (HL + 1), BZ, s * BX, BZ - 3, boardMat2);
+  const BZ = HW + 4.2, BX = HL + 5.2, C1 = HL + 1;
+  const loop = [
+    [[-C1, -BZ], [C1, -BZ], boardMat],
+    [[C1, -BZ], [BX, -BZ + 3], boardMat],
+    [[BX, -BZ + 3], [BX, -6], boardMat2], [[BX, -5.2], [BX, 5.2], boardMat2], [[BX, 6], [BX, BZ - 3], boardMat2],
+    [[BX, BZ - 3], [C1, BZ], boardMat],
+    [[C1, BZ], [15, BZ], boardMat], [[-15, BZ], [-C1, BZ], boardMat],
+    [[-C1, BZ], [-BX, BZ - 3], boardMat],
+    [[-BX, BZ - 3], [-BX, 6], boardMat2], [[-BX, 5.2], [-BX, -5.2], boardMat2], [[-BX, -6], [-BX, -BZ + 3], boardMat2],
+    [[-BX, -BZ + 3], [-C1, -BZ], boardMat],
+  ];
+  let per = 0, prev = loop[0][0];
+  for (const [a, b, mat] of loop) {
+    per += Math.hypot(a[0] - prev[0], a[1] - prev[1]);
+    addBoard(a, b, per, mat);
+    per += Math.hypot(b[0] - a[0], b[1] - a[1]);
+    prev = b;
   }
 
   // ---------------- dugouts & tunnel

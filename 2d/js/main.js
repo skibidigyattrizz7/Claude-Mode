@@ -6,8 +6,8 @@ import { KickScene } from './kickscene.js';
 import { Tutorial } from './tutorial.js';
 import { CornerPractice } from './cornerpractice.js';
 import { drawMatch, drawHUD, makeCamera, updateCamera, s2w } from './render.js';
-import { input, initInput, clearEdges, mouseAimActive, releaseAll } from './input.js';
-import { initTouch, setTouchMode, isTouchDevice } from './touch.js';
+import { input, initInput, clearEdges, mouseAimActive, releaseAll, setTouchModeFlag } from './input.js';
+import { initTouch, setTouchMode, refreshTouch, isTouchDevice } from './touch.js';
 import { initAudio, sfx, setMuted, crowdAmbience } from './audio.js';
 import { settings } from './settings.js';
 import { store } from './storage.js';
@@ -26,8 +26,8 @@ function resize() {
   canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
   canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
   const rot = document.getElementById('rotate');
-  const portrait = H > W && (input.touchMode || isTouchDevice());
-  rot.classList.toggle('hidden', !(portrait && app.scene && !app.rotateDismissed));
+  const portrait = H > W && input.touchMode;
+  rot.classList.toggle('hidden', !(portrait && app.scene && input.gameActive && !app.rotateDismissed));
 }
 
 // ---------- scenes ----------
@@ -39,7 +39,7 @@ class MatchScene {
     this.cam = makeCamera();
     this.kick = null;
     this.demo = !!opts.demo;
-    this.tut = opts.tutorial ? new Tutorial(this.m, input.binds, input.touchMode || isTouchDevice()) : null;
+    this.tut = opts.tutorial ? new Tutorial(this.m, input.binds, input.touchMode) : null;
     this.ftShown = false;
     this.paused = false;
     this.snapCam = true;
@@ -66,7 +66,7 @@ class MatchScene {
     if (this.tut) {
       this.tut.update(dt, input);
       updateTutorialBox(this.tut);
-      if (this.tut.finished && (input.raw.has('Enter') || input.mouse.pressed || input.anyPressed) && this.tut.t > 1.2) { app.toMenu(); return; }
+      if (this.tut.finished && (input.raw.has('Enter') || input.mouse.pressed || input.anyPressed) && this.tut.t > 0.6) { app.toMenu(); return; }
     }
     if (m.kickRequest && !this.kick && !this.demo) this.openKick(m.kickRequest);
     if (this.demo && (m.state === 'fulltime')) { app.startDemo(); return; }
@@ -350,13 +350,14 @@ function frame(now) {
 function boot() {
   initInput(canvas);
   initTouch(() => { if (app.paused) app.resume(); else app.pause(); });
-  if (isTouchDevice()) input.touchMode = true;
+  input.onTouchModeChange = () => { refreshTouch(); resize(); if (app.scene && app.scene.k) app.scene.k.syncDom(); if (app.scene && app.scene.kick) app.scene.kick.syncDom(); };
+  if (isTouchDevice()) setTouchModeFlag(true);
   window.addEventListener('resize', resize);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   document.getElementById('rotate').querySelector('button').addEventListener('click', () => { app.rotateDismissed = true; resize(); });
   // prevent pinch zoom / scrolling during play
   document.addEventListener('gesturestart', (e) => e.preventDefault());
-  document.addEventListener('touchmove', (e) => { if (input.gameActive) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (input.gameActive && !(e.target.closest && e.target.closest('#ui'))) e.preventDefault(); }, { passive: false });
   const unlock = () => { initAudio(); setMuted(!settings.sound); };
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });

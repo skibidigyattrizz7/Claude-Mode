@@ -592,8 +592,14 @@ export class KickScene {
     if (hint) {
       ctx.font = '13px Arial'; ctx.textAlign = 'center';
       const tw = Math.min(w - 20, ctx.measureText(hint).width + 24);
-      ctx.fillStyle = 'rgba(8,14,28,0.75)'; ctx.fillRect(w / 2 - tw / 2, h - 40, tw, 26);
-      ctx.fillStyle = '#e6ecff'; ctx.fillText(hint, w / 2, h - 27, w - 30);
+      // keep the hint clear of the on-screen kick controls
+      let hy = h - 40;
+      if (this.dom && !this.dom.classList.contains('hidden')) {
+        const r = this.dom.getBoundingClientRect();
+        if (r.height > 0 && r.right > w / 2 - tw / 2 && r.top < hy + 26) hy = r.top - 34;
+      }
+      ctx.fillStyle = 'rgba(8,14,28,0.75)'; ctx.fillRect(w / 2 - tw / 2, hy, tw, 26);
+      ctx.fillStyle = '#e6ecff'; ctx.fillText(hint, w / 2, hy + 13, w - 30);
     }
     // result
     if (this.phase === 'result' && this.resultText) {
@@ -624,7 +630,10 @@ export class KickScene {
   drawShootoutBoard(ctx, w) {
     const so = this.so;
     const n = Math.max(5, so.res[0].length, so.res[1].length);
-    const bw = 110 + n * 22, x = w / 2 - bw / 2, y = 14;
+    const bw = 110 + n * 22;
+    // centred at the top, or under the title strip on narrow screens
+    const narrow = w / 2 - bw / 2 < 280;
+    const x = narrow ? 14 : w / 2 - bw / 2, y = narrow ? 72 : 14;
     ctx.fillStyle = 'rgba(8,14,28,0.88)'; ctx.fillRect(x, y, bw, 58);
     for (let t = 0; t < 2; t++) {
       const yy = y + 16 + t * 26;

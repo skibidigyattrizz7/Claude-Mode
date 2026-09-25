@@ -46,8 +46,20 @@ export class CameraDirector {
     const bvx = b[3], bvz = b[5];
     const bs = Math.hypot(b[3], b[4], b[5]);
     let lx, ly, lz, px, py, pz, fov, wLook = 3.2, wPos = 2.2;
-    const mode = this.mode;
-    if (mode === 'pro' && ctx.ctrlPos) {
+    let mode = this.mode;
+    // establishing wide shot (shows the bowl, sky and floodlights): start of each half and at the breaks
+    const since = (view.t ?? 0) - (view.pt ?? -99);
+    const establish = mode === 'broadcast' && ((view.ph === PHASE.KICKOFF && (view.cl ?? 1) === 0 && since < 3.5) || view.ph === PHASE.HALFTIME || view.ph === PHASE.FULLTIME);
+    if (establish !== !!this.wasEstablish) { this.cut = true; this.wasEstablish = establish; this.estT = 0; }
+    if (establish) {
+      this.estT = (this.estT || 0) + dt;
+      // inside the bowl, high over a corner, slowly orbiting
+      const a = 2.45 + this.estT * 0.06;
+      px = Math.cos(a) * 56; pz = Math.sin(a) * 38; py = 33 - this.estT * 1.5;
+      lx = 0; ly = 19 - this.estT * 3.2; lz = 0; fov = 50; wLook = 4; wPos = 4;
+      mode = 'establish';
+    }
+    if (mode === 'establish') { /* set above */ } else if (mode === 'pro' && ctx.ctrlPos) {
       const c = ctx.ctrlPos; // {x,z,dir}
       const d = c.dir;
       const tx = clamp(c.x * 0.75 + bx * 0.25, -HL + 2, HL - 2);
@@ -63,7 +75,7 @@ export class CameraDirector {
         this.replaySide = (Math.sign(bz) || 1) * (Math.random() < 0.5 ? 1 : -1);
       }
       const g = this.replayGoal;
-      px = g * (HL + 7.5 - this.replayT * 0.25);
+      px = g * (HL + 3.9 - this.replayT * 0.2);
       pz = this.replaySide * (10 + this.replayT * 0.6);
       py = 2.0 + this.replayT * 0.1;
       lx = bx; ly = Math.max(0.7, by * 0.85 + 0.3); lz = bz;

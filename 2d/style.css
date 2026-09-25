@@ -30,9 +30,9 @@ select { background: #14213d; color: var(--txt); border: 1px solid var(--line); 
   overflow-y: auto; padding: 24px 12px; background: radial-gradient(ellipse at center, rgba(5,10,25,0.55), rgba(5,10,25,0.85));
   touch-action: pan-y; -webkit-overflow-scrolling: touch; user-select: none;
 }
-#ui.overlay { background: rgba(3,7,18,0.65); align-items: center; }
-#ui.menu-screen { align-items: center; background: linear-gradient(90deg, rgba(5,10,25,0.92) 0%, rgba(5,10,25,0.55) 55%, rgba(5,10,25,0.15) 100%); justify-content: flex-start; }
-.menu { margin-left: max(24px, 6vw); display: flex; flex-direction: column; gap: 18px; max-width: 420px; width: 100%; }
+#ui.overlay { background: rgba(3,7,18,0.65); }
+#ui.menu-screen { background: linear-gradient(90deg, rgba(5,10,25,0.92) 0%, rgba(5,10,25,0.55) 55%, rgba(5,10,25,0.15) 100%); justify-content: flex-start; }
+.menu { margin: auto 0 auto max(24px, 6vw); display: flex; flex-direction: column; gap: 18px; max-width: 420px; width: 100%; }
 .logo { display: flex; flex-direction: column; line-height: 0.95; }
 .logo .l1 { font-size: clamp(40px, 7vw, 72px); font-weight: 900; font-style: italic; letter-spacing: 2px; color: #fff; text-shadow: 0 4px 0 #16a34a, 0 8px 24px rgba(0,0,0,.6); }
 .logo .l2 { font-size: clamp(13px, 1.8vw, 18px); font-weight: 700; letter-spacing: 6px; color: var(--acc2); margin-top: 10px; }
@@ -114,30 +114,42 @@ table.stats th { color: var(--dim); font-weight: 600; }
 .tm.me { color: var(--acc2); }
 .bracket { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; align-items: center; }
 .kcol h4 { margin: 4px 0; color: var(--acc2); text-align: center; }
-.tie { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 8px; padding: 6px; margin: 6px 0; font-size: 13px; text-align: center; }
+.tie { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 8px; padding: 6px; margin: 6px 0; font-size: 13px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
 .tie.tbd { color: var(--dim); }
 
 /* tutorial box */
-#tut { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); width: min(620px, calc(100% - 24px)); background: rgba(8,14,28,0.9); border: 1px solid var(--acc2); border-radius: 10px; padding: 10px 14px; pointer-events: none; z-index: 5; }
+#tut { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 520px)); background: rgba(8,14,28,0.9); border: 1px solid var(--acc2); border-radius: 10px; padding: 10px 14px; pointer-events: none; z-index: 5; }
 #tut .tstep { font-size: 11px; letter-spacing: 2px; color: var(--acc2); font-weight: 800; }
 #tut .ok { color: #7dffa0; margin-left: 8px; }
 #tut .ttext { font-size: 15px; margin-top: 4px; }
 #tut .tskip { font-size: 11px; color: var(--dim); margin-top: 4px; }
 
+@media (max-width: 1000px) { #tut { top: 72px; width: min(560px, calc(100% - 24px)); } }
+
 /* rotate hint */
-#rotate { position: absolute; left: 10px; right: 10px; bottom: 10px; background: rgba(8,14,28,0.92); border: 1px solid var(--warn); border-radius: 10px; padding: 10px; display: flex; gap: 10px; align-items: center; justify-content: space-between; z-index: 20; font-size: 14px; }
+#rotate { position: absolute; left: 10px; right: 10px; top: 96px; background: rgba(8,14,28,0.92); border: 1px solid var(--warn); border-radius: 10px; padding: 10px; display: flex; gap: 10px; align-items: center; justify-content: space-between; z-index: 20; font-size: 14px; }
 
 /* ---------- touch controls ---------- */
 #touch { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 #joyZone { position: absolute; left: 0; top: 70px; bottom: 0; width: 46%; pointer-events: auto; touch-action: none; }
 #joyBase { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.45); pointer-events: none; }
 #joyKnob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,0.75); box-shadow: 0 2px 10px rgba(0,0,0,0.4); transform: translate(-50%,-50%); }
-#tbtns { position: absolute; right: max(10px, env(safe-area-inset-right)); bottom: 12px; display: grid; grid-template-columns: repeat(3, 62px); grid-auto-rows: 52px; gap: 8px; pointer-events: auto; direction: rtl; }
-.tbtn { border-radius: 50%; padding: 0; font-size: 11px; font-weight: 800; background: rgba(20,35,65,0.7); border: 2px solid rgba(255,255,255,0.35); direction: ltr; touch-action: none; }
-.tbtn.big { grid-row: span 2; grid-column: span 1; border-radius: 50%; background: rgba(22,163,74,0.75); font-size: 13px; }
-.tbtn.on { background: rgba(53,224,255,0.6); transform: scale(0.95); }
+#tbtns { position: absolute; right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); width: 236px; height: 236px; pointer-events: none; }
+.tbtn { position: absolute; width: 58px; height: 58px; border-radius: 50%; padding: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; background: rgba(20,35,65,0.62); border: 2px solid rgba(255,255,255,0.4); touch-action: none; pointer-events: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+.tbtn.big { width: 88px; height: 88px; font-size: 14px; background: rgba(22,163,74,0.72); border-color: rgba(187,247,208,0.8); }
+.tbtn[data-a=shoot] { right: 0; bottom: 0; }
+.tbtn[data-a=pass] { right: 96px; bottom: 2px; }
+.tbtn[data-a=through] { right: 78px; bottom: 70px; }
+.tbtn[data-a=lob] { right: 12px; bottom: 96px; }
+.tbtn[data-a=sprint] { right: 162px; bottom: 2px; }
+.tbtn[data-a=tackle] { right: 146px; bottom: 70px; }
+.tbtn[data-a=slide] { right: 80px; bottom: 138px; }
+.tbtn[data-a=switch] { right: 14px; bottom: 162px; }
+.tbtn[data-a=skill] { right: 150px; bottom: 138px; }
+.tbtn.on { background: rgba(53,224,255,0.6); transform: scale(0.94); }
 #tpause { position: absolute; top: 12px; right: calc(50% - 22px); width: 44px; height: 36px; padding: 0; pointer-events: auto; font-weight: 900; background: rgba(8,14,28,0.7); }
 #touch.kickmode #joyZone, #touch.kickmode #tbtns { display: none; }
+@media (max-width: 600px) { #tpause { top: 60px; right: auto; left: 12px; } }
 
 /* ---------- kick scene controls ---------- */
 #kickui { position: absolute; left: 14px; bottom: 50px; background: rgba(8,14,28,0.82); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; z-index: 3; width: 250px; }
@@ -156,12 +168,17 @@ table.stats th { color: var(--dim); font-weight: 600; }
   #kickui { bottom: 12px; }
 }
 
-@media (max-height: 480px) {
+@media (max-height: 520px) {
+  #ui.screen { padding: 12px 10px; }
   .panel { padding: 12px 14px; }
   .menu-buttons button { padding: 8px 14px; font-size: 15px; }
-  .logo .l1 { font-size: 40px; }
-  .menu { gap: 10px; }
+  .logo .l1 { font-size: 36px; }
+  .logo .l2 { margin-top: 4px; letter-spacing: 4px; }
+  .menu { gap: 10px; max-width: 540px; }
+  .menu > .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .final .fs { font-size: 34px; }
+  table.stats td, table.stats th { padding: 3px; }
   .team-grid { max-height: 34vh; }
-  #tbtns { grid-template-columns: repeat(3, 54px); grid-auto-rows: 44px; gap: 6px; }
+  #tbtns { transform: scale(0.84); transform-origin: 100% 100%; }
   #kickui { width: 220px; padding: 6px; gap: 4px; }
 }

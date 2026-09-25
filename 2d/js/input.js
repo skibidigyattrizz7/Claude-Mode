@@ -56,6 +56,17 @@ export function applyBinds(b, persist = true) {
 }
 applyBinds(input.binds, false);
 
+/**
+ * Touch mode = the player is using the touch screen. It turns on with a real touch and off
+ * again when a real mouse moves or a bound key is pressed, so on-screen controls never
+ * appear for mouse/keyboard players (even on touch-capable laptops).
+ */
+export function setTouchModeFlag(v) {
+  if (input.touchMode === v) return;
+  input.touchMode = v;
+  if (input.onTouchModeChange) input.onTouchModeChange(v);
+}
+
 export function mouseAimActive() {
   return !input.touchMode && performance.now() - input.mouse.movedAt < 2000;
 }
@@ -100,6 +111,7 @@ export function initInput(canvas) {
     input.anyPressed = true;
     if (!e.repeat) input.raw.add(e.code);
     const m = input.codeMap.get(e.code);
+    if (m && input.gameActive) setTouchModeFlag(false);
     if (m) {
       for (const { idx, action } of m) {
         const c = input.ctrls[idx];
@@ -126,20 +138,28 @@ export function initInput(canvas) {
 
   window.addEventListener('blur', releaseAll);
 
-  window.addEventListener('mousemove', (e) => {
+  // Pointer events tell mouse and touch apart reliably (compat mouse events after a tap don't).
+  window.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return;
     input.mouse.x = e.clientX; input.mouse.y = e.clientY;
-    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 0 || e.movementX === undefined) input.mouse.movedAt = performance.now();
-    if (!e.sourceCapabilities || !e.sourceCapabilities.firesTouchEvents) input.touchMode = input.touchMode && false;
+    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 0 || e.movementX === undefined) {
+      input.mouse.movedAt = performance.now();
+      setTouchModeFlag(false);
+    }
   });
-  canvas.addEventListener('mousedown', (e) => {
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    setTouchModeFlag(false);
     if (e.button === 0) { input.mouse.down = true; input.mouse.pressed = true; input.anyPressed = true; }
     if (e.button === 2) input.mouse.rdown = true;
     input.mouse.x = e.clientX; input.mouse.y = e.clientY;
   });
-  window.addEventListener('mouseup', (e) => {
+  window.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'mouse') return;
     if (e.button === 0 && input.mouse.down) { input.mouse.down = false; input.mouse.released = true; }
     if (e.button === 2) input.mouse.rdown = false;
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  window.addEventListener('touchstart', () => { input.touchMode = true; input.anyPressed = true; }, { passive: true });
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' || e.pointerType === 'pen') { setTouchModeFlag(true); input.anyPressed = true; } }, { capture: true });
+  window.addEventListener('touchstart', () => { setTouchModeFlag(true); input.anyPressed = true; }, { passive: true });
 }

@@ -45,7 +45,7 @@ export function createRenderer(container, opts = {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = night ? 0.95 : 1.0;
+  renderer.toneMappingExposure = night ? 0.88 : 1.0;
   renderer.shadowMap.enabled = q.shadows;
   renderer.shadowMap.type = opts.quality === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   const dom = renderer.domElement;
@@ -65,7 +65,7 @@ export function createRenderer(container, opts = {}) {
   const hemi = new THREE.HemisphereLight(night ? 0x8898c0 : 0xd6e8ff, night ? 0x1b261b : 0x4b6a3a, night ? 0.22 : 1.15);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(night ? 0xe8efff : 0xfff1dc, night ? 0.85 : 2.9);
-  const sunDir = night ? new THREE.Vector3(0.15, 1, 0.35).normalize() : new THREE.Vector3(-0.42, 0.78, -0.46).normalize();
+  const sunDir = night ? new THREE.Vector3(0.15, 1, 0.35).normalize() : new THREE.Vector3(-0.38, 0.8, 0.46).normalize();
   sun.castShadow = q.shadows;
   if (q.shadows) {
     sun.shadow.mapSize.set(q.shadowSize, q.shadowSize);
@@ -90,7 +90,7 @@ export function createRenderer(container, opts = {}) {
     if (!n) hemi.intensity = 1.0;
   } else {
     const fill = new THREE.DirectionalLight(0xcfe0ff, 0.45);
-    fill.position.set(30, 40, 80);
+    fill.position.set(30, 40, -80);
     scene.add(fill);
   }
 

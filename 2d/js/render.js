@@ -34,7 +34,7 @@ export const s2w = (cam, sx, sy) => ({ x: (sx - cam.w / 2) / cam.scale + cam.x, 
 
 // ---------- stadium background (pre-rendered once) ----------
 let stadium = null;
-const ST_M = 22, ST_PX = 7;
+const ST_M = 22, ST_PX = 10;
 function buildStadium() {
   const c = document.createElement('canvas');
   c.width = Math.round((PITCH.L + ST_M * 2) * ST_PX); c.height = Math.round((PITCH.W + ST_M * 2) * ST_PX);
@@ -42,11 +42,11 @@ function buildStadium() {
   g.fillStyle = '#1b2230'; g.fillRect(0, 0, c.width, c.height);
   // crowd dots
   const cols = ['#e63946', '#f1faee', '#a8dadc', '#457b9d', '#ffb703', '#fb8500', '#8ecae6', '#e9c46a', '#2a9d8f', '#f4a261', '#d62828', '#ffffff'];
-  for (let i = 0; i < 26000; i++) {
+  for (let i = 0; i < 52000; i++) {
     const x = Math.random() * c.width, y = Math.random() * c.height;
     g.fillStyle = cols[(Math.random() * cols.length) | 0];
     g.globalAlpha = 0.35 + Math.random() * 0.5;
-    g.fillRect(x, y, 2.2, 2.2);
+    g.fillRect(x, y, 3, 3);
   }
   g.globalAlpha = 1;
   // tier rings
@@ -317,8 +317,9 @@ function drawArc(ctx, pts, color) {
   ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.stroke();
   for (let i = 0; i < pts.length; i += 2) {
     const q = pts[i];
+    const z = Math.min(q.z, 8);
     ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(q.x, q.y - q.z * 0.55, 0.12 + q.z * 0.02, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(q.x, q.y - z * 0.55, 0.12 + z * 0.015, 0, TAU); ctx.fill();
   }
 }
 
@@ -467,8 +468,11 @@ export function drawScoreboard(ctx, m, x = 14, y = 14) {
   ctx.restore();
 }
 
+/** HUD elements shrink on small (phone) screens. */
+export const hudScale = (w, h) => clamp(Math.min(w / 1000, h / 560), 0.62, 1);
+
 function drawMinimap(ctx, m, cam) {
-  const mw = Math.min(170, cam.w * 0.24), mh = mw * PITCH.W / PITCH.L;
+  const mw = Math.min(170, cam.w * 0.2, 175 * hudScale(cam.w, cam.h)), mh = mw * PITCH.W / PITCH.L;
   const x = cam.w - mw - 14, y = 14;
   // fade the minimap when the action (ball / controlled players) is underneath it
   let hidden = false;
@@ -581,9 +585,14 @@ function drawSetPieceHUD(ctx, m, w, h, binds) {
 
 export function drawHUD(ctx, m, cam, settings, binds) {
   const w = cam.w, h = cam.h;
-  drawScoreboard(ctx, m);
+  const k = hudScale(w, h);
+  ctx.save(); ctx.scale(k, k); drawScoreboard(ctx, m); ctx.restore();
   drawMinimap(ctx, m, cam);
-  m.humans.forEach((hh, i) => drawPlayerPanel(ctx, m, hh, i === 0 ? 14 : w - 14, h - 52, i === 1));
+  m.humans.forEach((hh, i) => {
+    ctx.save(); ctx.translate(i === 0 ? 14 : w - 14, h - 12); ctx.scale(k, k);
+    drawPlayerPanel(ctx, m, hh, 0, -40, i === 1);
+    ctx.restore();
+  });
   drawSetPieceHUD(ctx, m, w, h, drawHUD.binds || { p1: {}, p2: {} });
   if (m.state === 'replay') {
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, w, 36); ctx.fillRect(0, h - 36, w, 36);

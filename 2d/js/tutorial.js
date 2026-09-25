@@ -62,9 +62,11 @@ export class Tutorial {
       this.opp = opp;
     } else if (s.id === 'corner') {
       beginSetPiece(m, { type: 'corner', team: 0, x: dir > 0 ? PITCH.L - 0.4 : 0.4, y: 0.4 });
-    } else if (s.id === 'pass' || s.id === 'through' || s.id === 'lob' || s.id === 'move') {
-      if (m.owner && m.owner.team !== 0) giveMe(PITCH.L / 2 - dir * 10, CY);
-    }
+    } else if (s.id === 'pass' || s.id === 'through' || s.id === 'lob') {
+      // start every passing drill on the ball in midfield
+      if (!m.owner || m.owner.team !== 0 || m.state !== 'play') giveMe(PITCH.L / 2 - dir * 10, CY);
+      else m.setHumanPlayer(h, m.owner);
+    } else if (s.id === 'move' && m.owner && m.owner.team !== 0) giveMe(PITCH.L / 2 - dir * 10, CY);
   }
 
   onEvent(e) {
@@ -103,6 +105,8 @@ export class Tutorial {
     if ((s.id === 'tackle' || s.id === 'slide') && m.state === 'play' && !m.owner && this.t > 4 && this.doneT < 0) this.enter();
     // after a goal or set piece in the attacking drills, reset
     if (['pass', 'through', 'lob', 'shoot', 'skill'].includes(s.id) && m.state === 'play' && m.owner && m.owner.team === 1) this.enter();
+    // the ball ran dead (out of play / stopped far away): hand it back so the drill can continue
+    if (['pass', 'through', 'lob', 'shoot', 'skill'].includes(s.id) && this.t > 2 && (m.state !== 'play' || (!m.owner && Math.hypot(m.ball.vx, m.ball.vy) < 0.3))) this.enter();
     if (input.raw.has('Enter') && this.t > 0.3) { this.i++; this.enter(); }
   }
 }
