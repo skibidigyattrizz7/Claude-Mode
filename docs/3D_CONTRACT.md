@@ -125,3 +125,17 @@ weight: 58..100,               // kg; affects shoulder challenges/shielding with
 playstyles: [{ id: 'finesse', plus: false }, ...]   // 0..4 total, count scales with OVR (<70: 0–1, 70–79: 1–2, 80–86: 2–3, 87+: 3–4); at most 1–2 'plus' for 85+
 ```
 PlayStyle ids (FC-style): attack `finesse, power, chip, deadball, trivela, lowdriven, powerheader, acrobatic`; passing `incisive, tikitaka, pinged, longball, whipped`; ball control `firsttouch, technical, rapid, flair, trickster, pressproven`; defending `anticipate, intercept, block, jockey, slidetackle, bruiser, aerial`; physical `quickstep, relentless, longthrow`; GK `farreach, footwork, rushout, crossclaimer, quickreflexes, deflector`. Plus version = stronger effect. Engine: missing fields → defaults (height 1.80, weight 75, playstyles []).
+
+## V2.2 — tactics (optional `Team.tactics`; engine uses defaults when missing)
+```js
+tactics: {
+  defensiveStyle: 'balanced'|'pressAfterLoss'|'constantPressure'|'dropBack',
+  width: 1..10, depth: 1..10,                      // defensive width / line height
+  buildUp: 'balanced'|'shortPassing'|'longBall'|'counter',
+  chanceCreation: 'balanced'|'possession'|'directPassing'|'forwardRuns',
+  playersInBox: 1..10, corners: 1..5, freeKicks: 1..5,
+  instructions: { [playerId]: { attack?: 'stayForward'|'getInBehind'|'comeShort'|'balanced', defend?: 'stayBack'|'cutPasses'|'markPlayer'|'balanced', support?: 'stayWide'|'cutInside'|'overlap'|'stayBack'|'balanced' } },
+  quick: [ /* up to 4 preset tactics objects bound to quick-tactics keys in-match */ ],
+  setPieceTakers: { fk?: id, pen?: id, cornerL?: id, cornerR?: id, captain?: id },
+}
+```

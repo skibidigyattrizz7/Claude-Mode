@@ -186,6 +186,18 @@ export class TeamAI {
     const m = this.m;
     const opps = m.opps(this.team).filter((o) => o.role !== 'GK' && o !== carrier);
     const gc = m.goalCenter(m.ownSide(this.team));
+    if (globalThis.__oldMarkFull) {
+      const taken = new Set();
+      const order = field.filter((p) => p.human < 0).sort((a, b) => FORMATION[a.idx].x - FORMATION[b.idx].x);
+      for (const p of order) {
+        p.ai.mark = null;
+        const home = formationPos(m, p, -1);
+        let best = null, bd = 16;
+        for (const o of opps) { if (taken.has(o)) continue; const d = dist(o, home); if (d < bd) { bd = d; best = o; } }
+        if (best) { taken.add(best); p.ai.mark = best; }
+      }
+      return;
+    }
     const marks = markTargets(field, opps, (p) => formationPos(m, p, -1), gc, { autoMarking: this.gp ? this.gp.autoMarking : true });
     for (const p of field) if (p.human < 0) p.ai.mark = marks.get(p) || null;
   }
