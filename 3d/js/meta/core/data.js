@@ -255,7 +255,7 @@ function makeShort(name, used) {
 // Club list: id, name, short, league, tier, rep (1..5 stars), colours, target overall
 function buildClubs() {
   const out = [];
-  const used = new Set();
+  const used = new Set(NATIONS.map((n) => n.code));
   const t1Target = [84, 82, 80, 78, 77, 76, 75, 74, 73, 72];
   const t2Target = [70, 69, 68, 67, 66, 65, 64, 63];
   for (const lg of LEAGUES) {
