@@ -14,6 +14,7 @@ export const GAMEPLAY_DEFAULTS = {
   autoTackle: false,           // controlled player auto-pokes when ball is in reach while defending
   jockeyAssist: true,          // hold sprint-less contain key auto-faces the ball carrier
   passReceiverLock: 'earlyRelease', // 'off' | 'earlyRelease' | 'lateRelease'
+  manualKeeper: false,         // take control of your keeper when a shot is coming (dive with the tackle key)
   switchOnPass: 'instant',     // 'instant' (on strike) | 'release' (ball halfway) | 'receive' (on reception)
   autoShots: false,            // auto-shoot on first-time chances (arcade)
   autoClearances: true,        // defenders clear danger automatically when not controlled

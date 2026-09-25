@@ -328,7 +328,7 @@ export class Match {
   /** Running alongside the carrier and leaning in: strength decides who keeps the ball. */
   shoulderDuel(ch, carrier) {
     if (ch.state !== 'run' || carrier.state !== 'run' || ch.role === 'GK' || carrier.role === 'GK') return;
-    if ((ch.ai.shoulderT || 0) > this.time) return;
+    if (globalThis.__noShoulder || (ch.ai.shoulderT || 0) > this.time) return;
     const vc = Math.hypot(carrier.vx, carrier.vy), vh = Math.hypot(ch.vx, ch.vy);
     if (vc < 2.5 || vh < 2.5) return;
     if ((ch.vx * carrier.vx + ch.vy * carrier.vy) / (vc * vh) < 0.45) return;      // not running together
@@ -1031,7 +1031,7 @@ export class Match {
         for (const o of this.opps(p.team)) near = Math.min(near, dist(o, p));
         const pressure = clamp(1 - (near - 0.8) / 2.5, 0, 1);
         const hv = touchHeaviness({ relSpeed, dribbling: p.attrs.dribbling, sprinting: p.sprint && Math.hypot(p.vx, p.vy) > jogSpeed(p), pressure, height: b.z });
-        if (Math.random() < hv * 0.7) { this.heavyTouch(p, hv); return; }
+        if (!globalThis.__noHeavy && Math.random() < hv * 0.7) { this.heavyTouch(p, hv); return; }
       }
       this.setOwner(p); return;
     }

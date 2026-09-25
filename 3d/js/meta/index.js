@@ -7,13 +7,16 @@ import { loadUT, utTeam } from './core/ut.js';
 /**
  * Mount the meta UI inside `container`.
  * @param {HTMLElement} container
- * @param {{ startMatch:(home, away, opts) => Promise<object>, onExit?: () => void }} options
- *   startMatch opts passed: { halfMinutes, difficulty, userSide: 'home'|'away', mode: 'ut'|'career', knockout? }
- *   onExit (optional, non-contract extra): when given, a Back button on the root screen calls it.
+ * @param {{ startMatch:(home, away, opts) => Promise<object>, startOnlineMatch?: (o:{mode:'ut', team}) => Promise<object>,
+ *           online?: object, onExit?: () => void }} options
+ *   startMatch opts passed: { halfMinutes, difficulty, userSide: 'home'|'away', mode: 'ut'|'career'|'draft'|'tournament', knockout? }
+ *   startOnlineMatch (V2): runs matchmaking + an online UT match (main.js); `online` = net/services.js `online` object.
+ *   Both are optional: without them the Player Market / Online Seasons / Admin show an "unavailable" state.
+ *   onExit (optional): when given, a Back button on the root screen calls it.
  * @returns {{ showCareer(): void, showUltimateTeam(): void, destroy(): void }}
  */
-export function mountMeta(container, { startMatch, onExit } = {}) {
-  const app = new MetaApp(container, { startMatch, onExit });
+export function mountMeta(container, { startMatch, startOnlineMatch = null, online = null, onExit } = {}) {
+  const app = new MetaApp(container, { startMatch, startOnlineMatch, online, onExit });
   return {
     showCareer: () => app.showCareer(),
     showUltimateTeam: () => app.showUltimateTeam(),

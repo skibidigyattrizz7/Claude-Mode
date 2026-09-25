@@ -82,7 +82,7 @@ export const MOMENTUM_SPEED = 5.2;
  * Returns false when the normal acceleration model should be used instead.
  */
 export function turnWithMomentum(p, tx, ty, wm, sp, dt) {
-  if (p.jockey || p.shield || p.role === 'GK' || sp < MOMENTUM_SPEED || wm < 0.5) return false;
+  if (globalThis.__noMomentum || p.jockey || p.shield || p.role === 'GK' || sp < MOMENTUM_SPEED || wm < 0.5) return false;
   const cur = Math.atan2(p.vy, p.vx);
   const d = angDiff(cur, Math.atan2(ty, tx));
   const step = maxTurnRate(p, sp) * dt;

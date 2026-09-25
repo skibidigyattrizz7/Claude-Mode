@@ -68,6 +68,10 @@ export const GAMEPLAY_FIELDS = {
     group: 'defending', label: 'Jockey Assist', options: ON_OFF,
     desc: 'While holding Jockey your player keeps facing the ball carrier.',
   },
+  manualKeeper: {
+    group: 'defending', label: 'Manual Goalkeeper', options: ON_OFF,
+    desc: 'Take control of your keeper when a shot is coming and dive with the Tackle key.',
+  },
   autoClearances: {
     group: 'defending', label: 'Auto Clearances', options: ON_OFF,
     desc: 'Defenders you are not controlling clear the ball out of danger automatically.',
