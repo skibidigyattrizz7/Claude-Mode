@@ -52,6 +52,7 @@ export function createRenderer(container, { home, away, stadium = 'day' }) {
   }
   resize();
   return {
+    _scene: scene, _camera: camera, _renderer: renderer,
     domElement: renderer.domElement,
     setCamera(m) { mode = m; },
     setControlled(ids) { ctrl = ids; },

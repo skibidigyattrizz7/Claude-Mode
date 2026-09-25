@@ -212,6 +212,7 @@ body.in-match #app, body.in-match .bg { display: none; }
 .back span:first-child { font-size: 24px; line-height: 1; margin-top: -3px; }
 .back:hover { border-color: var(--acc); }
 .topbar-title { flex: 1; min-width: 0; }
+.topbar-title .kicker { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-title h1 { font-size: 22px; text-transform: uppercase; font-style: italic; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-logo { font: 900 14px var(--display); font-style: italic; letter-spacing: .08em; color: var(--acc-ink); background: linear-gradient(135deg, var(--acc), var(--acc3)); padding: 6px 10px; border-radius: 9px; }
 .screen-body { max-width: 1100px; margin: 0 auto; padding: 18px 16px calc(28px + env(safe-area-inset-bottom)); }
@@ -259,8 +260,8 @@ button.picker-card:hover { border-color: var(--acc); transform: translateY(-2px)
 .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 18px 0 4px; }
 .field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .field-label { font: 800 12px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--mut); }
-.seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(5,8,16,.6); border: 1px solid var(--line); }
-.seg button { flex: 1 1 auto; min-height: 40px; min-width: 56px; padding: 6px 12px; border: 0; border-radius: 9px; background: transparent; color: var(--mut); cursor: pointer; font: 800 14px var(--display); letter-spacing: .04em; white-space: nowrap; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 4px; border-radius: 12px; background: rgba(5,8,16,.6); border: 1px solid var(--line); }
+.seg button { min-height: 40px; min-width: 0; padding: 6px 6px; border: 0; border-radius: 9px; background: transparent; color: var(--mut); cursor: pointer; font: 800 14px/1.1 var(--display); letter-spacing: .02em; overflow-wrap: anywhere; }
 .seg button:hover { color: var(--txt); background: rgba(255,255,255,.05); }
 .seg button.on { background: var(--acc); color: var(--acc-ink); }
 .kick { margin-top: 10px; min-width: 240px; }

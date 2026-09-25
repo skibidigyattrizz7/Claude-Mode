@@ -788,7 +788,7 @@ function controlsScreen() {
         h('button', { class: 'btn', type: 'button', 'data-reset': 'p2', onclick: () => resetOne('p2') }, 'Reset P2'),
         h('button', { class: 'btn btn--danger', type: 'button', 'data-reset': 'all', onclick: () => { binds = resetKeybinds(); render(); status.textContent = 'All controls reset to defaults.'; } }, 'Reset all'))),
     h('div', { class: 'panel info-grid' },
-      h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works — press a button to wake it. Left stick move, A pass, B shoot, X through ball, Y lob, RT sprint, LB switch player.')),
+      h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works — press a button on it to wake it up. Left stick moves, face buttons pass and shoot, triggers sprint. In Local 2-Player each pad can take a side.')),
       h('div', null, h('h3', null, 'Touch'), h('p', null, 'On phones and tablets an on-screen stick and action buttons appear during the match.')),
       h('div', null, h('h3', null, 'Shooting'), h('p', null, 'Hold shoot to build power, release to strike. Finesse curls it; lob chips the keeper.'))));
   nav.push({ el, name: 'controls', destroy: () => stopListening() });

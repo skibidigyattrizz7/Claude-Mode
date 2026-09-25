@@ -426,6 +426,8 @@ export function createMatch(container, opts = {}) {
 
   // ---------------------------------------------------------------- handle
   return {
+    // private debugging aid (not part of the contract)
+    _debug: { get renderer() { return R; }, get sim() { return sim; }, get view() { return lastView; } },
     pause() { paused = true; },
     resume() { resume(); },
     destroy() {

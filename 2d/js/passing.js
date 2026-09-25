@@ -22,8 +22,11 @@ export function groundPassSpeed(d, va) {
   return { v0: hi, t: rollDistance(hi, va).t };
 }
 
-/** Arrival speed we want for a ground pass of length d (firmer for longer passes). */
-export const arriveSpeedFor = (d, kind) => (kind === 'through' ? 2.2 : clamp(4 + d * 0.16, 4.5, 9));
+/**
+ * Arrival speed we want for a ground pass of length d: firm enough to beat defenders, soft
+ * enough to control and not to run on out of play if the receiver misses it.
+ */
+export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(3 + d * 0.05, 3.2, 4.5) : clamp(3 + d * 0.1, 3.5, 6.5));
 
 /** Lofted ball: find horizontal speed & vz so the ball lands at distance d after ~T seconds. */
 export function lobParams(d, T) {
@@ -82,28 +85,44 @@ export function laneRisk(a, b, opps, kind = 'ground') {
 
 const CONES = { ground: 45 * DEG, through: 55 * DEG, lob: 50 * DEG };
 
-/** Predict where the receiver will be when the ball arrives (lead by velocity). */
+const RUN_SPEED = 6.8;   // how fast a receiver sprints onto a through ball
+
+/**
+ * Where to play the ball so the receiver meets it.
+ * ground/lob: lead a moving receiver by (part of) his velocity, capped so a change of
+ * direction doesn't leave the ball in empty space.
+ * through: into space ahead of the runner, at the first point he can reach before the ball.
+ */
 export function leadTarget(from, mate, kind, attackDir = 1) {
-  let tgt = { x: mate.x, y: mate.y };
-  let plan = null;
-  for (let i = 0; i < 4; i++) {
+  const vx = mate.vx || 0, vy = mate.vy || 0;
+  const ballTime = (tgt) => {
     const d = Math.hypot(tgt.x - from.x, tgt.y - from.y);
-    let t;
-    if (kind === 'lob') t = lobTimeFor(d);
-    else t = groundPassSpeed(d, arriveSpeedFor(d, kind)).t;
-    if (kind === 'through') {
-      const sp = Math.hypot(mate.vx || 0, mate.vy || 0);
-      const dir = sp > 1.5 ? norm(mate.vx, mate.vy) : { x: attackDir, y: 0 };
-      const run = Math.max(sp, 6.5) * t * 0.9;
-      tgt = { x: mate.x + dir.x * run, y: mate.y + dir.y * run };
-      tgt = clampToPitch(tgt, 5, 2.5);
-    } else {
-      tgt = { x: mate.x + (mate.vx || 0) * t, y: mate.y + (mate.vy || 0) * t };
-      tgt = clampToPitch(tgt, 1.2, 1.2);
+    return kind === 'lob' ? lobTimeFor(d) : groundPassSpeed(d, arriveSpeedFor(d, kind)).t;
+  };
+  if (kind === 'through') {
+    const sp = Math.hypot(vx, vy);
+    let dir = sp > 1.5 ? norm(vx, vy) : { x: attackDir, y: 0 };
+    // bias the run towards goal so the ball is played in behind, not square
+    dir = norm(dir.x + attackDir * 0.6, dir.y);
+    let best = null;
+    for (let s = 3; s <= 14; s += 0.5) {
+      const tgt = clampToPitch({ x: mate.x + dir.x * s, y: mate.y + dir.y * s }, 4, 2.5);
+      const t = ballTime(tgt);
+      const tr = Math.hypot(tgt.x - mate.x, tgt.y - mate.y) / RUN_SPEED + 0.25;
+      best = { target: tgt, t };
+      if (t >= tr) break;          // the runner gets there first: ball rolls into his stride
     }
-    plan = { target: tgt, t };
+    return best;
   }
-  return plan;
+  let tgt = { x: mate.x, y: mate.y }, t = 0;
+  for (let i = 0; i < 3; i++) {
+    t = ballTime(tgt);
+    const lead = Math.min(kind === 'lob' ? 7 : 5, Math.hypot(vx, vy) * t * 0.7);
+    const sp = Math.hypot(vx, vy);
+    tgt = sp > 0.3 ? { x: mate.x + (vx / sp) * lead, y: mate.y + (vy / sp) * lead } : { x: mate.x, y: mate.y };
+    tgt = clampToPitch(tgt, 1.5, 1.5);
+  }
+  return { target: tgt, t: ballTime(tgt) };
 }
 
 /**
