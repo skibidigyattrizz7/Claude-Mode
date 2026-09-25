@@ -110,7 +110,7 @@ export class KickScene {
     const d = document.createElement('div');
     d.id = 'kickui';
     d.innerHTML = `
-      <div class="krow"><label>Power</label><input id="kPower" type="range" min="0" max="100" value="65"></div>
+      <div class="krow kpow"><label>Power</label><input id="kPower" type="range" min="0" max="100" value="65"></div>
       <div class="krow fk"><label>Curve</label><input id="kCurve" type="range" min="-100" max="100" value="0"></div>
       <div class="krow fk kt">${TYPES.map((t) => `<button data-type="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
       <div class="krow"><button id="kKick" class="primary">KICK</button><button id="kHold" class="primary hold">HOLD</button></div>
@@ -146,7 +146,11 @@ export class KickScene {
     d.classList.toggle('ispractice', this.mode === 'fkpractice');
     const keeperMode = this.humanKeeper != null;
     d.classList.toggle('keeper', keeperMode);
-    d.classList.toggle('hidden', this.humanShooter == null && !keeperMode);
+    // "hold" power mode on a desktop: the power bar is charged with the key / mouse, so the
+    // slider + KICK button are only offered in "slider" mode (touch always gets both)
+    const holdMode = settings.penaltyPower !== 'slider' && !input.touchMode;
+    d.classList.toggle('holdmode', holdMode);
+    d.classList.toggle('hidden', (this.humanShooter == null && !keeperMode) || (holdMode && !keeperMode && !this.isFK) || this.phase === 'over');
     d.querySelector('#kKick').textContent = keeperMode ? 'DIVE' : 'KICK';
     d.querySelector('#kHold').textContent = keeperMode ? 'DIVE' : 'HOLD';
     d.querySelector('#kCurve').value = Math.round(this.curve * 100);
@@ -429,7 +433,7 @@ export class KickScene {
     }
     if (this.mode === 'shootout') {
       if (this.so.done) {
-        if (this.phase !== 'over') { this.phase = 'over'; this.phaseT = 0; sfx('whistleEnd'); }
+        if (this.phase !== 'over') { this.phase = 'over'; this.phaseT = 0; sfx('whistleEnd'); this.syncDom(); }
         return;
       }
       this.so.turn = 1 - this.so.turn;
@@ -576,8 +580,10 @@ export class KickScene {
     const b = input.binds.p1;
     let hint = '';
     if (this.phase === 'aim' && this.humanShooter != null) {
+      const aimTxt = `Aim: mouse / ${keyLabel(b.up)}${keyLabel(b.left)}${keyLabel(b.down)}${keyLabel(b.right)}`;
       hint = input.touchMode ? 'Drag to aim · hold HOLD (or use slider + KICK)'
-        : `Aim: mouse / ${keyLabel(b.up)}${keyLabel(b.left)}${keyLabel(b.down)}${keyLabel(b.right)} · Hold ${keyLabel(b.shoot)} or mouse button for power, release to shoot · ${keyLabel(b.pass)}: kick at slider power`;
+        : settings.penaltyPower === 'slider' ? `${aimTxt} · set power with the slider, then KICK or ${keyLabel(b.pass)} · (holding ${keyLabel(b.shoot)} also works)`
+        : `${aimTxt} · Hold ${keyLabel(b.shoot)} or mouse button for power, release to shoot`;
       if (this.isFK && !input.touchMode) hint += ` · ${keyLabel(b.lob)}/${keyLabel(b.through)} curve · ${keyLabel(b.skill)} type`;
       if (this.mode === 'fkpractice' && !input.touchMode) hint += ' · N new spot · P place ball';
     } else if (this.humanKeeper != null && (this.phase === 'aim' || this.phase === 'runup' || this.phase === 'flight')) {

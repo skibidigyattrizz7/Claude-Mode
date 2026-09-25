@@ -150,6 +150,7 @@ table.stats th { color: var(--dim); font-weight: 600; }
 #kickui.isfk .fk, #kickui.ispractice .prac { display: flex; }
 #kickui #kHold { display: none; }
 #kickui.keeper .krow:first-child { display: none; }
+#kickui.holdmode:not(.keeper) .kpow, #kickui.holdmode:not(.keeper) #kKick { display: none; }
 @media (pointer: coarse) {
   #kickui #kHold { display: block; }
   #kickui { bottom: 12px; }
