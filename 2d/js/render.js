@@ -85,16 +85,19 @@ function buildStadium() {
 function drawPitch(ctx) {
   const L = PITCH.L, W = PITCH.W;
   // grass with mowed stripes
+  const G = 4.6;   // grass run-off beyond the lines (the ad boards sit just behind it)
   ctx.fillStyle = '#2f8a3a';
-  ctx.fillRect(-7, -7, L + 14, W + 14);
+  ctx.fillRect(-G, -G, L + 2 * G, W + 2 * G);
   const n = 14, sw = L / n;
-  for (let i = -1; i <= n; i++) {
+  for (let i = 0; i < n; i++) {
     ctx.fillStyle = i % 2 === 0 ? '#3a9a45' : '#338d3e';
-    ctx.fillRect(i * sw, -7, sw, W + 14);
+    ctx.fillRect(i * sw, -G, sw, W + 2 * G);
   }
+  ctx.fillStyle = '#338d3e'; ctx.fillRect(-G, -G, G, W + 2 * G);
+  ctx.fillStyle = '#3a9a45'; ctx.fillRect(L, -G, G, W + 2 * G);
   // subtle cross mow
   ctx.fillStyle = 'rgba(255,255,255,0.025)';
-  for (let j = 0; j < W; j += 9) ctx.fillRect(-7, j, L + 14, 4.5);
+  for (let j = 0; j < W; j += 9) ctx.fillRect(-G, j, L + 2 * G, 4.5);
 
   ctx.strokeStyle = 'rgba(255,255,255,0.92)';
   ctx.lineWidth = 0.14;

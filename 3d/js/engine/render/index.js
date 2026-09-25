@@ -62,9 +62,9 @@ export function createRenderer(container, opts = {}) {
   camera.position.set(0, 23, 70);
 
   // ---------------------------------------------------------------- lights
-  const hemi = new THREE.HemisphereLight(night ? 0x8898c0 : 0xd6e8ff, night ? 0x1b261b : 0x4b6a3a, night ? 0.35 : 1.15);
+  const hemi = new THREE.HemisphereLight(night ? 0x8898c0 : 0xd6e8ff, night ? 0x1b261b : 0x4b6a3a, night ? 0.22 : 1.15);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(night ? 0xe8efff : 0xfff1dc, night ? 1.25 : 2.9);
+  const sun = new THREE.DirectionalLight(night ? 0xe8efff : 0xfff1dc, night ? 0.85 : 2.9);
   const sunDir = night ? new THREE.Vector3(0.15, 1, 0.35).normalize() : new THREE.Vector3(-0.42, 0.78, -0.46).normalize();
   sun.castShadow = q.shadows;
   if (q.shadows) {
@@ -81,7 +81,7 @@ export function createRenderer(container, opts = {}) {
     const n = q.spots ? 4 : 0;
     for (let i = 0; i < n; i++) {
       const xs = i & 1 ? 1 : -1, zs = i & 2 ? 1 : -1;
-      const s = new THREE.SpotLight(0xf4f6ff, 1.05, 0, 0.62, 0.85, 0);
+      const s = new THREE.SpotLight(0xf4f6ff, 1.25, 0, 0.5, 0.9, 0);
       s.position.set(xs * 85, 60, zs * 64);
       s.target.position.set(xs * 12, 0, zs * 6);
       scene.add(s, s.target);
