@@ -4,12 +4,15 @@ import { PITCH, CX, CY, GOAL, PEN_SPOT, CIRCLE_R, BALL_R, DIFFICULTY } from './c
 import { FORMATION, chooseKits } from './data.js';
 import { makeBall, placeBall, stepBallWorld, simulatePath } from './physics.js';
 import { goalScored, keeperMaySave, outOfPlay, restartFor, judgeTackle, isFromBehind, inPenaltyArea, applyCard, tackleSweep } from './rules.js';
-import { choosePassTarget, passVelocity, leadTarget, clampToPitch } from './passing.js';
+import { choosePassTarget, passVelocity, leadTarget, clampToPitch, planPass } from './passing.js';
 import { planShot, shotVelocity } from './shooting.js';
-import { makePlayer, stepPlayer, topSpeed, startSkill, isEvading, SKILL_NAMES } from './player.js';
+import { makePlayer, stepPlayer, topSpeed, jogSpeed, startSkill, isEvading, SKILL_NAMES } from './player.js';
 import { TeamAI } from './ai.js';
 import { beginSetPiece, updateSetPiece } from './setpieces.js';
 import { clamp, dist, norm, gauss, angDiff } from './util.js';
+import { GAMEPLAY_DEFAULTS } from './settings.js';
+import { touchHeaviness, heavyTouchSpeed, shoulderWinChance, timedFinishGrade, savedKickRestart, TIMED_WINDOW } from './feel.js';
+import { solveKick } from './physics.js';
 
 const HUMAN_PROF = { react: 0.3, acc: 0.85, speed: 1, keeper: 1, press: 0.9, careful: 0.9 };
 export const STATE_CODES = ['run', 'tackle', 'slide', 'down', 'dive', 'hold', 'skill', 'celebrate'];
@@ -19,7 +22,7 @@ const mkStats = () => ({ poss: 0, shots: 0, onTarget: 0, passAtt: 0, passCmp: 0,
 /** Ring buffer of the last few seconds (ball + players) for goal replays. */
 class Replay {
   constructor(n) {
-    this.n = n; this.stride = 4 + n * 5; this.cap = 330;
+    this.n = n; this.stride = 4 + n * 5; this.cap = 600;           // 10 s at 60 Hz
     this.buf = new Float32Array(this.cap * this.stride);
     this.len = 0; this.head = 0; this.tick = 0; this.frames = 0; this.start = 0; this.pos = 0;
   }
@@ -98,6 +101,8 @@ export class Match {
     this.minutes = o.minutes || 4;
     this.noClock = !!o.noClock;
     this.paused = false;
+    this.autoKicks = !!o.autoKicks;      // resolve penalties / direct free kicks without the 3D scene
+    this.irSnap = null;                  // saved match state while an instant replay plays
     this.setupKickoff(this.firstKick);
   }
 
@@ -119,6 +124,14 @@ export class Match {
   }
   get minute() { return Math.floor(this.clock / 60); }
   humanFor(p) { return this.humans.find((h) => h.player === p); }
+  /** Gameplay (assist) settings of a human controller. */
+  gp(h) {
+    const g = this.settings && this.settings.gameplay;
+    const d = g ? g[h.ctrl === 1 ? 'p2' : 'p1'] : null;
+    return d || { ...GAMEPLAY_DEFAULTS, shot: (this.settings && this.settings.assist) || 'Assisted' };
+  }
+  /** Settings that steer a team's AI teammates (the first human on it), null for a CPU team. */
+  gpTeam(t) { const h = this.humans.find((hh) => hh.team === t); return h ? this.gp(h) : null; }
 
   // ---------- kickoff ----------
   setupKickoff(team) {
@@ -165,8 +178,10 @@ export class Match {
       case 'out':
         this.idlePlayers(dt, 0.4);
         if (!this.owner) { stepBallWorld(this.ball, dt, []); this.adBoards(); }
-        if (this.stateT > 1.3) beginSetPiece(this, this.pendingRestart);
+        if (this.stateT > 0.3 && this.quickRestartWanted(this.pendingRestart)) beginSetPiece(this, this.pendingRestart, { quick: true });
+        else if (this.stateT > 1.3) beginSetPiece(this, this.pendingRestart);
         break;
+      case 'ireplay': this.updateInstantReplay(dt); break;
       case 'setpiece': updateSetPiece(this, dt); break;
       case 'halftime':
         this.idlePlayers(dt, 0);
@@ -246,12 +261,14 @@ export class Match {
   updatePlay(dt) {
     if (this.checkHalfEnd()) return;
     this.predict();
+    for (const p of this.players) p.onBall = this.owner === p;
     this.updateHumans(dt);
     for (let t = 0; t < 2; t++) {
       if (this.passive[t]) this.passiveTeam(t);
       else this.ai[t].update(dt);
     }
     for (const p of this.players) stepPlayer(p, dt);
+    for (const p of this.players) if (p.timedFx) { p.timedFx.t += dt; if (p.timedFx.t > 1.2) p.timedFx = null; }
     this.playerCollisions();
     this.updateBall(dt);
     // 1) Goal line — authoritative and always before any keeper interaction
@@ -296,12 +313,41 @@ export class Match {
         const b = ps[j]; if (b.sentOff) continue;
         const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
         if (d < 0.7 && d > 1e-4) {
-          const push = (0.7 - d) / 2, nx = dx / d, ny = dy / d;
-          if (a.state !== 'slide' && a.state !== 'dive') { a.x -= nx * push; a.y -= ny * push; }
-          if (b.state !== 'slide' && b.state !== 'dive') { b.x += nx * push; b.y += ny * push; }
+          // the stronger player gives less ground (a shielding carrier even less)
+          const sa = (a.attrs.strength ?? 0.6) + (a.shield ? 0.3 : 0), sb = (b.attrs.strength ?? 0.6) + (b.shield ? 0.3 : 0);
+          const wa = clamp(sb / (sa + sb), 0.2, 0.8);
+          const push = 0.7 - d, nx = dx / d, ny = dy / d;
+          if (a.state !== 'slide' && a.state !== 'dive') { a.x -= nx * push * wa; a.y -= ny * push * wa; }
+          if (b.state !== 'slide' && b.state !== 'dive') { b.x += nx * push * (1 - wa); b.y += ny * push * (1 - wa); }
+          if (this.owner && a.team !== b.team && (this.owner === a || this.owner === b)) this.shoulderDuel(this.owner === a ? b : a, this.owner);
         }
       }
     }
+  }
+
+  /** Running alongside the carrier and leaning in: strength decides who keeps the ball. */
+  shoulderDuel(ch, carrier) {
+    if (ch.state !== 'run' || carrier.state !== 'run' || ch.role === 'GK' || carrier.role === 'GK') return;
+    if ((ch.ai.shoulderT || 0) > this.time) return;
+    const vc = Math.hypot(carrier.vx, carrier.vy), vh = Math.hypot(ch.vx, ch.vy);
+    if (vc < 2.5 || vh < 2.5) return;
+    if ((ch.vx * carrier.vx + ch.vy * carrier.vy) / (vc * vh) < 0.45) return;      // not running together
+    const side = Math.acos(clamp(((ch.x - carrier.x) * Math.cos(carrier.facing) + (ch.y - carrier.y) * Math.sin(carrier.facing)) / Math.max(0.05, dist(ch, carrier)), -1, 1));
+    if (side < 0.85 || side > 2.2) return;                                          // shoulder, not front/back
+    ch.ai.shoulderT = this.time + 0.9;
+    const pWin = shoulderWinChance(ch, carrier, { shielding: carrier.shield, speedEdge: vh - vc });
+    const won = Math.random() < pWin;
+    if (won) {
+      const b = this.ball;
+      this.owner = null; this.lastTouch = carrier; b.kickId++;
+      const away = norm(carrier.x - ch.x, carrier.y - ch.y);
+      b.vx = carrier.vx * 0.9 + away.x * 1.2; b.vy = carrier.vy * 0.9 + away.y * 1.2; b.vz = 0;
+      carrier.kickCD = 0.35; carrier.recover = 0.45;
+      carrier.vx *= 0.6; carrier.vy *= 0.6;
+    } else {
+      ch.recover = 0.45; ch.vx *= 0.55; ch.vy *= 0.55;
+    }
+    this.emit('shoulder', { p: ch, victim: carrier, won });
   }
 
   updateBall(dt) {

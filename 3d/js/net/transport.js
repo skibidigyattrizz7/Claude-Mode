@@ -8,6 +8,9 @@
 //   t.onStatus  = (status, detail) => {}  // 'connecting'|'waiting'|'open'|'down'|'closed'|'error'
 //   t.reconnect()         -> guest only: try to re-establish a lost link (idempotent)
 //   t.close()
+//   await t.listen(id)    -> quick search: register under an arbitrary id and accept one guest
+//   await t.connectTo(id) -> quick search: become the guest of a peer that is listen()ing on id
+// Messages that arrive before anyone set onMessage are buffered (max 64) and delivered on assignment.
 //
 // Implementations: PeerTransport (WebRTC via PeerJS cloud or a custom PeerServer),
 // LoopbackTransport (same page, in-memory; for tests), BroadcastChannelTransport (two tabs, same origin; for tests).
@@ -15,7 +18,8 @@ import { encode, decode, makeRoomCode, normalizeRoomCode, PEER_PREFIX } from './
 
 class BaseTransport {
   constructor() {
-    this.onMessage = null;
+    this._pending = [];
+    this._onMessage = null;
     this.onStatus = null;
     this.code = null;
     this.role = null;
@@ -23,12 +27,23 @@ class BaseTransport {
     this.closed = false;
     this.blackhole = false; // test hook: silently drop all traffic both ways (simulated network outage)
   }
+  get onMessage() { return this._onMessage; }
+  set onMessage(fn) {
+    this._onMessage = fn;
+    if (fn && this._pending.length) {
+      const q = this._pending.splice(0);
+      setTimeout(() => { for (const m of q) this._deliver(m); }, 0);
+    }
+  }
+  _deliver(m) {
+    if (this.closed) return;
+    if (!this._onMessage) { if (this._pending.length < 64) this._pending.push(m); return; }
+    try { this._onMessage(m); } catch (e) { console.error('[net] handler error', e); }
+  }
   _emitRaw(raw) {
     if (this.closed || this.blackhole) return;
     const m = decode(raw);
-    if (m && this.onMessage) {
-      try { this.onMessage(m); } catch (e) { console.error('[net] handler error', e); }
-    }
+    if (m) this._deliver(m);
   }
   _setStatus(s, detail) {
     if (this.closed && s !== 'closed') return;
@@ -59,9 +74,18 @@ export class LoopbackTransport extends BaseTransport {
     this._setStatus('waiting');
     return code;
   }
-  async join(code) {
+  async listen(id) {
+    this.role = 'host';
+    if (loopRooms.has(id)) throw new Error('That id is already in use.');
+    this.code = id;
+    loopRooms.set(id, this);
+    this._setStatus('waiting');
+  }
+  async join(code) { return this.connectTo(normalizeRoomCode(code)); }
+  async connectTo(id) {
+    if (this.role === 'host' && loopRooms.get(this.code) === this) loopRooms.delete(this.code);
     this.role = 'guest';
-    this.code = normalizeRoomCode(code);
+    this.code = id;
     await new Promise((r) => setTimeout(r, this.latency));
     const h = loopRooms.get(this.code);
     if (!h || h.closed) throw new Error('Room not found');
@@ -154,9 +178,18 @@ export class BroadcastChannelTransport extends BaseTransport {
     }
     throw new Error('Could not allocate a room');
   }
-  async join(code) {
+  async listen(id) {
+    this.role = 'host';
+    this.code = id;
+    this._open(id);
+    this._setStatus('waiting');
+  }
+  async join(code) { return this.connectTo(normalizeRoomCode(code)); }
+  async connectTo(id) {
+    if (this.ch) { try { this.ch.close(); } catch { /* ignore */ } this.ch = null; }
     this.role = 'guest';
-    this.code = normalizeRoomCode(code);
+    this.other = null;
+    this.code = id;
     this._open(this.code);
     this._setStatus('connecting');
     await new Promise((resolve, reject) => {
@@ -245,43 +278,48 @@ export class PeerTransport extends BaseTransport {
     });
     conn.on('error', (e) => console.warn('[net] data connection error', e && e.type));
   }
-  async host() {
-    this.role = 'host';
+  /** Register a Peer (with `id`, or a random one) with the signalling server. Resolves on 'open'. */
+  async _openPeer(id) {
     const Peer = await loadPeerJS();
     this._setStatus('connecting');
+    await new Promise((resolve, reject) => {
+      const peer = id ? new Peer(id, this._peerOptions()) : new Peer(this._peerOptions());
+      this.peer = peer;
+      let opened = false;
+      const t = setTimeout(() => { if (!opened) reject(new Error(PEER_ERRORS.network)); }, 15000);
+      peer.on('open', () => { opened = true; clearTimeout(t); resolve(); });
+      peer.on('error', (e) => {
+        const msg = PEER_ERRORS[e && e.type] || (e && e.message) || 'Connection error';
+        if (!opened) { clearTimeout(t); reject(Object.assign(new Error(msg), { type: e && e.type })); return; }
+        if (this._connectFail) { this._connectFail(msg); return; }
+        if (e && e.type !== 'peer-unavailable') this._setStatus('error', msg);
+      });
+      peer.on('disconnected', () => {
+        // lost the broker (not the peer): keep data connections, try to re-register
+        if (!this.closed) setTimeout(() => { try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch { /* ignore */ } }, 1500);
+      });
+      peer.on('connection', (conn) => {
+        if (this.closed || this.role !== 'host') { try { conn.close(); } catch { /* ignore */ } return; }
+        this._wireConn(conn);
+        conn.on('open', () => {
+          if (conn.label === 'rt') {
+            if (this.rt && this.rt !== conn) try { this.rt.close(); } catch { /* ignore */ }
+            this.rt = conn;
+          } else {
+            if (this.ctl && this.ctl !== conn) { const old = this.ctl; this.ctl = null; try { old.close(); } catch { /* ignore */ } }
+            this.ctl = conn;
+            this._setStatus('open');
+          }
+        });
+      });
+    });
+  }
+  async host() {
+    this.role = 'host';
     for (let tries = 0; tries < 4; tries++) {
       const code = makeRoomCode();
       try {
-        await new Promise((resolve, reject) => {
-          const peer = new Peer(PEER_PREFIX + code, this._peerOptions());
-          this.peer = peer;
-          let opened = false;
-          const t = setTimeout(() => { if (!opened) reject(new Error(PEER_ERRORS.network)); }, 15000);
-          peer.on('open', () => { opened = true; clearTimeout(t); resolve(); });
-          peer.on('error', (e) => {
-            const msg = PEER_ERRORS[e && e.type] || (e && e.message) || 'Connection error';
-            if (!opened) { clearTimeout(t); reject(Object.assign(new Error(msg), { type: e && e.type })); }
-            else this._setStatus('error', msg);
-          });
-          peer.on('disconnected', () => {
-            // lost the broker (not the peer): keep data connections, try to re-register
-            if (!this.closed) setTimeout(() => { try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch { /* ignore */ } }, 1500);
-          });
-          peer.on('connection', (conn) => {
-            if (this.closed) { conn.close(); return; }
-            this._wireConn(conn);
-            conn.on('open', () => {
-              if (conn.label === 'rt') {
-                if (this.rt && this.rt !== conn) try { this.rt.close(); } catch { /* ignore */ }
-                this.rt = conn;
-              } else {
-                if (this.ctl && this.ctl !== conn) { const old = this.ctl; this.ctl = null; try { old.close(); } catch { /* ignore */ } }
-                this.ctl = conn;
-                this._setStatus('open');
-              }
-            });
-          });
-        });
+        await this._openPeer(PEER_PREFIX + code);
         this.code = code;
         this._setStatus('waiting');
         return code;
@@ -293,31 +331,47 @@ export class PeerTransport extends BaseTransport {
     }
     throw new Error('Could not allocate a room code.');
   }
+  async listen(id) {
+    this.role = 'host';
+    try {
+      await this._openPeer(id);
+    } catch (e) {
+      try { if (this.peer) this.peer.destroy(); } catch { /* ignore */ }
+      this.peer = null;
+      this._setStatus('error', e.message);
+      throw e;
+    }
+    this.code = id;
+    this._setStatus('waiting');
+  }
   async join(code) {
+    const c = normalizeRoomCode(code);
+    if (c.length !== 5) throw new Error('Room codes are 5 characters.');
+    this.code = c;
+    return this.connectTo(PEER_PREFIX + c);
+  }
+  async connectTo(targetId) {
     this.role = 'guest';
-    this.code = normalizeRoomCode(code);
-    if (this.code.length !== 5) throw new Error('Room codes are 5 characters.');
-    const Peer = await loadPeerJS();
+    this.target = targetId;
+    if (this.ctl) { try { this.ctl.close(); } catch { /* ignore */ } this.ctl = null; }
+    if (!this.peer || this.peer.destroyed) await this._openPeer();
     this._setStatus('connecting');
     await new Promise((resolve, reject) => {
-      const peer = new Peer(this._peerOptions());
-      this.peer = peer;
       let done = false;
-      const fail = (msg) => { if (!done) { done = true; clearTimeout(t); reject(new Error(msg)); } };
-      const t = setTimeout(() => fail('Timed out connecting to the room.'), 20000);
-      peer.on('open', () => this._connect(() => { if (!done) { done = true; clearTimeout(t); resolve(); } }));
-      peer.on('error', (e) => {
-        const msg = PEER_ERRORS[e && e.type] || (e && e.message) || 'Connection error';
-        if (!done) fail(msg);
-        else if (e && e.type !== 'peer-unavailable') this._setStatus('error', msg);
-      });
-      peer.on('disconnected', () => {
-        if (!this.closed) setTimeout(() => { try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch { /* ignore */ } }, 1500);
-      });
+      const fin = (err) => {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        this._connectFail = null;
+        if (err) reject(new Error(err)); else resolve();
+      };
+      const t = setTimeout(() => fin('Timed out connecting to the room.'), 20000);
+      this._connectFail = (msg) => fin(msg);
+      this._connect(() => fin(null));
     });
   }
   _connect(onOpen) {
-    const target = PEER_PREFIX + this.code;
+    const target = this.target || PEER_PREFIX + this.code;
     const ctl = this.peer.connect(target, { label: 'ctl', reliable: true, serialization: 'raw' });
     const rt = this.peer.connect(target, { label: 'rt', reliable: false, serialization: 'raw' });
     this._wireConn(ctl);

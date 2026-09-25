@@ -9,10 +9,13 @@ const CHECK_MS = 250;
 export class NetSession {
   /**
    * @param {object} transport  see transport.js
-   * @param {{ dcDetectMs?: number, name?: string }} opts
+   * @param {{ dcDetectMs?: number, name?: string, matchToken?: string }} opts
+   *   matchToken: quick-search pairing token from the server; the host only accepts a guest whose
+   *   hello carries the same token (so only the matched opponent can take the seat).
    */
-  constructor(transport, { dcDetectMs = 3500, name = 'Player' } = {}) {
+  constructor(transport, { dcDetectMs = 3500, name = 'Player', matchToken = null } = {}) {
     this.t = transport;
+    this.matchToken = typeof matchToken === 'string' ? matchToken : null;
     this.dcDetectMs = dcDetectMs;
     this.name = String(name).slice(0, 24);
     this.token = Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -57,15 +60,36 @@ export class NetSession {
     this.role = 'guest';
     await this.t.join(code);
     this.code = this.t.code;
-    await new Promise((resolve, reject) => {
-      const off = this.on('link', (up) => { if (up) { off(); offF(); clearTimeout(to); resolve(); } });
-      const offF = this.on('fatal', (why) => { off(); offF(); clearTimeout(to); reject(new Error(why)); });
-      const to = setTimeout(() => { off(); offF(); reject(new Error('Host did not answer.')); }, 10000);
-      this._hello();
+    await this._awaitLink(10000, 'Host did not answer.');
+  }
+
+  /**
+   * Use a transport that is already listening (host) or connected (guest), e.g. from quick search.
+   * Guest: resolves once the host welcomed us. Host: resolves once the (token-checked) guest said hello.
+   */
+  async attach(role, timeoutMs = 25000) {
+    this.role = role === 'host' ? 'host' : 'guest';
+    this.code = this.t.code;
+    await this._awaitLink(timeoutMs, this.role === 'host' ? 'Your opponent did not connect.' : 'The host did not answer.');
+  }
+
+  _awaitLink(timeoutMs, msg) {
+    if (this.linked) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      let iv = null;
+      const stop = () => { off(); offF(); clearTimeout(to); if (iv) clearInterval(iv); };
+      const off = this.on('link', (up) => { if (up) { stop(); resolve(); } });
+      const offF = this.on('fatal', (why) => { stop(); reject(new Error(why)); });
+      const to = setTimeout(() => { stop(); reject(new Error(msg)); }, timeoutMs);
+      if (this.role === 'guest') {
+        this._hello();
+        // the host may not be listening to its transport yet: repeat until welcomed
+        iv = setInterval(() => { if (!this.closed && !this.linked) this._hello(); }, 1000);
+      }
     });
   }
 
-  _hello() { this.t.send({ t: 'hello', v: PROTOCOL_VERSION, tok: this.token, name: this.name }); }
+  _hello() { this.t.send({ t: 'hello', v: PROTOCOL_VERSION, tok: this.token, name: this.name, ...(this.matchToken ? { mt: this.matchToken } : {}) }); }
 
   /** Send an application message. rt=true -> realtime channel. */
   send(t, payload = {}, rt = false) {
@@ -93,6 +117,7 @@ export class NetSession {
       case 'hello': {
         if (this.role !== 'host') return;
         if (m.v !== PROTOCOL_VERSION) { this.t.send({ t: 'fatal', why: 'Game versions differ. Both players should reload.' }); return; }
+        if (this.matchToken && m.mt !== this.matchToken) { this.t.send({ t: 'fatal', why: 'This match is reserved for another player.' }); return; }
         const tok = typeof m.tok === 'string' ? m.tok.slice(0, 64) : '';
         if (this.peerToken && tok !== this.peerToken && this.locked) {
           this.t.send({ t: 'fatal', why: 'That room is already in a match.' });
