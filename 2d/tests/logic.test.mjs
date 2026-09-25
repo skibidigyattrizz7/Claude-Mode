@@ -1,8 +1,9 @@
 // Pure-logic tests. Run with: node 2d/tests/logic.test.mjs
 import { PITCH, CY, GOAL, BALL_R, PHYS, POST_R } from '../js/constants.js';
+import { DEG } from '../js/util.js';
 import { makeBall, stepBallWorld, integrate, solveKick } from '../js/physics.js';
 import { goalScored, keeperMaySave, resolveKeeperContact, outOfPlay, restartFor, judgeTackle, isFromBehind, applyCard, tackleSweep } from '../js/rules.js';
-import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk, planPass, manualPassSpeed } from '../js/passing.js';
+import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk, planPass, manualPassSpeed, PASS_CONES } from '../js/passing.js';
 import { touchHeaviness, savedKickRestart, timedFinishGrade, shoulderWinChance } from '../js/feel.js';
 import { defensiveRoles, markTargets } from '../js/ai.js';
 import { sanitizeGameplay, GAMEPLAY_DEFAULTS } from '../js/settings.js';
@@ -10,8 +11,9 @@ import { sanitizeBinds } from '../js/keybinds.js';
 import { makePlayer, stepPlayer } from '../js/player.js';
 import { planShot, shotVelocity, isOnTarget } from '../js/shooting.js';
 import { defaultBinds, setBind, saveBinds, loadBinds, STORAGE_KEY, keyLabel } from '../js/keybinds.js';
-import { makeRng } from '../js/util.js';
-import { chooseKits, TEAMS, teamByCode, kitsClash } from '../js/data.js';
+import { makeRng, norm } from '../js/util.js';
+import { chooseKits, TEAMS, teamByCode, kitsClash, kitTone } from '../js/data.js';
+import { Match } from '../js/match.js';
 import { newTournament, recordUserResult, nextUserFixture, standings } from '../js/tournament.js';
 import { penaltyOutcomeSim, KeeperModel, buildWall, makeKickState, launch, stepKick, kickError, freeKickSpeed, aiFreeKickDive } from '../js/kickphys.js';
 
@@ -256,6 +258,29 @@ test('kit clash switches away side to away kit', () => {
   const k2 = chooseKits(teamByCode('BRA'), teamByCode('FRA'));
   assert(!k2.awayUsesAway);
 });
+test('every nation has a distinct home/away/third kit, with patterns beyond plain', () => {
+  const patterns = new Set();
+  for (const t of TEAMS) {
+    assert(t.third && t.third.shirt && t.third.pattern, `${t.code} missing a third kit`);
+    patterns.add(t.home.pattern); patterns.add(t.away.pattern); patterns.add(t.third.pattern);
+    // the third kit must read as a different colour from both home and away
+    assert(kitTone(t.third) !== kitTone(t.home) && kitTone(t.third) !== kitTone(t.away), `${t.code} third kit is not distinct`);
+  }
+  for (const p of ['stripes', 'hoops', 'sashes']) assert(patterns.has(p), `no team uses the ${p} pattern`);
+});
+test('kit clash detection always finds enough colour contrast across every fixture', () => {
+  for (let i = 0; i < TEAMS.length; i++) {
+    for (const j of [(i + 5) % TEAMS.length, (i + 11) % TEAMS.length, (i + 17) % TEAMS.length]) {
+      if (i === j) continue;
+      const home = TEAMS[i], away = TEAMS[j];
+      const k = chooseKits(home, away);
+      // when a non-clashing option exists among the away side's kits, one is picked
+      const anyClear = [away.home, away.away, away.third].some((kit) => !kitsClash(home.home, kit));
+      if (anyClear) assert(!kitsClash(k.kits[0], k.kits[1]), `${home.code} vs ${away.code} (${k.kitTag}) still clashes`);
+      assert(!kitsClash(k.gk[0], k.kits[0]) && !kitsClash(k.gk[0], k.kits[1]), `${home.code} home keeper kit blends in`);
+    }
+  }
+});
 test('tournament progresses to a champion', () => {
   const rng = makeRng(11);
   const t = newTournament('BRA', rng);
@@ -469,6 +494,56 @@ test('auto marking: runners are tracked when on, zones held when off', () => {
   assert(![...on.values()].includes(far), 'far attacker (out of every zone) is left');
   const off = markTargets([d1, d2, me], [runner, other, far], (p) => homes.get(p), goal, { autoMarking: false });
   assert(off.size === 0, 'no man-marking with auto marking off');
+});
+
+console.log('2D gameplay sims: user-team parity, receiving, interceptions (AI vs AI)');
+test('assisted human passing uses the exact same target-selection and speed solver as an AI pass', () => {
+  const passer = { x: 28, y: 24 }, mate = { x: 46, y: 33, vx: 1.5, vy: -0.5 };
+  const opps = [{ x: 34, y: 27 }];
+  for (const kind of ['ground', 'through', 'lob']) {
+    const aim = norm(mate.x - passer.x, mate.y - passer.y);
+    const C = PASS_CONES.Assisted;
+    // choosePassTarget / leadTarget / passVelocity are the exact functions planPass('Assisted') calls;
+    // reproducing its own cone (and full lead) here proves the human pass IS that AI solver, not a copy.
+    const ai = choosePassTarget(passer, [passer, mate], opps, aim, kind, 1, { cone: C[kind] * DEG, wide: C.wide * DEG, alignW: C.alignW, fullLead: true });
+    const humanPlan = planPass({ passer, from: passer, mates: [passer, mate], opps, aimDir: aim, kind, attackDir: 1, mode: 'Assisted', power: 0.5, passing: 0.7 });
+    assert(ai.mate === humanPlan.mate, `${kind}: assisted pass should pick the same team-mate as the AI`);
+    const aiV = passVelocity(passer, ai.target, kind);
+    assert(near(aiV.vx, humanPlan.v.vx, 1e-9) && near(aiV.vy, humanPlan.v.vy, 1e-9), `${kind}: assisted pass velocity must match the AI's`);
+  }
+});
+test('AI vs AI: user-side (team 0) pass completion is on par with the AI opponent\'s, and both sides record interceptions', () => {
+  const totals = { cmp: [0, 0], att: [0, 0], int: [0, 0] };
+  for (let seed = 0; seed < 4; seed++) {
+    const m = new Match({ home: TEAMS[seed], away: TEAMS[(seed + 9) % TEAMS.length], humans: [], minutes: 4, noClock: true });
+    for (let i = 0; i < 4800; i++) m.update(1 / 60);
+    for (const t of [0, 1]) { totals.cmp[t] += m.stats[t].passCmp; totals.att[t] += m.stats[t].passAtt; totals.int[t] += m.stats[t].interceptions; }
+  }
+  const rate = (t) => totals.cmp[t] / Math.max(1, totals.att[t]);
+  assert(totals.att[0] > 20 && totals.att[1] > 20, 'both sides actually played passes: ' + JSON.stringify(totals.att));
+  assert(Math.abs(rate(0) - rate(1)) < 0.2, `pass completion should be close: user ${rate(0).toFixed(2)} vs AI ${rate(1).toFixed(2)}`);
+  assert(totals.int[0] > 0, 'team 0 (the user\'s team) must record interceptions, not just AI opponents');
+  assert(totals.int[1] > 0, 'AI opponents still intercept too');
+});
+test('receivers move onto the ball\'s path and close the distance, they do not free-roam', () => {
+  const m = new Match({ home: TEAMS[2], away: TEAMS[13], humans: [], minutes: 4, noClock: true });
+  let watch = null; const done = [];
+  for (let i = 0; i < 9000 && done.length < 10; i++) {
+    m.update(1 / 60);
+    for (const e of m.events) {
+      if (e.type === 'pass' && e.receiver && !watch) {
+        watch = { receiver: e.receiver, passRef: m.pass, start: Math.hypot(e.receiver.x - m.ball.x, e.receiver.y - m.ball.y) };
+      }
+    }
+    m.events.length = 0;
+    if (watch && m.pass !== watch.passRef) {
+      if (m.owner === watch.receiver) done.push({ start: watch.start, end: Math.hypot(watch.receiver.x - m.ball.x, watch.receiver.y - m.ball.y) });
+      watch = null;
+    }
+  }
+  assert(done.length >= 5, 'need enough completed passes to a receiver to check: got ' + done.length);
+  for (const d of done) assert(d.end < d.start, `receiver ended farther from the ball than he started: ${d.start.toFixed(2)} -> ${d.end.toFixed(2)}`);
+  assert(done.every((d) => d.end < 1.2), 'receiver actually meets the ball, not just gets close');
 });
 
 console.log('Feel');

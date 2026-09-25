@@ -122,8 +122,9 @@ export function aiOpponent(seed, difficulty, { maxTier = null, noSpecial = false
   const want = { GK: 2, DEF: 7, MID: 7, ATT: 5 };
   for (const g of Object.keys(want)) {
     const gp = pool.filter((p) => grp(p) === g);
-    const src = gp.length ? gp : db.players.filter((p) => grp(p) === g && Math.abs(p.ovr - target) <= 8);
-    for (let i = 0; i < want[g]; i++) picked.push(rng.pick(src));
+    const wide = gp.length ? gp : db.players.filter((p) => grp(p) === g && Math.abs(p.ovr - target) <= 8);
+    const src = wide.length ? wide : db.players.filter((p) => grp(p) === g);
+    for (let i = 0; i < want[g]; i++) { const p = rng.pick(src); if (p) picked.push(p); }
   }
   const uniq = [...new Map(picked.map((p) => [p.id, p])).values()];
   const formation = rng.pick(Object.keys(FORMATIONS));

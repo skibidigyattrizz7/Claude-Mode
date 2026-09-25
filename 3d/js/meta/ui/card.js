@@ -68,8 +68,9 @@ export function playerCard(p, opts = {}) {
         ${flagSVG(p.nat, 'pc-flag')}
         ${crestSVG(club, 'pc-crest')}
       </div>
-      ${avatarSVG(p, 'pc-avatar')}
+      ${p.photo ? `<img class="pc-avatar pc-photo" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
       ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
+      ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}
       <div class="pc-name">${esc(cardName(p))}</div>
       ${statsHtml}
       ${p.special || p.evo ? `<div class="pc-tag">${p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? SPECIAL_LABEL[p.special] || '' : 'EVOLUTION'}</div>` : ''}

@@ -1,6 +1,6 @@
 -- =====================================================================================
 -- Pitchside 3D — player accounts, sessions, bans, moderation, audit trail
--- Migration 002 (run AFTER 001_pitchside.sql). Idempotent: safe to run more than once.
+-- Migration 002 (run AFTER 20260925140338_pitchside_001.sql). Idempotent: safe to run more than once.
 --
 -- Same security model as 001: RLS on every table, no table privileges for anon/authenticated,
 -- all access through SECURITY DEFINER functions with a fixed search_path, no dynamic SQL.

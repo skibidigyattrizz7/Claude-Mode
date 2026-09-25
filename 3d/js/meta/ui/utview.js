@@ -18,6 +18,9 @@ import * as SS from '../core/seasons.js';
 import { ensureEvo } from '../core/evolutions.js';
 import { playstyleList } from './card.js';
 import { adminCodesPanel, adminBadge } from './adminview.js';
+import { tileIcon } from './icons.js';
+import { giftsButton } from './giftsview.js';
+import { getConfig, effPrice } from './config.js';
 import { promoHubView, promoTileSub } from './promoview.js';
 import { PROMO_BY_ID } from '../core/promos.js';
 
@@ -94,12 +97,12 @@ export function utHomeView() {
       const seasonReady = SS.claimableLevels(ss).length;
       const evo = ensureEvo(s);
       const evoReady = evo.active.length;
-      const tile = (cls, title, sub, onclick, badge = null, art = null) => h('button', { class: `pm-tile ${cls}`, onclick },
-        art, badge ? h('span', { class: 'pm-badge' }, badge) : null,
+      const tile = (cls, title, sub, onclick, badge = null, iconName = 'squad') => h('button', { class: `pm-tile ${cls}`, onclick },
+        tileIcon(iconName), badge ? h('span', { class: 'pm-badge' }, badge) : null,
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
-      add(main, 
+      add(main,
         h('section', { class: 'pm-clubhead' },
-          adminBadge(app),
+          h('div', { class: 'pm-clubhead-btns' }, giftsButton(app), adminBadge(app)),
           frag(crestSVG(userClubObj(s), 'pm-crest pm-crest--lg')),
           h('div', null, h('div', { class: 'pm-kicker' }, 'Your club'), h('h2', null, s.clubName),
             h('div', { class: 'pm-chiprow' },
@@ -109,25 +112,22 @@ export function utHomeView() {
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`))),
             h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
         h('div', { class: 'pm-tiles' },
-          tile('pm-tile--wide pm-tile--squad', 'Squad', `${s.squad.formation} · Rating ${info.rating} · Chemistry ${info.chem.scaled}`, () => app.push(squadView()), info.complete ? null : '!',
-            h('div', { class: 'pm-tile-art pm-art-pitch', 'aria-hidden': 'true' })),
+          tile('pm-tile--wide pm-tile--squad', 'Squad', `${s.squad.formation} · Rating ${info.rating} · Chemistry ${info.chem.scaled}`, () => app.push(squadView()), info.complete ? null : '!', 'squad'),
           rivalsTile(app),
-          tile('pm-tile--wide pm-tile--play', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()), null,
-            h('div', { class: 'pm-tile-art pm-art-play', 'aria-hidden': 'true' }, h('span', null, '▶'))),
-          tile('pm-tile--wide pm-tile--store', 'Store', 'Packs, Player Picks & odds', () => app.push(storeView()), (s.packs.length + (s.picks || []).length) ? `${s.packs.length + (s.picks || []).length}` : null, h('div', { class: 'pm-tile-art pm-art-pack', 'aria-hidden': 'true' })),
-          tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView())),
-          tile('pm-tile--obj', 'Objectives', 'Daily · Weekly · Player · Season', () => app.push(M.objectivesHubView()), claimable ? `${claimable}` : null),
-          tile('pm-tile--season', 'Season', `Level ${SS.levelOf(ss.xp)}/${SS.SEASON_LEVELS}`, () => app.push(M.seasonPassView()), seasonReady ? `${seasonReady}` : null),
-          tile('pm-tile--evo', 'Evolutions', `${evoReady}/3 active`, () => app.push(M.evolutionsView())),
-          tile('pm-tile--draft', 'Draft', s.draft ? 'Draft in progress' : 'Pick 1 of 5 · 4-round knockout', () => app.push(M.draftView()), s.draft ? '▶' : null),
-          tile('pm-tile--event', 'Tournaments', 'Weekly knockout events', () => app.push(M.eventsView())),
-          tile('pm-tile--wide pm-tile--promo', 'Promos', promoTileSub(), () => app.push(promoHubView(PROMO_DEPS)), 'LIVE',
-            h('div', { class: 'pm-tile-art pm-art-promo', 'aria-hidden': 'true' }, h('span', null, '★'))),
-          tile('pm-tile--totw', 'Team of the Week', '3 headliners rated 88+', () => app.push(M.totwView())),
-          tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView())),
-          tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
-          tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null),
-          tile('pm-tile--custom', 'Customise club', 'Badge, name & home/away kits', () => app.push(M.clubEditView())),
+          tile('pm-tile--wide pm-tile--play', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()), null, 'play'),
+          tile('pm-tile--wide pm-tile--store', 'Store', 'Packs, Player Picks & odds', () => app.push(storeView()), (s.packs.length + (s.picks || []).length) ? `${s.packs.length + (s.picks || []).length}` : null, 'store'),
+          tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView()), null, 'sbc'),
+          tile('pm-tile--obj', 'Objectives', 'Daily · Weekly · Player · Season', () => app.push(M.objectivesHubView()), claimable ? `${claimable}` : null, 'objectives'),
+          tile('pm-tile--season', 'Season', `Level ${SS.levelOf(ss.xp)}/${SS.SEASON_LEVELS}`, () => app.push(M.seasonPassView()), seasonReady ? `${seasonReady}` : null, 'season'),
+          tile('pm-tile--evo', 'Evolutions', `${evoReady}/3 active`, () => app.push(M.evolutionsView()), null, 'evolutions'),
+          tile('pm-tile--draft', 'Draft', s.draft ? 'Draft in progress' : 'Pick 1 of 5 · 4-round knockout', () => app.push(M.draftView()), s.draft ? '▶' : null, 'draftpick'),
+          tile('pm-tile--event', 'Tournaments', 'Weekly knockout events', () => app.push(M.eventsView()), null, 'event'),
+          tile('pm-tile--wide pm-tile--promo', 'Promos', promoTileSub(), () => app.push(promoHubView(PROMO_DEPS)), 'LIVE', 'promo'),
+          tile('pm-tile--totw', 'Team of the Week', '3 headliners rated 88+', () => app.push(M.totwView()), null, 'totw'),
+          tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView()), null, 'tactics'),
+          tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView()), null, 'club'),
+          tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null, 'market'),
+          tile('pm-tile--custom', 'Customise club', 'Badge, name & home/away kits', () => app.push(M.clubEditView()), null, 'custom'),
         ),
         adminCodesPanel(app, { compact: true }));
     },
@@ -170,7 +170,8 @@ function squadView() {
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
         getPlayer, pool: () => UT.clubPlayers(s),
         onChange: (v) => { s.squad = v; OBJ.setFlag(s, 'squadEdited'); persist(app); },
-        toolbar: [autoBtn],
+        toolbar: [autoBtn], chemToggle: true,
+        manager: { value: s.squad.manager || null, onChange: (m) => { s.squad.manager = m; persist(app); } },
       });
       add(main, ed.el);
     },
@@ -300,28 +301,32 @@ function storeView() {
               h('button', { class: 'pm-btn pm-btn--primary', onclick: () => { s.packs.splice(i, 1); openPackFlow(app, pk.type); } }, 'Open'));
           })));
       }
+      const cfg = getConfig();
       const onSale = UT.storePacks();
       const promoPacks = onSale.filter((p) => p.promo);
-      const store = h('section', { class: 'pm-section' },
+      const store = !cfg.packsInShop ? h('section', { class: 'pm-section' }, h('div', { class: 'pm-empty-state' }, h('p', null, 'Packs are temporarily disabled in the shop by the owner.'))) : h('section', { class: 'pm-section' },
         promoPacks.length ? h('h3', { class: 'pm-h' }, 'Promo packs', h('span', { class: 'pm-chip on' }, 'Live')) : null,
         promoPacks.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, promoPacks.map((pack) => storeItem(pack))) : null,
         h('h3', { class: 'pm-h' }, 'Buy packs'),
         h('div', { class: 'pm-storegrid' }, onSale.filter((p) => !p.promo).map((pack) => storeItem(pack))));
-      function storeItem(pack) { return h('div', { class: `pm-storeitem ${pack.promo ? `is-promo pm-promo--${pack.promo}` : ''}`, style: pack.promo ? { '--pa': PROMO_BY_ID[pack.promo].colors[0], '--pb': PROMO_BY_ID[pack.promo].colors[1], '--pc': PROMO_BY_ID[pack.promo].colors[2] } : null },
+      function storeItem(pack) {
+        const price = effPrice(pack.price);
+        return h('div', { class: `pm-storeitem ${pack.promo ? `is-promo pm-promo--${pack.promo}` : ''}`, style: pack.promo ? { '--pa': PROMO_BY_ID[pack.promo].colors[0], '--pb': PROMO_BY_ID[pack.promo].colors[1], '--pc': PROMO_BY_ID[pack.promo].colors[2] } : null },
           packArt(pack, 'md'),
           h('div', { class: 'pm-storeinfo' }, h('h4', null, pack.name), h('p', { class: 'pm-dim' }, pack.desc),
-            h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(pack.price)),
+            h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(price), price !== pack.price ? h('small', { class: 'pm-dim' }, ` (base ${fmtNum(pack.price)})`) : null),
             h('div', { class: 'pm-btnrow' },
               h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => oddsModal(app, pack) }, 'View odds'),
               h('button', {
-                class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: s.coins < pack.price,
+                class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: s.coins < price,
                 onclick: async () => {
-                  if (!(await confirmBox(app.root, 'Buy pack', `Buy ${pack.name} for ${fmtNum(pack.price)} coins?`, 'Buy & open'))) return;
-                  if (s.coins < pack.price) return;
-                  s.coins -= pack.price; persist(app); app.renderTop(app.stack[app.stack.length - 1]);
+                  if (!(await confirmBox(app.root, 'Buy pack', `Buy ${pack.name} for ${fmtNum(price)} coins?`, 'Buy & open'))) return;
+                  if (s.coins < price) return;
+                  s.coins -= price; persist(app); app.renderTop(app.stack[app.stack.length - 1]);
                   openPackFlow(app, pack.id);
                 },
-              }, 'Buy & open')))); }
+              }, 'Buy & open'))));
+      }
       add(main, M.picksRow(app), mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
@@ -456,6 +461,7 @@ async function startBattle(app, opp) {
   const r = UT.applyBattleResult(s, opp, result, 'home');
   persist(app);
   app.afterMatch({ team, result, side: 'home', mode: 'squadbattles' });
+  M.showMatchRewards(app, { coins: r.coins });
   app.push(resultView({
     title: 'Squad Battles', kicker: DIFF_LABEL[opp.difficulty], home: team, away, result, userSide: 'home',
     extra: h('section', { class: 'pm-rewards' }, h('div', null, h('span', { class: 'pm-dim' }, 'Coins'), h('b', null, `+${fmtNum(r.coins)}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Points'), h('b', null, `+${r.points}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Rank'), h('b', null, UT.rankFor(s.battles.points).name))),

@@ -231,8 +231,17 @@ export function think(sim, p, dt) {
   if (owner === p) return carrier(sim, p, dt);
   if (p.fooledUntil > t) { p.des.x *= 0.9; p.des.z *= 0.9; return; }
   if (!owner) {
-    // the intended receiver checks toward the ball's arrival point instead of drifting away
-    if (b.intended === p.idx) {
+    // a through ball: the intended receiver keeps running onto the lead point (his run target,
+    // set in sim._release()) rather than stopping to face the ball — that's the whole point of the
+    // pass. This takes priority over both the intended-receiver and chaser branches below, which
+    // would otherwise pull him back onto the ball's current position.
+    if (b.throughBall && b.intended === p.idx && p.run && p.run.until > t) {
+      goTo(sim, p, p.run, 'sprint', 0.3);
+      headerCheck(sim, p);
+      return;
+    }
+    // the intended receiver stops whatever run he was on and moves to meet the ball, facing it.
+    if (b.intended === p.idx && !b.throughBall) {
       // lofted balls: wait for it to drop (control at the feet/chest); ground balls: meet it early
       const ic = sim.intercept(p, b.p.y > 1 || b.v.y > 2 ? 1.3 : undefined);
       goTo(sim, p, ic, 'sprint', 0);

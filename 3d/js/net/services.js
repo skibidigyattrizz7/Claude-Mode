@@ -22,6 +22,10 @@ import {
   normalizeFriendCode, FRIEND_CODE_RE, INVITE_MODES, TOKEN_RE, cleanJson, roleOf,
 } from './validate.js';
 import { usernameError, passwordError, parseBan, banActive, banText, isReservedName, trimUsername } from './accountcore.js';
+import {
+  nonNeg, PACK_RE, JPEG_RE, MAX_IMAGE_CHARS, CONFIG_KEYS, CONFIG_TTL_MS, sanitizeConfigValue, sanitizeConfig, sanitizeEpochs, sanitizeBroadcast,
+  sanitizePresence, sanitizeGift, sanitizePublicPlayer, sanitizeConversation, sanitizeMessage, cleanSquad, compressImage,
+} from './onlinevalidate.js';
 
 export const OFFLINE_SIGNUP_MSG = 'Online services are offline — you can play offline now and your account will be created when online is back.';
 const MATCH_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(owner|mod)\.[0-9]{9,11}\.[0-9a-f]{64}$/;
@@ -106,6 +110,7 @@ export async function supabaseRpc(fn, args) {
  *   matchmakerConfig       -> overrides for MM_DEFAULTS (tests)
  */
 export function createOnline(deps) {
+  const volatileFallback = memStore();
   const rpc = async (fn, args) => {
     try { return await deps.rpc(fn, args); } catch { return { ok: false, error: 'offline' }; }
   };
@@ -113,7 +118,20 @@ export function createOnline(deps) {
   const KEY = deps.identityKey || 'pitchside.online.identity';
   let avail = { at: -Infinity, value: false, pending: null };
   let identP = null;
-  let adminCode = null; // held in memory only after a successful server-side verify; never persisted
+  // Admin: a server-signed 12 h token ("adm.<level>.<exp>.<sig>", migration 003) kept in session storage —
+  // never the code. Legacy servers (no admin_login) keep the verified code in memory only.
+  const ADM_KEY = `${deps.accountKey || 'pitchside.account'}.admin`;
+  const ADM_RE = /^adm\.(full|super)\.[0-9]{9,11}\.[0-9a-f]{64}$/;
+  let adminCode = null;
+  const readAdm = () => {
+    try {
+      const v = JSON.parse(sget(deps.volatileStorage || volatileFallback, ADM_KEY) || 'null');
+      if (v && typeof v.token === 'string' && ADM_RE.test(v.token) && Number(v.exp) * 1000 > Date.now()) return { token: v.token, level: v.level === 'super' ? 'super' : 'full', exp: Number(v.exp) };
+    } catch { /* ignore */ }
+    return null;
+  };
+  const adminSecret = () => { const a = readAdm(); return a ? a.token : adminCode; };
+  const adminLevelNow = () => { const a = readAdm(); return a ? a.level : adminCode ? 'full' : null; };
 
   const readIdent = () => {
     try {
@@ -130,7 +148,8 @@ export function createOnline(deps) {
   // Remembered sessions live in `storage` (localStorage); others in `volatileStorage` (sessionStorage).
   const ACC_KEY = deps.accountKey || 'pitchside.account';
   const PENDING_KEY = `${ACC_KEY}.pending`;
-  const volatile = deps.volatileStorage || memStore();
+  const GUEST_KEY = `${ACC_KEY}.guest`;
+  const volatile = deps.volatileStorage || volatileFallback;
   const requireAccount = deps.requireAccount === true;
   const accListeners = new Set();
   let pendingCreds = null; // offline sign-up kept in memory only (never persisted with the password)
@@ -304,20 +323,31 @@ export function createOnline(deps) {
       },
     },
 
+    // One model: when online, the server balance IS the UT balance. Every change is one atomic RPC with an
+    // idempotency key (network retries never double-apply). Offline callers use their local balance.
     coins: {
       async get() {
-        const p = await online.profile();
-        return p.ok ? { ok: true, coins: p.coins } : p;
+        const r = dataOr(await authed('coins_get'));
+        if (r.ok === true) return { ok: true, coins: nonNeg(r.coins), infinite: r.infinite === true };
+        if (r.error === 'server_error') { const p = await online.profile(); return p.ok ? { ok: true, coins: p.coins, infinite: false } : p; } // pre-003 server
+        return fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
       },
-      /** Negative delta = spend (server checks the balance). Positive delta needs a verified admin code. */
+      /** -> { ok, coins, applied } | insufficient_coins. Infinite wallets never fail (applied = 0). */
+      async spend(amount, reason = 'ut-spend') {
+        if (!Number.isInteger(amount) || amount <= 0 || amount > 1e8) return fail('bad_amount');
+        return coinOp(-amount, reason);
+      },
+      /** -> { ok, coins, applied } — server caps earnings (applied may be lower than requested). */
+      async earn(amount, reason = 'ut-earn') {
+        if (!Number.isInteger(amount) || amount <= 0 || amount > 1e8) return fail('bad_amount');
+        return coinOp(amount, reason);
+      },
+      /** Compat: negative = spend, positive = earn (capped). Admin top-ups: online.owner.giveCoins. */
       async add(delta, reason = '') {
         if (typeof delta !== 'number' || !Number.isInteger(delta) || delta === 0) return fail('bad_amount');
-        if (delta < 0) {
-          const r = dataOr(await authed('spend_coins', { p_amount: -delta, p_reason: cleanStr(reason, 40, '') }));
-          return r.ok === true ? { ok: true, coins: Number(r.coins) || 0 } : fail(r.error);
-        }
-        if (!adminCode) return fail('not_allowed');
-        return online.admin.addCoins(delta);
+        const why = /^[a-z-]{1,24}$/.test(reason) ? reason : delta < 0 ? 'ut-spend' : 'ut-earn';
+        if (delta > 0 && why === 'admin') return online.owner.giveCoins(null, delta);
+        return delta < 0 ? online.coins.spend(-delta, why) : online.coins.earn(delta, why === 'ut-spend' ? 'ut-earn' : why);
       },
     },
 
@@ -487,23 +517,37 @@ export function createOnline(deps) {
     },
 
     admin: {
-      async verify(code) {
-        if (typeof code !== 'string' || !code || code.length > 128) return false;
-        const r = await rpc('admin_verify', { p_code: code });
-        const ok = !!(r.ok && r.data === true);
-        if (ok) adminCode = code;
-        return ok;
+      /** -> { ok, level:'super'|'full' } (server only; stores a 12 h admin token for owner RPCs). */
+      async verifyLevel(code) {
+        if (typeof code !== 'string' || !code || code.length > 128) return fail('invalid');
+        const r = await rpc('admin_login', { p_code: code });
+        if (r.ok && r.data && r.data.ok === true && typeof r.data.token === 'string' && ADM_RE.test(r.data.token)) {
+          const level = r.data.level === 'super' ? 'super' : 'full';
+          sset(volatile, ADM_KEY, JSON.stringify({ token: r.data.token, level, exp: Number(r.data.exp) || 0 }));
+          adminCode = null;
+          emitAcc();
+          return { ok: true, level };
+        }
+        if (r.ok && r.data && r.data.ok === false) return fail(r.data.error || 'invalid');
+        if (!r.ok && r.error === 'server_error') { // pre-003 server: boolean check, code kept in memory
+          const v = await rpc('admin_verify', { p_code: code });
+          if (v.ok && v.data === true) { adminCode = code; emitAcc(); return { ok: true, level: 'full' }; }
+          return fail('invalid');
+        }
+        return fail(r.ok ? 'bad_response' : r.error);
       },
-      async addCoins(delta, code = adminCode) {
-        if (!code) return fail('not_admin');
-        if (typeof delta !== 'number' || !Number.isInteger(delta) || delta === 0) return fail('bad_amount');
-        const r = dataOr(await authed('admin_add_coins', { p_code: code, p_delta: delta }));
-        return r.ok === true ? { ok: true, coins: Number(r.coins) || 0 } : fail(r.error);
-      },
-      get verified() { return !!adminCode; },
-      forget() { adminCode = null; },
-      /** 'admin' (code verified this session) | 'owner' | 'mod' (account role) | null */
-      get level() { return adminCode ? 'admin' : staffRole(); },
+      /** Compat boolean check (same as verifyLevel().ok). */
+      async verify(code) { return (await online.admin.verifyLevel(code)).ok === true; },
+      /** Admin coins for yourself (compat). */
+      addCoins(delta) { return online.owner.giveCoins(null, delta); },
+      get verified() { return !!adminSecret(); },
+      /** Server-verified code level this session: 'super' | 'full' | null */
+      get codeLevel() { return adminLevelNow(); },
+      forget() { adminCode = null; sdel(volatile, ADM_KEY); emitAcc(); },
+      /** 'super' | 'full' (server-verified code) | 'owner' | 'mod' (account role) | null */
+      get level() { return adminLevelNow() || staffRole(); },
+      /** true when owner powers will be accepted (code token or owner account). */
+      canOwner() { return !!adminSecret() || staffRole() === 'owner'; },
       /**
        * Short-lived (15 min) signed token proving this account is owner/mod, bound to the host's room
        * code / peer id (`bind`) so it cannot be replayed in another match. -> { ok, token, role, exp }
@@ -605,6 +649,7 @@ export function createOnline(deps) {
         const a = readAcc();
         clearAcc();
         adminCode = null;
+        sdel(volatile, ADM_KEY);
         emitAcc();
         if (a) await rpc('logout', { p_id: a.id, p_token: a.token, p_all: !!all });
         return { ok: true };
@@ -624,6 +669,35 @@ export function createOnline(deps) {
         return online.account.signup({ username: c.username, password: c.password, confirm: c.password, remember: c.remember, adminCode: c.adminCode });
       },
       get hasPendingCreds() { return !!pendingCreds; },
+      /** Change the login name (display name follows). Needs the current password. */
+      async changeUsername({ username, password, adminCode: code = '' } = {}) {
+        const a = readAcc();
+        if (!a) return fail('no_account');
+        const u = trimUsername(username);
+        const e = usernameError(u);
+        if (e) return fail(e);
+        if (typeof password !== 'string' || !password) return fail('bad_credentials');
+        if (isReservedName(u) && a.role !== 'owner' && !code && !adminSecret()) return fail('reserved_username');
+        const r = dataOr(await authed('change_username', { p_username: u, p_password: password, p_admin_code: (code && String(code).slice(0, 128)) || adminSecret() || null }));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        const cur = readAcc();
+        if (cur) writeAcc({ ...cur, username: cleanStr(r.username, 16, u), role: roleOf(r.role) || cur.role });
+        emitAcc();
+        return { ok: true, username: cleanStr(r.username, 16, u), role: roleOf(r.role) };
+      },
+      /** Change the password (other devices are logged out). */
+      async changePassword({ password, newPassword, confirm } = {}) {
+        const a = readAcc();
+        if (!a) return fail('no_account');
+        if (typeof password !== 'string' || !password) return fail('bad_credentials');
+        const e = passwordError(newPassword, a.username, confirm);
+        if (e) return fail(e);
+        const r = dataOr(await authed('change_password', { p_password: password, p_new: newPassword }));
+        return r.ok === true ? { ok: true } : fail(r.error || 'bad_response');
+      },
+      /** "Continue as guest": the device profile keeps working; the account gate is not shown again. */
+      guest() { sset(storage, GUEST_KEY, '1'); emitAcc(); },
+      isGuest() { return !readAcc() && sget(storage, GUEST_KEY) === '1'; },
       onChange(fn) { accListeners.add(fn); return () => accListeners.delete(fn); },
       isReservedName,
       validateUsername: (u) => usernameError(u),
@@ -633,8 +707,8 @@ export function createOnline(deps) {
     // ---------------------------------------------------------------- moderation (owner/mod session or admin code)
     moderation: {
       /** 'admin' | 'owner' | 'mod' | null */
-      get role() { return adminCode ? 'admin' : staffRole(); },
-      canModerate() { return !!(adminCode || staffRole()); },
+      get role() { return adminSecret() ? 'admin' : staffRole(); },
+      canModerate() { return !!(adminSecret() || staffRole()); },
       async search(query, code) {
         const q = cleanStr(query, 40, '');
         if (!q) return fail('bad_query');
@@ -688,11 +762,297 @@ export function createOnline(deps) {
       },
     },
 
+
+    // ---------------------------------------------------------------- owner powers (migration 003)
+    owner: {
+      /** Coins for one player (null = yourself). Idempotent + retried on network errors. -> { ok, coins, player } */
+      async giveCoins(playerId, amount, { reason = '', key = opKey() } = {}) {
+        if (playerId != null && (typeof playerId !== 'string' || !UUID_RE.test(playerId))) return fail('not_found');
+        if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 1e9) return fail('bad_amount');
+        const r = await ownerCall('admin_coins', { p_player: playerId || null, p_delta: amount, p_reason: cleanStr(reason, 120, '') || null, p_key: key }, true);
+        return r.ok ? { ok: true, coins: nonNeg(r.coins), player: typeof r.player === 'string' ? r.player : null } : r;
+      },
+      /** { to: playerId | 'all', kind: 'coins'|'pack'|'card', coins, packId, count, card, message } -> { ok, giftId } */
+      async gift({ to, kind, coins = null, packId = null, count = 1, card = null, message = '' } = {}, { key = opKey() } = {}) {
+        const all = to === 'all';
+        if (!all && (typeof to !== 'string' || !UUID_RE.test(to))) return fail('bad_target');
+        let payload = null;
+        if (kind === 'coins') { if (!Number.isInteger(coins) || coins < 1 || coins > 1e9) return fail('bad_amount'); }
+        else if (kind === 'pack') { if (typeof packId !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(packId) || !Number.isInteger(count) || count < 1 || count > 50) return fail('bad_pack'); payload = { packId, count }; }
+        else if (kind === 'card') { const c = cleanJson(card); if (!c || typeof c !== 'object' || Array.isArray(c) || JSON.stringify(c).length > 4000) return fail('bad_card'); payload = { card: c }; }
+        else return fail('bad_kind');
+        const r = await ownerCall('admin_gift', {
+          p_to: all ? null : to, p_all: all, p_kind: kind, p_coins: kind === 'coins' ? coins : null, p_payload: payload, p_message: cleanStr(message, 200, '') || null, p_key: key,
+        }, true);
+        return r.ok ? { ok: true, giftId: typeof r.giftId === 'string' ? r.giftId : null } : r;
+      },
+      /** what: 'coins' | 'progress' | 'club' | 'all' -> { ok, player, resets } */
+      async reset(playerId, what) {
+        if (typeof playerId !== 'string' || !UUID_RE.test(playerId)) return fail('not_found');
+        if (!['coins', 'progress', 'club', 'all'].includes(what)) return fail('bad_value');
+        const r = await ownerCall('admin_reset', { p_player: playerId, p_what: what });
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player), resets: sanitizeEpochs(r.resets) } : r;
+      },
+      async broadcast(text, minutes = 30) {
+        const t = cleanStr(text, 200, '');
+        if (!t) return fail('bad_text');
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return fail('bad_value');
+        const r = await ownerCall('admin_broadcast', { p_text: t, p_minutes: minutes });
+        if (r.ok) presenceTick(true);
+        return r.ok ? { ok: true, id: Number(r.id) || 0 } : r;
+      },
+      async clearBroadcast(id) {
+        if (!Number.isInteger(id) || id <= 0) return fail('not_found');
+        const r = await ownerCall('admin_clear_broadcast', { p_bid: id });
+        return r.ok ? { ok: true } : r;
+      },
+      /** key: 'promos' | 'packs' | 'rewards' | 'market' | 'features' (see docs/ONLINE_API.md) */
+      async setConfig(key, value) {
+        if (!CONFIG_KEYS.includes(key)) return fail('bad_key');
+        const v = sanitizeConfigValue(key, value);
+        if (!v) return fail('bad_value');
+        const r = await ownerCall('admin_set_config', { p_key: key, p_value: v });
+        if (r.ok) await online.config.get(true);
+        return r.ok ? { ok: true, version: Number(r.version) || 0 } : r;
+      },
+      /** Infinite online wallet for your own profile (spends / market buys succeed without deducting). */
+      async setInfinite(on, playerId = null) {
+        if (playerId != null && (typeof playerId !== 'string' || !UUID_RE.test(playerId))) return fail('not_found');
+        const r = await ownerCall('admin_set_infinite', { p_on: !!on, p_player: playerId });
+        return r.ok ? { ok: true, infinite: r.infinite === true, coins: nonNeg(r.coins) } : r;
+      },
+      players(query) { return online.moderation.search(query); },
+    },
+
+    // ---------------------------------------------------------------- global config (public read)
+    config: {
+      /** -> { ok, version, config } (cached 3 min; offline -> last cached copy, ok:false) */
+      async get(force = false) {
+        if (!force && cfg.at && Date.now() - cfg.at < CONFIG_TTL_MS) return { ok: true, version: cfg.version, config: cfg.config };
+        if (cfg.pending) return cfg.pending;
+        cfg.pending = (async () => {
+          const r = await rpc('get_config', {});
+          cfg.pending = null;
+          if (!r.ok || !r.data || r.data.ok !== true) return { ...fail(r.ok ? 'bad_response' : r.error), version: cfg.version, config: cfg.config };
+          const next = sanitizeConfig(r.data.config);
+          const changed = JSON.stringify(next) !== JSON.stringify(cfg.config);
+          cfg = { ...cfg, version: Number(r.data.version) || 0, config: next, at: Date.now() };
+          sset(storage, CFG_KEY, JSON.stringify({ version: cfg.version, config: next }));
+          if (changed) for (const f of [...cfgListeners]) { try { f(next); } catch (e) { console.error('[online] config listener failed', e); } }
+          return { ok: true, version: cfg.version, config: next };
+        })();
+        return cfg.pending;
+      },
+      /** Sync read, e.g. value('packs.gold.price', 7500). */
+      value(path, fallback = undefined) {
+        let v = cfg.config;
+        for (const k of String(path).split('.')) { if (!v || typeof v !== 'object' || !Object.prototype.hasOwnProperty.call(v, k)) return fallback; v = v[k]; }
+        return v === undefined ? fallback : v;
+      },
+      get current() { return cfg.config; },
+      onChange(fn) { cfgListeners.add(fn); return () => cfgListeners.delete(fn); },
+    },
+
+    // ---------------------------------------------------------------- presence, counter, broadcasts
+    presence: {
+      /** Heartbeat every 25 s while the tab is visible (+ config refresh every 3 min). Idempotent. */
+      start() {
+        if (pres.running) return;
+        pres.running = true;
+        presenceTick(true);
+        pres.timer = setInterval(() => presenceTick(false), deps.presenceMs || 25000);
+        pres.cfgTimer = setInterval(() => { online.config.get(true); }, CONFIG_TTL_MS);
+        online.config.get();
+        if (typeof document !== 'undefined' && document.addEventListener) {
+          pres.onVis = () => { if (!document.hidden) presenceTick(false); };
+          document.addEventListener('visibilitychange', pres.onVis);
+        }
+      },
+      stop() {
+        pres.running = false;
+        clearInterval(pres.timer); clearInterval(pres.cfgTimer);
+        if (pres.onVis && typeof document !== 'undefined') document.removeEventListener('visibilitychange', pres.onVis);
+      },
+      /** One tick now (tests / after actions). */
+      tick: () => presenceTick(true),
+      get last() { return pres.last; },
+      async count() {
+        const r = await rpc('online_count', {});
+        return r.ok && Number.isInteger(r.data) ? { ok: true, online: Math.max(0, r.data) } : fail(r.ok ? 'bad_response' : r.error);
+      },
+      onUpdate(fn) { pres.listeners.add(fn); if (pres.last) { try { fn(pres.last); } catch { /* ignore */ } } return () => pres.listeners.delete(fn); },
+      /** fn({ id, text, until }) once per new broadcast. */
+      onBroadcast(fn) { pres.bcast.add(fn); return () => pres.bcast.delete(fn); },
+      async broadcasts() {
+        const r = dataOr(await rpc('get_broadcasts', {}));
+        return r.ok === true ? { ok: true, items: sanitizeList(r.items, sanitizeBroadcast, 5) } : fail(r.error || 'bad_response');
+      },
+    },
+
+    // ---------------------------------------------------------------- gifts inbox
+    gifts: {
+      async inbox() {
+        const r = dataOr(await authed('gifts_inbox'));
+        return r.ok === true ? { ok: true, items: sanitizeList(r.items, sanitizeGift, 50) } : fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
+      },
+      /** -> { ok, kind, coins, balance, packId, count, card } — coins already added server-side. */
+      async claim(id) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        const r = dataOr(await authed('claim_gift', { p_gift: id }));
+        if (r.ok !== true) return fail(r.error === 'already_claimed' ? 'already_claimed_gift' : r.error || 'bad_response');
+        const g = sanitizeGift(r);
+        if (!g) return fail('bad_response');
+        if (pres.last) { pres.last = { ...pres.last, gifts: Math.max(0, pres.last.gifts - 1) }; emitPresence(); }
+        return { ok: true, ...g, balance: nonNeg(r.balance) };
+      },
+    },
+
+    // ---------------------------------------------------------------- post-match rewards
+    rewards: {
+      /** { mode:'ut'|'friendly'|'rivals'|'offline', won, drawn, gf|goalsFor, ga|goalsAgainst } -> { ok, coinsAwarded, coins, pack, capped, multiplier } */
+      async match(x = {}) {
+        const v = normalizeReport({ ...x, goalsFor: x.goalsFor ?? x.gf, goalsAgainst: x.goalsAgainst ?? x.ga });
+        if (!v.ok) return fail(v.error);
+        const r = dataOr(await authed('match_reward', v.args));
+        const s = sanitizeReport(r);
+        if (!s.ok) return fail(s.error, r.ban ? { ban: r.ban } : undefined);
+        return { ...s, pack: typeof r.pack === 'string' && PACK_RE.test(r.pack) ? r.pack : null, multiplier: typeof r.multiplier === 'number' && Number.isFinite(r.multiplier) ? r.multiplier : 1 };
+      },
+    },
+
+    // ---------------------------------------------------------------- social
+    players: {
+      async find(query) {
+        const q = cleanStr(query, 40, '');
+        if (q.length < 2) return fail('bad_query');
+        const r = dataOr(await rpc('find_player', { p_query: q }));
+        return r.ok === true ? { ok: true, items: sanitizeList(r.items, sanitizePublicPlayer, 10) } : fail(r.error || 'bad_response');
+      },
+    },
+    messages: {
+      /** text <= 300 chars, image = JPEG data URL <= 150 KB (see compressImage). */
+      async send(toId, text = '', image = null) {
+        if (typeof toId !== 'string' || !UUID_RE.test(toId)) return fail('not_found');
+        const t = typeof text === 'string' ? text.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 300).trim() : ''; // eslint-disable-line no-control-regex
+        if (image != null && (typeof image !== 'string' || image.length > MAX_IMAGE_CHARS || !JPEG_RE.test(image))) return fail('bad_image');
+        if (!t && !image) return fail('empty');
+        const r = dataOr(await authed('send_message', { p_to: toId, p_body: t, p_image: image || null }));
+        return r.ok === true ? { ok: true, id: Number(r.id) || 0 } : fail(r.error || 'bad_response');
+      },
+      async conversations() {
+        const r = dataOr(await authed('list_conversations'));
+        return r.ok === true ? { ok: true, items: sanitizeList(r.items, sanitizeConversation, 30) } : fail(r.error || 'bad_response');
+      },
+      async thread(withId, before = null) {
+        if (typeof withId !== 'string' || !UUID_RE.test(withId)) return fail('not_found');
+        const r = dataOr(await authed('get_messages', { p_with: withId, p_before: Number.isInteger(before) ? before : null }));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        if (pres.last && pres.last.unread) { pres.last = { ...pres.last, unread: 0 }; emitPresence(); presenceTick(true); }
+        return { ok: true, with: sanitizePublicPlayer(r.with), items: sanitizeList(r.items, sanitizeMessage, 30) };
+      },
+      unread() { return pres.last ? pres.last.unread : 0; },
+      compressImage,
+      MAX_TEXT: 300,
+      MAX_IMAGE_BYTES: 150 * 1024,
+    },
+    squads: {
+      /** Public squad snapshot (JSON object <= 20 KB), visible to anyone by username / friend code. */
+      async publish(snapshot) {
+        const c = cleanSquad(snapshot);
+        if (!c) return fail('bad_squad');
+        if (JSON.stringify(c).length > 20480) return fail('too_large');
+        const r = dataOr(await authed('set_squad', { p_squad: c }));
+        return r.ok === true ? { ok: true } : fail(r.error || 'bad_response');
+      },
+      async view(query) {
+        const q = cleanStr(query, 40, '');
+        if (q.length < 3) return fail('bad_query');
+        const r = dataOr(await rpc('view_squad', { p_query: q }));
+        if (r.ok !== true) return { ...fail(r.error || 'bad_response'), owner: sanitizePublicPlayer(r.owner) };
+        return { ok: true, owner: sanitizePublicPlayer(r.owner), squad: cleanSquad(r.squad), updatedAt: isoOr(r.updatedAt) };
+      },
+    },
+
     errorText,
   };
+
+  // ---------------------------------------------------------------- helpers (003)
+  function opKey() { return randomSecret().slice(0, 24); }
+  const RETRY_ERRORS = ['offline', 'timeout'];
+  async function coinOp(delta, reason) {
+    const key = opKey();
+    let r;
+    for (let i = 0; i < 3; i++) {
+      r = dataOr(await authed('coins_op', { p_delta: delta, p_reason: reason, p_key: key }));
+      if (r.ok === true || !RETRY_ERRORS.includes(r.error)) break;
+      await sleepMs(300 * (i + 1));
+    }
+    if (r.ok !== true) return fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
+    const out = { ok: true, coins: nonNeg(r.coins), applied: Number.isFinite(r.applied) ? r.applied : 0, infinite: r.infinite === true };
+    if (pres.last) { pres.last = { ...pres.last, coins: out.coins }; }
+    return out;
+  }
+  /** Owner RPC: admin token (or legacy code) + the caller's identity. `retry` = idempotent call, retried on network errors. */
+  async function ownerCall(fn, args, retry = false) {
+    const a = readAcc();
+    const d = a ? null : readIdent();
+    const ident = a ? { id: a.id, secret: a.token } : d && d.id ? d : null;
+    const c = adminSecret();
+    if (!c && staffRole() !== 'owner') return fail(staffRole() === 'mod' ? 'not_allowed' : 'not_admin');
+    const payload = { p_code: c || null, ...args, p_id: ident ? ident.id : null, p_secret: ident ? ident.secret : null };
+    let r;
+    for (let i = 0; i < (retry ? 3 : 1); i++) {
+      r = await rpc(fn, payload);
+      if (r.ok || !RETRY_ERRORS.includes(r.error)) break;
+      await sleepMs(400 * (i + 1));
+    }
+    if (!r.ok) { if (r.error === 'banned') setBan(r.ban); return fail(r.error, r.ban ? { ban: parseBan(r.ban) } : undefined); }
+    const out = r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' };
+    if (out.ok !== true && out.error === 'not_admin' && readAdm()) sdel(volatile, ADM_KEY); // expired / revoked token
+    return out.ok === true ? out : fail(out.error || 'bad_response');
+  }
+  // config cache
+  const CFG_KEY = `${deps.accountKey || 'pitchside.account'}.config`;
+  let cfg = { version: -1, config: {}, at: 0, pending: null };
+  try { const c = JSON.parse(sget(storage, CFG_KEY) || 'null'); if (c && typeof c === 'object') cfg = { ...cfg, version: Number(c.version) || 0, config: sanitizeConfig(c.config) }; } catch { /* ignore */ }
+  const cfgListeners = new Set();
+  // presence
+  const pres = { running: false, timer: null, cfgTimer: null, last: null, listeners: new Set(), bcast: new Set(), seen: new Set(), busy: false, onVis: null };
+  const emitPresence = () => { for (const f of [...pres.listeners]) { try { f(pres.last); } catch (e) { console.error('[online] presence listener failed', e); } } };
+  async function presenceTick(force) {
+    if (pres.busy) return pres.last;
+    if (!force && typeof document !== 'undefined' && document.hidden) return pres.last;
+    pres.busy = true;
+    try {
+      let d = null;
+      const acc = readAcc();
+      if (online.hasIdentity() && !(acc && banActive(acc.ban))) {
+        const r = dataOr(await authed('presence'));
+        if (r.ok === true) d = r;
+      }
+      if (!d) {
+        const [c, b] = await Promise.all([rpc('online_count', {}), rpc('get_broadcasts', {})]);
+        if (!c.ok && !b.ok) return pres.last;
+        d = { online: c.ok ? c.data : null, broadcasts: b.ok && b.data ? b.data.items : [] };
+      }
+      const u = sanitizePresence(d);
+      const prev = pres.last;
+      pres.last = u;
+      if (acc && u.role && u.role !== acc.role) { const cur = readAcc(); if (cur) { writeAcc({ ...cur, role: u.role }); emitAcc(); } }
+      if (u.configVersion != null && u.configVersion !== cfg.version) online.config.get(true);
+      emitPresence();
+      for (const b of u.broadcasts) {
+        if (pres.seen.has(b.id)) continue;
+        pres.seen.add(b.id);
+        for (const f of [...pres.bcast]) { try { f(b); } catch (e) { console.error('[online] broadcast listener failed', e); } }
+      }
+      void prev;
+      return u;
+    } finally { pres.busy = false; }
+  }
   function staffRole() { const a = readAcc(); return a && !banActive(a.ban) && (a.role === 'owner' || a.role === 'mod') ? a.role : null; }
   async function modCall(fn, args, code) {
-    const c = typeof code === 'string' && code ? code.slice(0, 128) : adminCode;
+    const c = typeof code === 'string' && code ? code.slice(0, 160) : adminSecret();
     const a = staffRole() ? readAcc() : null;
     if (!c && !a) return fail('not_admin');
     const r = await rpc(fn, { p_code: c || null, ...args, p_id: a ? a.id : null, p_secret: a ? a.token : null });
@@ -759,16 +1119,24 @@ const unavailable = () => {
     available: async () => false, profile: f, setName: f,
     status: async () => ({ online: false, reason: 'unreachable', message: 'Online services are unavailable.' }),
     market: { list: f, search: f, buy: f, mine: f, cancel: f, claimSales: f },
-    coins: { get: f, add: f }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
-    hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, addCoins: f, verified: false, forget() {}, level: null, matchToken: f, verifyMatchToken: f }, errorText,
+    coins: { get: f, add: f, spend: f, earn: f }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
+    hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, verifyLevel: f, addCoins: f, verified: false, codeLevel: null, canOwner: () => false, forget() {}, level: null, matchToken: f, verifyMatchToken: f }, errorText,
     hasIdentity: () => false,
     account: {
       current: () => ({ state: 'none', id: null, username: null, role: null, remember: true, ban: null, pending: null, hasDevice: false }),
       status: async () => ({ ok: false, online: false, error: 'offline', state: 'none' }), signup: f, claim: f, login: f,
-      logout: async () => ({ ok: true }), continueOffline() {}, pending: () => null, retryPending: f, hasPendingCreds: false,
+      logout: async () => ({ ok: true }), continueOffline() {}, changeUsername: f, changePassword: f, guest() {}, isGuest: () => false, pending: () => null, retryPending: f, hasPendingCreds: false,
       onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
+    owner: { giveCoins: f, gift: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f },
+    config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, onChange: () => () => {} },
+    presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
+    gifts: { inbox: f, claim: f },
+    rewards: { match: f },
+    players: { find: f },
+    messages: { send: f, conversations: f, thread: f, unread: () => 0, compressImage: async () => ({ ok: false, error: 'bad_image' }), MAX_TEXT: 300, MAX_IMAGE_BYTES: 150 * 1024 },
+    squads: { publish: f, view: f },
     rivals: { status: f, claimWeekly: f },
     friends: {
       list: f, code: f, add: f, respond: f, accept: f, decline: f, remove: f, block: f, unblock: f, heartbeat: f, pollInvites: f,

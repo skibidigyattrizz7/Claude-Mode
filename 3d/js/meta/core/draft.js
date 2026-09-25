@@ -36,9 +36,9 @@ export function chooseFormation(d, formation) {
   const pool = getDB().all.filter((p) => p.ovr >= 85 && p.special !== 'objective' && [p.pos, ...(p.alt || [])].some((x) => slotPos.has(x)) && p.pos !== 'GK');
   const out = [];
   const persons = new Set();
-  for (let i = 0; i < 200 && out.length < 5; i++) {
+  for (let i = 0; i < 200 && out.length < 5 && pool.length; i++) {
     const p = rng.pick(pool);
-    if (!persons.has(personOf(p))) { persons.add(personOf(p)); out.push(p.id); }
+    if (p && !persons.has(personOf(p))) { persons.add(personOf(p)); out.push(p.id); }
   }
   d.captainOptions = out;
   d.stage = 'captain';
@@ -76,9 +76,9 @@ export function slotOptions(d, i) {
       persons.add(per); out.push(p.id); got++;
     }
   }
-  while (out.length < 5) {
+  for (let t = 0; t < 300 && out.length < 5 && all.length; t++) {
     const p = rng.pick(all);
-    if (!persons.has(personOf(p)) && !used.has(personOf(p))) { persons.add(personOf(p)); out.push(p.id); }
+    if (p && !persons.has(personOf(p)) && !used.has(personOf(p))) { persons.add(personOf(p)); out.push(p.id); }
   }
   return out;
 }
@@ -93,10 +93,12 @@ export function pickSlot(d, i, pid) {
     // auto bench: 5 solid subs (1 GK) not already drafted
     const used = usedPersons(d);
     const rng = new Rng(`draft-${d.seed}-bench`);
-    const pool = getDB().players.filter((p) => p.ovr >= 76 && p.ovr <= 83 && !used.has(personOf(p)));
-    const gk = pool.filter((p) => p.pos === 'GK');
+    let pool = getDB().players.filter((p) => p.ovr >= 76 && p.ovr <= 83 && !used.has(personOf(p)));
+    let gk = pool.filter((p) => p.pos === 'GK');
+    if (!gk.length) { pool = getDB().players.filter((p) => p.ovr >= 70 && p.ovr <= 88); gk = pool.filter((p) => p.pos === 'GK'); }
+    if (!gk.length) gk = getDB().players.filter((p) => p.pos === 'GK');
     d.bench = [rng.pick(gk).id];
-    for (let t = 0; t < 60 && d.bench.length < 5; t++) { const p = rng.pick(pool); if (p.pos !== 'GK' && !d.bench.includes(p.id)) d.bench.push(p.id); }
+    for (let t = 0; t < 120 && d.bench.length < 5 && pool.length; t++) { const p = rng.pick(pool); if (p.pos !== 'GK' && !d.bench.includes(p.id) && !used.has(personOf(p))) d.bench.push(p.id); }
     d.stage = 'play';
   }
 }

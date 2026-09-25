@@ -68,7 +68,10 @@ export function humanGround(sim, p, aim, power, kind = 'ground') {
     if (tgt >= 0) {
       const m = sim.players[tgt];
       const dist = Math.hypot(m.x - from.x, m.z - from.z);
-      const arrive = kind === 'gkthrow' ? 5 : passArrive(p, dist);
+      // Assisted: same arrival-speed solver an AI ground pass uses (passArrive scaled by power,
+      // 0.9..1.1x) so a firm assisted pass is never weaker or less accurate than an AI pass over
+      // the same distance. Semi keeps its own held-power scaling below.
+      const arrive = kind === 'gkthrow' ? 5 : passArrive(p, dist) * (mode === 'assisted' ? 0.9 + power * 0.2 : 1);
       const L = leadPass(from, m, sim._recvVel(m), arrive, kind === 'gkthrow' ? 20 : 30);
       const pt = sim._clampPt(L);
       const dd = Math.hypot(pt.x - from.x, pt.z - from.z);

@@ -15,6 +15,14 @@ import { radialTexture } from './textures.js';
 import { AdminRender } from './admin.js';
 
 const STRIDE = 7;
+
+// Defers a unit of work to a spare moment on the main thread (falls back to a macrotask when
+// requestIdleCallback isn't available), so building the stadium's crowd/ad boards doesn't delay
+// the first rendered frame of the match.
+const idle = (fn) => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(() => fn(), { timeout: 500 });
+  else setTimeout(fn, 0);
+};
 const HL = PITCH.HL, HW = PITCH.HW;
 
 const QUALITY = {
@@ -99,7 +107,7 @@ export function createRenderer(container, opts = {}) {
   const pitch = buildPitch(scene, q, maxAniso, track);
   const goals = buildGoals(scene, q, track);
   const flags = buildFlags(scene, q, track);
-  const stadium = buildStadium(scene, opts, q, track);
+  const stadium = buildStadium(scene, opts, q, track, idle);
   const ball = buildBall(scene, q, track);
   const markers = buildMarkers(scene, track);
   const director = new CameraDirector(camera);

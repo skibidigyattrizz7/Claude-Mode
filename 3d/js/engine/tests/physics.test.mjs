@@ -254,6 +254,17 @@ test('AI penalty conversion is around 75%', () => {
   assert.ok(rate > 0.6 && rate < 0.9, 'rate ' + rate);
 });
 
+test('AI defending/marking applies to the user team too: user teammates register real interceptions', () => {
+  // home is the user (controller 'p1'), fed no input at all — so every interception credited to
+  // them must come from the AI teammates' own press/contain/marking logic, the same as an AI team.
+  const sim = new MatchSim({ home: BRAZIL, away: FRANCE, halfMinutes: 2, controllers: { home: 'p1', away: 'ai' }, seed: 901 });
+  let n = 0;
+  while (!sim.ended && n < 120 * 60 * 4) { sim.step(1 / 120, [null, null]); n++; }
+  let homeInt = 0;
+  for (const p of sim.players) if (p.team === 0) homeInt += p.st.int;
+  assert.ok(homeInt > 0, 'user-team interceptions ' + homeInt);
+});
+
 runGameplayTests(test);
 runAdminTests(test);
 

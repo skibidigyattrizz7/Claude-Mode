@@ -49,7 +49,11 @@ export function createMatch(container, opts = {}) {
   const stadium = opts.stadium === 'night' ? 'night' : 'day';
   const weather = ['rain', 'snow'].includes(opts.weather) ? opts.weather : 'clear';
   const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
-  const quality = opts.quality || (touch ? 'med' : 'high');
+  // ?safe=1 (e.g. a locked-down school Chromebook/proxy): force the lightest settings regardless
+  // of what the caller asked for, so the match has the best chance of starting at all.
+  let safeMode = false;
+  try { safeMode = typeof location !== 'undefined' && new URLSearchParams(location.search).get('safe') === '1'; } catch { /* no location (tests) */ }
+  const quality = safeMode ? 'low' : (opts.quality || (touch ? 'med' : 'high'));
   const local = SIDES.map((s) => (controllers[s] === 'p1' || controllers[s] === 'p2' ? controllers[s] : null));
   const localCount = local.filter(Boolean).length;
   const timeScale = Math.max(1, Math.min(20, +opts.timeScale || 1)); // dev/testing only
@@ -132,22 +136,70 @@ export function createMatch(container, opts = {}) {
     },
   });
 
-  // renderer (owned by the render module; loaded asynchronously)
-  import('./render/index.js')
-    .then((m) => m.createRenderer)
-    .catch((err) => {
-      console.warn('[pitchside-engine] render/index.js unavailable, using fallback renderer:', err && err.message);
-      return import('./fallback/index.js').then((m) => m.createRenderer);
-    })
-    .then((create) => {
-      if (destroyed) return;
-      R = create(stage, { home, away, stadium, quality, weather });
-      if (R.domElement && R.domElement.parentNode !== stage && !stage.contains(R.domElement)) stage.appendChild(R.domElement);
-      R.setCamera(camMode);
-      hud.setLoaded();
-      R.resize();
-    })
-    .catch((err) => console.error('[pitchside-engine] renderer failed to start', err));
+  // renderer (owned by the render module; loaded asynchronously). Some devices (locked-down school
+  // Chromebooks/proxies especially) can fail to create a WebGL context at all, fail only at the
+  // requested quality, or lose the context mid-match — none of that should leave a blank page, so
+  // each rung below is tried in turn and any failure (import, construction, or a lost context)
+  // drops to the next one instead of just logging to a console nobody on a school machine will see.
+  const rendererAttempts = [{ path: './render/index.js', quality }];
+  if (quality !== 'low') rendererAttempts.push({ path: './render/index.js', quality: 'low' });
+  rendererAttempts.push({ path: './fallback/index.js', quality: 'low' });
+  let rendererRung = -1;
+
+  function showFatalError(msg) {
+    if (destroyed) return;
+    hud.setLoaded();
+    const el = document.createElement('div');
+    el.className = 'ps3d-fatal-error';
+    el.style.cssText = 'position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;'
+      + 'text-align:center;padding:24px;color:#cfd8ea;background:#05070d;font:14px/1.5 system-ui,sans-serif;';
+    el.textContent = msg;
+    root.appendChild(el);
+  }
+
+  async function attemptRenderer(fromRung) {
+    for (let i = fromRung; i < rendererAttempts.length; i++) {
+      const a = rendererAttempts[i];
+      try {
+        const m = await import(a.path);
+        const r = m.createRenderer(stage, { home, away, stadium, quality: a.quality, weather, safe: safeMode });
+        rendererRung = i;
+        return r;
+      } catch (err) {
+        console.warn(`[pitchside-engine] renderer attempt ${i} (${a.path}, quality=${a.quality}) failed:`, err && err.message);
+      }
+    }
+    return null;
+  }
+
+  async function startRenderer(fromRung = 0) {
+    const r = await attemptRenderer(fromRung);
+    if (destroyed) { if (r && r.destroy) { try { r.destroy(); } catch { /* ignore */ } } return; }
+    if (!r) {
+      showFatalError('This device or browser could not start the 3D pitch (no working WebGL renderer). '
+        + 'Try reloading, updating your browser, or a different network/device.');
+      return;
+    }
+    R = r;
+    if (R.domElement && R.domElement.parentNode !== stage && !stage.contains(R.domElement)) stage.appendChild(R.domElement);
+    R.setCamera(camMode);
+    hud.setLoaded();
+    R.resize();
+    // GPU driver resets / low-memory kills surface as a 'lost context' event, not a thrown error —
+    // catch it and drop to the next rung (lower quality, then the plain fallback renderer).
+    if (R.domElement && typeof R.domElement.addEventListener === 'function') {
+      R.domElement.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        console.warn('[pitchside-engine] WebGL context lost, downgrading renderer');
+        if (destroyed) return;
+        try { R.destroy(); } catch { /* ignore */ }
+        R = null;
+        stage.innerHTML = '';
+        startRenderer(rendererRung + 1);
+      }, { once: true });
+    }
+  }
+  startRenderer();
 
   const onResize = () => { if (R) R.resize(); };
   window.addEventListener('resize', onResize);

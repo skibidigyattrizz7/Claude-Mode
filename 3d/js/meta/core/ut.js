@@ -1,6 +1,6 @@
 // Pitchside Ultimate Team — pure logic (packs, club, squad, SBCs, objectives, squad battles, market). DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
-import { getDB, getPlayer, utPrice, quickSellValue, registerCard, registerLocalCard } from './players.js';
+import { getDB, getPlayer, utPrice, quickSellValue, registerCard, registerLocalCard, personOf } from './players.js';
 import { FORMATIONS } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
 import { buildTeam, gkKitFor, bestLineup, autoBuildSquad, contrastColor } from './teams.js';
@@ -190,6 +190,7 @@ export function migrateUT(state) {
   const valid = (id) => (id && state.club.includes(id) ? id : null);
   state.squad.slots = Array.from({ length: 11 }, (_, i) => valid((state.squad.slots || [])[i]));
   state.squad.bench = Array.from({ length: 7 }, (_, i) => valid((state.squad.bench || [])[i]));
+  dedupeSquad(state); // squad rules: no two cards of the same base player (also fixes pre-existing saves)
   state.v = UT_VERSION;
   return state;
 }
@@ -210,7 +211,38 @@ export function autoSquad(state, formation = state.squad.formation) {
   return state.squad;
 }
 
-export function squadSlots(state) { return state.squad.slots.map((id) => (id ? getPlayer(id) : null)); }
+/** Null out any slot/bench id that is a second card of a player already placed earlier in the squad
+ * (no two cards of the same base player in one squad — squad rules). Mutates and returns `state.squad`. */
+export function dedupeSquad(state) {
+  const seen = new Set();
+  const scrub = (arr) => arr.map((id) => {
+    if (!id) return id;
+    const p = getPlayer(id);
+    if (!p) return null;
+    const key = personOf(p);
+    if (seen.has(key)) return null;
+    seen.add(key);
+    return id;
+  });
+  state.squad.slots = scrub(state.squad.slots);
+  if (Array.isArray(state.squad.bench)) state.squad.bench = scrub(state.squad.bench);
+  return state.squad;
+}
+/** Validate + apply a squad edit (formation, 11 starter ids, optional bench ids) from the club, enforcing
+ * "no duplicate player" and that every id is actually owned. Prefer this over assigning `state.squad`
+ * directly so the rule holds no matter which UI writes the squad. */
+export function setSquad(state, { formation, slots, bench } = {}) {
+  if (!FORMATIONS[formation]) throw new Error('Bad formation');
+  const owned = (id) => (id && state.club.includes(id) ? id : null);
+  state.squad = {
+    formation,
+    slots: Array.from({ length: 11 }, (_, i) => owned((slots || [])[i])),
+    bench: Array.from({ length: 7 }, (_, i) => owned((bench || [])[i])),
+  };
+  dedupeSquad(state);
+  return state.squad;
+}
+export function squadSlots(state) { dedupeSquad(state); return state.squad.slots.map((id) => (id ? getPlayer(id) : null)); }
 export function squadInfo(state) {
   const slots = squadSlots(state);
   const chem = calcChemistry(state.squad.formation, slots);
@@ -356,7 +388,9 @@ export function evaluateSbc(sbc, formation, slots) {
   const players = slots.filter(Boolean);
   const chem = calcChemistry(formation, slots).scaled;
   const rating = teamRating(slots);
-  const checks = sbc.reqs.map((r) => {
+  const persons = players.map(personOf);
+  const checks = [{ label: 'No duplicate player', ok: new Set(persons).size === persons.length, cur: `${new Set(persons).size}/${persons.length}` }];
+  checks.push(...sbc.reqs.map((r) => {
     let cur, ok;
     switch (r.t) {
       case 'count': cur = players.length; ok = cur === r.v; break;
@@ -373,7 +407,7 @@ export function evaluateSbc(sbc, formation, slots) {
       default: cur = '?'; ok = false;
     }
     return { label: reqLabel(r), ok, cur };
-  });
+  }));
   return { checks, ok: checks.every((c) => c.ok), rating, chem };
 }
 
@@ -544,7 +578,9 @@ export function battleOpponents(week) {
       const grp = (p) => (p.pos === 'GK' ? 'GK' : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(p.pos) ? 'DEF' : ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.pos) ? 'MID' : 'ATT');
       for (const g of Object.keys(want)) {
         const gp = pool.filter((p) => grp(p) === g);
-        for (let i = 0; i < want[g]; i++) picked.push(rng.pick(gp));
+        const wide = gp.length ? gp : db.players.filter((p) => grp(p) === g && Math.abs(p.ovr - target) <= 12);
+        const src = wide.length ? wide : db.players.filter((p) => grp(p) === g);
+        for (let i = 0; i < want[g]; i++) { const p = rng.pick(src); if (p) picked.push(p); }
       }
       const uniq = [...new Map(picked.map((p) => [p.id, p])).values()];
       const formation = rng.pick(forms);

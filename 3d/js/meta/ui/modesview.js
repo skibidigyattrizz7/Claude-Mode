@@ -6,6 +6,7 @@ import { crestSVG, badgeSVG } from './art.js';
 import { squadEditor } from './squad.js';
 import { resultView } from './app.js';
 import { openPackFlow, playerModal } from './utview.js';
+import { icon } from './icons.js';
 import { tacticsEditor } from './tacticsview.js';
 import * as UT from '../core/ut.js';
 import * as OBJ from '../core/objectives.js';
@@ -114,6 +115,37 @@ export function picksRow(app) {
       h('div', { class: 'pm-pickicon', 'aria-hidden': 'true' }, '1/3'),
       h('div', null, h('b', null, pk.label), h('small', { class: 'pm-dim' }, pk.from || '')),
       h('button', { class: 'pm-btn pm-btn--primary', onclick: () => openPick(app, pk.id) }, 'Choose')))));
+}
+
+// ---------- post-match rewards screen (FIFA-style coin count-up, occasional bonus pack) ----------
+function animateCount(el, to, ms = 950) {
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / ms);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmtNum(to * eased);
+    el.parentNode && el.parentNode.classList.toggle('is-counting', p < 1);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+/** Small celebratory modal shown after a UT match vs AI: animated coin count-up, occasional bonus pack. */
+export function showMatchRewards(app, { coins = 0, packChance = 0.16 } = {}) {
+  if (!coins && Math.random() >= packChance) return;
+  const gotPack = Math.random() < packChance;
+  const pk = gotPack ? UT.PACKS[Math.floor(Math.random() * UT.PACKS.length)] : null;
+  const countEl = h('b', { class: 'pm-rewardcount' }, '0');
+  const body = h('div', { class: 'pm-rewardbody' },
+    h('div', { class: 'pm-rewardburst', 'aria-hidden': 'true' }),
+    h('div', { class: 'pm-rewardcoin' }, icon('coins'), countEl),
+    h('p', { class: 'pm-dim' }, 'Coins earned'),
+    gotPack ? h('div', { class: 'pm-rewardpack' }, icon('chest'), h('span', null, `Bonus: ${pk.name}!`)) : null);
+  const close = modal(app.root, {
+    title: 'Match Rewards', className: 'pm-rewardmodal', body,
+    actions: [{ label: gotPack ? 'Open bonus pack' : 'Nice!', primary: true, onClick: () => { if (gotPack) setTimeout(() => openPackFlow(app, pk.id), 0); } }],
+  });
+  setTimeout(() => animateCount(countEl, coins), 160);
+  return close;
 }
 
 // ---------- shared UT match runner ----------

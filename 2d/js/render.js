@@ -175,6 +175,11 @@ function kitFill(ctx, kit, rx, ry) {
   if (kit.pattern === 'stripes') { for (let y = -ry; y < ry; y += 0.24) ctx.fillRect(-rx, y, rx * 2, 0.11); }
   else if (kit.pattern === 'checks') { for (let x = -rx; x < rx; x += 0.16) for (let y = -ry; y < ry; y += 0.16) if (((Math.round(x / 0.16) + Math.round(y / 0.16)) & 1) === 0) ctx.fillRect(x, y, 0.16, 0.16); }
   else if (kit.pattern === 'hoops') { for (let x = -rx; x < rx; x += 0.2) ctx.fillRect(x, -ry, 0.09, ry * 2); }
+  else if (kit.pattern === 'sashes') {
+    ctx.save(); ctx.rotate(0.62);
+    ctx.fillRect(-rx * 1.5, -ry * 0.28, rx * 3, ry * 0.56);
+    ctx.restore();
+  }
   else { ctx.fillRect(-rx, -ry, 0.08, ry * 2); }           // collar trim at the back
   ctx.restore();
   ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 0.04;

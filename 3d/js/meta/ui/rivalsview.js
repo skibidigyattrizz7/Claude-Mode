@@ -4,6 +4,7 @@
 import { h, add, fmtNum, confirmBox, modal } from './dom.js';
 import { resultView, safeCall } from './app.js';
 import { rewardFlow, rewardText } from './modesview.js';
+import { tileIcon } from './icons.js';
 import * as UT from '../core/ut.js';
 import * as RV from '../core/rivals.js';
 import { setFlag } from '../core/objectives.js';
@@ -17,7 +18,7 @@ export function rivalsTile(app) {
   const r = RV.ensureRivals(app.ut);
   const ready = !!RV.claimableWeekly(r);
   return h('button', { class: 'pm-tile pm-tile--wide pm-tile--online', onclick: () => app.push(rivalsView()) },
-    h('div', { class: 'pm-tile-art pm-art-online', 'aria-hidden': 'true' }, h('span', null, 'VS')),
+    tileIcon('rivals'),
     ready ? h('span', { class: 'pm-badge' }, '!') : null,
     h('div', { class: 'pm-tile-body' }, h('h2', null, 'Rivals'), h('p', null, `${RV.divisionLabel(r.division)} · ${r.points} pts · ${app.startOnlineMatchFn ? 'online ranked + AI Rivals' : 'AI Rivals (offline)'}`)));
 }

@@ -2,7 +2,7 @@
 import { FORMATIONS, effectiveOvr, positionFit } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
 import { ALL_NATIONS, CLUBS } from './data.js';
-import { getDB, genPlayer } from './players.js';
+import { getDB, genPlayer, personOf } from './players.js';
 import { hashStr, Rng, clamp } from './rng.js';
 import { matchPhysique, genPhysique, ensureAlts } from './physique.js';
 import { sanitizeTactics, aiTactics, autoSetPieceTakers, defaultQuick } from './tactics.js';
@@ -196,31 +196,37 @@ export function bestLineup(pool, formation, { benchSize = 7, score = null } = {}
   const val = score || ((p, pos) => effectiveOvr(p, pos));
   const avail = pool.slice().sort((a, b) => b.ovr - a.ovr).slice(0, 60);
   const slots = new Array(11).fill(null);
-  const used = new Set();
+  const used = new Set(); // player ids used
+  const usedPersons = new Set(); // base identities used (no two cards of the same player)
+  const take = (p) => { used.add(p.id); usedPersons.add(personOf(p)); };
   // GK first
   const gks = avail.filter((p) => p.pos === 'GK');
   const gk = gks[0] || avail.slice().sort((a, b) => val(b, 'GK') - val(a, 'GK'))[0];
-  if (gk) { slots[0] = gk; used.add(gk.id); }
+  if (gk) { slots[0] = gk; take(gk); }
   for (let n = 1; n < 11; n++) {
     let best = null, bs = -Infinity, bi = -1;
     for (let i = 1; i < 11; i++) {
       if (slots[i]) continue;
       const pos = f.slots[i].pos;
       for (const p of avail) {
-        if (used.has(p.id) || p.pos === 'GK') continue;
+        if (used.has(p.id) || usedPersons.has(personOf(p)) || p.pos === 'GK') continue;
         const s = val(p, pos);
         if (s > bs) { bs = s; best = p; bi = i; }
       }
     }
     if (!best) break;
-    slots[bi] = best; used.add(best.id);
+    slots[bi] = best; take(best);
   }
-  // bench: 1 GK + best others
-  const rest = avail.filter((p) => !used.has(p.id));
+  // bench: 1 GK + best others (never a duplicate of a starter's underlying player)
+  const rest = avail.filter((p) => !used.has(p.id) && !usedPersons.has(personOf(p)));
   const bench = [];
   const bgk = rest.find((p) => p.pos === 'GK');
-  if (bgk && benchSize > 0) bench.push(bgk);
-  for (const p of rest) { if (bench.length >= benchSize) break; if (p !== bgk && p.pos !== 'GK') bench.push(p); }
+  if (bgk && benchSize > 0) { bench.push(bgk); usedPersons.add(personOf(bgk)); }
+  for (const p of rest) {
+    if (bench.length >= benchSize) break;
+    if (p === bgk || p.pos === 'GK' || usedPersons.has(personOf(p))) continue;
+    bench.push(p); usedPersons.add(personOf(p));
+  }
   return { slots, bench };
 }
 
@@ -263,6 +269,7 @@ export function autoBuildSquad(pool, formation, { chemWeight = 0.15 } = {}) {
         for (const p of shortlist) {
           if (cur.includes(p) || (i === 0) !== (p.pos === 'GK')) continue;
           if (positionFit(p, pos) === 0) continue;
+          if (cur.some((q, k) => k !== i && q && personOf(q) === personOf(p))) continue;
           const next = cur.slice(); next[i] = p;
           const s = scoreOf(next);
           if (s > cs + 1e-9) { cur = next; cs = s; improved = true; }
@@ -278,11 +285,16 @@ export function autoBuildSquad(pool, formation, { chemWeight = 0.15 } = {}) {
     if (!best || cs > best.score) best = { slots: cur, score: cs };
   }
   const used = new Set(best.slots.map((p) => p.id));
-  const rest = pool.filter((p) => !used.has(p.id)).sort((a, b) => b.ovr - a.ovr);
+  const usedPersons = new Set(best.slots.map((p) => personOf(p)));
+  const rest = pool.filter((p) => !used.has(p.id) && !usedPersons.has(personOf(p))).sort((a, b) => b.ovr - a.ovr);
   const bench = [];
   const bgk = rest.find((p) => p.pos === 'GK');
-  if (bgk) bench.push(bgk);
-  for (const p of rest) { if (bench.length >= 7) break; if (p !== bgk && p.pos !== 'GK') bench.push(p); }
+  if (bgk) { bench.push(bgk); usedPersons.add(personOf(bgk)); }
+  for (const p of rest) {
+    if (bench.length >= 7) break;
+    if (p === bgk || p.pos === 'GK' || usedPersons.has(personOf(p))) continue;
+    bench.push(p); usedPersons.add(personOf(p));
+  }
   return { slots: best.slots, bench, rating: teamRating(best.slots), chem: calcChemistry(formation, best.slots).scaled, score: best.score };
 }
 

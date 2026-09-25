@@ -99,11 +99,35 @@ function buildSquad(code, rating, style) {
   });
 }
 
-export const TEAMS = RAW.map(([code, name, rating, home, away, style]) => ({
-  code, name, rating,
-  home: kitObj(home), away: kitObj(away),
-  squad: buildSquad(code, rating, style),
-}));
+// Palette + pattern pool used to build each nation's third kit procedurally, so every
+// team gets a distinct home/away/third set without hand-authoring dozens more colours.
+const THIRD_PALETTE = ['#111111', '#FFFFFF', '#00C2A8', '#FF6B00', '#6A1B9A', '#0057B8', '#C9A227', '#E8112D', '#2E7D32'];
+const THIRD_PATTERNS = ['plain', 'stripes', 'hoops', 'sashes', 'checks'];
+
+/** Build a nation's third kit: a colour that contrasts with both its home and away kits,
+ *  in a pattern (stripes/hoops/sashes/checks/plain) picked deterministically per team. */
+function thirdKit(code, home, away) {
+  const rng = makeRng(hashStr(code + ':third'));
+  let shirt = THIRD_PALETTE[0], bestScore = -1;
+  for (const c of THIRD_PALETTE) {
+    const score = Math.min(colorDist(c, home.shirt), colorDist(c, away.shirt));
+    if (score > bestScore) { bestScore = score; shirt = c; }
+  }
+  const secPool = THIRD_PALETTE.filter((c) => c !== shirt);
+  const sec = secPool[Math.floor(rng() * secPool.length)];
+  const pattern = THIRD_PATTERNS[Math.floor(rng() * THIRD_PATTERNS.length)];
+  const num = luminance(shirt) > 0.55 ? '#111111' : '#FFFFFF';
+  return { shirt, sec, shorts: shirt, socks: shirt, num, pattern };
+}
+
+export const TEAMS = RAW.map(([code, name, rating, home, away, style]) => {
+  const homeKit = kitObj(home), awayKit = kitObj(away);
+  return {
+    code, name, rating,
+    home: homeKit, away: awayKit, third: thirdKit(code, homeKit, awayKit),
+    squad: buildSquad(code, rating, style),
+  };
+});
 
 export const teamByCode = (code) => TEAMS.find((t) => t.code === code) || TEAMS[0];
 
@@ -120,22 +144,28 @@ export function kitsClash(a, b) {
 
 const GK_COLOURS = ['#1DB954', '#F5E100', '#FF7A00', '#8E44AD', '#111111', '#00B7C3', '#E91E63', '#9E9E9E'];
 
-/** Choose kits for a fixture: home keeps home kit, away switches to away kit on clash. */
+/**
+ * Choose kits for a fixture: home always keeps its home kit; the away side tries its
+ * home -> away -> third kit in turn and takes the first that doesn't clash. If all three
+ * clash (unlucky colour overlap), it falls back to whichever of the three contrasts most
+ * with the home kit, so there is always enough colour contrast to tell the sides apart.
+ */
 export function chooseKits(home, away) {
   const hk = home.home;
-  let ak = away.home, awayUsesAway = false;
-  if (kitsClash(hk, ak)) {
-    ak = away.away; awayUsesAway = true;
-    if (kitsClash(hk, ak)) {
-      // Last resort: plain alternate strip that contrasts with the home kit.
-      const alt = ['#FFFFFF', '#111111', '#6A1B9A', '#00897B'].sort((x, y) => colorDist(y, kitTone(hk)) - colorDist(x, kitTone(hk)))[0];
-      ak = { shirt: alt, sec: alt === '#111111' ? '#FFFFFF' : '#222222', shorts: alt, socks: alt, num: alt === '#FFFFFF' ? '#111111' : '#FFFFFF', pattern: 'plain' };
-    }
+  const candidates = [
+    { kit: away.home, tag: 'home' },
+    { kit: away.away, tag: 'away' },
+    { kit: away.third, tag: 'third' },
+  ];
+  let chosen = candidates.find((c) => !kitsClash(hk, c.kit));
+  if (!chosen) {
+    chosen = candidates.slice().sort((a, b) => colorDist(kitTone(b.kit), kitTone(hk)) - colorDist(kitTone(a.kit), kitTone(hk)))[0];
   }
+  const ak = chosen.kit, awayUsesAway = chosen.tag !== 'home';
   const gk = [];
   for (const k of [hk, ak]) {
     const c = GK_COLOURS.find((g) => colorDist(g, kitTone(hk)) > 180 && colorDist(g, kitTone(ak)) > 180 && !gk.some((x) => colorDist(x.shirt, g) < 180)) || '#9E9E9E';
     gk.push({ shirt: c, sec: '#222222', shorts: '#222222', socks: c, num: c === '#111111' ? '#FFFFFF' : '#111111', pattern: 'plain' });
   }
-  return { kits: [hk, ak], gk, awayUsesAway };
+  return { kits: [hk, ak], gk, awayUsesAway, kitTag: chosen.tag };
 }

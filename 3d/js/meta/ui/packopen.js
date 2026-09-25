@@ -1,15 +1,76 @@
-// Pack opening sequence: shake -> flare -> (walkout: flag -> position -> club) -> card reveal -> item grid.
+// Pack opening sequence: 3D tunnel glide -> pack shake -> rip open -> (walkout: 3D player -> flag ->
+// position -> club) -> card reveal (flip) -> item grid. The cinematic tunnel/walkout is Three.js
+// (walkout3d.js, built on the engine's read-only player rig); everything else here is DOM/CSS as before.
 import { h, clear, frag, fmtNum } from './dom.js';
 import { playerCard } from './card.js';
 import { flagSVG, crestSVG } from './art.js';
 import { NATION_BY_CODE, clubById } from '../core/data.js';
 import { isWalkout } from '../core/ut.js';
 import { PROMOS, PROMO_BY_ID } from '../core/promos.js';
+import { TunnelScene, supports3D } from './walkout3d.js';
 
 const FLARE = { bronze: '#a9b1bf', silver: '#e4ecf6', gold: '#ffc933', walkout: '#b44dff' };
 const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', lotg: '#ffd35a', objective: '#6ee7ff' };
 const SPECIAL_BADGE = { inform: 'In-Form', hero: 'Hero', legend: 'Classic', lotg: 'Legend of the Game', objective: 'Pathfinder' };
 for (const pr of PROMOS) { SPECIAL_FLARE[pr.id] = pr.colors[1]; SPECIAL_BADGE[pr.id] = pr.name; }
+
+// The card is 3D-rendered / promoted "unmistakably" from ovr 86 up.
+const WALKOUT3D_OVR = 86;
+
+// ---------------------------------------------------------------- per-promo / per-special themes
+// Each entry: tunnel wall colour, beam/particle colours, an audio "sting" recipe. Unknown promo ids
+// (or specials not listed) fall back to DEFAULT_THEME, keyed off the pack's own rarity flare colour.
+const PROMO_THEME = {
+  toty: { wall: '#0a1740', beam: '#5b8bff', particles: ['#2f6bff', '#dfe9ff', '#ffffff'], sting: { wave: 'triangle', freq: [220, 440, 660] } },
+  tots: { wall: '#083244', beam: '#37d6f2', particles: ['#19c3e6', '#d9fbff', '#ffffff'], sting: { wave: 'sine', freq: [260, 520, 780] } },
+  futurestars: { wall: '#220a44', beam: '#c976ff', particles: ['#b44dff', '#ffd9fb', '#ffffff'], sting: { wave: 'sawtooth', freq: [196, 392, 588] } },
+  flashback: { wall: '#331a08', beam: '#f0a94e', particles: ['#e0892b', '#ffe8c7', '#ffffff'], sting: { wave: 'square', freq: [174, 349, 523] } },
+  birthday: { wall: '#42092a', beam: '#ff7fb8', particles: ['#ff4f9a', '#ffe0ef', '#ffffff'], sting: { wave: 'sine', freq: [392, 494, 659] } },
+  rttk: { wall: '#062a1c', beam: '#3fe89a', particles: ['#18d17b', '#d7ffe9', '#ffffff'], sting: { wave: 'triangle', freq: [220, 330, 440] } },
+  moments: { wall: '#2a2a2a', beam: '#ffffff', particles: ['#f2f2f2', '#ffffff', '#cfcfcf'], sting: { wave: 'sine', freq: [440, 554, 659] } },
+};
+const SPECIAL_THEME = {
+  legend: { wall: '#2a1c04', beam: '#ffd35a', particles: ['#fff2c4', '#ffe08a', '#ffffff'], sting: { wave: 'sine', freq: [196, 247, 294] } },
+  lotg: { wall: '#1a1204', beam: '#ffd35a', particles: ['#ffcc33', '#fff6d8', '#ff9f1c'], sting: { wave: 'sawtooth', freq: [130, 260, 520] } },
+  hero: { wall: '#063c34', beam: '#54ffe0', particles: ['#27e1c1', '#c8fff2', '#ffffff'], sting: { wave: 'square', freq: [233, 349, 466] } },
+  inform: { wall: '#2a1a00', beam: '#ffcc55', particles: ['#ffb300', '#ffe08a', '#ffffff'], sting: { wave: 'triangle', freq: [261, 329, 392] } },
+  objective: { wall: '#083041', beam: '#8ff0ff', particles: ['#6ee7ff', '#d9fbff', '#ffffff'], sting: { wave: 'sine', freq: [293, 369, 440] } },
+  // Reserved for future card types (Secret / Admin-issued cards): themed now so they never fall back silently.
+  secret: { wall: '#141414', beam: '#ff2d55', particles: ['#ff003c', '#ffffff', '#8a8a8a'], sting: { wave: 'sawtooth', freq: [110, 220, 330] } },
+  admin: { wall: '#0b1220', beam: '#93c5fd', particles: ['#ffffff', '#94a3b8', '#38bdf8'], sting: { wave: 'square', freq: [440, 880, 660] } },
+};
+function themeFor(best, promo) {
+  if (promo && PROMO_THEME[promo.id]) return PROMO_THEME[promo.id];
+  if (best.special && SPECIAL_THEME[best.special]) return SPECIAL_THEME[best.special];
+  return { wall: '#0b1120', beam: null, particles: null, sting: { wave: 'sine', freq: [220, 330, 440] } };
+}
+
+function pseudoNumber(p) {
+  // Players carry no squad number in the data model; derive a stable one so the walkout shirt reads "his number".
+  let hh = 2166136261; const s = String(p.id || p.name || '');
+  for (let i = 0; i < s.length; i++) { hh ^= s.charCodeAt(i); hh = Math.imul(hh, 16777619); }
+  return 1 + ((hh >>> 0) % 29);
+}
+/** Kit for the 3D walkout: the player's own club colours, or the user's club when `userKit` is supplied. */
+function walkoutKit(best, userKit) {
+  const club = clubById(best.club);
+  const base = userKit || (club && club.colors) || { primary: '#2a3a55', secondary: '#e8edf7' };
+  return {
+    primary: base.primary, secondary: base.secondary || '#ffffff',
+    shorts: base.shorts || base.secondary || base.primary,
+    socks: base.socks || base.primary,
+    number: pseudoNumber(best), pattern: 0,
+  };
+}
+
+function ensureCss(root) {
+  try {
+    const has = [...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => /(^|\/)css\/packs\.css(\?|#|$)/.test(l.getAttribute('href') || '') || l.dataset.pmPacksCss);
+    if (has) return;
+    const href = new URL('../../../css/packs.css', import.meta.url).href;
+    root.appendChild(h('link', { rel: 'stylesheet', href, 'data-pm-packs-css': '1' }));
+  } catch { /* ignore */ }
+}
 
 class Particles {
   constructor(canvas) {
@@ -79,34 +140,54 @@ export function packArt(pack, size = 'md') {
   </div>`);
 }
 
+// Stage chains after the tunnel/rip cinematic: kinds shown in order; gaps[i] is the wait (ms) after
+// showing kinds[i] before the next one (the last gap is the wait before the card reveal).
+const STAGE_PLANS = {
+  plain: { kinds: [], gaps: [] },
+  walk: { kinds: ['flag', 'pos', 'club'], gaps: [1500, 1200, 1500] },
+  lotg: { kinds: ['lotg', 'flag', 'pos', 'club'], gaps: [1900, 1600, 1300, 1500] },
+  promo: { kinds: ['promo', 'flag', 'pos', 'club'], gaps: [1800, 1400, 1200, 1400] },
+};
+
 /**
  * root: container to append the overlay into
- * opts: { pack, items:[{pid, dup}], getPlayer, sellValue(p), onSend(pid), onSell(pid)->coins, onDone(summary) }
+ * opts: { pack, items:[{pid, dup}], getPlayer, sellValue(p), onSend(pid), onSell(pid)->coins, onDone(summary),
+ *         userKit?:{primary,secondary,shorts?,socks?} — user's club colours for the 3D walkout kit }
  */
 export function runPackOpening(root, opts) {
+  ensureCss(root);
   const { pack, items, getPlayer } = opts;
   const players = items.map((it) => ({ ...it, p: getPlayer(it.pid), state: 'new' }));
   const best = players[0].p;
-  const walk = isWalkout(best);
+  const walk = isWalkout(best); // gates the flag/pos/club stage chain (unchanged threshold)
+  const walk3d = best.ovr >= WALKOUT3D_OVR; // gates the unmistakable 3D player walkout
   const flareKey = walk ? 'walkout' : best.tier;
   const lotg = best.special === 'lotg';
-  const promo = PROMO_BY_ID[best.special] && best.ovr >= 86 ? PROMO_BY_ID[best.special] : null; // promo walkout (86+)
+  const promo = PROMO_BY_ID[best.special] && best.ovr >= 86 ? PROMO_BY_ID[best.special] : null;
   const flare = lotg ? '#ffcc33' : promo ? promo.colors[1] : FLARE[flareKey];
   const accent = best.special ? SPECIAL_FLARE[best.special] : flare;
+  const theme = themeFor(best, promo);
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const T = reduce ? 0.45 : 1;
-  const timers = [];
-  const at = (ms, fn) => timers.push(setTimeout(fn, ms * T));
+  const cancels = [];
+  const wait = (ms) => new Promise((resolve) => {
+    const id = setTimeout(resolve, Math.max(0, ms));
+    cancels.push(() => { clearTimeout(id); resolve(); });
+  });
   let particles = null;
   let phase = 'pack';
+  let stopped = false;
+  let scene = null;
 
+  const bgEl = h('div', { class: 'pm-po-bg' });
   const canvas = h('canvas', { class: 'pm-po-canvas', 'aria-hidden': 'true' });
+  const canvas3d = h('canvas', { class: 'pm-po-3d', 'aria-hidden': 'true' });
   const rays = h('div', { class: 'pm-po-rays', 'aria-hidden': 'true' });
   const flash = h('div', { class: 'pm-po-flash', 'aria-hidden': 'true' });
   const stage = h('div', { class: 'pm-po-stage' });
   const skipBtn = h('button', { class: 'pm-po-skip pm-btn pm-btn--ghost', onclick: () => toGrid() }, 'Skip ›');
   const ov = h('div', { class: 'pm-po', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Opening ${pack.name}`, style: { '--flare': flare, '--accent': accent } },
-    h('div', { class: 'pm-po-bg' }), rays, canvas, flash, stage, skipBtn);
+    bgEl, rays, canvas, canvas3d, flash, stage, skipBtn);
   root.appendChild(ov);
   particles = new Particles(canvas);
 
@@ -121,43 +202,70 @@ export function runPackOpening(root, opts) {
   stage.appendChild(h('div', { class: 'pm-po-center' }, openBtn));
   setTimeout(() => openBtn.focus(), 30);
 
-  function start() {
+  function sideFireworks(count) {
+    particles.burst(accent, count, 5, particles.w * 0.14, particles.h * 0.45, [accent, flare]);
+    particles.burst(accent, count, 5, particles.w * 0.86, particles.h * 0.45, [accent, flare]);
+  }
+
+  async function start() {
     if (phase !== 'pack') return;
-    phase = 'shake';
+    phase = 'intro';
     openBtn.disabled = true;
     ov.classList.add('is-shaking');
     if (lotg) ov.classList.add('is-lotg');
     if (promo) { ov.classList.add('is-promo', `promo-${promo.id}`); ov.style.setProperty('--pa', promo.colors[0]); ov.style.setProperty('--pb', promo.colors[1]); ov.style.setProperty('--pc', promo.colors[2]); }
     packEl.classList.add('shake');
-    at(1150, () => {
-      phase = 'flare';
-      ov.classList.add('is-flare', `flare-${flareKey}`);
-      flash.classList.add('go');
-      packEl.classList.add('burst');
-      particles.burst(flare, reduce ? 60 : 220, walk ? 13 : 9, null, null, walk ? [flare, accent, '#ffffff'] : null);
-    });
-    if (promo) {
-      // Promo walkout: campaign title card in the promo colours, then the usual reveal stages
-      at(1700, () => showStage('promo'));
-      at(3500, () => showStage('flag'));
-      at(4900, () => showStage('pos'));
-      at(6100, () => showStage('club'));
-      at(7500, () => revealCard());
-      [1900, 2600, 3300, 5200, 6600].forEach((ms, k) => at(ms, () => particles.burst(promo.colors[k % 3], reduce ? 30 : 130, 10, particles.w * (0.2 + Math.random() * 0.6), particles.h * (0.2 + Math.random() * 0.4), promo.colors.concat('#ffffff'))));
-    } else if (lotg) {
-      // Legend of the Game: longer walkout with a title card and fireworks
-      at(1700, () => showStage('lotg'));
-      at(3600, () => showStage('flag'));
-      at(5200, () => showStage('pos'));
-      at(6500, () => showStage('club'));
-      at(8000, () => revealCard());
-      [2000, 2600, 3200, 4200, 5600, 7000].forEach((ms) => at(ms, () => particles.burst(['#ffcc33', '#ffffff', '#ff9f1c'][ms % 3], reduce ? 30 : 140, 10, particles.w * (0.2 + Math.random() * 0.6), particles.h * (0.2 + Math.random() * 0.4), ['#ffcc33', '#fff6d8', '#ff9f1c'])));
-    } else if (walk) {
-      at(1700, () => showStage('flag'));
-      at(3200, () => showStage('pos'));
-      at(4400, () => showStage('club'));
-      at(5900, () => revealCard());
-    } else at(1700, () => revealCard());
+
+    if (!reduce && supports3D()) {
+      try { scene = new TunnelScene(canvas3d, { theme, flare, accent }); } catch { scene = null; }
+    }
+    if (scene) {
+      clear(stage); // the 3D canvas takes over from the 2D pack button
+      ov.classList.add('is-3d');
+      canvas3d.classList.add('show');
+      try {
+        cancels.push(() => scene && scene.skipAll());
+        await scene.introSequence();
+        if (!stopped) {
+          flash.classList.add('go');
+          particles.burst(flare, reduce ? 60 : 200, walk ? 13 : 9, null, null, walk ? [flare, accent, '#ffffff'] : null);
+        }
+        if (walk3d && !stopped) {
+          ov.classList.add('is-walkout3d');
+          await scene.walkoutSequence(best, walkoutKit(best, opts.userKit));
+        }
+      } finally {
+        if (scene) { scene.dispose(); scene = null; }
+        canvas3d.classList.remove('show');
+        ov.classList.remove('is-walkout3d');
+      }
+    } else {
+      // No WebGL / reduced motion: cheap legacy shake -> burst instead of the tunnel cinematic.
+      await wait(reduce ? 480 : 1150);
+      if (!stopped) {
+        packEl.classList.add('burst');
+        flash.classList.add('go');
+        particles.burst(flare, reduce ? 40 : 160, walk ? 11 : 7, null, null, walk ? [flare, accent, '#ffffff'] : null);
+        await wait(reduce ? 200 : 450);
+      }
+      clear(stage);
+    }
+    if (stopped) return;
+
+    phase = 'flare';
+    ov.classList.add('is-flare', `flare-${flareKey}`);
+    const plan = promo ? STAGE_PLANS.promo : lotg ? STAGE_PLANS.lotg : walk ? STAGE_PLANS.walk : STAGE_PLANS.plain;
+    if (!plan.kinds.length) { if (!reduce) sideFireworks(24); await wait(350 * T); if (stopped) return; }
+    await runStages(plan);
+  }
+
+  async function runStages(plan) {
+    for (let i = 0; i < plan.kinds.length; i++) {
+      showStage(plan.kinds[i]);
+      await wait(plan.gaps[i] * T);
+      if (stopped) return;
+    }
+    revealCard();
   }
 
   function showStage(kind) {
@@ -182,9 +290,10 @@ export function runPackOpening(root, opts) {
   }
 
   function revealCard() {
+    if (stopped) return;
     phase = 'reveal';
     clear(stage);
-    const card = playerCard(best, { size: 'lg', className: 'pm-reveal' });
+    const card = playerCard(best, { size: 'lg', className: 'pm-reveal flip-in' });
     const cont = h('button', { class: 'pm-btn pm-btn--primary pm-po-continue', onclick: () => toGrid() }, 'Continue');
     stage.appendChild(h('div', { class: 'pm-po-center pm-po-revealwrap' },
       h('div', { class: 'pm-po-glow' }), card,
@@ -198,7 +307,10 @@ export function runPackOpening(root, opts) {
   function toGrid() {
     if (phase === 'grid') return;
     phase = 'grid';
-    timers.forEach(clearTimeout);
+    stopped = true;
+    cancels.forEach((c) => c()); cancels.length = 0;
+    if (scene) { scene.dispose(); scene = null; }
+    canvas3d.classList.remove('show');
     ov.classList.remove('is-shaking');
     ov.classList.add('is-grid', 'is-flare', `flare-${flareKey}`);
     skipBtn.remove();
@@ -243,8 +355,10 @@ export function runPackOpening(root, opts) {
     opts.onDone && opts.onDone({ coins: coinsGained, sent: players.filter((x) => x.state === 'sent').length });
   }
   function destroy() {
-    timers.forEach(clearTimeout);
+    stopped = true;
+    cancels.forEach((c) => c()); cancels.length = 0;
     document.removeEventListener('keydown', onKey, true);
+    if (scene) { scene.dispose(); scene = null; }
     if (particles) particles.destroy();
     ov.remove();
   }

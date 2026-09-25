@@ -3,7 +3,7 @@ import { Rng, clamp, hashStr } from './rng.js';
 import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP } from './data.js';
 import { buildRealPlayers } from './realplayers.js';
 import { genPhysique, ensurePhysique, ensureAlts } from './physique.js';
-import { buildPromoCards, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID } from './promos.js';
+import { buildPromoCards, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID, setOvr } from './promos.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -51,6 +51,11 @@ export function computeOvr(pos, p) {
 }
 
 export function tierOf(ovr) { return ovr >= 75 ? 'gold' : ovr >= 65 ? 'silver' : 'bronze'; }
+
+/** Canonical identity of the real/base person behind a card — used to forbid two versions of the same
+ * player (e.g. a regular card and a promo/admin card of them) in one squad. Generated players have no
+ * `person`/`baseId` so each card is its own identity. */
+export function personOf(p) { return (p && (p.person || p.baseId)) || (p && p.id) || null; }
 
 // ---------- names ----------
 function genName(rng, region) {
@@ -295,7 +300,9 @@ export function getDB() {
     const p = structuredClone(b);
     p.id = `if_${b.id}`; p.baseId = b.id;
     rng.int(2, 5); // V3: still consumed so the shared RNG sequence (and every generated id) is unchanged
-    adjustOvr(p, informBoost(b.ovr)); // V3: boost scaled to the base card (+3..+8)
+    // V3: boost scaled to the base card (+3..+8); setOvr actively frees up stat headroom so a strong
+    // base still reaches its intended target instead of stalling on a single capped stat.
+    setOvr(p, clamp(b.ovr + informBoost(b.ovr), b.ovr, 99), { adjustOvr, computeOvr });
     p.special = 'inform'; p.rare = true; p.tier = tierOf(p.ovr);
     specials.push(p);
   }

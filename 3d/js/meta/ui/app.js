@@ -7,6 +7,7 @@ import { careerHomeView } from './careerview.js';
 import { loadUT, saveUT } from '../core/ut.js';
 import { INFINITE_COINS, getAdminLevel, matchAdminLevel, refreshAccountRole } from '../core/admin.js';
 import { adminButton, adminView } from './adminview.js';
+import { tileIcon } from './icons.js';
 import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
@@ -246,10 +247,10 @@ export function hubView() {
     render(main, app) {
       add(main, h('div', { class: 'pm-hub' },
         h('button', { class: 'pm-tile pm-tile--hero pm-tile--ut', 'data-autofocus': '1', onclick: () => app.push(app.ut ? utHomeView() : ensureUTView(app)) },
-          h('div', { class: 'pm-tile-art pm-art-ut', 'aria-hidden': 'true' }, h('span', null, 'PUT')),
+          tileIcon('squad'),
           h('div', { class: 'pm-tile-body' }, h('div', { class: 'pm-kicker' }, 'Build your dream squad'), h('h2', null, 'Pitchside Ultimate Team'), h('p', null, 'Open packs, complete SBCs, climb Squad Battles.'))),
         h('button', { class: 'pm-tile pm-tile--hero pm-tile--career', onclick: () => app.push(careerHomeView()) },
-          h('div', { class: 'pm-tile-art pm-art-career', 'aria-hidden': 'true' }, h('span', null, 'CM')),
+          tileIcon('club'),
           h('div', { class: 'pm-tile-body' }, h('div', { class: 'pm-kicker' }, 'Manage a club'), h('h2', null, 'Career Mode'), h('p', null, 'Seasons, transfers, youth, promotion and glory.'))),
       ), h('div', { class: 'pm-hubfoot' }, adminButton(app)));
     },

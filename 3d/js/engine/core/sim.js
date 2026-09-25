@@ -102,7 +102,7 @@ export class MatchSim {
     }
     this.teamList = [this.players.slice(0, 11), this.players.slice(11)];
     this.ball = createBall();
-    Object.assign(this.ball, { owner: -1, inHands: false, lastTouch: -1, lastTeam: 0, kicker: -1, kickT: -9, intended: -1 });
+    Object.assign(this.ball, { owner: -1, inHands: false, lastTouch: -1, lastTeam: 0, kicker: -1, kickT: -9, intended: -1, throughBall: false });
     this.dir = [1, -1];
     this.t = 0;
     this.half = 1;
@@ -1165,6 +1165,8 @@ export class MatchSim {
     b.w = { x: spin.x, y: spin.y, z: spin.z };
     b.lastTouch = p.idx; b.lastTeam = p.team; b.kicker = p.idx; b.kickT = t;
     b.intended = info.target ?? -1;
+    // through balls run the receiver onto space instead of snapping him to face the ball (see ai.js think())
+    b.throughBall = info.kind === 'through';
     p.cool.touch = t + 0.3;
     this.path = null; this.nextPredict = 0;
     p.holdStart = null; p.drib = null; p.windup = 0;

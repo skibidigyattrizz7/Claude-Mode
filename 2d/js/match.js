@@ -17,7 +17,7 @@ import { solveKick } from './physics.js';
 const HUMAN_PROF = { react: 0.3, acc: 0.85, speed: 1, keeper: 1, press: 0.9, careful: 0.9 };
 export const STATE_CODES = ['run', 'tackle', 'slide', 'down', 'dive', 'hold', 'skill', 'celebrate'];
 
-const mkStats = () => ({ poss: 0, shots: 0, onTarget: 0, passAtt: 0, passCmp: 0, fouls: 0, corners: 0, yellows: 0, reds: 0 });
+const mkStats = () => ({ poss: 0, shots: 0, onTarget: 0, passAtt: 0, passCmp: 0, interceptions: 0, fouls: 0, corners: 0, yellows: 0, reds: 0 });
 
 /** Ring buffer of the last few seconds (ball + players) for goal replays. */
 class Replay {
@@ -618,6 +618,7 @@ export class Match {
   setOwner(p, silent = false) {
     if (this.pass) {
       if (p.team === this.pass.team && p !== this.pass.from) { this.stats[p.team].passCmp++; this.emit('passDone', { p, kind: this.pass.kind }); }
+      else if (p.team !== this.pass.team) { this.stats[p.team].interceptions++; this.emit('interception', { p }); }
       this.pass = null;
     }
     this.shot = null;
@@ -965,8 +966,12 @@ export class Match {
       const d = Math.hypot(b.x - p.x, b.y - p.y);
       const isGK = p.role === 'GK' && inPenaltyArea(b, this.ownSide(p.team));
       let reach;
+      // a player closing down a pass that isn't his own team's gets the same committed reach as
+      // the intended receiver: without this he arrives at the interception point but can only
+      // nudge the ball, never actually win it, no matter how well he reads the lane.
+      const committed = this.pass && (this.pass.receiver === p || this.pass.team !== p.team);
       if (isGK) reach = b.z < (p.ai.claim ? 2.8 : 2.4) ? (p.state === 'dive' || p.ai.claim ? 1.1 : 0.9) : 0;
-      else reach = b.z < 0.6 ? (this.pass && this.pass.receiver === p ? 1.0 : 0.58) : b.z < 1.6 ? 0.5 : b.z < 2.3 ? 0.48 : 0;
+      else reach = b.z < 0.6 ? (committed ? 1.0 : 0.58) : b.z < 1.6 ? 0.5 : b.z < 2.3 ? 0.48 : 0;
       if (d < reach && d < bd) {
         // keepers that did not read a hard shot cannot magically stop it
         if (isGK && bs > 12 && this.shot && this.shot.team !== p.team && !(p.saveIntent && p.saveKick === b.kickId)) continue;

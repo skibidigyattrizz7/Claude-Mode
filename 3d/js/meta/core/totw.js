@@ -3,10 +3,10 @@
 // real regular players are eligible. New card ids are `tt<week>_<baseId>`; the pre-V3 generator is kept for
 // `tw<week>_<baseId>` ids so cards in existing saves still resolve with their original ratings.
 import { Rng, clamp } from './rng.js';
-import { getDB, adjustOvr, tierOf, addResolver, marketValue } from './players.js';
+import { getDB, adjustOvr, computeOvr, tierOf, addResolver, marketValue } from './players.js';
 import { genPhysique } from './physique.js';
 import { weekNumber } from './calendar.js';
-import { informBoost, upgradeStyles } from './promos.js';
+import { informBoost, upgradeStyles, setOvr } from './promos.js';
 
 const grp = (p) => (p.pos === 'GK' ? 'GK' : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(p.pos) ? 'DEF' : ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.pos) ? 'MID' : 'ATT');
 
@@ -50,7 +50,7 @@ function boost(base, week, target, headliner) {
   p.id = `tt${week}_${base.id}`;
   p.baseId = base.id;
   delete p.intended;
-  for (let i = 0; i < 20 && p.ovr < target; i++) { const b = p.ovr; adjustOvr(p, 1); if (p.ovr === b) break; }
+  setOvr(p, clamp(target, base.ovr, 99), { adjustOvr, computeOvr });
   p.special = 'inform'; p.totw = week; p.rare = true; p.tier = tierOf(p.ovr);
   if (headliner) p.headliner = true;
   p.pot = Math.max(p.pot, p.ovr);

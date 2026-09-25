@@ -10,6 +10,8 @@ import { getDB } from '../core/players.js';
 import { remove as removeKey } from '../core/storage.js';
 import { safeCall } from './app.js';
 import { openPackFlow } from './utview.js';
+import { icon } from './icons.js';
+import * as X from './adminextra.js';
 
 const LEVEL_NAME = { full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
 const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
@@ -18,7 +20,7 @@ const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 
 export function adminButton(app) {
   const lv = A.getAdminLevel();
   return h('button', { class: 'pm-btn pm-btn--ghost pm-codesbtn', onclick: () => app.push(lv ? adminView() : adminCodesView()) },
-    h('span', { 'aria-hidden': 'true' }, '\u{1F511}\uFE0E'), lv ? ' Admin panel' : ' Admin Given Codes');
+    icon('key'), lv ? ' Admin panel' : ' Admin Given Codes');
 }
 
 /**
@@ -58,7 +60,7 @@ export function adminCodesPanel(app, { onUnlock = null, compact = false } = {}) 
   const form = h('form', { class: 'pm-codes-form', onsubmit: submit }, input, btn);
   startLockTimer();
   return h('section', { class: `pm-panel pm-codes ${compact ? 'is-compact' : ''}`, 'data-codes': 'panel' },
-    h('div', { class: 'pm-codes-head' }, h('span', { class: 'pm-codes-ico', 'aria-hidden': 'true' }, '\u{1F511}\uFE0E'), h('h3', null, 'Admin Given Codes')),
+    h('div', { class: 'pm-codes-head' }, icon('key', 'pm-codes-ico'), h('h3', null, 'Admin Given Codes')),
     form, msg);
 }
 
@@ -89,12 +91,12 @@ export function adminBadge(app) {
   draw();
   if (info.level === 'temp') { const t = setInterval(() => { if (!draw()) clearInterval(t); }, 1000); app.onCleanup(() => clearInterval(t)); }
   return h('button', { class: `pm-adminbadge lv-${info.level} ${owner ? 'is-owner' : ''}`, 'data-admin-badge': info.level, title: 'Open the Admin panel', onclick: () => app.push(adminView()) },
-    owner ? h('span', { class: 'pm-crown', 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 16" width="18" height="12"><path d="M1 14h22L20 3l-5 5-3-7-3 7-5-5z" fill="currentColor"/></svg>' }) : h('span', { 'aria-hidden': 'true' }, '\u2699\uFE0E'),
+    owner ? icon('crown', 'pm-crown') : icon('admin'),
     label);
 }
 
 export function adminView() {
-  const st = { q: '', slot: null, amount: 100000, budget: 250000000, tab: 'tools' };
+  const st = { q: '', q2: '', slot: null, amount: 100000, budget: 250000000, tab: 'tools' };
   const view = {
     title: 'Admin', kicker: 'Owner tools', coins: true, cls: 'pm-main--wide',
     render(main, app) {
@@ -110,14 +112,14 @@ export function adminView() {
       amt.addEventListener('input', () => { st.amount = Math.round(Number(amt.value) || 0); });
       const inf = !!(s && s.admin && s.admin.infinite);
       const limited = !can('infinite');
-      const coinsLimited = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Coins'),
+      const coinsLimited = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
         h('p', { class: 'pm-dim' }, s ? `Local balance: ${fmtNum(app.wallet.mode === 'online' ? (app.wallet.local || 0) : s.coins)}. Up to ${fmtNum(A.COIN_CAP[level])} coins per grant.` : ''),
         h('div', { class: 'pm-btnrow' }, amt,
           h('button', { class: 'pm-btn pm-btn--primary', disabled: !s || inf, onclick: () => {
             if (app.wallet.mode === 'online') { const tmp = { coins: app.wallet.local || 0 }; const v = A.addLocalCoins(tmp, st.amount, level); app.wallet.local = tmp.coins; done(`Added ${fmtNum(v)} local coins.`); }
             else { const v = A.addLocalCoins(s, st.amount, level); done(`Added ${fmtNum(v)} coins.`); }
           } }, 'Add coins')));
-      const coins = limited ? coinsLimited : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Coins'),
+      const coins = limited ? coinsLimited : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
         h('p', { class: 'pm-dim' }, s ? `Shown balance: ${inf ? '∞' : fmtNum(s.coins)} (${app.coinSourceLabel()}).${app.wallet.mode === 'online' ? ` Local balance: ${fmtNum(app.wallet.local || 0)}.` : ''}` : ''),
         h('div', { class: 'pm-btnrow' }, amt,
           h('button', { class: 'pm-btn', disabled: !s || inf, onclick: () => { if (app.wallet.mode === 'online') app.wallet.local = Math.max(0, st.amount); else s.coins = Math.max(0, st.amount); done('Local coins set.'); } }, 'Set local'),
@@ -142,7 +144,7 @@ export function adminView() {
         }), h('span', null, 'Infinite coins (UT)')));
 
       // ---- packs ----
-      const packs = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Open any pack for free'),
+      const packs = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('chest'), ' Open any pack for free'),
         h('div', { class: 'pm-btnrow pm-wrap' }, UT.PACKS.map((pk) => h('button', { class: 'pm-btn pm-btn--sm', disabled: !s, onclick: () => openPackFlow(app, pk.id) }, pk.name))));
 
       // ---- grant player ----
@@ -163,11 +165,36 @@ export function adminView() {
       };
       const q = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search any player…', value: st.q, 'aria-label': 'Search players' });
       q.addEventListener('input', () => { st.q = q.value; drawResults(); });
-      const grant = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Grant any player'), q, results);
+      const grant = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('grant'), ' Grant any player'), q, results);
       drawResults();
 
+      // ---- toggle tradable on owned cards ----
+      const tradeResults = h('div', { class: 'pm-admin-results' });
+      const drawTrade = () => {
+        clear(tradeResults);
+        if (!s) return;
+        const q2 = st.q2.trim().toLowerCase();
+        const owned = UT.clubPlayers(s).filter((p) => !q2 || p.name.toLowerCase().includes(q2)).sort((a, b) => b.ovr - a.ovr).slice(0, 24);
+        if (!owned.length) { tradeResults.appendChild(h('p', { class: 'pm-dim' }, 'No club players match.')); return; }
+        for (const p of owned) {
+          const untrad = (s.untradeable || []).includes(p.id);
+          tradeResults.appendChild(h('div', { class: 'pm-mktrow' }, playerCard(p, { size: 'xs' }),
+            h('div', { class: 'pm-mkt-info' }, h('b', null, p.name), h('span', { class: `pm-dim ${untrad ? '' : 'pm-goodline'}` }, untrad ? 'Untradeable' : 'Tradable')),
+            h('button', { class: 'pm-btn pm-btn--sm', onclick: () => {
+              s.untradeable = s.untradeable || [];
+              const i = s.untradeable.indexOf(p.id);
+              if (i >= 0) s.untradeable.splice(i, 1); else s.untradeable.push(p.id);
+              app.saveUT(); app.toast(`${p.name} is now ${i >= 0 ? 'tradable' : 'untradeable'}.`, 'good'); drawTrade();
+            } }, untrad ? 'Make tradable' : 'Make untradeable')));
+        }
+      };
+      const q2 = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search your club…', value: st.q2, 'aria-label': 'Search club players' });
+      q2.addEventListener('input', () => { st.q2 = q2.value; drawTrade(); });
+      const tradable = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('tag'), ' Toggle tradable'), q2, tradeResults);
+      drawTrade();
+
       // ---- UT progress ----
-      const progress = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'SBCs & objectives'),
+      const progress = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('sbc'), ' SBCs & objectives'),
         h('div', { class: 'pm-btnrow pm-wrap' },
           h('button', { class: 'pm-btn', disabled: !s, onclick: () => { const got = A.completeAllSbcs(s); done(got.length ? `Completed SBCs: ${got.length} rewards granted.` : 'All SBCs already complete.'); } }, 'Complete all SBCs'),
           h('button', { class: 'pm-btn', disabled: !s, onclick: () => { const n = A.unlockAllObjectives(s); done(`${n} objectives ready to claim.`); } }, 'Unlock all objectives')));
@@ -185,7 +212,7 @@ export function adminView() {
       };
       const budget = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.budget), 'aria-label': 'Career budget' });
       budget.addEventListener('input', () => { st.budget = Number(budget.value) || 0; });
-      const career = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Career Mode'),
+      const career = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('club'), ' Career Mode'),
         slots.length ? h('div', { class: 'pm-btnrow pm-wrap' },
           select(slots.map((x) => [x.slot, `Slot ${x.slot}: ${x.club} (S${x.season})`]), st.slot, (v) => { st.slot = Number(v); }, { 'aria-label': 'Career slot' }),
           h('button', { class: 'pm-btn', onclick: () => withCareer((c) => `${A.maxCareerRatings(c)} players maxed to 99.`) }, 'Max all player ratings'),
@@ -194,35 +221,38 @@ export function adminView() {
           : h('p', { class: 'pm-dim' }, 'No career saves yet.'));
 
       // ---- reset ----
-      const reset = h('section', { class: 'pm-panel pm-admin-sec pm-admin-danger' }, h('h3', null, 'Reset'),
+      const reset = h('section', { class: 'pm-panel pm-admin-sec pm-admin-danger' }, h('h3', null, icon('reset'), ' Reset'),
         h('div', { class: 'pm-btnrow pm-wrap' },
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !s, onclick: async () => { if (!(await confirmBox(app.root, 'Reset UT', 'Delete the Ultimate Team save on this device?', 'Reset', true))) return; removeKey(UT.UT_KEY); app.ut = null; app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 }; app.toast('UT save reset.', 'good'); app.refresh(); } }, 'Reset UT save'),
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !slots.length, onclick: async () => { if (!(await confirmBox(app.root, 'Reset careers', 'Delete every Career Mode save slot?', 'Delete', true))) return; for (const x of C.SLOTS) C.deleteCareer(x); app.career = null; app.toast('Career saves deleted.', 'good'); app.refresh(); } }, 'Delete all careers'),
           h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin')));
 
-      const lock = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Session'),
+      const lock = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('lock'), ' Session'),
         h('p', { class: 'pm-dim' }, `${LEVEL_NAME[level]}${A.adminInfo().fromAccount ? ' (from your account role)' : ''}.`),
         h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin'));
       const tools = h('div', { class: 'pm-admin-grid', 'data-admin-tab': 'tools' },
         can('coins') ? coins : null, can('packs') ? packs : null,
-        can('sbc') ? progress : null, can('career') ? career : null, can('grant') ? grant : null, can('reset') ? reset : lock);
+        can('sbc') ? progress : null, can('career') ? career : null, can('grant') ? grant : null, can('grant') ? tradable : null, can('reset') ? reset : lock);
 
-      // ---- EXTENSION POINT: Moderation tab ----
-      // Rendered only for 'full' / 'mod' levels when the online services expose `online.moderation`
-      // (added by the net agent). If it provides mount(el, { level, app }), it renders its own UI in `modPane`.
-      const modOk = can('moderation') && app.online && app.online.moderation && typeof app.online.moderation === 'object';
-      const modPane = h('div', { class: 'pm-admin-mod', 'data-admin-tab': 'moderation', hidden: true });
-      if (modOk) {
-        if (typeof app.online.moderation.mount === 'function') { try { const un = app.online.moderation.mount(modPane, { level, app }); if (typeof un === 'function') app.onCleanup(un); } catch (e) { console.warn('[meta] moderation mount failed', e); } }
-        else modPane.appendChild(h('section', { class: 'pm-panel' }, h('h3', null, 'Moderation'), h('p', { class: 'pm-dim' }, 'Moderation tools will appear here.')));
+      // ---- extra tabs: moderation (mod/full), and owner-only Cards / Broadcast / Config ----
+      const extraTabs = [];
+      if (can('moderation')) extraTabs.push(['moderation', 'Moderation', () => X.moderationPanel(app, { level })]);
+      if (level === 'full') {
+        extraTabs.push(['cards', 'Card Creator', () => X.cardCreatorPanel(app, { level })]);
+        extraTabs.push(['broadcast', 'Broadcast & Giveaways', () => h('div', null, X.broadcastPanel(app), X.giveawayPanel(app))]);
+        extraTabs.push(['config', 'Global Config', () => X.configPanel(app)]);
       }
-      const tabs = modOk ? h('div', { class: 'pm-tabs', role: 'tablist' }, [['tools', 'Tools'], ['moderation', 'Moderation']].map(([k, label]) => h('button', {
+      if (!extraTabs.some(([k]) => k === st.tab)) st.tab = 'tools';
+      const panes = { tools };
+      for (const [k, , build] of extraTabs) { const p = h('div', { 'data-admin-tab': k, hidden: k !== st.tab }); if (k === st.tab) p.appendChild(build()); panes[k] = p; }
+      tools.hidden = st.tab !== 'tools';
+      const tabDefs = [['tools', 'Tools'], ...extraTabs.map(([k, label]) => [k, label])];
+      const tabs = extraTabs.length ? h('div', { class: 'pm-tabs', role: 'tablist' }, tabDefs.map(([k, label]) => h('button', {
         class: `pm-tab ${k === st.tab ? 'on' : ''}`, role: 'tab', 'aria-selected': String(k === st.tab), 'data-tab': k,
-        onclick: (e) => { st.tab = k; tools.hidden = k !== 'tools'; modPane.hidden = k !== 'moderation'; for (const b of e.currentTarget.parentNode.children) { const on = b.dataset.tab === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } },
+        onclick: () => { st.tab = k; app.refresh(); },
       }, label))) : null;
-      if (modOk && st.tab === 'moderation') { tools.hidden = true; modPane.hidden = false; }
       add(main, h('p', { class: 'pm-lead' }, level === 'full' ? 'Owner tools. Changes apply to this device (and the online balance where stated).' : `${LEVEL_NAME[level]}: limited tools. Changes apply to this device only.`), needUT,
-        tabs, tools, modOk ? modPane : null);
+        tabs, tools, ...extraTabs.map(([k]) => panes[k]));
     },
   };
   return view;

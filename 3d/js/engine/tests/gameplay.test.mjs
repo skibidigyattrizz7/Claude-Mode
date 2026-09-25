@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { MatchSim } from '../core/sim.js';
 import { PHASE, SP, GOAL, PITCH, BALL_R } from '../core/constants.js';
+import { segDist } from '../core/mathx.js';
 import { predictBall, behindLine } from '../core/physics.js';
 import { rateStats, computeRatings, playerOfMatch } from '../core/ratings.js';
 import { decided } from '../core/knockout.js';
@@ -156,6 +157,45 @@ export function runGameplayTests(test) {
       assert.ok(Math.abs(m.z - (c.z + 8)) < 3, 'receiver drifted ' + m.z);
       void d0;
     }
+  });
+  test('receiver free-roam: distance from the intended receiver to the ball\'s flight path shrinks', () => {
+    for (const seed of [1, 2, 3]) {
+      const { sim, c } = scenario({}, { seed });
+      const recv = sim.players[7];
+      sim._teleport(recv, 0, 20); // well off the ball's line
+      recv.vx = 0; recv.vz = 0;
+      const b = sim.ball;
+      b.owner = -1; b.inHands = false;
+      b.p.x = 0; b.p.y = BALL_R; b.p.z = 0;
+      b.v.x = 15; b.v.y = 0; b.v.z = 0; // travelling along z=0
+      b.intended = recv.idx; b.throughBall = false;
+      b.lastTeam = 0; b.lastTouch = c.idx; b.kicker = c.idx; b.kickT = sim.t;
+      sim.pendingPass = { from: c.idx, team: 0, t: sim.t };
+      sim.path = null;
+      const distToPath = () => segDist(recv.x, recv.z, sim.ball.p.x, sim.ball.p.z, sim.ball.p.x + sim.ball.v.x, sim.ball.p.z + sim.ball.v.z).d;
+      const d0 = distToPath();
+      let dfinal = d0;
+      for (let i = 0; i < 360 && sim.ball.owner < 0; i++) { sim.step(DT, [null, null]); dfinal = distToPath(); }
+      assert.ok(dfinal < d0 - 5, `seed ${seed}: d0=${d0.toFixed(2)} dfinal=${dfinal.toFixed(2)}`);
+    }
+  });
+  test('through balls are excepted: the receiver keeps running onto the pass, not snapping to face the ball', () => {
+    const { sim, c } = scenario({}, { seed: 3 });
+    const recv = sim.players[7];
+    sim._teleport(recv, 20, 5);
+    recv.vx = 6; recv.vz = 0; // already sprinting onto the run
+    recv.run = { x: 40, z: 5, until: sim.t + 3 }; // the run the through ball was threaded onto
+    const b = sim.ball;
+    b.owner = -1; b.inHands = false;
+    b.p.x = 0; b.p.y = BALL_R; b.p.z = -10; // ball's flight line is offset from the run
+    b.v.x = 18; b.v.y = 0; b.v.z = 0;
+    b.intended = recv.idx; b.throughBall = true;
+    b.lastTeam = 0; b.lastTouch = c.idx; b.kicker = c.idx; b.kickT = sim.t;
+    sim.pendingPass = { from: c.idx, team: 0, t: sim.t };
+    sim.path = null;
+    sim.step(DT, [null, null]);
+    assert.ok(recv.run && recv.run.until > sim.t, 'the run should not be cancelled by a through ball');
+    assert.ok(Math.abs(recv.des.z) < 1, `should keep heading down the run (des.z=${recv.des.z}), not curl onto the ball's line`);
   });
   test('passes arrive firmly at the receiver\'s feet', () => {
     const { sim, c } = scenario({});

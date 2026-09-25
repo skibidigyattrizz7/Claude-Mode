@@ -737,6 +737,57 @@ test('national teams stay valid with real regulars (incl. new nations Georgia an
   for (const t of nts) { const real = t.players.filter((p) => getPlayer(p.id) && getPlayer(p.id).real); assert.equal(new Set(real.map((p) => getPlayer(p.id).person)).size, real.length, `${t.id} duplicates a person`); }
 });
 
+// ---------------- B9: every mode that plays a match vs AI must build a valid, duplicate-free Team ----------------
+function assertValidNoDup(t, label) {
+  assert.deepEqual(validateTeam(t), [], `${label}: ${validateTeam(t).join(', ')}`);
+  const persons = t.players.concat(t.bench).map((p) => getPlayer(p.id)).filter(Boolean).map((p) => p.person || p.baseId || p.id);
+  assert.equal(new Set(persons).size, persons.length, `${label}: duplicate player`);
+}
+
+test('Squad Battles: every weekly opponent (all difficulties) builds a valid, duplicate-free Team', () => {
+  for (const week of [1, 2, 3, 17, 40, 59]) {
+    const opps = UT.battleOpponents(week);
+    assert.equal(opps.length, 12);
+    for (const o of opps) assertValidNoDup(o.team, `SB week ${week} ${o.name}`);
+  }
+});
+
+test('Rivals AI: opponents at every difficulty build valid, duplicate-free Teams', () => {
+  for (let seed = 0; seed < 40; seed++) {
+    for (const diff of ['amateur', 'pro', 'world', 'legendary']) {
+      const opp = RV.aiOpponent(`ladder-${seed}`, diff);
+      assertValidNoDup(opp.team, `rivals ${diff} seed ${seed}`);
+    }
+  }
+});
+
+test('Draft: repeated runs build valid, duplicate-free user + opponent Teams', () => {
+  for (let i = 0; i < 8; i++) {
+    const d = DR.newDraft(`stress-${i}`);
+    DR.chooseFormation(d, DR.FORMATION_NAMES[i % DR.FORMATION_NAMES.length]);
+    DR.chooseCaptain(d, d.captainOptions[0]);
+    let guard = 0, slot;
+    while ((slot = DR.nextOpenSlot(d)) >= 0 && guard++ < 20) DR.pickSlot(d, slot, DR.slotOptions(d, slot)[0]);
+    assert.equal(d.stage, 'play');
+    assertValidNoDup(DR.draftTeam(d), `draft ${i} user`);
+    for (let r = 0; r < 4; r++) { d.round = r; assertValidNoDup(DR.draftOpponent(d).team, `draft ${i} round ${r} opp`); }
+  }
+});
+
+test('Tournaments (events): every template/round opponent builds a valid Team', () => {
+  const s = UT.createUTState({ clubName: 'Evt2 FC' }, new Rng(21));
+  UT.migrateUT(s);
+  for (const week of [1, 5, 9]) {
+    EVT.ensureEvents(s, week);
+    for (const tpl of EVT.EVENT_TEMPLATES) {
+      const run = EVT.eventRun(s, tpl.id);
+      for (run.round = 0; run.round < 4; run.round++) {
+        assertValidNoDup(EVT.eventOpponent(s, tpl, run).team, `event ${tpl.id} w${week} r${run.round}`);
+      }
+    }
+  }
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

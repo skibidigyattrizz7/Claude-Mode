@@ -148,7 +148,9 @@ void main() {
 }`;
 
 // ---------------------------------------------------------------- build
-export function buildStadium(scene, opts, q, track) {
+// `schedule(fn)` (optional): when given, defers a unit of work (e.g. requestIdleCallback) instead
+// of running it inline — used to spread the crowd + ad boards build across idle frames.
+export function buildStadium(scene, opts, q, track, schedule) {
   const night = opts.stadium === 'night';
   const group = new THREE.Group();
   scene.add(group);
@@ -165,6 +167,12 @@ export function buildStadium(scene, opts, q, track) {
   const seatBase = new THREE.Color(0x1f3563);
   const riser = [0.35, 0.36, 0.38];
   const stands = [];
+  // shared seeded RNG + scratch objects, used by both the synchronous skyline and the deferred crowd
+  const rnd = mulberry(1234);
+  const tmpM = new THREE.Matrix4();
+  const tmpV = new THREE.Vector3();
+  const tmpQ = new THREE.Quaternion();
+  const tmpS = new THREE.Vector3();
   const defs = [
     { name: 'near', pos: [0, 0, SIDE_Z], rot: 0, len: SIDE_LEN },
     { name: 'far', pos: [0, 0, -SIDE_Z], rot: Math.PI, len: SIDE_LEN },
@@ -216,9 +224,13 @@ export function buildStadium(scene, opts, q, track) {
     stands.push({ ...d, group: s });
   }
 
-  // ---------------- crowd
+  // ---------------- crowd (built lazily — see buildCrowd() below; this is the priciest part of
+  // the stadium: a texture atlas plus thousands of instanced billboards across the four stands)
+  const crowds = [];
+  let cmat = null;
+  function buildCrowd() {
   const atlas = track(crowdAtlas());
-  const cmat = track(new THREE.ShaderMaterial({
+  cmat = track(new THREE.ShaderMaterial({
     vertexShader: crowdVS, fragmentShader: crowdFS,
     uniforms: {
       uMap: { value: atlas }, uTime: { value: 0 }, uExcite: { value: new THREE.Vector3(0, 0, 0) }, uCols: { value: COLS },
@@ -228,12 +240,6 @@ export function buildStadium(scene, opts, q, track) {
   const cgeo = track(new THREE.PlaneGeometry(0.62, 1.24));
   cgeo.translate(0, 0.62, 0);
   const neutral = ['#1b1b1b', '#e9e9e9', '#26324a', '#5a5a5a', '#7a6a55', '#2f4f2f', '#8b1a1a', '#d8c9a8'].map((c) => new THREE.Color(c));
-  const crowds = [];
-  const rnd = mulberry(1234);
-  const tmpM = new THREE.Matrix4();
-  const tmpV = new THREE.Vector3();
-  const tmpQ = new THREE.Quaternion();
-  const tmpS = new THREE.Vector3();
   const tmpC = new THREE.Color();
   for (const st of stands) {
     const L = st.len;
@@ -290,16 +296,19 @@ export function buildStadium(scene, opts, q, track) {
     group.add(inst);
     crowds.push(inst);
   }
+  } // buildCrowd()
 
-  // ---------------- LED boards
-  const boardTex = track(adStripTexture(0, 512, 64, 8));
-  const boardTex2 = track(adStripTexture(5, 512, 64, 8));
+  // ---------------- LED boards (also built lazily — see buildBoards() below)
+  let boardTex = null, boardTex2 = null;
+  const boards = [];
+  function buildBoards() {
+  boardTex = track(adStripTexture(0, 512, 64, 8));
+  boardTex2 = track(adStripTexture(5, 512, 64, 8));
   const boardMat = track(new THREE.MeshBasicMaterial({ map: boardTex, toneMapped: false, color: night ? 0xffffff : 0xe8e8e8 }));
   const boardMat2 = track(new THREE.MeshBasicMaterial({ map: boardTex2, toneMapped: false, color: night ? 0xffffff : 0xe8e8e8 }));
   const boardBack = stdMat(0x15181e);
   const BH = 0.95;
   const STRIP_M = 8 * 7.3; // world metres per strip texture repeat
-  const boards = [];
   // boards are listed as a loop (a -> b runs left-to-right as seen from the pitch); `s0` is the
   // perimeter coordinate of `a`, so the scrolling text runs continuously from board to board.
   const addBoard = (a, b, s0, mat) => {
@@ -339,6 +348,7 @@ export function buildStadium(scene, opts, q, track) {
     per += Math.hypot(b[0] - a[0], b[1] - a[1]);
     prev = b;
   }
+  } // buildBoards()
 
   // ---------------- dugouts & tunnel
   const glass = track(new THREE.MeshStandardMaterial({ color: 0x9fc4dd, transparent: true, opacity: 0.35, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false }));
@@ -425,17 +435,23 @@ export function buildStadium(scene, opts, q, track) {
   }
 
   let scroll = 0;
-  return {
-    group, towers, crowds, crowdMat: cmat,
+  const api = {
+    group, towers, crowds,
+    get crowdMat() { return cmat; },
     update(t, dt, excite) {
-      cmat.uniforms.uTime.value = t;
-      cmat.uniforms.uExcite.value.set(excite[0], excite[1], excite[2]);
+      if (cmat) { cmat.uniforms.uTime.value = t; cmat.uniforms.uExcite.value.set(excite[0], excite[1], excite[2]); }
       scroll += dt * 0.035;
-      boardTex.offset.x = scroll;
-      boardTex2.offset.x = -scroll * 1.2;
+      if (boardTex) boardTex.offset.x = scroll;
+      if (boardTex2) boardTex2.offset.x = -scroll * 1.2;
       fasciaTex.offset.x = scroll * 0.6;
     },
   };
+  // The stands/roofs/floodlights/sky above are the lightweight "shell" needed to show the match
+  // straight away. The crowd (a texture atlas + thousands of instanced billboards) and the LED ad
+  // boards are comparatively expensive to build, so — unless the caller wants them built inline —
+  // they're deferred to run one per idle callback, spread across the frames right after kickoff.
+  if (schedule) { schedule(buildCrowd); schedule(buildBoards); } else { buildCrowd(); buildBoards(); }
+  return api;
 }
 
 function mulberry(seed) {

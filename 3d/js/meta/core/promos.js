@@ -78,6 +78,7 @@ export function setOvr(p, target, { adjustOvr, computeOvr }) {
       if (!moved) break;
     }
   }
+  if (p.pot !== undefined && p.pot < p.ovr) p.pot = p.ovr;
   return p;
 }
 

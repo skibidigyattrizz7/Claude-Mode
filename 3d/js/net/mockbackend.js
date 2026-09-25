@@ -56,12 +56,14 @@ export function memoryStore() {
  * @param {{ now?:()=>number, rand?:()=>number, latencyMs?:number, down?:boolean }} opts
  */
 export function createMockBackend(store, { now = () => Date.now(), rand = Math.random, latencyMs = 0, down = false } = {}) {
-  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: null, adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand) });
+  const extraDefaults = () => ({ adminHashSuper: null, config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {} });
+  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: null, adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand), ...extraDefaults() });
   const load = () => {
     const d = store.load();
     if (!d || !d.profiles) return fresh();
     d.friends = d.friends || []; d.invites = d.invites || [];
     d.sessions = d.sessions || []; d.audit = d.audit || []; d.loginFails = d.loginFails || {}; d.serverKey = d.serverKey || hex(32, rand);
+    for (const [k, v] of Object.entries(extraDefaults())) if (d[k] == null) d[k] = v;
     return d;
   };
   const SESSION_TTL = 60 * DAY;
@@ -77,13 +79,22 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     return token;
   };
   const accountJson = (p, token) => ({ ok: true, id: p.id, session_token: token, username: p.username, name: p.name, friendCode: p.friendCode, role: p.role || 'player' });
-  const adminOk = (db, code) => {
+  // Admin code levels (003): 'super' | 'full' | null. Accepts the code or a signed admin token "adm.<level>.<exp>.<sig>".
+  const admSig = (db, level, exp) => (fnv(`adm|${db.serverKey}|${level}|${exp}`) + fnv(`${exp}|${level}|${db.serverKey}`) + fnv(`z${level}${db.serverKey}${exp}`) + fnv(`q${db.serverKey}${exp}`)).slice(0, 64).padEnd(64, '0');
+  const adminLevel = (db, code) => {
     const minute = Math.floor(now() / 60000);
-    if ((db.adminFails[minute] || 0) >= 20) return false;
-    const ok = !!db.adminHash && typeof code === 'string' && code.length > 0 && code.length <= 128 && fnv(`admin:${code}`) === db.adminHash;
-    if (!ok) db.adminFails = { [minute]: (db.adminFails[minute] || 0) + 1 };
-    return ok;
+    if ((db.adminFails[minute] || 0) >= 20 || typeof code !== 'string' || !code || code.length > 160) return null;
+    const m = /^adm\.(full|super)\.(\d{9,11})\.([0-9a-f]{64})$/.exec(code);
+    let lv = null;
+    if (m) { if (Number(m[2]) > now() / 1000 && admSig(db, m[1], m[2]) === m[3]) lv = m[1]; }
+    else if (code.length <= 128) {
+      const h = fnv(`admin:${code}`);
+      lv = db.adminHashSuper && h === db.adminHashSuper ? 'super' : db.adminHash && h === db.adminHash ? 'full' : null;
+    }
+    if (!lv) db.adminFails = { [minute]: (db.adminFails[minute] || 0) + 1 };
+    return lv;
   };
+  const adminOk = (db, code) => !!adminLevel(db, code);
   const RANK = { admin: 3, owner: 2, mod: 1 };
   const rank = (r) => RANK[r] || 0;
   function modActor(db, p_code, p_id, p_secret) {
@@ -168,6 +179,71 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
   }
   const pub = (l, db) => ({ listingId: l.id, card: l.card, price: l.price, seller: (db.profiles[l.sellerId] || {}).name || 'Player', listedAt: new Date(l.createdAt).toISOString() });
 
+
+  // ---------------------------------------------------------------- 003 helpers
+  const hit = (db, bucket, windowMs, max) => {
+    const w = Math.floor(now() / windowMs);
+    const k = `${bucket}@${windowMs}`;
+    const cur = db.throttle[k] && db.throttle[k].w === w ? db.throttle[k].n : 0;
+    db.throttle[k] = { w, n: cur + 1 };
+    return cur + 1 <= max;
+  };
+  const cfgNum = (db, key, field, dflt) => { const v = db.config && db.config[key] && db.config[key].value; return v && typeof v[field] === 'number' ? v[field] : dflt; };
+  const cfgVersion = (db) => db.configAt || 0;
+  function actor(db, p_code, p_id, p_secret) {
+    let role = null;
+    if (p_id && p_secret) { const a = auth(db, p_id, p_secret); if (a && (a.role === 'owner' || a.role === 'mod')) role = a.role; }
+    const lv = p_code ? adminLevel(db, p_code) : null;
+    return lv || role;
+  }
+  const ownerPower = (a) => a === 'super' || a === 'full' || a === 'owner';
+  const powerErr = (a) => err(a === 'mod' ? 'not_allowed' : 'not_admin');
+  const mayActOn = (a, p_id, v) => a === 'super' || a === 'full' || (a === 'owner' && ((v.role || 'player') !== 'owner' || v.id === p_id));
+  const keyOk = (k) => k == null || (typeof k === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(k));
+  const cleanText = (t, max) => String(t ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/ {2,}/g, ' ').slice(0, max).trim();
+  const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+  const KEY_RE = /^[A-Za-z0-9_.-]{1,40}$/;
+  function configError(key, v) {
+    if (!isObj(v)) return 'bad_value';
+    if (JSON.stringify(v).length > 8192) return 'too_large';
+    const ent = Object.entries(v);
+    if (ent.length > 200) return 'too_large';
+    if (key === 'promos' || key === 'features') return ent.every(([k, x]) => KEY_RE.test(k) && typeof x === 'boolean') ? null : 'bad_value';
+    if (key === 'packs') {
+      return ent.every(([k, x]) => KEY_RE.test(k) && isObj(x) && Object.entries(x).every(([f, y]) => (f === 'enabled' && typeof y === 'boolean')
+        || (f === 'price' && Number.isInteger(y) && y >= 0 && y <= 10000000))) ? null : 'bad_value';
+    }
+    if (key === 'rewards') return ent.every(([f, y]) => typeof y === 'number' && ((f === 'multiplier' && y >= 0 && y <= 10) || (f === 'packChance' && y >= 0 && y <= 1))) ? null : 'bad_value';
+    if (key === 'market') return ent.every(([f, y]) => f === 'tax' && typeof y === 'number' && y >= 0 && y <= 0.5) ? null : 'bad_value';
+    return 'bad_key';
+  }
+  const activeBroadcasts = (db) => db.broadcasts.filter((b) => !b.cancelled && b.until > now()).sort((a, b) => b.id - a.id).slice(0, 5)
+    .map((b) => ({ id: b.id, text: b.text, at: new Date(b.at).toISOString(), until: new Date(b.until).toISOString() }));
+  const onlineCount = (db) => Object.values(db.profiles).filter((p) => p.lastSeen > now() - 60000).length;
+  const claimed = (db, gid, pid) => db.giftClaims.some((c) => c.giftId === gid && c.profileId === pid);
+  const myGifts = (db, p) => db.gifts.filter((g) => (g.toId === p.id || g.toId == null) && g.until > now() && !claimed(db, g.id, p.id));
+  const giftJson = (g) => ({ id: g.id, kind: g.kind, coins: g.coins, packId: g.payload.packId ?? null, count: g.payload.count ?? null, card: g.payload.card ?? null, message: g.message, all: g.toId == null, at: new Date(g.at).toISOString(), until: new Date(g.until).toISOString() });
+  const publicRow = (q) => ({ id: q.id, username: q.username || null, name: q.name, friendCode: q.friendCode, online: (q.lastSeen || 0) > now() - 60000 });
+  function findProfile(db, query) {
+    const q = String(query ?? '').trim();
+    if (q.length < 3 || q.length > 40) return null;
+    if (db.profiles[q.toLowerCase()]) return db.profiles[q.toLowerCase()];
+    const k = usernameKey(q);
+    return Object.values(db.profiles).find((p) => p.username && usernameKey(p.username) === k)
+      || Object.values(db.profiles).find((p) => p.friendCode === q.toUpperCase().replace(/-/g, '')) || null;
+  }
+  const blocked = (db, x, y) => { const f = findF(db, x, y); return !!f && f.status === 'blocked'; };
+  const epochs = (p) => ({ coins: p.resetCoins || 0, progress: p.resetProgress || 0, club: p.resetClub || 0 });
+  function giftCard(c, sup) {
+    if (!isObj(c) || JSON.stringify(c).length > 4000) return null;
+    if (typeof c.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(c.id) || typeof c.name !== 'string' || c.name.length < 1 || c.name.length > 32) return null;
+    if (!Number.isInteger(c.ovr) || c.ovr < 1 || c.ovr > (sup ? 999 : 99)) return null;
+    if ('pos' in c && (typeof c.pos !== 'string' || !/^[A-Z]{2,4}$/.test(c.pos))) return null;
+    const { untradable, ...rest } = c; // eslint-disable-line no-unused-vars
+    return { ...rest, tradable: true };
+  }
+  const passOk = (p, pw) => typeof pw === 'string' && pw.length <= 72 && p.pwHash === fnv(`pw:${pw}`);
+
   const fns = {
     ping: () => true,
     register({ p_secret, p_name }) {
@@ -249,10 +325,8 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     },
     admin_verify({ p_code }) {
       const db = load();
-      const minute = Math.floor(now() / 60000);
-      if ((db.adminFails[minute] || 0) >= 20) return false;
-      const ok = !!db.adminHash && typeof p_code === 'string' && p_code.length <= 128 && fnv(`admin:${p_code}`) === db.adminHash;
-      if (!ok) { db.adminFails = { [minute]: (db.adminFails[minute] || 0) + 1 }; store.save(db); }
+      const ok = adminOk(db, p_code);
+      store.save(db);
       return ok;
     },
     admin_add_coins({ p_id, p_secret, p_code, p_delta }) {
@@ -306,9 +380,13 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (l.status !== 'active') return err('unavailable');
       if (l.createdAt <= now() - 3 * DAY) { l.status = 'expired'; store.save(db); return err('expired'); }
       if (l.sellerId === p.id) return err('own_listing');
-      if (p.coins < l.price) return err('insufficient_coins');
-      p.coins -= l.price;
-      Object.assign(l, { status: 'sold', buyerId: p.id, soldAt: now() });
+      if (!p.infinite && p.coins < l.price) return err('insufficient_coins');
+      if (!p.infinite) p.coins -= l.price;
+      const tax = Math.max(0, Math.min(0.5, cfgNum(db, 'market', 'tax', 0.05)));
+      const credit = l.price - Math.ceil(l.price * tax);
+      Object.assign(l, { status: 'sold', buyerId: p.id, soldAt: now(), credit, claimed: true });
+      const seller = db.profiles[l.sellerId];
+      if (seller) seller.coins += credit;
       store.save(db);
       return { ok: true, card: l.card, price: l.price, coins: p.coins };
     },
@@ -328,7 +406,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (!p) return err('auth');
       expireMine(db, p.id);
       store.save(db);
-      const items = db.listings.filter((l) => l.sellerId === p.id && (l.status === 'active' || l.status === 'expired' || (l.status === 'sold' && (!l.claimed || l.soldAt > now() - 7 * DAY))))
+      const items = db.listings.filter((l) => l.sellerId === p.id && (l.status === 'active' || l.status === 'expired'))
         .sort((a, b) => b.createdAt - a.createdAt).slice(0, 100)
         .map((l) => ({ ...pub(l, db), status: l.status, soldAt: l.soldAt ? new Date(l.soldAt).toISOString() : null, claimed: l.claimed, credit: l.credit }));
       return { ok: true, items };
@@ -754,6 +832,332 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (!p || p.role !== m[2] || isBanned(p)) return err('invalid');
       return { ok: true, profile_id: p.id, role: p.role, exp: Number(m[3]) };
     },
+
+    // ---------------------------------------------------------------- 003: admin levels, config, coins, owner powers
+    admin_login({ p_code }) {
+      const db = load();
+      const lv = adminLevel(db, p_code);
+      store.save(db);
+      if (!lv) return err('invalid');
+      const exp = Math.floor(now() / 1000) + 12 * 3600;
+      return { ok: true, level: lv, exp, token: `adm.${lv}.${exp}.${admSig(db, lv, String(exp))}` };
+    },
+    get_config() {
+      const db = load();
+      return { ok: true, version: cfgVersion(db), config: Object.fromEntries(Object.entries(db.config).map(([k, v]) => [k, v.value])) };
+    },
+    admin_set_config({ p_code, p_key, p_value, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (!['promos', 'packs', 'rewards', 'market', 'features'].includes(p_key)) return err('bad_key');
+      const e = configError(p_key, p_value);
+      if (e) return err(e);
+      db.configAt = Math.max(now(), (db.configAt || 0) + 1);
+      db.config[p_key] = { value: JSON.parse(JSON.stringify(p_value)), at: db.configAt, by: a };
+      audit(db, p_id, 'admin_config', { key: p_key, by: a });
+      store.save(db);
+      return { ok: true, version: db.configAt };
+    },
+    coins_get({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      return { ok: true, coins: p.coins, infinite: !!p.infinite };
+    },
+    coins_op({ p_id, p_secret, p_delta, p_reason = null, p_key = null }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!Number.isInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 1e8) return err('bad_amount');
+      if (!keyOk(p_key)) return err('bad_key');
+      const ok = p_key ? db.coinOps[`${p.id}:${p_key}`] : null;
+      if (ok) return { ...ok, replay: true };
+      if (!hit(db, `coinop:${p.id}`, 3600000, 900)) { store.save(db); return err('rate_limited'); }
+      let applied;
+      if (p_delta < 0) {
+        if (p.infinite) applied = 0;
+        else { if (p.coins < -p_delta) return err('insufficient_coins'); p.coins += p_delta; applied = p_delta; }
+      } else {
+        if (!['quicksell', 'objective', 'sbc', 'season', 'ut-earn', 'event', 'draft', 'reward'].includes(p_reason)) return err('bad_reason');
+        const hs = Math.floor(now() / 3600000), ds = Math.floor(now() / DAY);
+        const hour = p.earnHour === hs ? p.earnHourCoins : 0, day = p.earnDay === ds ? p.earnDayCoins : 0;
+        applied = Math.max(0, Math.min(p_delta, 250000 - hour, 1000000 - day));
+        Object.assign(p, { coins: p.coins + applied, earnHour: hs, earnHourCoins: hour + applied, earnDay: ds, earnDayCoins: day + applied });
+      }
+      const res = { ok: true, coins: p.coins, applied, requested: p_delta, infinite: !!p.infinite };
+      if (p_key) db.coinOps[`${p.id}:${p_key}`] = res;
+      store.save(db);
+      return res;
+    },
+    admin_coins({ p_code, p_player = null, p_delta, p_reason = null, p_key = null, p_id = null, p_secret = null }) {
+      const db = load();
+      if (!keyOk(p_key)) return err('bad_key');
+      if (p_key && db.adminOps[`coins:${p_key}`]) return { ...db.adminOps[`coins:${p_key}`], replay: true };
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (!Number.isInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 1e9) return err('bad_amount');
+      const v = db.profiles[p_player || p_id];
+      if (!v) return err('not_found');
+      if (!mayActOn(a, p_id, v)) return err('not_allowed');
+      const before = v.coins;
+      v.coins = Math.max(0, Math.min(v.coins + p_delta, 1e12));
+      const res = { ok: true, coins: v.coins, player: v.id };
+      if (p_key) db.adminOps[`coins:${p_key}`] = res;
+      audit(db, v.id, 'admin_coins', { delta: p_delta, before, balance: v.coins, reason: p_reason || '', by: a });
+      store.save(db);
+      return res;
+    },
+    admin_set_infinite({ p_code, p_on, p_player = null, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (typeof p_on !== 'boolean') return err('bad_value');
+      if (p_player && p_player !== p_id && a !== 'super' && a !== 'full') return err('not_allowed');
+      if (!p_player && !authRaw(db, p_id, p_secret)) return err('auth');
+      const v = db.profiles[p_player || p_id];
+      if (!v) return err('not_found');
+      v.infinite = p_on;
+      audit(db, v.id, 'admin_infinite', { on: p_on, by: a });
+      store.save(db);
+      return { ok: true, infinite: v.infinite, coins: v.coins };
+    },
+    admin_reset({ p_code, p_player, p_what, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (!['coins', 'progress', 'club', 'all'].includes(p_what)) return err('bad_value');
+      const v = db.profiles[p_player];
+      if (!v) return err('not_found');
+      if (!mayActOn(a, p_id, v)) return err('not_allowed');
+      const all = p_what === 'all';
+      if (all || p_what === 'coins') Object.assign(v, { coins: 5000, infinite: false, resetCoins: (v.resetCoins || 0) + 1, earnHourCoins: 0, earnDayCoins: 0 });
+      if (all || p_what === 'progress') Object.assign(v, { rating: 1000, division: 8, wins: 0, draws: 0, losses: 0, ...rivalsDefaults, resetProgress: (v.resetProgress || 0) + 1 });
+      if (all || p_what === 'club') {
+        v.resetClub = (v.resetClub || 0) + 1;
+        delete db.squads[v.id];
+        for (const l of db.listings) if (l.sellerId === v.id && (l.status === 'active' || l.status === 'expired')) l.status = 'cancelled';
+      }
+      audit(db, v.id, 'admin_reset', { what: p_what, by: a });
+      store.save(db);
+      return { ok: true, player: modRow(v), resets: epochs(v) };
+    },
+    // ---------------------------------------------------------------- 003: broadcasts + presence
+    get_broadcasts() { return { ok: true, items: activeBroadcasts(load()) }; },
+    admin_broadcast({ p_code, p_text, p_minutes = 30, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const text = cleanText(p_text, 200);
+      if (!text) return err('bad_text');
+      if (!Number.isInteger(p_minutes) || p_minutes < 1 || p_minutes > 1440) return err('bad_value');
+      if (!hit(db, 'bcast', 3600000, 60)) { store.save(db); return err('rate_limited'); }
+      const id = ++db.bcastSeq;
+      db.broadcasts.push({ id, text, at: now(), until: now() + p_minutes * 60000, by: a, cancelled: false });
+      db.broadcasts = db.broadcasts.filter((b) => b.until > now() - 30 * DAY);
+      store.save(db);
+      return { ok: true, id };
+    },
+    admin_clear_broadcast({ p_code, p_bid, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const b = db.broadcasts.find((x) => x.id === p_bid && !x.cancelled);
+      if (!b) return err('not_found');
+      b.cancelled = true;
+      store.save(db);
+      return { ok: true };
+    },
+    online_count() { return onlineCount(load()); },
+    presence({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!hit(db, `pres:${p.id}`, 3600000, 600)) { store.save(db); return err('rate_limited'); }
+      seen(p);
+      store.save(db);
+      return {
+        ok: true, online: onlineCount(db), coins: p.coins, infinite: !!p.infinite, broadcasts: activeBroadcasts(db), gifts: myGifts(db, p).length,
+        unread: db.messages.filter((m) => m.toId === p.id && !m.readAt).length,
+        invites: db.invites.filter((i) => i.toId === p.id && i.status === 'pending' && i.createdAt > now() - 60000).length,
+        requests: db.friends.filter((f) => (f.a === p.id || f.b === p.id) && f.status === 'pending' && f.requestedBy !== p.id).length,
+        resets: epochs(p), configVersion: cfgVersion(db), role: p.role || 'player',
+      };
+    },
+    // ---------------------------------------------------------------- 003: gifts
+    admin_gift({ p_code, p_to = null, p_all = false, p_kind, p_coins = null, p_payload = null, p_message = null, p_key = null, p_id = null, p_secret = null }) {
+      const db = load();
+      if (!keyOk(p_key)) return err('bad_key');
+      if (p_key && db.adminOps[`gift:${p_key}`]) return { ...db.adminOps[`gift:${p_key}`], replay: true };
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (!!p_all === (p_to != null)) return err('bad_target');
+      if (p_to != null && !db.profiles[p_to]) return err('not_found');
+      let payload = {};
+      if (p_kind === 'coins') { if (!Number.isInteger(p_coins) || p_coins < 1 || p_coins > 1e9) return err('bad_amount'); }
+      else if (p_kind === 'pack') {
+        const count = p_payload && p_payload.count != null ? p_payload.count : 1;
+        if (!p_payload || typeof p_payload.packId !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(p_payload.packId) || !Number.isInteger(count) || count < 1 || count > 50) return err('bad_pack');
+        payload = { packId: p_payload.packId, count };
+      } else if (p_kind === 'card') {
+        const c = giftCard(p_payload && p_payload.card, a === 'super');
+        if (!c) return err(a !== 'super' && p_payload && p_payload.card && Number(p_payload.card.ovr) > 99 ? 'needs_super' : 'bad_card');
+        payload = { card: c };
+      } else return err('bad_kind');
+      if (!hit(db, `gift:${a}:${p_id || 'ip'}`, 3600000, 300)) { store.save(db); return err('rate_limited'); }
+      const g = { id: uuid(rand), toId: p_to, kind: p_kind, coins: p_kind === 'coins' ? p_coins : 0, payload, message: cleanText(p_message, 200) || null, by: a, at: now(), until: now() + 14 * DAY };
+      db.gifts.push(g);
+      const res = { ok: true, giftId: g.id };
+      if (p_key) db.adminOps[`gift:${p_key}`] = res;
+      audit(db, p_to, 'admin_gift', { gift: g.id, kind: p_kind, all: p_to == null, by: a });
+      store.save(db);
+      return res;
+    },
+    gifts_inbox({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      return { ok: true, items: myGifts(db, p).sort((x, y) => y.at - x.at).slice(0, 50).map(giftJson) };
+    },
+    claim_gift({ p_id, p_secret, p_gift }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const g = db.gifts.find((x) => x.id === p_gift);
+      if (!g || !(g.toId === p.id || g.toId == null)) return err('not_found');
+      if (g.until <= now()) return err('expired');
+      if (claimed(db, g.id, p.id)) return err('already_claimed');
+      db.giftClaims.push({ giftId: g.id, profileId: p.id, at: now() });
+      if (g.kind === 'coins') p.coins = Math.min(p.coins + g.coins, 1e12);
+      audit(db, p.id, 'gift_claim', { gift: g.id, kind: g.kind });
+      store.save(db);
+      return { ...giftJson(g), ok: true, balance: p.coins };
+    },
+    // ---------------------------------------------------------------- 003: players, messages, squads
+    find_player({ p_query }) {
+      const db = load();
+      const q = String(p_query ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+      if (q.length < 2 || q.length > 40) return err('bad_query');
+      const k = usernameKey(q), code = q.toUpperCase().replace(/-/g, '');
+      const items = Object.values(db.profiles).filter((p) => !isBanned(p) && ((p.username && k && usernameKey(p.username).startsWith(k)) || p.friendCode === code))
+        .sort((a, b) => ((b.username && usernameKey(b.username) === k) - (a.username && usernameKey(a.username) === k)) || (b.lastSeen || 0) - (a.lastSeen || 0))
+        .slice(0, 10).map(publicRow);
+      return { ok: true, items };
+    },
+    send_message({ p_id, p_secret, p_to, p_body = '', p_image = null }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!p.username) return err('no_account');
+      const o = db.profiles[p_to];
+      if (!o || o.id === p.id || blocked(db, p.id, o.id)) return err('not_found');
+      const body = cleanText(p_body, 300);
+      if (!body && p_image == null) return err('empty');
+      if (p_image != null && (typeof p_image !== 'string' || p_image.length > 204860 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(p_image))) return err('bad_image');
+      if (!hit(db, `msg:${p.id}`, 600000, 20) || !hit(db, `msgday:${p.id}`, DAY, 300) || (p_image != null && !hit(db, `msgimg:${p.id}`, DAY, 20))) { store.save(db); return err('rate_limited'); }
+      const id = ++db.msgSeq;
+      db.messages.push({ id, fromId: p.id, toId: o.id, body, image: p_image, at: now(), readAt: null });
+      if (db.messages.length > 3000) db.messages.splice(0, db.messages.length - 3000);
+      store.save(db);
+      return { ok: true, id };
+    },
+    list_conversations({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const last = new Map();
+      for (const m of db.messages) {
+        if (m.fromId !== p.id && m.toId !== p.id) continue;
+        const other = m.fromId === p.id ? m.toId : m.fromId;
+        if (!last.has(other) || last.get(other).id < m.id) last.set(other, m);
+      }
+      const items = [...last.entries()].sort((a, b) => b[1].id - a[1].id).slice(0, 30).filter(([o]) => db.profiles[o]).map(([o, m]) => ({
+        with: publicRow(db.profiles[o]), lastText: m.body, lastImage: m.image != null, lastMine: m.fromId === p.id, at: new Date(m.at).toISOString(),
+        unread: db.messages.filter((x) => x.toId === p.id && x.fromId === o && !x.readAt).length,
+      }));
+      return { ok: true, items };
+    },
+    get_messages({ p_id, p_secret, p_with, p_before = null }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const o = db.profiles[p_with];
+      if (!o) return err('not_found');
+      for (const m of db.messages) if (m.toId === p.id && m.fromId === o.id && !m.readAt) m.readAt = now();
+      store.save(db);
+      const items = db.messages.filter((m) => ((m.fromId === p.id && m.toId === o.id) || (m.fromId === o.id && m.toId === p.id)) && (p_before == null || m.id < p_before))
+        .sort((a, b) => b.id - a.id).slice(0, 30).reverse()
+        .map((m) => ({ id: m.id, mine: m.fromId === p.id, text: m.body, image: m.image, at: new Date(m.at).toISOString(), read: !!m.readAt }));
+      return { ok: true, with: publicRow(o), items };
+    },
+    set_squad({ p_id, p_secret, p_squad }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!isObj(p_squad)) return err('bad_squad');
+      if (JSON.stringify(p_squad).length > 20480) return err('too_large');
+      if (!hit(db, `squad:${p.id}`, 3600000, 60)) { store.save(db); return err('rate_limited'); }
+      db.squads[p.id] = { squad: JSON.parse(JSON.stringify(p_squad)), at: now() };
+      store.save(db);
+      return { ok: true };
+    },
+    view_squad({ p_query }) {
+      const db = load();
+      const o = findProfile(db, p_query);
+      if (!o || isBanned(o)) return err('not_found');
+      const s = db.squads[o.id];
+      if (!s) return { ok: false, error: 'no_squad', owner: publicRow(o) };
+      return { ok: true, owner: publicRow(o), squad: s.squad, updatedAt: new Date(s.at).toISOString() };
+    },
+    // ---------------------------------------------------------------- 003: account changes
+    change_username({ p_id, p_secret, p_username, p_password, p_admin_code = null }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!p.username || !p.pwHash) return err('no_account');
+      if (!passOk(p, p_password)) return err('bad_credentials');
+      const u = String(p_username ?? '').trim();
+      const e = usernameError(u);
+      if (e) return err(e);
+      let role = p.role || 'player';
+      if (isReservedName(u) && role !== 'owner') { if (!adminOk(db, p_admin_code)) { store.save(db); return err('reserved_username'); } role = 'owner'; }
+      if (Object.values(db.profiles).some((x) => x.id !== p.id && x.username && usernameKey(x.username) === usernameKey(u))) return err('username_taken');
+      if (!hit(db, `rename:${p.id}`, DAY, 5)) { store.save(db); return err('rate_limited'); }
+      const from = p.username;
+      Object.assign(p, { username: u, name: u, role });
+      audit(db, p.id, 'rename', { from, to: u });
+      store.save(db);
+      return { ok: true, username: p.username, name: p.name, role: p.role };
+    },
+    change_password({ p_id, p_secret, p_password, p_new }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!p.username || !p.pwHash) return err('no_account');
+      if (!passOk(p, p_password)) return err('bad_credentials');
+      const e = passwordError(p_new, p.username);
+      if (e) return err(e);
+      p.pwHash = fnv(`pw:${p_new}`);
+      const h = fnv(`s:${p_secret}`);
+      db.sessions = db.sessions.filter((x) => x.profileId !== p.id || x.tokenHash === h);
+      store.save(db);
+      return { ok: true };
+    },
+    // ---------------------------------------------------------------- 003: post-match rewards
+    match_reward(args) {
+      const r = fns.report_result(args);
+      const db = load();
+      const mult = Math.max(0, Math.min(10, cfgNum(db, 'rewards', 'multiplier', 1)));
+      if (!r || r.ok !== true || r.capped) return { ...r, pack: null, multiplier: mult };
+      const p = db.profiles[args.p_id];
+      const base = r.coinsAwarded;
+      const extra = Math.floor(base * mult) - base;
+      if (extra) { p.coins = Math.max(0, p.coins + extra); store.save(db); }
+      const chance = Math.max(0, Math.min(1, cfgNum(db, 'rewards', 'packChance', 0.06))) * (args.p_won ? 1 : args.p_drawn ? 0.6 : 0.35);
+      let pack = null;
+      if (rand() < chance) { const x = rand(); pack = x < 0.55 ? 'gold' : x < 0.85 ? 'premium' : x < 0.97 ? 'rare' : 'stars'; }
+      return { ...r, coinsAwarded: base + extra, coins: p.coins, pack, multiplier: mult };
+    },
   };
 
   return {
@@ -770,6 +1174,9 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     },
     /** Test helper: set the mock admin code (hash kept only in the mock store). */
     setAdminCode(code) { const db = load(); db.adminHash = fnv(`admin:${code}`); store.save(db); },
+    /** Test helper: set the mock 'full' / 'super' codes. */
+    setAdminCodes({ full, super: sup } = {}) { const db = load(); if (full) db.adminHash = fnv(`admin:${full}`); if (sup) db.adminHashSuper = fnv(`admin:${sup}`); store.save(db); },
+    hasAdminCodes() { const db = load(); return !!db.adminHash; },
     /** Test helper: set a profile's role directly (like the owner running SQL). */
     setRole(id, role) { const db = load(); if (db.profiles[id]) { db.profiles[id].role = role; store.save(db); } },
     reset() { store.save(fresh()); },

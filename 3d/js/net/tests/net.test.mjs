@@ -125,7 +125,7 @@ test('gameplay settings: every field is labelled and grouped; unknown keys still
 });
 
 // ------------------------------------------------------------------ mock backend mirrors the SQL rules
-test('mock backend: market rules (self-buy, double-buy, claim once, 5% tax)', async () => {
+test('mock backend: market rules (self-buy, double-buy, instant seller credit, 5% tax)', async () => {
   const be = createMockBackend(memoryStore());
   const s = (c) => c.repeat(64);
   const a = (await be.call('register', { p_secret: s('a'), p_name: 'A' })).data;
@@ -138,8 +138,9 @@ test('mock backend: market rules (self-buy, double-buy, claim once, 5% tax)', as
   assert.equal((await be.call('buy', { p_id: b, p_secret: s('a'), p_listing: l.listingId })).data.error, 'auth');
   assert.equal((await be.call('buy', { p_id: b, p_secret: s('b'), p_listing: l.listingId })).data.ok, true);
   assert.equal((await be.call('buy', { p_id: c, p_secret: s('c'), p_listing: l.listingId })).data.error, 'unavailable');
-  assert.equal((await be.call('claim_sales', { p_id: a, p_secret: s('a') })).data.coins, 950);
+  assert.equal((await be.call('get_profile', { p_id: a, p_secret: s('a') })).data.coins, 5950); // credited inside buy
   assert.equal((await be.call('claim_sales', { p_id: a, p_secret: s('a') })).data.coins, 0);
+  assert.equal((await be.call('my_listings', { p_id: a, p_secret: s('a') })).data.items.length, 0); // sold listings disappear
   assert.equal((await be.call('get_profile', { p_id: b, p_secret: s('b') })).data.coins, 4000);
 });
 
@@ -293,15 +294,15 @@ test('services: market round trip + coins.add rules + admin verify keeps code in
   assert.equal((await A.market.buy(l.listingId)).error, 'own_listing');
   const bought = await B.market.buy(l.listingId);
   assert.equal(bought.card.id, 'p6');
-  assert.equal((await A.market.claimSales()).coins, 1900);
-  assert.equal((await A.coins.get()).coins, 6900);
-  assert.equal((await A.coins.add(500)).error, 'not_allowed');
-  assert.equal((await A.coins.add(-400, 'pack')).coins, 6500);
+  assert.equal((await A.market.claimSales()).coins, 0);
+  assert.equal((await A.coins.get()).coins, 6900); // seller paid instantly (2000 - 5 %)
+  assert.equal((await A.coins.add(500)).coins, 7400); // earn (capped server-side)
+  assert.equal((await A.coins.add(-900, 'pack')).coins, 6500);
   assert.equal((await A.coins.add(-1e7)).error, 'insufficient_coins');
   be.setAdminCode('test-only-code');
   assert.equal(await A.admin.verify('wrong'), false);
   assert.equal(await A.admin.verify('test-only-code'), true);
-  assert.equal((await A.coins.add(1000)).coins, 7500);
+  assert.equal((await A.admin.addCoins(1000)).coins, 7500);
   assert.equal([...JSON.stringify(Object.fromEntries([['k', storA.getItem('pitchside.online.identity')]]))].join('').includes('test-only-code'), false);
 });
 test('services never throw when offline / unconfigured', async () => {
@@ -450,7 +451,7 @@ test('account rules: usernames, passwords, name filter, SQL parity', () => {
   assert.equal(passwordError('longenough', 'bob', 'different'), 'password_mismatch');
   assert.equal(passwordError('longenough', 'bob', 'longenough'), null);
   // the SQL word filter uses the same list
-  const sql = readFileSync(new URL('../../../../supabase/migrations/002_accounts_moderation.sql', import.meta.url), 'utf8');
+  const sql = readFileSync(new URL('../../../../supabase/migrations/20260926000000_pitchside_002_accounts.sql', import.meta.url), 'utf8');
   const m = /BLOCKLIST-BEGIN\s*\n\s*if v ~ '\(([^)]*)\)'/.exec(sql);
   assert.ok(m, 'blocklist regex found in SQL');
   assert.deepEqual(m[1].split('|'), BLOCKED_WORDS);
@@ -645,6 +646,248 @@ test('staff match tokens: owner/mod only, bound to the room, verified server-sid
   assert.equal((await P.admin.verifyMatchToken(t.token, 'ROOM2')).ok, false);
   assert.equal((await P.admin.verifyMatchToken(t.token.replace('.owner.', '.mod.'), 'ROOM1')).ok, false);
   assert.equal((await P.admin.verifyMatchToken('garbage', 'ROOM1')).ok, false);
+});
+
+
+// ------------------------------------------------------------------ migration 003: owner powers, config, coins, social
+const mk3 = (be, o = {}) => createOnline({ rpc: o.rpc || ((f, a) => be.call(f, a)), storage: o.storage || memStorage(), volatileStorage: o.volatile || memStorage(), transportKind: 'loopback', ...o.extra });
+async function world3() {
+  const be = createMockBackend(memoryStore());
+  be.setAdminCodes({ full: 'full-code-1', super: 'super-code-1' });
+  const A = mk3(be), B = mk3(be), O = mk3(be);
+  const a = await A.account.signup({ username: 'Alice Smith', password: 'password1', confirm: 'password1' });
+  const b = await B.account.signup({ username: 'Bob Jones', password: 'password2', confirm: 'password2' });
+  const o = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'super-code-1' });
+  return { be, A, B, O, a, b, o };
+}
+
+test('admin levels: full/super codes -> signed token in session storage (never the code); forged tokens fail', async () => {
+  const be = createMockBackend(memoryStore());
+  be.setAdminCodes({ full: 'full-code-1', super: 'super-code-1' });
+  const vol = memStorage(), disk = memStorage();
+  const X = mk3(be, { volatile: vol, storage: disk });
+  assert.deepEqual(await X.admin.verifyLevel('nope'), { ok: false, error: 'invalid', message: 'Invalid code.' });
+  assert.equal(X.admin.level, null);
+  assert.equal((await X.admin.verifyLevel('full-code-1')).level, 'full');
+  assert.equal((await X.admin.verifyLevel('super-code-1')).level, 'super');
+  assert.equal(X.admin.codeLevel, 'super');
+  assert.equal(X.admin.canOwner(), true);
+  const stored = vol.getItem('pitchside.account.admin');
+  assert.ok(stored && !stored.includes('super-code-1') && !JSON.stringify([...Array(1)].map(() => disk.getItem('pitchside.account.admin'))).includes('code'));
+  const tok = JSON.parse(stored).token;
+  assert.equal((await be.call('admin_verify', { p_code: tok.replace('adm.super.', 'adm.full.') })).data, false);
+  assert.equal(await X.admin.verify('super-code-1'), true); // compat boolean
+  X.admin.forget();
+  assert.equal(X.admin.codeLevel, null);
+  assert.equal((await X.owner.broadcast('hi')).error, 'not_admin');
+});
+
+test('owner give-coins: idempotent key survives a lost response (timeout after the server applied it)', async () => {
+  const { be, A, a } = await world3();
+  const X = mk3(be);
+  await X.admin.verifyLevel('full-code-1');
+  let first = true, calls = 0;
+  const flaky = mk3(be, { rpc: async (f, args) => { const r = await be.call(f, args); if (f === 'admin_coins') { calls++; if (first) { first = false; return { ok: false, error: 'timeout' }; } } return r; } });
+  flaky.admin.verifyLevel && await flaky.admin.verifyLevel('full-code-1');
+  const r = await flaky.owner.giveCoins(a.id, 2500, { reason: 'test' });
+  assert.equal(r.ok, true);
+  assert.equal(calls, 2);
+  assert.equal((await A.coins.get()).coins, 7500); // applied once
+  const k = { key: 'fixed-key-000001' };
+  await X.owner.giveCoins(a.id, 100, k); await X.owner.giveCoins(a.id, 100, k);
+  assert.equal((await A.coins.get()).coins, 7600);
+  assert.equal((await A.owner.giveCoins(a.id, 5)).error, 'not_admin'); // players cannot
+});
+
+test('coins: one server wallet — spend/earn atomic, earn capped, infinite wallet always succeeds (also market buys)', async () => {
+  const { A, B, O } = await world3();
+  assert.equal((await A.coins.spend(1000)).coins, 4000);
+  assert.equal((await A.coins.spend(1e7)).error, 'insufficient_coins');
+  const e = await A.coins.earn(300000, 'quicksell');
+  assert.equal(e.applied, 250000);
+  assert.equal((await A.coins.earn(10, 'quicksell')).applied, 0);
+  assert.equal((await O.owner.setInfinite(true)).infinite, true); // owner account, no code needed
+  assert.equal((await O.coins.spend(99999999)).ok, true);
+  assert.equal((await O.coins.get()).infinite, true);
+  const l = await B.market.list(card({ id: 'b1' }), 900000);
+  const bought = await O.market.buy(l.listingId);
+  assert.equal(bought.ok, true);
+  assert.equal((await O.coins.get()).coins, 5000);
+  assert.equal((await B.coins.get()).coins, 5000 + 855000); // seller credited instantly, 5 % tax
+  assert.equal((await B.market.mine()).items.length, 0);
+  assert.equal((await A.owner.setInfinite(true)).error, 'not_admin');
+});
+
+test('global config: owner/code writes (validated), everyone reads; tax applies to sales', async () => {
+  const { A, B, O } = await world3();
+  assert.equal((await A.owner.setConfig('market', { tax: 0.2 })).error, 'not_admin');
+  assert.equal((await O.owner.setConfig('market', { tax: 0.9 })).error, 'bad_value');
+  assert.equal((await O.owner.setConfig('secret', {})).error, 'bad_key');
+  assert.equal((await O.owner.setConfig('market', { tax: 0.2 })).ok, true);
+  assert.equal((await O.owner.setConfig('packs', { gold: { enabled: false, price: 9000 } })).ok, true);
+  assert.equal((await O.owner.setConfig('promos', { toty: true, fut_birthday: false })).ok, true);
+  let seen = null;
+  B.config.onChange((c) => { seen = c; });
+  const c = await B.config.get(true);
+  assert.equal(c.config.market.tax, 0.2);
+  assert.equal(B.config.value('packs.gold.price', 7500), 9000);
+  assert.equal(B.config.value('packs.silver.price', 1500), 1500);
+  assert.equal(seen.promos.toty, true);
+  const l = await A.market.list(card({ id: 'x9' }), 1000);
+  await B.market.buy(l.listingId);
+  assert.equal((await A.coins.get()).coins, 5800);
+});
+
+test('gifts: giveaway to everyone + direct card (tradable, >99 needs super), claim once, presence counts', async () => {
+  const { be, A, B, O, b } = await world3();
+  assert.equal((await O.owner.gift({ to: 'all', kind: 'coins', coins: 1000, message: 'Enjoy!' })).ok, true);
+  assert.equal((await O.owner.gift({ to: b.id, kind: 'card', card: { id: 'adm1', name: 'Admin Guy', ovr: 500, untradable: true } })).error, 'needs_super');
+  const X = mk3(be);
+  await X.admin.verifyLevel('super-code-1');
+  assert.equal((await X.owner.gift({ to: b.id, kind: 'card', card: { id: 'adm1', name: 'Admin Guy', pos: 'ST', ovr: 500, untradable: true } })).ok, true);
+  assert.equal((await X.owner.gift({ to: b.id, kind: 'pack', packId: 'gold', count: 3 })).ok, true);
+  assert.equal((await B.presence.tick()).gifts, 3);
+  const inbox = await B.gifts.inbox();
+  assert.equal(inbox.items.length, 3);
+  const cardGift = inbox.items.find((g) => g.kind === 'card');
+  assert.equal(cardGift.card.tradable, true);
+  assert.equal('untradable' in cardGift.card, false);
+  const coinsGift = inbox.items.find((g) => g.kind === 'coins');
+  const c1 = await B.gifts.claim(coinsGift.id);
+  assert.deepEqual([c1.ok, c1.coins, c1.balance], [true, 1000, 6000]);
+  assert.equal((await B.gifts.claim(coinsGift.id)).error, 'already_claimed_gift');
+  const p = await B.gifts.claim(inbox.items.find((g) => g.kind === 'pack').id);
+  assert.deepEqual([p.packId, p.count], ['gold', 3]);
+  assert.equal((await A.gifts.inbox()).items.length, 1); // A only has the giveaway
+  assert.equal((await A.gifts.claim(cardGift.id)).error, 'not_found'); // not A's gift
+});
+
+test('broadcasts + presence: banner once per message, counter, club reset epoch; guests poll without a profile', async () => {
+  const { be, A, B, O, b } = await world3();
+  const seen = [];
+  A.presence.onBroadcast((x) => seen.push(x.text));
+  assert.equal((await A.owner.broadcast('nope')).error, 'not_admin');
+  assert.equal((await O.owner.broadcast('Server   restart in 5 min', 10)).ok, true);
+  const u = await A.presence.tick();
+  await A.presence.tick();
+  assert.deepEqual(seen, ['Server restart in 5 min']);
+  assert.ok(u.online >= 2);
+  const guest = mk3(be); // never registered: no profile is created just by browsing
+  const g = await guest.presence.tick();
+  assert.equal(guest.hasIdentity(), false);
+  assert.equal(g.broadcasts.length, 1);
+  assert.ok((await guest.presence.count()).online >= 2);
+  const r = await O.owner.reset(b.id, 'club');
+  assert.equal(r.resets.club, 1);
+  assert.equal((await B.presence.tick()).resets.club, 1);
+  const r2 = await O.owner.reset(b.id, 'coins');
+  assert.equal(r2.player.coins, 5000);
+  const X = mk3(be); await X.admin.verifyLevel('full-code-1');
+  const id = (await X.owner.broadcast('two')).id;
+  assert.equal((await X.owner.clearBroadcast(id)).ok, true);
+  assert.equal((await guest.presence.broadcasts()).items.length, 1);
+});
+
+test('messages + squads + player search; guests cannot DM; images must be small JPEGs', async () => {
+  const { be, A, B, a, b } = await world3();
+  const found = await A.players.find('bob');
+  assert.equal(found.items[0].id, b.id);
+  assert.equal((await A.messages.send(b.id, 'hi bob')).ok, true);
+  assert.equal((await A.messages.send(b.id, '', 'data:image/png;base64,AAAA')).error, 'bad_image');
+  assert.equal((await A.messages.send(b.id, '', 'data:image/jpeg;base64,/9j/4AAQSkZJRg==')).ok, true);
+  assert.equal((await A.messages.send(b.id, '   ')).error, 'empty');
+  assert.equal((await A.messages.send(b.id, 'x'.repeat(400))).ok, true);
+  assert.equal((await B.presence.tick()).unread, 3);
+  const conv = await B.messages.conversations();
+  assert.deepEqual([conv.items[0].with.id, conv.items[0].unread], [a.id, 3]);
+  const th = await B.messages.thread(a.id);
+  assert.equal(th.items.length, 3);
+  assert.equal(th.items[1].image.startsWith('data:image/jpeg'), true);
+  assert.equal(th.items[2].text.length, 300);
+  assert.equal((await B.presence.tick()).unread, 0);
+  const G = mk3(be); // anonymous device profile
+  assert.equal((await G.messages.send(b.id, 'hey')).error, 'no_account');
+  const players = Array.from({ length: 18 }, (_, i) => ({ name: `P${i}`, pos: 'CM', ovr: 80 + (i % 10) }));
+  assert.equal((await A.squads.publish({ name: 'Alice XI', formation: '4-3-3', players })).ok, true);
+  const v = await B.squads.view('alice_smith');
+  assert.deepEqual([v.ok, v.owner.username, v.squad.name, v.squad.players.length], [true, 'Alice Smith', 'Alice XI', 18]);
+  const code = (await A.profile()).friendCode;
+  assert.equal((await B.squads.view(code)).squad.formation, '4-3-3');
+  assert.equal((await A.squads.view('bob jones')).error, 'no_squad');
+  assert.equal((await A.squads.publish({ blob: 'x'.repeat(64), list: Array.from({ length: 40 }, () => Object.fromEntries('abcdefgh'.split('').map((k) => [k, k.repeat(64)]))) })).error, 'too_large');
+});
+
+test('account: change username (password + reserved check) and password (other sessions end)', async () => {
+  const { be, A, a } = await world3();
+  assert.equal((await A.account.changeUsername({ username: 'Alicia', password: 'wrong-pass' })).error, 'bad_credentials');
+  assert.equal((await A.account.changeUsername({ username: 'Bob_Jones', password: 'password1' })).error, 'username_taken');
+  assert.equal((await A.account.changeUsername({ username: 'Shawky FC 2', password: 'password1' })).error, 'reserved_username');
+  const r = await A.account.changeUsername({ username: 'Alicia', password: 'password1' });
+  assert.equal(r.ok, true);
+  assert.equal(A.account.current().username, 'Alicia');
+  const A2 = mk3(be);
+  assert.equal((await A2.account.login({ username: 'alicia', password: 'password1' })).id, a.id);
+  assert.equal((await A.account.changePassword({ password: 'password1', newPassword: 'password7', confirm: 'nope' })).error, 'password_mismatch');
+  assert.equal((await A.account.changePassword({ password: 'password1', newPassword: 'password7', confirm: 'password7' })).ok, true);
+  assert.equal((await A2.profile()).error, 'auth'); // other device logged out
+  assert.equal((await A.profile()).ok, true);
+  const G = mk3(be);
+  assert.equal(G.account.isGuest(), false);
+  G.account.guest();
+  assert.equal(G.account.isGuest(), true);
+});
+
+test('post-match rewards: coins x multiplier, rare server pack, capped per minute', async () => {
+  const { A, O } = await world3();
+  assert.equal((await O.owner.setConfig('rewards', { multiplier: 1.5, packChance: 1 })).ok, true);
+  const r = await A.rewards.match({ mode: 'offline', won: true, gf: 3, ga: 1 });
+  assert.deepEqual([r.ok, r.coinsAwarded, r.coins, r.multiplier], [true, 1200, 6200, 1.5]);
+  assert.ok(['gold', 'premium', 'rare', 'stars'].includes(r.pack));
+  const r2 = await A.rewards.match({ mode: 'offline', won: true, gf: 1, ga: 0 });
+  assert.deepEqual([r2.capped, r2.pack, r2.coinsAwarded], [true, null, 0]);
+  assert.equal((await A.rewards.match({ mode: 'bogus' })).error, 'bad_mode');
+});
+
+test('shared adminauth: local PBKDF2 levels, session level + account role, caps', async () => {
+  const AA = await import('../../shared/adminauth.js');
+  const mem = memStorage();
+  globalThis.sessionStorage = mem; globalThis.localStorage = memStorage();
+  const salt = '00112233445566778899aabbccddeeff';
+  const table = {
+    super: { salt, iterations: 1000, hash: await AA.pbkdf2Hex('s-code', salt, 1000) },
+    full: { salt, iterations: 1000, hash: await AA.pbkdf2Hex('f-code', salt, 1000) },
+    temp: { salt, iterations: 1000, hash: await AA.pbkdf2Hex('t-code', salt, 1000) },
+  };
+  assert.equal(await AA.verifyAdminCodeLocal('s-code', table), 'super');
+  assert.equal(await AA.verifyAdminCodeLocal(' f-code ', table), 'full');
+  assert.equal(await AA.verifyAdminCodeLocal('t-code', table), 'temp');
+  assert.equal(await AA.verifyAdminCodeLocal('nope', table), null);
+  assert.equal(await AA.verifyAdminCodeLocal('definitely-wrong'), null); // real constants (3 x 600k PBKDF2)
+  const fakeOnline = { account: { current: () => ({ state: 'account', role: 'owner' }) }, admin: { codeLevel: null } };
+  AA.bindOnline(fakeOnline);
+  assert.equal(AA.getAdminLevel(), 'full');
+  AA.setAdminSessionLevel('temp');
+  assert.equal(AA.getAdminLevel(), 'full');
+  fakeOnline.admin.codeLevel = 'super';
+  assert.equal(AA.getAdminLevel(), 'super');
+  assert.equal(AA.adminCaps('super').maxOvr, 999);
+  assert.equal(AA.adminCaps('full').adminCards, false);
+  AA.bindOnline(null); AA.clearAdminSession();
+  assert.equal(AA.getAdminLevel(), null);
+  // server path: verifyAdminCode uses online.admin.verifyLevel first
+  const be = createMockBackend(memoryStore());
+  be.setAdminCodes({ super: 'srv-super-1' });
+  const X = mk3(be);
+  const r = await AA.verifyAdminCode('srv-super-1', X);
+  assert.deepEqual([r.ok, r.level, r.server], [true, 'super', true]);
+  assert.equal(AA.adminSessionLevel(), 'super');
+  delete globalThis.sessionStorage; delete globalThis.localStorage;
+});
+
+test('unavailable stub exposes every 003 namespace', async () => {
+  for (const ns of ['owner', 'config', 'presence', 'gifts', 'rewards', 'messages', 'squads', 'players']) assert.ok(defaultOnline[ns], ns);
+  assert.equal((await defaultOnline.gifts.inbox()).ok, false);
+  assert.equal(defaultOnline.config.value('x', 3), 3);
 });
 
 // ------------------------------------------------------------------ run
