@@ -68,6 +68,35 @@ function approach(p, tx, ty, accel, dt) {
   if (d <= m) { p.vx = tx; p.vy = ty; } else { p.vx += (dx / d) * m; p.vy += (dy / d) * m; }
 }
 
+/** Turn rate (rad/s) at speed sp: agile at jogging pace, wide arcs at full sprint. */
+export function maxTurnRate(p, sp) {
+  const agility = 0.75 + 0.5 * (((p.attrs.pace ?? 0.6) + (p.attrs.dribbling ?? 0.6)) / 2);
+  const k = clamp((sp - MOMENTUM_SPEED) / 4, 0, 1);
+  return (9 - 5 * k) * agility * (p.onBall ? 0.85 : 1);
+}
+export const MOMENTUM_SPEED = 5.2;
+
+/**
+ * Momentum-based turning: above jogging pace a change of direction is an arc (limited turn
+ * rate) and a sharp one brakes hard first, so nobody spins 180 degrees at full sprint.
+ * Returns false when the normal acceleration model should be used instead.
+ */
+export function turnWithMomentum(p, tx, ty, wm, sp, dt) {
+  if (p.jockey || p.shield || p.role === 'GK' || sp < MOMENTUM_SPEED || wm < 0.5) return false;
+  const cur = Math.atan2(p.vy, p.vx);
+  const d = angDiff(cur, Math.atan2(ty, tx));
+  const step = maxTurnRate(p, sp) * dt;
+  if (Math.abs(d) <= step) return false;
+  const h = cur + Math.sign(d) * step;
+  const ad = Math.abs(d);
+  let ns = ad > 0.9
+    ? sp - (10 + 16 * (ad - 0.9) / (Math.PI - 0.9)) * dt              // plant and brake
+    : wm > sp ? Math.min(wm, sp + 19 * dt) : Math.max(wm, sp - 26 * dt);
+  ns = Math.max(0, ns);
+  p.vx = Math.cos(h) * ns; p.vy = Math.sin(h) * ns;
+  return true;
+}
+
 /** Advance one player's motion for dt according to its state. */
 export function stepPlayer(p, dt) {
   if (p.sentOff) { p.vx = p.vy = 0; return; }
@@ -126,13 +155,16 @@ export function stepPlayer(p, dt) {
     default: {
       // 'run' and 'celebrate'
       let tx = p.want.x, ty = p.want.y;
-      const max = topSpeed(p, p.sprint);
+      let max = topSpeed(p, p.sprint);
+      if (p.jockey) max = Math.min(max, p.sprint ? 5.4 : 3.9);     // jockeying: side-steps, backpedals
+      if (p.shield) max = Math.min(max, 3.3);                       // shielding: slow, body in the way
       const wm = Math.hypot(tx, ty);
       if (wm > max) { tx *= max / wm; ty *= max / wm; }
-      const accel = (wm < sp ? 26 : 19) * (p.recover > 0 ? 0.4 : 1);
-      approach(p, tx, ty, accel, dt);
+      const accel = p.jockey ? 30 : (wm < sp ? 26 : 19) * (p.recover > 0 ? 0.4 : 1);
+      if (!turnWithMomentum(p, tx, ty, Math.min(wm, max), sp, dt)) approach(p, tx, ty, accel, dt);
       const nsp = Math.hypot(p.vx, p.vy);
-      if (nsp > 0.6) p.facing = turnToward(p.facing, Math.atan2(p.vy, p.vx), 11 * dt);
+      if ((p.jockey || p.shield) && p.faceWant != null) p.facing = turnToward(p.facing, p.faceWant, 13 * dt);
+      else if (nsp > 0.6) p.facing = turnToward(p.facing, Math.atan2(p.vy, p.vx), (p.onBall ? 9 : 11) * dt);
       else if (p.faceWant != null) p.facing = turnToward(p.facing, p.faceWant, 8 * dt);
     }
   }

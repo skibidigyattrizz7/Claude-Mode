@@ -158,6 +158,7 @@ test('simulated score distribution is realistic', () => {
   let goals = 0, draws = 0, homeWins = 0, n = 3000, maxG = 0;
   for (let i = 0; i < n; i++) {
     const h = nts[i % nts.length], a = nts[(i * 7 + 3) % nts.length];
+    if (h.id === a.id) { n++; continue; }
     const r = simulateMatch(h, a, { rng });
     goals += r.homeGoals + r.awayGoals;
     maxG = Math.max(maxG, r.homeGoals + r.awayGoals);

@@ -34,7 +34,10 @@ export function snapInsideFrame(y, z, margin = 0.2) {
 /**
  * Plan a shot.
  * @param o {from:{x,y}, aimDir:{x,y}, goalSide, mode, power(0..1), type, shooting(0..1),
- *           sprinting, pressure(0..1), errMul}
+ *           sprinting, pressure(0..1), errMul, realism (false = shot error realism off)}
+ * Modes: Assisted = any aim broadly at goal is snapped inside the frame (always on target);
+ *        Precision = exactly where aimed, and an on-target aim gets +10% pace and half the error;
+ *        Manual = exactly where aimed, full error.
  * Returns {target:{x,y,z}, speed, spin, topspin, onTarget, snapped, sd, aimY, bonus}
  */
 export function planShot(o, rng = Math.random) {
@@ -50,8 +53,10 @@ export function planShot(o, rng = Math.random) {
   // Base error: angular standard deviation (radians)
   const shooting = clamp(o.shooting ?? 0.7, 0, 1);
   const over = Math.max(0, power - 0.8);
-  let sd = 0.03 * (1.35 - shooting) * (1 + 3.5 * over) * (o.sprinting ? 1.25 : 1) * (1 + 0.5 * (o.pressure || 0)) * T.err * (o.errMul || 1);
-  let zsd = 0.22 * (1 + 4 * over) * T.err * (o.errMul || 1);
+  // Shot error realism off: no penalty for skill, sprinting or pressure (only power + type).
+  const real = o.realism !== false;
+  let sd = (real ? 0.03 * (1.35 - shooting) * (o.sprinting ? 1.25 : 1) * (1 + 0.5 * (o.pressure || 0)) : 0.012) * (1 + 3.5 * over) * T.err * (o.errMul || 1);
+  let zsd = (real ? 0.22 : 0.12) * (1 + 4 * over) * T.err * (o.errMul || 1);
   let zBias = over * 2.2;   // overpowered shots rise
   let snapped = false, bonus = false;
   const mode = o.mode || 'Assisted';

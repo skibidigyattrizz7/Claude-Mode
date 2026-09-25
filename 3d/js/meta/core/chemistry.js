@@ -1,14 +1,17 @@
 // Chemistry + team rating. DOM-free.
 import { FORMATIONS, positionFit } from './formations.js';
+import { SPECIAL_CLUB_IDS } from './data.js';
+
+/** Icons and Legends link to every league (and Icons are always green with their own nation). */
+const linksAll = (p) => p.special === 'legend' || p.special === 'icon';
 
 /** Link strength between two players: 0 (red), 1 (orange), 2 (green). */
 export function linkStrength(a, b) {
   if (!a || !b) return null;
   let s = 0;
   if (a.nat === b.nat) s++;
-  const aLeg = a.special === 'legend', bLeg = b.special === 'legend';
-  if (aLeg || bLeg || a.league === b.league) s++;
-  if (a.club === b.club && a.club !== 'LEG' && a.club !== 'HER') s++;
+  if (linksAll(a) || linksAll(b) || a.league === b.league) s++;
+  if (a.club === b.club && !SPECIAL_CLUB_IDS.has(a.club)) s++;
   return s >= 2 ? 2 : s;
 }
 
@@ -41,7 +44,7 @@ export function calcChemistry(formation, slots) {
       const avg = sum[i] / cnt[i];
       base = avg >= 1.5 ? 3 : avg >= 0.9 ? 2 : avg >= 0.4 ? 1 : 0;
     }
-    if (p.special === 'legend' || p.special === 'hero') base = Math.min(3, base + 1);
+    if (p.special === 'legend' || p.special === 'hero' || p.special === 'icon') base = Math.min(3, base + 1);
     const chem = fit === 2 ? base : fit === 1 ? Math.max(0, base - 1) : 0;
     players.push(chem);
     total += chem;

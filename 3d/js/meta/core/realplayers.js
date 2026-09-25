@@ -4,6 +4,7 @@
 // (no shared RNG is consumed, so the generated database and existing saves are unaffected).
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS } from './data.js';
+import { parseStyles } from './physique.js';
 
 // Row: [slug, full name, card name, nation, pos, alt positions, foot, weak foot, skill moves, OVR,
 //       face stats (outfield: pac sho pas dri def phy | GK: div han kic ref spd pos), age, height, skin tone 0..5, extra]
@@ -56,7 +57,7 @@ const ICON_ROWS = [
   ['fontaine', 'Just Fontaine', 'Fontaine', 'FRA', 'ST', [], 'R', 3, 3, 90, [88, 93, 72, 86, 35, 72], 25, 174, 1],
   ['cubillas', 'Teófilo Cubillas', 'Cubillas', 'PER', 'CAM', ['CF'], 'R', 4, 4, 89, [84, 89, 88, 90, 38, 70], 29, 172, 3],
   ['kempes', 'Mario Kempes', 'Kempes', 'ARG', 'ST', ['CF'], 'L', 3, 4, 90, [86, 91, 80, 88, 40, 80], 24, 184, 1],
-  ['johnstone', 'Jimmy Johnstone', 'Johnstone', 'SCO', 'RW', ['RM'], 'R', 3, 5, 88, [89, 76, 82, 93, 32, 58], 25, 157, 0],
+  ['johnstone', 'Jimmy Johnstone', 'Johnstone', 'SCO', 'RW', ['RM'], 'R', 3, 5, 88, [89, 76, 82, 93, 32, 58], 25, 162, 0],
   ['cantona', 'Eric Cantona', 'Cantona', 'FRA', 'CF', ['ST'], 'R', 4, 4, 91, [80, 91, 86, 88, 45, 86], 27, 188, 1],
   ['delpiero', 'Alessandro Del Piero', 'Del Piero', 'ITA', 'CF', ['ST', 'LW'], 'R', 4, 4, 92, [85, 91, 88, 92, 35, 68], 24, 174, 1],
   ['totti', 'Francesco Totti', 'Totti', 'ITA', 'CAM', ['CF', 'ST'], 'R', 4, 4, 92, [80, 90, 91, 90, 40, 80], 30, 180, 1],
@@ -114,6 +115,110 @@ const STAR_ROWS = [
   ['ramos', 'Sergio Ramos', 'Ramos', 'ESP', 'CB', ['RB'], 'R', 3, 3, 82, [62, 64, 72, 68, 84, 82], 40, 184, 1, { lg: 'CON' }],
   ['cavani', 'Edinson Cavani', 'Cavani', 'URU', 'ST', [], 'R', 4, 3, 78, [66, 80, 68, 72, 45, 78], 39, 184, 1, { lg: 'CON' }],
 ];
+
+// slug -> [weight kg, PlayStyles ('+' suffix = PlayStyle+)]
+const PHYS = {
+  pele: [73, ['finesse+', 'acrobatic+', 'technical', 'powerheader']],
+  maradona: [70, ['technical+', 'trickster+', 'finesse', 'firsttouch']],
+  messi_icon: [72, ['finesse+', 'tikitaka+', 'technical', 'firsttouch']],
+  ronaldo_icon: [83, ['power+', 'powerheader+', 'acrobatic', 'rapid']],
+  nazario: [82, ['rapid+', 'technical+', 'finesse', 'trickster']],
+  cruyff: [70, ['technical+', 'incisive+', 'flair', 'firsttouch']],
+  distefano: [76, ['finesse+', 'relentless', 'incisive', 'powerheader']],
+  beckenbauer: [75, ['anticipate+', 'longball+', 'intercept', 'pressproven']],
+  zidane: [80, ['technical+', 'firsttouch+', 'flair', 'pressproven']],
+  best: [65, ['trickster+', 'technical+', 'rapid', 'finesse']],
+  platini: [73, ['deadball+', 'incisive+', 'finesse', 'tikitaka']],
+  ronaldinho: [80, ['trickster+', 'flair+', 'finesse', 'deadball']],
+  maldini: [83, ['anticipate+', 'jockey+', 'slidetackle', 'intercept']],
+  garrincha: [72, ['trickster+', 'rapid+', 'technical', 'whipped']],
+  yashin: [82, ['farreach+', 'quickreflexes+', 'crossclaimer', 'rushout']],
+  matthews: [70, ['trickster+', 'whipped+', 'technical']],
+  baggio: [73, ['finesse+', 'deadball+', 'technical', 'firsttouch']],
+  henry: [83, ['finesse+', 'rapid+', 'quickstep', 'technical']],
+  vanbasten: [80, ['acrobatic+', 'finesse+', 'powerheader', 'firsttouch']],
+  xavi: [68, ['tikitaka+', 'incisive+', 'pressproven', 'firsttouch']],
+  iniesta: [68, ['technical+', 'pressproven+', 'tikitaka', 'incisive']],
+  figo: [75, ['whipped+', 'technical+', 'trickster', 'finesse']],
+  romario: [70, ['finesse+', 'chip+', 'quickstep', 'firsttouch']],
+  eusebio: [73, ['power+', 'rapid+', 'finesse', 'quickstep']],
+  rummenigge: [77, ['finesse+', 'power', 'rapid', 'acrobatic']],
+  cannavaro: [75, ['anticipate+', 'slidetackle+', 'intercept', 'jockey']],
+  casillas: [84, ['quickreflexes+', 'farreach+', 'rushout']],
+  raul: [73, ['finesse+', 'chip', 'firsttouch']],
+  rossi: [66, ['acrobatic+', 'lowdriven', 'firsttouch']],
+  robertocarlos: [70, ['power+', 'rapid+', 'whipped', 'relentless']],
+  hagi: [72, ['finesse+', 'deadball+', 'incisive', 'technical']],
+  ibrahimovic: [95, ['acrobatic+', 'power+', 'bruiser', 'firsttouch']],
+  lampard: [88, ['power+', 'lowdriven+', 'relentless', 'incisive']],
+  gerrard: [83, ['power+', 'pinged+', 'longball', 'relentless']],
+  beckham: [75, ['whipped+', 'deadball+', 'longball']],
+  seedorf: [76, ['power+', 'pressproven+', 'incisive']],
+  danialves: [70, ['whipped+', 'relentless', 'technical']],
+  vieira: [83, ['intercept+', 'bruiser+', 'relentless', 'pressproven']],
+  koeman: [82, ['deadball+', 'power+', 'longball', 'aerial']],
+  facchetti: [85, ['jockey+', 'relentless+', 'aerial', 'intercept']],
+  lahm: [66, ['jockey+', 'intercept+', 'tikitaka', 'relentless']],
+  zanetti: [75, ['relentless+', 'jockey+', 'intercept']],
+  kocsis: [76, ['powerheader+', 'finesse+', 'lowdriven']],
+  fontaine: [70, ['lowdriven+', 'finesse+', 'quickstep']],
+  cubillas: [72, ['deadball+', 'finesse', 'technical']],
+  kempes: [78, ['power+', 'finesse+', 'rapid']],
+  johnstone: [60, ['trickster+', 'technical', 'rapid']],
+  cantona: [88, ['flair+', 'power+', 'chip', 'firsttouch']],
+  delpiero: [73, ['finesse+', 'deadball+', 'technical', 'chip']],
+  totti: [82, ['incisive+', 'chip+', 'finesse', 'flair']],
+  forlan: [75, ['power+', 'deadball', 'lowdriven']],
+  rivaldo: [75, ['acrobatic+', 'finesse+', 'technical', 'deadball']],
+  laudrup: [76, ['incisive+', 'technical+', 'flair', 'firsttouch']],
+  neeskens: [75, ['relentless+', 'power', 'anticipate']],
+  stoichkov: [73, ['power+', 'deadball+', 'finesse', 'trickster']],
+  drogba: [90, ['powerheader+', 'bruiser+', 'power', 'firsttouch']],
+  scholes: [70, ['pinged+', 'power+', 'longball', 'tikitaka']],
+  nordahl: [94, ['power+', 'powerheader+', 'bruiser']],
+  robben: [80, ['finesse+', 'rapid+', 'trickster', 'technical']],
+  meireles: [70, ['power', 'relentless', 'tikitaka']],
+  fernandinho: [67, ['intercept+', 'relentless', 'bruiser']],
+  kroos: [76, ['pinged+', 'longball+', 'tikitaka', 'deadball']],
+  rakitic: [78, ['pinged+', 'longball', 'power']],
+  busquets: [76, ['tikitaka+', 'intercept', 'pressproven']],
+  buffon: [92, ['quickreflexes+', 'deflector+', 'farreach', 'crossclaimer']],
+  kaka: [82, ['rapid+', 'finesse+', 'incisive', 'technical']],
+  mancini: [70, ['flair+', 'chip', 'technical']],
+  sukur: [83, ['powerheader+', 'aerial', 'finesse']],
+  rooney: [83, ['power+', 'acrobatic+', 'relentless', 'longball']],
+  nesta: [79, ['anticipate+', 'slidetackle+', 'intercept', 'jockey']],
+  campbell: [95, ['aerial+', 'bruiser', 'block']],
+  kluivert: [80, ['powerheader+', 'firsttouch', 'finesse']],
+  zoff: [80, ['crossclaimer+', 'deflector+', 'farreach']],
+  socrates: [80, ['chip+', 'incisive+', 'flair', 'finesse']],
+  cafu: [75, ['relentless+', 'rapid+', 'whipped', 'jockey']],
+  matthaus: [72, ['power+', 'relentless+', 'anticipate', 'pinged']],
+  passarella: [73, ['aerial+', 'powerheader+', 'anticipate']],
+  hierro: [83, ['longball+', 'aerial', 'power']],
+  mascherano: [73, ['slidetackle+', 'intercept', 'relentless']],
+  villa: [69, ['finesse+', 'lowdriven', 'quickstep']],
+  lineker: [78, ['lowdriven+', 'quickstep', 'firsttouch']],
+  bagheri: [80, ['power+', 'longball', 'relentless']],
+  deschamps: [70, ['intercept+', 'relentless', 'tikitaka']],
+  petit: [78, ['longball+', 'intercept', 'power']],
+  futre: [68, ['trickster+', 'rapid', 'technical']],
+  bonev: [76, ['deadball+', 'finesse']],
+  clemence: [80, ['crossclaimer+', 'quickreflexes', 'farreach']],
+  // Stars
+  messi: [72, ['finesse+', 'tikitaka', 'technical']],
+  ronaldo: [85, ['power+', 'powerheader', 'acrobatic']],
+  neymar: [68, ['trickster', 'flair', 'technical']],
+  mbappe: [75, ['rapid+', 'quickstep+', 'finesse', 'lowdriven']],
+  salah: [71, ['finesse+', 'rapid', 'technical', 'quickstep']],
+  debruyne: [76, ['incisive+', 'pinged', 'whipped', 'power']],
+  modric: [66, ['trivela', 'tikitaka', 'pressproven']],
+  lukaku: [100, ['power', 'bruiser', 'powerheader']],
+  neuer: [93, ['footwork+', 'rushout', 'farreach']],
+  benzema: [81, ['firsttouch+', 'finesse', 'incisive']],
+  ramos: [82, ['aerial', 'powerheader', 'slidetackle']],
+  cavani: [71, ['powerheader', 'acrobatic']],
+};
 
 export const REAL_ROW_COUNT = ICON_ROWS.length + STAR_ROWS.length;
 
@@ -194,6 +299,9 @@ export function buildRealPlayers(helpers) {
     p.wf = wf; p.sm = isGK ? 1 : sm; p.foot = foot;
     p.wr = isGK ? ['Med', 'Med'] : ATTACK.has(pos) ? ['High', ovr >= 90 ? 'Low' : 'Med'] : ['CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM'].includes(pos) ? ['Med', 'High'] : ['High', 'High'];
     p.height = height;
+    const ph = PHYS[slug] || [75, []];
+    p.weight = ph[0];
+    p.playstyles = parseStyles(ph[1]);
     p.rare = true;
     p.tier = 'gold';
     p.special = icon ? 'icon' : 'star';

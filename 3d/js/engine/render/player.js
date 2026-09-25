@@ -363,7 +363,9 @@ export class PlayerRig {
     const hairStyle = (h >>> 9) % 6; // 5 = bald
     const bootI = (h >>> 13) % BOOTS.length;
     this.leftFoot = ((h >>> 17) % 5) === 0;
-    this.scale = 0.95 + ((h >>> 19) % 100) / 100 * 0.09;
+    // V2.1: rig height follows the player's real height (model is ~1.80 m at scale 1)
+    const ht = pd && Number.isFinite(+pd.height) && +pd.height > 1.4 ? Math.min(2.1, +pd.height) : 0;
+    this.scale = ht ? ht / 1.8 : 0.95 + ((h >>> 19) % 100) / 100 * 0.09;
     this.root.scale.setScalar(this.scale);
     const pal = new Array(NC);
     const col = (hex) => new THREE.Color(hex);

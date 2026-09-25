@@ -41,7 +41,8 @@ const EQUIV = { LB: ['LWB'], LWB: ['LB'], RB: ['RWB'], RWB: ['RB'], ST: ['CF'], 
 export function positionFit(player, slotPos) {
   if (!player) return 0;
   if (player.pos === slotPos || (EQUIV[player.pos] || []).includes(slotPos)) return 2;
-  if ((player.alt || []).includes(slotPos)) return 1;
+  const alt = player.alt || [];
+  if (alt.includes(slotPos) || (EQUIV[slotPos] || []).some((x) => alt.includes(x))) return 1;
   return 0;
 }
 

@@ -2,6 +2,7 @@
 import { Rng, clamp, hashStr } from './rng.js';
 import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP } from './data.js';
 import { buildRealPlayers } from './realplayers.js';
+import { genPhysique, ensurePhysique } from './physique.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -297,6 +298,9 @@ export function getDB() {
     specials.push(p);
   }
 
+  // V2.1 physique + PlayStyles for generated players (private per-player RNG; see physique.js)
+  for (const p of players.concat(specials)) Object.assign(p, genPhysique(p));
+
   // V2 real players (appended last and generated without the shared RNG, so every id above is unchanged).
   // Stars play for fictional clubs (they are part of `players`, so Career Mode includes them);
   // Icons belong to the special Icons club.
@@ -345,6 +349,10 @@ export function sanitizeCard(c) {
   if (Number.isInteger(c.skin) && c.skin >= 0 && c.skin <= 5) p.skin = c.skin;
   p.value = marketValue(p); p.wage = weeklyWage(p);
   p.look = hashStr(id) % 997;
+  p.weight = num(c.weight, 58, 100, NaN);
+  if (!Number.isFinite(p.weight)) delete p.weight;
+  if (Array.isArray(c.playstyles)) p.playstyles = c.playstyles.filter((x) => x && typeof x.id === 'string').slice(0, 4).map((x) => ({ id: String(x.id).slice(0, 20), plus: !!x.plus }));
+  ensurePhysique(p);
   p.foreign = true;
   return p;
 }
@@ -375,6 +383,7 @@ export function genProspect(rng, { id, nat, club, league, age = null, quality = 
   const target = clamp(Math.round(rng.normal(52 + quality * 2, 5)), 42, 68);
   const p = genPlayer(rng, { id, nat, pos, target, age: a, club, league });
   p.pot = clamp(Math.round(p.ovr + rng.range(14, 30) + quality * 1.5), p.ovr + 8, 94);
+  Object.assign(p, genPhysique(p));
   p.value = marketValue(p);
   p.wage = weeklyWage(p);
   return p;

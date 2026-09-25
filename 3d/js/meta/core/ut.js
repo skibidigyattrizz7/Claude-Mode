@@ -1,6 +1,6 @@
 // Pitchside Ultimate Team — pure logic (packs, club, squad, SBCs, objectives, squad battles, market). DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
-import { getDB, getPlayer, utPrice, quickSellValue } from './players.js';
+import { getDB, getPlayer, utPrice, quickSellValue, registerCard } from './players.js';
 import { FORMATIONS } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
 import { buildTeam, gkKitFor, bestLineup, autoBuildSquad, contrastColor } from './teams.js';
@@ -22,6 +22,8 @@ export const CATEGORIES = {
   inform: { label: 'In-Form', test: (p) => p.special === 'inform' },
   hero: { label: 'Hero', test: (p) => p.special === 'hero' },
   legend: { label: 'Legend', test: (p) => p.special === 'legend' },
+  star: { label: 'Star (real player)', test: (p) => p.special === 'star' },
+  icon: { label: 'Icon (real legend)', test: (p) => p.special === 'icon' },
 };
 
 let _pools = null;
@@ -45,20 +47,28 @@ export const PACKS = [
   {
     id: 'gold', name: 'Gold Pack', price: 7500, look: 'gold', desc: '12 players, mostly gold, 1 rare',
     slots: [{ n: 11, odds: { silver: 0.25, gold: 0.62, goldRare: 0.1, gold83: 0.025, inform: 0.004, hero: 0.001 } },
-      { n: 1, odds: { goldRare: 0.86, gold83: 0.1, gold86: 0.03, inform: 0.008, hero: 0.002 } }],
+      { n: 1, odds: { goldRare: 0.856, gold83: 0.1, gold86: 0.03, inform: 0.008, hero: 0.002, star: 0.004 } }],
   },
   {
     id: 'premium', name: 'Premium Gold Pack', price: 15000, look: 'premium', desc: '12 gold players incl. 3 rares',
-    slots: [{ n: 9, odds: { gold: 0.75, goldRare: 0.2, gold83: 0.04, inform: 0.008, hero: 0.002 } },
-      { n: 3, odds: { goldRare: 0.8, gold83: 0.14, gold86: 0.04, inform: 0.015, hero: 0.004, legend: 0.001 } }],
+    slots: [{ n: 9, odds: { gold: 0.746, goldRare: 0.2, gold83: 0.04, inform: 0.008, hero: 0.002, star: 0.004 } },
+      { n: 3, odds: { goldRare: 0.785, gold83: 0.14, gold86: 0.04, inform: 0.015, hero: 0.004, legend: 0.001, star: 0.014, icon: 0.001 } }],
   },
   {
     id: 'rare', name: 'Rare Players Pack', price: 30000, look: 'rare', desc: '12 rare gold players',
-    slots: [{ n: 12, odds: { goldRare: 0.78, gold83: 0.15, gold86: 0.045, inform: 0.02, hero: 0.004, legend: 0.001 } }],
+    slots: [{ n: 12, odds: { goldRare: 0.7675, gold83: 0.15, gold86: 0.045, inform: 0.02, hero: 0.004, legend: 0.001, star: 0.012, icon: 0.0005 } }],
+  },
+  {
+    id: 'stars', name: 'Real Stars Pack', price: 60000, look: 'stars', desc: '1 guaranteed Star (real player) + 5 rare golds',
+    slots: [{ n: 1, odds: { star: 1 } }, { n: 5, odds: { goldRare: 0.8, gold83: 0.17, gold86: 0.03 } }],
   },
   {
     id: 'legend', name: 'Legend Pack', price: 250000, look: 'legend', desc: '1 guaranteed Legend + 4 rare golds',
     slots: [{ n: 1, odds: { legend: 1 } }, { n: 4, odds: { goldRare: 0.7, gold83: 0.25, gold86: 0.05 } }],
+  },
+  {
+    id: 'icon', name: 'Icon Pack', price: 400000, look: 'icon', desc: '1 guaranteed Icon (all-time great) + 4 rare golds',
+    slots: [{ n: 1, odds: { icon: 1 } }, { n: 4, odds: { goldRare: 0.6, gold83: 0.3, gold86: 0.08, star: 0.02 } }],
   },
 ];
 export const PACK_BY_ID = Object.fromEntries(PACKS.map((p) => [p.id, p]));
@@ -89,7 +99,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   return items;
 }
 export function itemScore(p) {
-  return p.ovr + (p.special === 'legend' ? 30 : p.special === 'hero' ? 20 : p.special === 'inform' ? 10 : 0) + (p.rare ? 0.5 : 0);
+  return p.ovr + ({ icon: 40, legend: 30, hero: 20, star: 12, inform: 10 }[p.special] || 0) + (p.rare ? 0.5 : 0);
 }
 /** 'bronze' | 'silver' | 'gold' | 'walkout' */
 export function packFlare(items) {
@@ -117,7 +127,7 @@ export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primar
     }
     return out;
   };
-  const inLg = (p) => p.league === lg.id;
+  const inLg = (p) => p.league === lg.id && !p.real;
   const band = (lo, hi) => (p) => p.ovr >= lo && p.ovr <= hi;
   const club = [
     ...pickSome((p) => p.pos === 'GK' && band(62, 70)(p) && inLg(p), 1),
@@ -132,7 +142,7 @@ export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primar
     ...pickSome((p) => ['ST', 'CM', 'CB'].includes(p.pos) && band(75, 78)(p) && inLg(p), 1),
   ];
   const state = {
-    v: 1, clubName, short: short.slice(0, 3).toUpperCase(), kit: { primary, secondary },
+    v: UT_VERSION, listed: [], untradeable: [], foreign: {}, admin: {}, clubName, short: short.slice(0, 3).toUpperCase(), kit: { primary, secondary },
     coins: 10000, club: [...new Set(club)], squad: defaultSquad(),
     packs: [{ type: 'premium', from: 'Welcome gift' }, { type: 'gold', from: 'Welcome gift' }],
     sbc: {}, obj: {},
@@ -144,7 +154,27 @@ export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primar
   return state;
 }
 
-export function loadUT() { return load(UT_KEY, null); }
+export const UT_VERSION = 2;
+/** Upgrade older saves in place (v1 -> v2: player market, untradeables, foreign cards, admin flags). */
+export function migrateUT(state) {
+  if (!state || typeof state !== 'object') return null;
+  if (!Array.isArray(state.club)) return null;
+  state.listed = Array.isArray(state.listed) ? state.listed : [];
+  state.untradeable = Array.isArray(state.untradeable) ? state.untradeable : [];
+  state.foreign = state.foreign && typeof state.foreign === 'object' ? state.foreign : {};
+  state.admin = state.admin && typeof state.admin === 'object' ? state.admin : {};
+  state.packs = Array.isArray(state.packs) ? state.packs.filter((pk) => pk && PACK_BY_ID[pk.type]) : [];
+  state.sbc = state.sbc || {}; state.obj = state.obj || {};
+  for (const card of Object.values(state.foreign)) registerCard(card);
+  state.club = state.club.filter((id) => getPlayer(id));
+  if (!state.squad || !FORMATIONS[state.squad.formation]) state.squad = defaultSquad();
+  const valid = (id) => (id && state.club.includes(id) ? id : null);
+  state.squad.slots = Array.from({ length: 11 }, (_, i) => valid((state.squad.slots || [])[i]));
+  state.squad.bench = Array.from({ length: 7 }, (_, i) => valid((state.squad.bench || [])[i]));
+  state.v = UT_VERSION;
+  return state;
+}
+export function loadUT() { try { return migrateUT(load(UT_KEY, null)); } catch { return null; } }
 export function saveUT(state) { return save(UT_KEY, state); }
 
 export function clubPlayers(state) { return state.club.map(getPlayer).filter(Boolean); }
@@ -170,6 +200,7 @@ export function squadInfo(state) {
 
 export function removeFromClub(state, pid) {
   state.club = state.club.filter((x) => x !== pid);
+  if (state.untradeable) state.untradeable = state.untradeable.filter((x) => x !== pid);
   state.squad.slots = state.squad.slots.map((x) => (x === pid ? null : x));
   state.squad.bench = state.squad.bench.map((x) => (x === pid ? null : x));
 }
@@ -232,7 +263,20 @@ export const SBCS = [
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 78 }, { t: 'chem', v: 65 }, { t: 'rare', v: 3 }], reward: { player: 'hr4' } },
   { id: 'legend-trial', name: 'Legendary Trial', group: 'Player SBC', desc: 'The ultimate test. Earn a Legend pack.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 83 }, { t: 'chem', v: 80 }], reward: { pack: 'legend' } },
+  { id: 'star-search', name: 'Star Search', group: 'Stars', repeatable: true, desc: 'Trade a strong rare squad for a Real Stars pack.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 78 }, { t: 'rare', v: 4 }], reward: { pack: 'stars' } },
+  { id: 'star-salah', name: 'Star Signing: Mohamed Salah', group: 'Stars', desc: 'Bring the Egyptian King to your club.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 80 }, { t: 'chem', v: 70 }], reward: { player: 'rs_salah' } },
+  { id: 'icon-trial', name: 'Icon Trial', group: 'Icons', repeatable: true, desc: 'An elite squad earns a guaranteed Icon pack.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 84 }, { t: 'chem', v: 75 }, { t: 'rare', v: 6 }], reward: { pack: 'icon' } },
+  { id: 'icon-maldini', name: 'Icon: Paolo Maldini', group: 'Icons', desc: 'The complete defender. Build a rock-solid squad.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 85 }, { t: 'chem', v: 80 }], reward: { player: 'ic_maldini' } },
+  { id: 'icon-zidane', name: 'Icon: Zinedine Zidane', group: 'Icons', desc: 'Elegance on the ball. A world-class midfield is required.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 86 }, { t: 'chem', v: 85 }, { t: 'sameNation', v: 3 }], reward: { player: 'ic_zidane' } },
+  { id: 'icon-pele', name: 'Icon: Pelé', group: 'Icons', desc: 'The King. The hardest challenge in Pitchside.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 88 }, { t: 'chem', v: 90 }], reward: { player: 'ic_pele' } },
 ];
+export const SPECIAL_NAME = { icon: 'Icon', star: 'Star', legend: 'Legend', hero: 'Hero', inform: 'In-Form' };
 export const SBC_BY_ID = Object.fromEntries(SBCS.map((s) => [s.id, s]));
 
 export function reqLabel(r) {
@@ -309,7 +353,11 @@ export function grantReward(state, reward, from = '') {
   if (reward.player) {
     const p = getPlayer(reward.player);
     if (state.club.includes(reward.player)) { state.coins += 20000; out.push('20,000 coins (duplicate reward)'); }
-    else { state.club.push(reward.player); out.push(`${p.name} (${p.ovr} ${p.special === 'hero' ? 'Hero' : ''})`.trim()); }
+    else {
+      state.club.push(reward.player);
+      if (state.untradeable && !state.untradeable.includes(reward.player)) state.untradeable.push(reward.player);
+      out.push(`${p.name} (${p.ovr} ${SPECIAL_NAME[p.special] || ''})`.trim());
+    }
   }
   return out;
 }
@@ -453,9 +501,9 @@ export function marketSearch({ pos = '', minOvr = 0, maxOvr = 99, tier = '', nat
   let pool = db.all.filter((p) => p.ovr >= minOvr && p.ovr <= maxOvr
     && (!pos || p.pos === pos) && (!nat || p.nat === nat) && (!league || p.league === league)
     && (!q || p.name.toLowerCase().includes(q) || p.last.toLowerCase().includes(q))
-    && (!tier || (tier === 'special' ? !!p.special : tier === 'rare' ? p.rare && !p.special : p.tier === tier && !p.special)));
+    && (!tier || (tier === 'special' ? !!p.special : ['icon', 'star'].includes(tier) ? p.special === tier : tier === 'rare' ? p.rare && !p.special : p.tier === tier && !p.special)));
   // specials rarely listed
-  pool = pool.filter((p) => !p.special || rng.chance(0.35));
+  pool = pool.filter((p) => !p.special || (tier && tier === p.special) || rng.chance(p.special === 'icon' ? 0.2 : 0.35));
   rng.shuffle(pool);
   const out = [];
   for (const p of pool) {

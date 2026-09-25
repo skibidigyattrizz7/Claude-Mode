@@ -197,7 +197,7 @@ create or replace function public.pitchside__clean_name(p_name text)
 returns text language sql immutable
 set search_path = public, extensions, pg_temp
 as $$
-  select coalesce(nullif(left(btrim(regexp_replace(regexp_replace(coalesce(p_name, ''), '[[:cntrl:]]', '', 'g'), '\s+', ' ', 'g')), 16), ''), 'Player')
+  select coalesce(nullif(btrim(left(btrim(regexp_replace(regexp_replace(coalesce(p_name, ''), '[[:cntrl:]]', '', 'g'), '\s+', ' ', 'g')), 16)), ''), 'Player')
 $$;
 
 create or replace function public.pitchside__division(p_rating int)
@@ -248,7 +248,7 @@ begin
   -- idempotent: re-registering the same secret returns the same profile
   select id into v_id from public.pitchside_profiles where secret_hash = v_hash;
   if found then return v_id; end if;
-  if not public.pitchside__throttle('reg_ip:' || public.pitchside__client_key(), interval '1 hour', 5)
+  if not public.pitchside__throttle('reg_ip:' || public.pitchside__client_key(), interval '1 hour', 20)
      or not public.pitchside__throttle('reg_all', interval '1 hour', 300) then
     raise exception 'rate limited' using errcode = 'P0001';
   end if;

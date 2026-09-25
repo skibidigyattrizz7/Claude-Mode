@@ -248,3 +248,34 @@ export function predictKick(ballPos, target, hs, opts = {}) {
   Object.assign(b, { vx: v.vx, vy: v.vy, vz: v.vz, spin: opts.spin || 0, topspin: opts.topspin || 0 });
   return simulatePath(b, 2.5, (bb) => bb.x >= GX, 3);
 }
+
+/**
+ * Resolve a penalty / direct free kick without the first-person scene (AI-only matches and
+ * the menu demo). r: {kind:'penalty'|'freekick', x, y, side, shooter, keeper}.
+ * Returns the same shape the KickScene reports: {result, caught, y, shooter}.
+ */
+export function simulateDeadBall(r, rng = Math.random) {
+  const sk = r.shooter && r.shooter.attrs ? r.shooter.attrs.shooting : 0.75;
+  const kp = r.keeper && r.keeper.attrs ? r.keeper.attrs.keeping : 0.7;
+  const mirror = r.side === 0;
+  if (r.kind === 'penalty') {
+    const res = penaltyOutcomeSim(rng, sk, kp);
+    return { result: res === 'post' ? 'miss' : res, caught: res === 'save' && rng() < 0.45, y: CY + (rng() - 0.5) * 4, shooter: r.shooter };
+  }
+  const pos = mirror ? { x: PITCH.L - r.x, y: PITCH.W - r.y } : { x: r.x, y: r.y };
+  const keeper = new KeeperModel(CY + (pos.y < CY ? 1 : -1) * 0.8, kp, GX - 0.6);
+  const wall = buildWall(pos, 4, rng);
+  const s = makeKickState(pos, keeper, wall);
+  const far = pos.y < CY ? 1 : -1;
+  const tgt = kickError({ y: CY + far * (GOAL.W / 2 - 0.4 - rng() * 1.5), z: 0.8 + rng() * 1.2 }, 0.7, sk, rng, 1.2);
+  launch(s, tgt, freeKickSpeed(0.6 + rng() * 0.25), { spin: far * (0.4 + rng() * 0.5) });
+  const dv = aiFreeKickDive(s.ball, keeper, true, rng);
+  let dived = false;
+  for (let k = 0; k < 800 && !s.done; k++) {
+    if (!dived && s.t >= dv.at) { keeper.dive(dv.y, dv.z, dv.dur); dived = true; }
+    stepKick(s, PHYS.DT);
+  }
+  const res = s.result || 'miss';
+  const y = mirror ? PITCH.W - s.ball.y : s.ball.y;
+  return { result: res, caught: res === 'save' && rng() < 0.45, y, shooter: r.shooter };
+}

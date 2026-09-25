@@ -1,9 +1,10 @@
 // Builds contract-shaped Team objects, lineups, kits and national teams. DOM-free.
 import { FORMATIONS, effectiveOvr, positionFit } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
-import { NATIONS } from './data.js';
-import { getDB } from './players.js';
-import { hashStr } from './rng.js';
+import { ALL_NATIONS, CLUBS } from './data.js';
+import { getDB, genPlayer } from './players.js';
+import { hashStr, Rng, clamp } from './rng.js';
+import { matchPhysique, genPhysique } from './physique.js';
 
 // ---------- colour helpers ----------
 export function hexToRgb(h) {
@@ -93,6 +94,7 @@ export function toMatchPlayer(p, pos, number, scale = 1) {
   const ovr = Math.round(effectiveOvr(p, pos) * scale);
   return {
     id: p.id, name: p.name, number, pos, ovr: Math.max(1, Math.min(99, fit === 2 ? Math.round(p.ovr * scale) : ovr)),
+    ...matchPhysique(p),
     attrs: {
       pac: sc(p.stats.pac), sho: sc(p.stats.sho), pas: sc(p.stats.pas), dri: sc(p.stats.dri), def: sc(p.stats.def), phy: sc(p.stats.phy),
       div: sc(p.gk.div), han: sc(p.gk.han), kic: sc(p.gk.kic), ref: sc(p.gk.ref), spd: sc(p.gk.spd), pos: sc(p.gk.pos),
@@ -218,7 +220,7 @@ export function autoBuildSquad(pool, formation, { chemWeight = 0.15 } = {}) {
     for (const p of pool) m.set(p[key], (m.get(p[key]) || 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map((e) => e[0]);
   };
-  for (const lg of count('league')) for (const b of [4, 8]) tryBuild((p) => (p.league === lg || p.special === 'legend' ? b : 0));
+  for (const lg of count('league')) for (const b of [4, 8]) tryBuild((p) => (p.league === lg || p.special === 'legend' || p.special === 'icon' ? b : 0));
   for (const nat of count('nat')) for (const b of [4, 8]) tryBuild((p) => (p.nat === nat ? b : 0));
   for (const lg of count('league').slice(0, 2)) for (const nat of count('nat').slice(0, 2)) tryBuild((p) => (p.league === lg ? 5 : 0) + (p.nat === nat ? 4 : 0));
   candidates.sort((a, b) => b.score - a.score);
@@ -262,22 +264,83 @@ export function autoBuildSquad(pool, formation, { chemWeight = 0.15 } = {}) {
 }
 
 // ---------- national teams ----------
+// Each nation's XI is an all-time squad: its real players (Icons + Stars, one version per person — the
+// higher rated) where they fit, then filled with generated players. Extra V2 nations (not in the generated
+// DB) get deterministic generated fillers of their own.
 let _nt = null;
+let _extraPools = null;
+
+function extraNationPools() {
+  if (_extraPools) return _extraPools;
+  _extraPools = new Map();
+  const tmpl = ['GK', 'GK', 'CB', 'CB', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'ST', 'CB'];
+  const clubs = CLUBS.filter((c) => c.tier === 2);
+  for (const n of ALL_NATIONS.filter((x) => x.extra)) {
+    const rng = new Rng(`xnat-${n.code}`);
+    const pool = tmpl.map((pos, i) => {
+      const club = clubs[(hashStr(n.code) + i * 7) % clubs.length];
+      const target = clamp(Math.round(64 + n.str * 2.6 + rng.normal(0, 3) - (i === 1 ? 5 : 0)), 58, 82);
+      const p = genPlayer(rng, { id: `xn_${n.code}_${i + 1}`, nat: n.code, pos, target, club: club.id, league: club.league });
+      return Object.assign(p, genPhysique(p));
+    });
+    _extraPools.set(n.code, pool);
+  }
+  return _extraPools;
+}
+
+/** Real players of a nation, one version per person (highest overall). */
+export function nationRealPlayers(code) {
+  const best = new Map();
+  for (const p of getDB().real) {
+    if (p.nat !== code) continue;
+    const cur = best.get(p.person);
+    if (!cur || p.ovr > cur.ovr) best.set(p.person, p);
+  }
+  return [...best.values()];
+}
+
+/** Real players are preferred wherever they fit (natural/alternative position) and never forced out of position. */
+function nationScore(p, pos) {
+  const base = effectiveOvr(p, pos);
+  if (!p.real) return base;
+  const fit = positionFit(p, pos);
+  return base + (fit === 2 ? 10 : fit === 1 ? 8 : base >= p.ovr - 6 ? -8 : -25);
+}
+function lineupScore(slots, formation) {
+  const f = FORMATIONS[formation];
+  return slots.reduce((a, p, i) => a + (p ? nationScore(p, f.slots[i].pos) : -50), 0);
+}
+
 export function getNationalTeams() {
   if (_nt) return _nt.map((t) => structuredClone(t));
   const db = getDB();
   const byNat = new Map();
   for (const p of db.players) {
+    if (p.real) continue;
     if (!byNat.has(p.nat)) byNat.set(p.nat, []);
     byNat.get(p.nat).push(p);
   }
-  _nt = NATIONS.map((n) => {
-    const pool = byNat.get(n.code) || [];
-    const { slots, bench } = bestLineup(pool, n.formation);
+  const extra = extraNationPools();
+  _nt = ALL_NATIONS.map((n) => {
+    const generated = byNat.get(n.code) || extra.get(n.code) || [];
+    const real = nationRealPlayers(n.code);
+    const pool = real.concat(generated);
+    let formation = n.formation;
+    let lineup = bestLineup(pool, formation, { score: nationScore });
+    if (real.length >= 2) {
+      // all-time squads pick the shape that fits their real players best (ties keep the nation's usual shape)
+      let bestScore = lineupScore(lineup.slots, formation);
+      for (const f of Object.keys(FORMATIONS)) {
+        if (f === formation) continue;
+        const lu = bestLineup(pool, f, { score: nationScore });
+        const sc = lineupScore(lu.slots, f);
+        if (sc > bestScore + 0.5) { bestScore = sc; lineup = lu; formation = f; }
+      }
+    }
     const kit = { ...n.kit };
     return buildTeam({
       id: n.code, name: n.name, short: n.code, kit, gkKit: gkKitFor(n.kit, n.away),
-      formation: n.formation, starters: slots, bench,
+      formation, starters: lineup.slots, bench: lineup.bench,
     });
   });
   return _nt.map((t) => structuredClone(t));
@@ -285,6 +348,6 @@ export function getNationalTeams() {
 
 /** Alternate (away) kit lookup for national teams. */
 export function nationalAwayKit(code) {
-  const n = NATIONS.find((x) => x.code === code);
+  const n = ALL_NATIONS.find((x) => x.code === code);
   return n ? { ...n.away } : null;
 }

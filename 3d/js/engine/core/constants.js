@@ -29,3 +29,7 @@ export const DIFFICULTY = {
   world:     { level: 2, err: 0.95, react: 0.2,  think: 0.3,  press: 0.9,  noise: 0.12, gk: 1.0 },
   legendary: { level: 3, err: 0.78, react: 0.13, think: 0.22, press: 1.0,  noise: 0.06, gk: 1.06 },
 };
+
+// Match periods: halves 1-2 are 45 game-minutes, extra-time halves 3-4 are 15 game-minutes.
+export const halfLen = (h) => (h <= 2 ? 2700 : 900);
+export const halfBase = (h) => (h <= 2 ? (h - 1) * 2700 : 5400 + (Math.min(h, 4) - 3) * 900);

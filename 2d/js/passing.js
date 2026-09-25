@@ -1,7 +1,7 @@
 // Pass target selection and pass velocity planning (pure).
 import { PITCH, PHYS } from './constants.js';
 import { integrate, makeBall } from './physics.js';
-import { angleBetween, clamp, distToSegment, norm, DEG } from './util.js';
+import { angleBetween, clamp, distToSegment, norm, DEG, gauss } from './util.js';
 
 const CK = PHYS.ROLL_C / PHYS.ROLL_K;
 
@@ -120,7 +120,7 @@ const RUN_SPEED = 6.8;   // how fast a receiver sprints onto a through ball
  * direction doesn't leave the ball in empty space.
  * through: into space ahead of the runner, at the first point he can reach before the ball.
  */
-export function leadTarget(from, mate, kind, attackDir = 1) {
+export function leadTarget(from, mate, kind, attackDir = 1, full = false) {
   const vx = mate.vx || 0, vy = mate.vy || 0;
   const ballTime = (tgt) => {
     const d = Math.hypot(tgt.x - from.x, tgt.y - from.y);
@@ -141,10 +141,11 @@ export function leadTarget(from, mate, kind, attackDir = 1) {
     }
     return best;
   }
+  // full lead (assisted passing): the ball meets the runner exactly where he will be
   let tgt = { x: mate.x, y: mate.y }, t = 0;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < (full ? 6 : 3); i++) {
     t = ballTime(tgt);
-    const lead = Math.min(kind === 'lob' ? 7 : 5, Math.hypot(vx, vy) * t * 0.7);
+    const lead = full ? Math.min(kind === 'lob' ? 14 : 11, Math.hypot(vx, vy) * t) : Math.min(kind === 'lob' ? 7 : 5, Math.hypot(vx, vy) * t * 0.7);
     const sp = Math.hypot(vx, vy);
     tgt = sp > 0.3 ? { x: mate.x + (vx / sp) * lead, y: mate.y + (vy / sp) * lead } : { x: mate.x, y: mate.y };
     tgt = clampToPitch(tgt, 1.5, 1.5);
@@ -157,8 +158,9 @@ export function leadTarget(from, mate, kind, attackDir = 1) {
  * Score = alignment with aim (cone ~45°) - distance cost - interception risk.
  * Returns {mate, target, score} or null if nobody is in the cone.
  */
-export function choosePassTarget(passer, mates, opps, aimDir, kind = 'ground', attackDir = 1) {
+export function choosePassTarget(passer, mates, opps, aimDir, kind = 'ground', attackDir = 1, opts = {}) {
   const maxD = kind === 'lob' ? 60 : kind === 'through' ? 45 : 40;
+  const alignW = opts.alignW || 1.8;
   const scan = (cone) => {
     let best = null;
     for (const m of mates) {
@@ -168,9 +170,9 @@ export function choosePassTarget(passer, mates, opps, aimDir, kind = 'ground', a
       if (d < 2.5 || d > maxD) continue;
       const ang = angleBetween(aimDir.x, aimDir.y, dx, dy);
       if (ang > cone) continue;
-      const plan = leadTarget(passer, m, kind, attackDir);
+      const plan = leadTarget(passer, m, kind, attackDir, !!opts.fullLead);
       const risk = laneRisk(passer, plan.target, opps, kind);
-      let score = 1.8 * (1 - ang / cone) - 0.014 * d - 1.5 * risk;
+      let score = alignW * (1 - ang / cone) - 0.014 * d - 1.5 * risk;
       if (kind === 'through') score += 0.3 * clamp(((m.vx || 0) * attackDir) / 6, -1, 1);
       if (kind === 'lob' && d < 12) score -= 0.5;
       if (!best || score > best.score) best = { mate: m, target: plan.target, t: plan.t, score };
@@ -178,7 +180,83 @@ export function choosePassTarget(passer, mates, opps, aimDir, kind = 'ground', a
     return best;
   };
   // Nobody inside the normal cone: look a little wider rather than passing to nobody.
-  return scan(CONES[kind] || CONES.ground) || scan(WIDE_CONE);
+  return scan(opts.cone || CONES[kind] || CONES.ground) || scan(opts.wide || WIDE_CONE);
+}
+
+// ---------- pass assistance (Assisted / Semi / Manual) ----------
+
+/** Targeting cones (degrees) and how much the aim direction dominates the choice. */
+export const PASS_CONES = {
+  Assisted: { ground: 70, through: 75, lob: 75, wide: 120, alignW: 1.2 },
+  Semi: { ground: 28, through: 32, lob: 32, wide: 42, alignW: 2.6 },
+};
+export const PASS_MODES = ['Assisted', 'Semi', 'Manual'];
+
+/** Manual passing: launch speed (ground) or carry distance (lob) from the hold-time power 0..1. */
+export function manualPassSpeed(kind, power) {
+  const f = clamp(power, 0, 1);
+  if (kind === 'lob') return 8 + 44 * f;                  // metres to the landing spot
+  return (kind === 'through' ? 6 : 5) + 23 * f;          // m/s along the ground
+}
+
+/** The hold-time power that would play a perfect pass of length d (inverse of manualPassSpeed). */
+export function idealPassPower(kind, d) {
+  if (kind === 'lob') return clamp((d - 8) / 44, 0, 1);
+  const v0 = groundPassSpeed(d, arriveSpeedFor(d, kind)).v0;
+  return clamp((v0 - (kind === 'through' ? 6 : 5)) / 23, 0, 1);
+}
+
+function rotate(v, a, s = 1) {
+  const c = Math.cos(a), n = Math.sin(a);
+  return { ...v, vx: (v.vx * c - v.vy * n) * s, vy: (v.vx * n + v.vy * c) * s };
+}
+
+/**
+ * Plan a human pass for an assist mode.
+ *  Assisted: wide cone around the aim, automatic power, leads the runner so the ball arrives at
+ *            his feet; no error (only an interception stops it).
+ *  Semi:     narrower cone (the aim matters more), power from the hold time blended with the
+ *            ideal pass, small error from the passing attribute.
+ *  Manual:   no targeting at all: exactly along the aim with the power you hold.
+ * @param o {passer, from, mates, opps, aimDir, kind, attackDir, mode, power, passing}
+ * Returns {mate, target, v:{vx,vy,vz,t}, mode, err}
+ */
+export function planPass(o, rng = Math.random) {
+  const mode = PASS_MODES.includes(o.mode) ? o.mode : 'Assisted';
+  const kind = o.kind || 'ground';
+  const from = o.from;
+  const f = clamp(o.power ?? 0.5, 0, 1);
+  const aim = norm(o.aimDir.x, o.aimDir.y);
+  const alongAim = () => {
+    if (kind === 'lob') {
+      const d = manualPassSpeed('lob', f);
+      const target = { x: from.x + aim.x * d, y: from.y + aim.y * d };
+      const v = passVelocity(from, target, 'lob');
+      return { mate: null, target, v, mode, err: 0 };
+    }
+    const v0 = manualPassSpeed(kind, f);
+    const r = rollDistance(v0, 0);
+    return { mate: null, target: { x: from.x + aim.x * r.d, y: from.y + aim.y * r.d }, v: { vx: aim.x * v0, vy: aim.y * v0, vz: 0, t: r.t }, mode, err: 0 };
+  };
+  if (mode === 'Manual') return alongAim();
+  const C = PASS_CONES[mode];
+  const sel = choosePassTarget(o.passer, o.mates, o.opps, aim, kind, o.attackDir ?? 1,
+    { cone: C[kind] * DEG, wide: C.wide * DEG, alignW: C.alignW, fullLead: mode === 'Assisted' });
+  if (!sel) {
+    if (mode === 'Semi') return alongAim();
+    // assisted pass into space along the aim
+    const L = kind === 'lob' ? 24 : kind === 'through' ? 18 : 13;
+    const target = clampToPitch({ x: from.x + aim.x * L, y: from.y + aim.y * L }, 1.5, 1.5);
+    return { mate: null, target, v: passVelocity(from, target, kind, kind === 'lob' ? null : 1.8), mode, err: 0 };
+  }
+  const v = passVelocity(from, sel.target, kind);
+  if (mode === 'Assisted') return { mate: sel.mate, target: sel.target, v, mode, err: 0 };
+  // Semi-assisted: the hold time decides the weight of the pass
+  const d = Math.hypot(sel.target.x - from.x, sel.target.y - from.y);
+  const scale = clamp(1 + (f - idealPassPower(kind, d)) * 0.55, 0.8, 1.3);
+  const err = gauss(rng) * 0.035 * (1.25 - clamp(o.passing ?? 0.7, 0, 1));
+  const vv = rotate(v, err, scale);
+  return { mate: sel.mate, target: { x: from.x + (sel.target.x - from.x) * scale, y: from.y + (sel.target.y - from.y) * scale }, v: vv, mode, err, scale };
 }
 
 /**
