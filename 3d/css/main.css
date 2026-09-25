@@ -506,3 +506,52 @@ button.picker-card:hover { border-color: var(--acc); transform: translateY(-2px)
   .gp-group { padding: 14px; }
   .seg button { font-size: 12.5px; padding: 6px 3px; }
 }
+
+/* ------------------------------------------------ small buttons, alert retry, badges */
+.btn--sm { min-height: 36px; padding: 6px 12px; font-size: 13px; border-radius: 10px; }
+.alert { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.tile-badge { position: absolute; top: 10px; right: 10px; z-index: 2; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center; background: var(--hot); color: #fff; font: 900 13px var(--display); box-shadow: 0 0 0 3px rgba(255,61,127,.25); }
+.rivals-chip { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(123,92,255,.5); background: rgba(123,92,255,.12); }
+.rivals-chip b { font: 900 15px var(--display); color: #b9a8ff; text-transform: uppercase; }
+.rivals-chip small { color: var(--mut); font-size: 12px; }
+.reward-rivals b { color: #b9a8ff; } .reward-rivals.up { color: var(--ok); }
+
+/* ------------------------------------------------ friends */
+.friends { margin-top: 14px; display: grid; gap: 14px; }
+.friends-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.friends-top h2 { font-size: 26px; text-transform: uppercase; font-style: italic; }
+.friends-code { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.friends-code small { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--mut); }
+.friends-code b { font: 900 24px var(--display); letter-spacing: .18em; color: var(--acc); }
+.friends-body { display: grid; gap: 14px; }
+.friends-body .hint { margin: 0; }
+.friend-add { display: flex; gap: 8px; max-width: 420px; }
+.friend-add .input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .14em; font-weight: 800; }
+.friend-group { display: grid; gap: 8px; }
+.friend-group h3, .friend-group summary { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--mut); cursor: default; }
+.friend-group summary { cursor: pointer; }
+.challenge-mode { max-width: 360px; }
+.friend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.friend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 12px; background: rgba(5,8,16,.5); border: 1px solid var(--line); }
+.friend-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; }
+.friend.is-online .friend-dot { background: var(--acc); box-shadow: 0 0 8px var(--acc); }
+.friend--incoming .friend-dot { background: var(--gold); }
+.friend-name { flex: 1; min-width: 120px; font-weight: 800; display: flex; flex-direction: column; line-height: 1.2; overflow-wrap: anywhere; }
+.friend-name small { font-weight: 600; color: var(--mut); font-size: 12px; }
+.friend-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* ------------------------------------------------ incoming invite banners */
+.invite-stack { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 2600; display: grid; gap: 8px; width: min(380px, calc(100vw - 24px)); }
+.invite { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--panel-solid); border: 1px solid rgba(25,245,164,.55); box-shadow: 0 18px 40px rgba(0,0,0,.55); animation: fade .2s ease both; }
+.invite-text b { color: var(--acc); }
+.invite-left { color: var(--mut); margin-left: 4px; }
+.invite-actions { display: flex; gap: 8px; }
+.invite-actions .btn { flex: 1; }
+@media (max-width: 520px) {
+  .friends-code b { font-size: 20px; }
+  .friend-actions { width: 100%; }
+  .friend-actions .btn { flex: 1; }
+  .invite-stack { left: 12px; right: 12px; width: auto; }
+}
+.join-row .btn--xl { width: auto; flex: none; align-self: auto; padding-left: 22px; padding-right: 22px; }
+.join-row .code-input { min-width: 150px; }

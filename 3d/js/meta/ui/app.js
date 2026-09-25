@@ -7,6 +7,9 @@ import { careerHomeView } from './careerview.js';
 import { loadUT, saveUT } from '../core/ut.js';
 import { INFINITE_COINS } from '../core/admin.js';
 import { adminButton } from './adminview.js';
+import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
+import { recordEvoMatch } from '../core/evolutions.js';
+import { recordSeasonMatch } from '../core/seasons.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
 export function coinNum(r) {
@@ -115,7 +118,12 @@ export class MetaApp {
     return h('div', { class: `pm-coins ${online ? 'is-online' : ''}`, title: online ? 'Online coin balance (server)' : 'Local coin balance (this device)' },
       h('i', { 'aria-hidden': 'true' }), inf ? '∞' : fmtNum(this.ut.coins), h('small', { class: 'pm-coins-src' }, online ? 'Online' : 'Local'));
   }
-  topRefresh() { const v = this.stack[this.stack.length - 1]; if (v) this.renderTop(v); }
+  topRefresh() {
+    const v = this.stack[this.stack.length - 1];
+    if (v) this.renderTop(v);
+    const note = this.main.querySelector('.pm-walletnote');
+    if (note) note.textContent = this.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.';
+  }
   coinSourceLabel() { return this.wallet.mode === 'online' ? 'online balance' : 'local balance'; }
 
   async onlineAvailable() {
@@ -203,6 +211,27 @@ export class MetaApp {
   }
 
   showUltimateTeam() { this.reset(hubView()); this.push(ensureUTView(this)); }
+  /**
+   * Shared post-match bookkeeping for every mode: objectives + evolutions (UT only) and the season XP track.
+   * Returns { m (normalised stats), season, done (objectives completed) }.
+   */
+  afterMatch({ team, result, side = 'home', mode = 'match', ut = true }) {
+    let m;
+    try { m = userMatchStats(team, result, side); } catch (e) { console.warn('[meta] afterMatch', e); return null; }
+    let done = [];
+    if (ut && this.ut) {
+      done = recordObjectiveMatch(this.ut, m);
+      recordEvoMatch(this.ut, m);
+      this.saveUT();
+    }
+    const season = recordSeasonMatch({ outcome: m.outcome, goals: m.gf, mode });
+    const msgs = [];
+    if (season.levelsGained.length) msgs.push(`Season level ${season.levelsGained[season.levelsGained.length - 1]} reached!`);
+    if (done.length) msgs.push(`${done.length} objective${done.length > 1 ? 's' : ''} complete — claim in Objectives`);
+    if (msgs.length) setTimeout(() => this.toast(msgs.join(' · '), 'good'), 400);
+    return { m, season, done };
+  }
+
   isAdmin() { try { return globalThis.sessionStorage.getItem('pitchside.admin.session') === '1'; } catch { return false; } }
   showCareer() { this.reset(hubView()); this.push(careerHomeView()); }
 }

@@ -13,7 +13,7 @@ export class Tutorial {
     this.enter();
   }
 
-  k(a) { return this.touch ? { up: 'joystick', shoot: 'SHOOT', pass: 'PASS', through: 'THRU', lob: 'LOB', sprint: 'SPRINT', tackle: 'TACKLE', slide: 'SLIDE', skill: 'SKILL', switch: 'SWITCH' }[a] || a : keyLabel(this.b[a]); }
+  k(a) { return this.touch ? { up: 'joystick', shoot: 'SHOOT', pass: 'PASS', through: 'THRU', lob: 'LOB', sprint: 'SPRINT', tackle: 'TACKLE', slide: 'SLIDE', skill: 'SKILL', switch: 'SWITCH', jockey: 'JOCKEY' }[a] || a : keyLabel(this.b[a]); }
 
   buildSteps() {
     const k = (a) => this.k(a);

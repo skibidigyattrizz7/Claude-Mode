@@ -253,7 +253,7 @@ export class KickScene {
       case 'result':
         this.keeper.update(dt);
         this.settleBall(dt);
-        if (this.phaseT > 2.0 || (this.phaseT > 0.8 && (input.anyPressed || input.mouse.pressed) && this.mode !== 'penalty' && this.mode !== 'freekick')) this.finishKick();
+        if (this.phaseT > 2.0 || (this.phaseT > 0.8 && (input.anyPressed || input.mouse.pressed))) this.finishKick();   // skippable
         break;
       case 'over':
         if (this.phaseT > 1 && (input.anyPressed || input.mouse.pressed)) {

@@ -8,7 +8,7 @@ import * as KO from './knockout.js';
 import * as HSP from './humansp.js';
 import { normTactics, applyTactic } from './tactics.js';
 import { clamp, lerp, wrapAngle, angleTo, mulberry32, segDist } from './mathx.js';
-import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine } from './physics.js';
+import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine, setWeather } from './physics.js';
 import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
 import { leadPass, rollSpeedFor, rollTimeTo, solveLob, solveShot, groundVel } from './passing.js';
 import { FORMATIONS, assignSlots, roleGroup } from './formations.js';
@@ -24,6 +24,7 @@ const GP_ENUMS = {
   passAssist: ['assisted', 'semi', 'manual'], throughAssist: ['assisted', 'semi', 'manual'], lobAssist: ['assisted', 'semi', 'manual'],
   shotAssist: ['assisted', 'precision', 'manual'], autoSwitch: ['auto', 'airballs', 'manual'], autoSwitchAssist: ['none', 'low', 'high'],
   aiDefending: ['assisted', 'tactical'], passReceiverLock: ['off', 'earlyRelease', 'lateRelease'], switchOnPass: ['instant', 'release', 'receive'],
+  gameplayStyle: ['competitive', 'authentic'], commentary: ['off', 'text', 'voice'],
 };
 // Merge per-side gameplay settings over the defaults, rejecting unknown values.
 export function mergeGameplay(g) {
@@ -61,6 +62,7 @@ export class MatchSim {
     this.halfMinutes = o.halfMinutes || 3;
     this.gp = [mergeGameplay(o.gameplay && o.gameplay.home), mergeGameplay(o.gameplay && o.gameplay.away)];
     this.knockout = !!o.knockout;
+    this.weather = setWeather(o.weather);
     this.tac = [normTactics(o.home.tactics), normTactics(o.away.tactics)];
     this.formation = [o.home.formation || '4-3-3', o.away.formation || '4-3-3'];
     this.subReq = [[], []];
@@ -763,7 +765,7 @@ export class MatchSim {
     if (p.act || this.t < p.cool.tackle) return;
     const o = this.owner();
     if (o && o.team !== p.team) p.face = Math.atan2(this.ball.p.z - p.z, this.ball.p.x - p.x);
-    p.act = { type: 'tackle', t0: this.t, dur: 0.42 };
+    p.act = { type: 'tackle', t0: this.t, dur: 0.42, behind: o && o.team !== p.team ? this.fromBehind(p, o) : false };
     p.cool.tackle = this.t + 0.7;
   }
   startSlide(p) {
@@ -1435,7 +1437,9 @@ export class MatchSim {
     this.pendingPass = null; this.pendingOffside = null; b.intended = -1;
     const celeb = og ? this.nearestToBall(scoring) : toucher;
     this.celeb = celeb.idx;
-    celeb.celebKind = Math.floor(this.rng() * 3);
+    // signature celebration per player (the human scorer can pick another with pass / lob / shoot)
+    celeb.celebKind = celeb.hash % 3;
+    this.celebPicked = false;
     for (const p of this.players) { p.run = null; p.gkPlan = null; if (p.act && p.act.type !== 'dive') p.act = null; }
   }
 
@@ -1445,6 +1449,12 @@ export class MatchSim {
     stepBall(b, dt, this.physEv); this._physFx();
     const sc = this.players[this.celeb];
     const scoringTeam = sc.team;
+    if (this.human[scoringTeam] && !this.celebPicked) {
+      const inp = this.inputs[scoringTeam] || EMPTY_IN, prev = this.prevIn[scoringTeam] || EMPTY_IN;
+      const pick = inp.pass && !prev.pass ? 0 : inp.lob && !prev.lob ? 1 : inp.shoot && !prev.shoot ? 2 : inp.through && !prev.through ? (sc.hash % 3) : -1;
+      if (pick >= 0 && t - this.phaseT < 2.5) { sc.celebKind = pick; this.celebPicked = true; if (sc.act && sc.act.type === 'celeb') sc.act.t0 = t; }
+    }
+    if (this.human[scoringTeam]) this.prevIn[scoringTeam] = { ...(this.inputs[scoringTeam] || EMPTY_IN) };
     const endX = this.goalX(scoringTeam);
     for (const p of this.players) {
       if (p.sentOff) continue;
@@ -1573,7 +1583,7 @@ export class MatchSim {
       if ((!this.human[team] || gp.autoClearances) && this._autoClear(p)) return;
       if (this._aiFirstTime(p, zone, rel)) return;
     }
-    const ctrlMax = (zone === 'feet' ? 13 + p.a.dri * 0.11 : 9 + p.a.dri * 0.06) + ps(p, 'firsttouch') * 3;
+    const ctrlMax = (zone === 'feet' ? 13 + p.a.dri * 0.11 : 12 + p.a.dri * 0.07) + ps(p, 'firsttouch') * 3 + (b.intended === p.idx ? 3 : 0);
     if (rel > ctrlMax) return this._deflect(p, zone);
     // contextual first touch: fast balls, pressure, sprinting and bouncing balls make it harder
     const comfort = 8 + p.a.dri * 0.06 + ps(p, 'firsttouch') * 2.5;
@@ -1773,7 +1783,10 @@ export class MatchSim {
       const e = clamp(at / g.act.flight, 0, 1);
       const a = g.act;
       const body = { x: g.x, y: lerp(0.9, clamp(a.h * 0.6, 0.35, 1.4), e), z: g.z };
-      const hands = { x: g.x + a.hx * e, y: lerp(1.3, a.h, e), z: g.z + a.side * (0.35 + 0.65 * e) };
+      const ext = (0.35 + 0.65 * e) * (1 + (g.h - 1.85) * 0.4);
+      const hands = a.dx != null
+        ? { x: g.x + a.dx * ext, y: lerp(0.9, a.h, e), z: g.z + a.dz * ext }
+        : { x: g.x + a.hx * e, y: lerp(1.3, a.h, e), z: g.z + a.side * ext };
       hit = segDist3(b.p, body, hands) < 0.3;
       stretched = e > 0.6;
     } else if (!g.act || ['head', 'kick', 'chest', 'gkjump'].includes(g.act.type)) {
@@ -1870,6 +1883,19 @@ export class MatchSim {
     g.animP = side * (1 + h);
   }
 
+  // keeper dives onto a loose ball (low, toward the ball) — smothers it if he gets there
+  gkDiveAtBall(g) {
+    const b = this.ball, t = this.t;
+    const dx = b.p.x + b.v.x * 0.25 - g.x, dz = b.p.z + b.v.z * 0.25 - g.z, dl = Math.hypot(dx, dz) || 1;
+    const flight = 0.3;
+    const reach = Math.min(dl, 1.2 + g.a.div * 0.012 + (g.h - 1.85) * 1.2 + ps(g, 'rushout') * 0.2);
+    const side = Math.sign(dz) || 1;
+    g.cool.tackle = t + 1.3;
+    g.act = { type: 'dive', t0: t, dur: 1.1, flight, side, h: 0.3, vx: ((dx / dl) * reach * 0.7) / flight, vz: ((dz / dl) * reach * 0.7) / flight, hx: 0, dx: dx / dl, dz: dz / dl, fromLoose: true };
+    g.animP = side * 1.3;
+    g.gkPlan = null;
+  }
+
   gkSmother(g, owner) {
     const t = this.t;
     g.cool.tackle = t + 1.5;
@@ -1931,7 +1957,7 @@ export class MatchSim {
     const victim = owner;
     const bd = Math.hypot(b.p.x - foot.x, b.p.z - foot.z);
     const reach = bd < 0.85 && b.p.y < 0.6;
-    const behind = victim ? this.fromBehind(p, victim) : false;
+    const behind = victim ? (p.act && p.act.behind != null ? p.act.behind && this.fromBehind(p, victim) : this.fromBehind(p, victim)) : false;
     let won = false;
     if (reach) {
       if (!victim) won = true;
@@ -1941,7 +1967,7 @@ export class MatchSim {
         won = this.rng() < pr;
       }
     }
-    const contact = victim ? Math.hypot(victim.x - p.x, victim.z - p.z) < 1.25 && (!won && this.rng() < 0.7 * (1 - ps(p, 'anticipate') * 0.3)) : false;
+    const contact = victim ? Math.hypot(victim.x - p.x, victim.z - p.z) < 1.25 && (!won && this.rng() < 0.45 * (1 - ps(p, 'anticipate') * 0.3)) : false;
     if (won) { this._winBall(p, false); p.st.tackles++; }
     if (victim) {
       const j = judgeTackle({ wonBall: won, contactFirst: !won && contact && !reach, fromBehind: behind, slide: false, bodyContact: contact, lastMan: this._lastMan(victim, p) });
@@ -2128,6 +2154,29 @@ export class MatchSim {
   }
 
   applyTactic(team, cmd) { return applyTactic(this, team, cmd); }
+
+  // aim-line preview: the kick the controlled player would make now with key k (no error, no side effects)
+  previewKick(team, key, aim, power) {
+    const p = this.players[this.ctrl[team]];
+    if (!p || this.ball.owner !== p.idx || this.ball.inHands || this.phase !== PHASE.PLAY) return null;
+    try {
+      if (key === 'pass') return humanGround(this, p, aim, power);
+      if (key === 'through') return humanThrough(this, p, aim, power);
+      if (key === 'lob') return humanLob(this, p, aim, power, this._isCrossZone(p) ? 'cross' : 'lob');
+      if (key === 'shoot' || key === 'finesse') return humanShot(this, p, key === 'shoot' ? 'shot' : 'finesse', aim, power);
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  // snapshot of a side for the team-management menu
+  teamInfo(team) {
+    return {
+      formation: this.formation[team], tac: this.tac[team], subsMade: this.subsMade[team], maxSubs: this.maxSubs, windows: this.subWindows[team],
+      pending: this.subReq[team].slice(),
+      players: this.players.slice(team * 11, team * 11 + 11).map((p) => ({ i: p.i, id: p.data.id, name: p.data.name, pos: p.data.pos, role: p.role, ovr: p.data.ovr, stam: p.stamMax, sentOff: p.sentOff, rating: computeRatings({ x: p.st }, this.score).x })),
+      bench: this.bench[team].map((d, bi) => ({ bi, id: d.id, name: d.name, pos: d.pos, ovr: d.ovr, used: this.benchUsed[team].has(bi) })),
+    };
+  }
 
   _autoSubs() {
     this._applySubReqs();

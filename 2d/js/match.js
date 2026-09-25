@@ -328,7 +328,7 @@ export class Match {
   /** Running alongside the carrier and leaning in: strength decides who keeps the ball. */
   shoulderDuel(ch, carrier) {
     if (ch.state !== 'run' || carrier.state !== 'run' || ch.role === 'GK' || carrier.role === 'GK') return;
-    if (globalThis.__noShoulder || (ch.ai.shoulderT || 0) > this.time) return;
+    if ((ch.ai.shoulderT || 0) > this.time) return;
     const vc = Math.hypot(carrier.vx, carrier.vy), vh = Math.hypot(ch.vx, ch.vy);
     if (vc < 2.5 || vh < 2.5) return;
     if ((ch.vx * carrier.vx + ch.vy * carrier.vy) / (vc * vh) < 0.45) return;      // not running together
@@ -469,7 +469,8 @@ export class Match {
       let assisted = false;
       if (this.pass && this.pass.receiver === p && !this.owner) {
         // receiver assist: run onto the ball unless the player clearly steers somewhere else
-        const ip = this.ai[p.team].interceptPoint(p);
+        // get onto the ball's line a touch early (no parallel chasing of a pass)
+        const ip = this.ai[p.team].interceptPoint(p, 0.15, 0.12);
         const dx = ip.x - p.x, dy = ip.y - p.y, d = Math.hypot(dx, dy);
         // the stick is still held from the pass itself for a moment: ignore it, and afterwards
         // only a clear steer away (> ~110 degrees) takes the receiver off the ball's line
@@ -477,7 +478,7 @@ export class Match {
         const agrees = since < 0.45 || mag < 0.15 || d < 0.3 || (mv.x * dx + mv.y * dy) / (mag * d) > (locked ? -0.8 : -0.35);
         if (agrees) {
           assisted = true;
-          const sp = Math.min(topSpeed(p, d > 5 || sprint), d * 2.5);
+          const sp = Math.min(topSpeed(p, d > 3 || sprint), d * 6);
           p.want.x = d > 0.2 ? (dx / d) * sp : 0; p.want.y = d > 0.2 ? (dy / d) * sp : 0; p.sprint = d > 5 || (sprint && d > 1);
         }
       }
@@ -686,7 +687,7 @@ export class Match {
       if (h) this.setHumanPlayer(h, receiver);   // control follows the ball
     }
     // give-and-go: an AI passer keeps running into space after playing it forward
-    if (!globalThis.__noGG && !human && receiver && p.role !== 'GK' && (target.x - from.x) * dir > 4 && Math.random() < 0.5) {
+    if (!human && receiver && p.role !== 'GK' && (target.x - from.x) * dir > 4 && Math.random() < 0.5) {
       p.ai.runT = 1.6;
       p.ai.runTo = clampToPitch({ x: p.x + dir * 12, y: p.y + (CY - p.y) * 0.2 }, 3, 3);
     }
@@ -965,7 +966,7 @@ export class Match {
       const isGK = p.role === 'GK' && inPenaltyArea(b, this.ownSide(p.team));
       let reach;
       if (isGK) reach = b.z < (p.ai.claim ? 2.8 : 2.4) ? (p.state === 'dive' || p.ai.claim ? 1.1 : 0.9) : 0;
-      else reach = b.z < 0.6 ? (this.pass && this.pass.receiver === p ? 0.8 : 0.58) : b.z < 1.6 ? 0.5 : b.z < 2.3 ? 0.48 : 0;
+      else reach = b.z < 0.6 ? (this.pass && this.pass.receiver === p ? 1.0 : 0.58) : b.z < 1.6 ? 0.5 : b.z < 2.3 ? 0.48 : 0;
       if (d < reach && d < bd) {
         // keepers that did not read a hard shot cannot magically stop it
         if (isGK && bs > 12 && this.shot && this.shot.team !== p.team && !(p.saveIntent && p.saveKick === b.kickId)) continue;
@@ -1006,7 +1007,7 @@ export class Match {
       const aim = human ? p.aimDir || norm(gc.x - p.x, gc.y - p.y) : norm(gc.x - b.x, CY + (Math.random() - 0.5) * 5 - b.y);
       const type = b.z > 1.6 ? 'header' : b.z > 0.3 ? 'volley' : 'driven';
       this.lastTouch = p;
-      this.doShot(p, { aimDir: aim, power: human ? Math.max(0.35, p.charge) : 0.7, type, mode: human ? this.settings.assist : 'Manual', sprinting: false, errMul: human ? 1.1 : 1.3 });
+      this.doShot(p, { aimDir: aim, power: human ? Math.max(0.35, p.charge) : 0.7, type, mode: human ? this.gp(this.humanFor(p) || { ctrl: 0 }).shot : 'Manual', realism: human ? this.gp(this.humanFor(p) || { ctrl: 0 }).shotError : true, sprinting: false, errMul: human ? 1.1 : 1.3 });
       return;
     }
     // first-time clearance in our own box under pressure (AI, or a human with auto clearances)
@@ -1044,7 +1045,7 @@ export class Match {
         for (const o of this.opps(p.team)) near = Math.min(near, dist(o, p));
         const pressure = clamp(1 - (near - 0.8) / 2.5, 0, 1);
         const hv = touchHeaviness({ relSpeed, dribbling: p.attrs.dribbling, sprinting: p.sprint && Math.hypot(p.vx, p.vy) > jogSpeed(p), pressure, height: b.z });
-        if (!globalThis.__noHeavy && Math.random() < hv * 0.55) { this.heavyTouch(p, hv); return; }
+        if (Math.random() < hv * 0.55) { this.heavyTouch(p, hv); return; }
       }
       this.setOwner(p); return;
     }

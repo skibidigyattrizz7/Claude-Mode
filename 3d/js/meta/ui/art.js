@@ -53,9 +53,30 @@ export function initialsOf(name, short) {
   return ini.length >= 2 ? ini : (short || ini || '?').slice(0, 3);
 }
 
-/** club: {id, name, short, colors:{primary, secondary}} or club id */
+const BADGE_PATHS = {
+  shield: 'M4 3H36V21C36 33 28.5 41 20 45.5C11.5 41 4 33 4 21Z',
+  round: 'M20 3A21 21 0 1 1 19.99 3Z',
+  diamond: 'M20 2L38 24L20 46L2 24Z',
+  hex: 'M20 2L37.5 12.5V35.5L20 46L2.5 35.5V12.5Z',
+  classic: 'M3 4L8 1H32L37 4V16C37 30 30 40 20 46C10 40 3 30 3 16Z',
+};
+/** Custom UT badge: { shape, c1, c2, c3, text, stripe } */
+export function badgeSVG(b, cls = 'pm-crest', label = 'Club badge') {
+  const d = BADGE_PATHS[b.shape] || BADGE_PATHS.shield;
+  const cid = nid('bd');
+  const text = esc(String(b.text || '').slice(0, 3));
+  const fs = text.length >= 3 ? 11 : 14;
+  const band = b.stripe ? `<rect x="0" y="18" width="40" height="10" fill="${b.c2}"/>` : `<path d="M0 30L40 14V48H0Z" fill="${b.c2}" opacity=".9"/>`;
+  return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="${esc(label)}"><defs><clipPath id="${cid}"><path d="${d}"/></clipPath></defs>`
+    + `<g clip-path="url(#${cid})"><rect width="40" height="48" fill="${b.c1}"/>${band}</g>`
+    + `<path d="${d}" fill="none" stroke="${b.c3 || '#fff'}" stroke-width="2.2"/>`
+    + `<text x="20" y="26" dy="${fs / 3}" text-anchor="middle" font-size="${fs}" font-weight="900" fill="${b.c3 || '#fff'}" stroke="${b.c1}" stroke-width=".7" paint-order="stroke" font-family="Arial Black,Arial,sans-serif">${text}</text></svg>`;
+}
+
+/** club: {id, name, short, colors:{primary, secondary}, badge?} or club id */
 export function crestSVG(club, cls = 'pm-crest') {
   if (typeof club === 'string') club = clubById(club) || { id: club, name: club, short: club.slice(0, 3), colors: { primary: '#445', secondary: '#aab' } };
+  if (club.badge) return badgeSVG(club.badge, cls, club.name);
   const { primary: p, secondary: s } = club.colors;
   const cid = nid('cc');
   const shield = 'M4 3H36V21C36 33 28.5 41 20 45.5C11.5 41 4 33 4 21Z';
@@ -63,7 +84,7 @@ export function crestSVG(club, cls = 'pm-crest') {
     return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Legends"><path d="${shield}" fill="#F4E8C1" stroke="#B8860B" stroke-width="2.4"/>${star(20, 22, 11, '#B8860B')}</svg>`;
   }
   if (club.id === 'ICN') {
-    return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Icons"><path d="${shield}" fill="#FFFDF4" stroke="#C9A227" stroke-width="2.4"/><path d="M11 30l3-12 6 7 6-7 3 12z" fill="#C9A227"/><circle cx="14" cy="17" r="1.6" fill="#C9A227"/><circle cx="20" cy="23" r="1.6" fill="#C9A227"/><circle cx="26" cy="17" r="1.6" fill="#C9A227"/><rect x="11" y="31.5" width="18" height="2.6" fill="#C9A227"/></svg>`;
+    return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Legends of the Game"><path d="${shield}" fill="#111" stroke="#D4AF37" stroke-width="2.4"/><path d="M11 30l3-12 6 7 6-7 3 12z" fill="#D4AF37"/><circle cx="14" cy="17" r="1.6" fill="#D4AF37"/><circle cx="20" cy="23" r="1.6" fill="#D4AF37"/><circle cx="26" cy="17" r="1.6" fill="#D4AF37"/><rect x="11" y="31.5" width="18" height="2.6" fill="#D4AF37"/></svg>`;
   }
   if (club.id === 'HER') {
     return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Heroes"><path d="${shield}" fill="#3A1C71" stroke="#27E1C1" stroke-width="2.4"/><text x="20" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="#27E1C1" font-family="Arial Black,Arial,sans-serif">H</text></svg>`;

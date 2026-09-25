@@ -11,11 +11,15 @@ import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, clubById, POS_GROUP, POSI
 import { resolveKitClash, gkKitFor } from '../core/teams.js';
 import { Rng } from '../core/rng.js';
 import { marketView, playerMarketListModal } from './marketview.js';
-import { onlineSeasonsTile } from './onlineview.js';
+import { rivalsTile } from './rivalsview.js';
+import * as M from './modesview.js';
+import * as OBJ from '../core/objectives.js';
+import * as SS from '../core/seasons.js';
+import { ensureEvo } from '../core/evolutions.js';
 import { playstyleList } from './card.js';
 
 const persist = (app) => app.saveUT();
-const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary } });
+const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary }, badge: s.badge || null });
 const DIFF_LABEL = { amateur: 'Amateur', pro: 'Professional', world: 'World Class', legendary: 'Legendary' };
 
 export function ensureUTView(app) {
@@ -82,7 +86,11 @@ export function utHomeView() {
       if (!s) { app.replace(onboardView()); return; }
       const info = UT.squadInfo(s);
       const rank = UT.rankFor(s.battles.points);
-      const claimable = UT.OBJECTIVES.filter((o) => !s.obj[o.id] && UT.objectiveProgress(s, o) >= o.target).length;
+      const claimable = OBJ.claimableCount(s);
+      const ss = SS.loadSeason();
+      const seasonReady = SS.claimableLevels(ss).length;
+      const evo = ensureEvo(s);
+      const evoReady = evo.active.length;
       const tile = (cls, title, sub, onclick, badge = null, art = null) => h('button', { class: `pm-tile ${cls}`, onclick },
         art, badge ? h('span', { class: 'pm-badge' }, badge) : null,
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
@@ -99,14 +107,21 @@ export function utHomeView() {
         h('div', { class: 'pm-tiles' },
           tile('pm-tile--wide pm-tile--squad', 'Squad', `${s.squad.formation} · Rating ${info.rating} · Chemistry ${info.chem.scaled}`, () => app.push(squadView()), info.complete ? null : '!',
             h('div', { class: 'pm-tile-art pm-art-pitch', 'aria-hidden': 'true' })),
+          rivalsTile(app),
           tile('pm-tile--wide pm-tile--play', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()), null,
             h('div', { class: 'pm-tile-art pm-art-play', 'aria-hidden': 'true' }, h('span', null, '▶'))),
-          tile('pm-tile--wide pm-tile--store', 'Store', 'Packs with transparent odds', () => app.push(storeView()), s.packs.length ? `${s.packs.length}` : null, h('div', { class: 'pm-tile-art pm-art-pack', 'aria-hidden': 'true' })),
+          tile('pm-tile--wide pm-tile--store', 'Store', 'Packs, Player Picks & odds', () => app.push(storeView()), (s.packs.length + (s.picks || []).length) ? `${s.packs.length + (s.picks || []).length}` : null, h('div', { class: 'pm-tile-art pm-art-pack', 'aria-hidden': 'true' })),
           tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView())),
-          tile('pm-tile--obj', 'Objectives', 'Earn coins & packs', () => app.push(objectivesView()), claimable ? `${claimable}` : null),
+          tile('pm-tile--obj', 'Objectives', 'Daily · Weekly · Player · Season', () => app.push(M.objectivesHubView()), claimable ? `${claimable}` : null),
+          tile('pm-tile--season', 'Season', `Level ${SS.levelOf(ss.xp)}/${SS.SEASON_LEVELS}`, () => app.push(M.seasonPassView()), seasonReady ? `${seasonReady}` : null),
+          tile('pm-tile--evo', 'Evolutions', `${evoReady}/3 active`, () => app.push(M.evolutionsView())),
+          tile('pm-tile--draft', 'Draft', s.draft ? 'Draft in progress' : 'Pick 1 of 5 · 4-round knockout', () => app.push(M.draftView()), s.draft ? '▶' : null),
+          tile('pm-tile--event', 'Tournaments', 'Weekly knockout events', () => app.push(M.eventsView())),
+          tile('pm-tile--totw', 'Team of the Week', 'Boosted In-Form cards', () => app.push(M.totwView())),
           tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
           tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null),
-          onlineSeasonsTile(app),
+          tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView())),
+          tile('pm-tile--custom', 'Customise', 'Badge, name & kits', () => app.push(M.clubEditView())),
         ));
     },
   };
@@ -145,7 +160,7 @@ function squadView() {
       const ed = squadEditor({
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
         getPlayer, pool: () => UT.clubPlayers(s),
-        onChange: (v) => { s.squad = v; persist(app); },
+        onChange: (v) => { s.squad = v; OBJ.setFlag(s, 'squadEdited'); persist(app); },
         toolbar: [autoBtn],
       });
       add(main, ed.el);
@@ -167,7 +182,7 @@ function clubView() {
         const q = f.q.trim().toLowerCase();
         let list = UT.clubPlayers(s).filter((p) => (!q || p.name.toLowerCase().includes(q))
           && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group)
-          && (!f.tier || (f.tier === 'special' ? !!p.special : ['icon', 'star'].includes(f.tier) ? p.special === f.tier : f.tier === 'rare' ? p.rare : p.tier === f.tier && !p.special))
+          && (!f.tier || (f.tier === 'special' ? !!p.special : f.tier === 'lotg' ? p.special === 'lotg' : f.tier === 'rare' ? p.rare : p.tier === f.tier && !p.special))
           && (!f.league || p.league === f.league));
         const sorters = { ovr: (a, b) => b.ovr - a.ovr, name: (a, b) => a.name.localeCompare(b.name), pos: (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr, value: (a, b) => utPrice(b) - utPrice(a), nation: (a, b) => a.nat.localeCompare(b.nat) || b.ovr - a.ovr, league: (a, b) => a.league.localeCompare(b.league) || b.ovr - a.ovr };
         list.sort(sorters[f.sort]);
@@ -185,8 +200,8 @@ function clubView() {
         h('div', { class: 'pm-filterbar' },
           search,
           select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),
-          select([['', 'All tiers'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special'], ['icon', 'Icons'], ['star', 'Stars']], f.tier, (v) => { f.tier = v; draw(); }, { 'aria-label': 'Tier' }),
-          select([['', 'All leagues'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Icons'], ['LEG', 'Legends'], ['HER', 'Heroes']], f.league, (v) => { f.league = v; draw(); }, { 'aria-label': 'League' }),
+          select([['', 'All tiers'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special'], ['lotg', 'Legends of the Game']], f.tier, (v) => { f.tier = v; draw(); }, { 'aria-label': 'Tier' }),
+          select([['', 'All leagues'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Legends of the Game'], ['LEG', 'Classics'], ['HER', 'Heroes']], f.league, (v) => { f.league = v; draw(); }, { 'aria-label': 'League' }),
           select([['ovr', 'Sort: Rating'], ['name', 'Sort: Name'], ['pos', 'Sort: Position'], ['value', 'Sort: Value'], ['nation', 'Sort: Nation'], ['league', 'Sort: League']], f.sort, (v) => { f.sort = v; draw(); }, { 'aria-label': 'Sort' }),
           count),
         grid);
@@ -292,7 +307,7 @@ function storeView() {
                   openPackFlow(app, pack.id);
                 },
               }, 'Buy & open')))))));
-      add(main, mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
+      add(main, M.picksRow(app), mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
 }
@@ -319,13 +334,7 @@ function sbcListView() {
     },
   };
 }
-function rewardText(r) {
-  const parts = [];
-  if (r.coins) parts.push(`${fmtNum(r.coins)} coins`);
-  if (r.pack) parts.push(UT.PACK_BY_ID[r.pack].name);
-  if (r.player) { const p = getPlayer(r.player); parts.push(`${p.name} (${p.ovr} ${UT.SPECIAL_NAME[p.special] || ''})`.trim()); }
-  return parts.join(' + ');
-}
+const rewardText = (r) => M.rewardText(r);
 
 function sbcDetailView(id) {
   const sbc = UT.SBC_BY_ID[id];
@@ -358,13 +367,12 @@ function sbcDetailView(id) {
         const inSq = local.slots.filter((x) => x && inSquad().has(x)).length;
         const ok = await confirmBox(app.root, 'Submit SBC', `The ${local.slots.filter(Boolean).length} players in this challenge will be exchanged${inSq ? ` (${inSq} from your active squad)` : ''}. Reward: ${rewardText(sbc.reward)}.`, 'Submit');
         if (!ok) return;
-        try {
-          const got = UT.submitSbc(s, sbc.id, local.formation, local.slots);
-          persist(app);
-          local.slots = new Array(11).fill(null);
-          app.pop();
-          app.toast(`SBC complete! Received ${got.join(', ')}`, 'good');
-        } catch (e) { app.toast(e.message, 'bad'); }
+        const ev = UT.evaluateSbc(sbc, local.formation, local.slots.map((x) => (x ? getPlayer(x) : null)));
+        if (!ev.ok) { app.toast('Requirements not met', 'bad'); return; }
+        const slots = local.slots.slice();
+        local.slots = new Array(11).fill(null);
+        app.pop();
+        try { M.rewardFlow(app, () => UT.submitSbc(s, sbc.id, local.formation, slots), 'SBC complete!'); } catch (e) { app.toast(e.message, 'bad'); }
       }
       add(main, h('div', { class: 'pm-sbcdetail' },
         h('section', { class: 'pm-panel pm-sbcreq' },
@@ -373,26 +381,6 @@ function sbcDetailView(id) {
           submit, h('p', { class: 'pm-hint' }, 'Submitted players are removed from your club.')),
         ed.el));
       update();
-    },
-  };
-}
-
-// ---------- objectives ----------
-function objectivesView() {
-  return {
-    title: 'Objectives', kicker: 'Ultimate Team', coins: true,
-    render(main, app) {
-      const s = app.ut;
-      add(main, h('div', { class: 'pm-objlist' }, UT.OBJECTIVES.map((o) => {
-        const prog = UT.objectiveProgress(s, o);
-        const done = prog >= o.target, claimed = !!s.obj[o.id];
-        return h('div', { class: `pm-obj ${claimed ? 'is-claimed' : done ? 'is-ready' : ''}` },
-          h('div', { class: 'pm-obj-main' }, h('b', null, o.label), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${(prog / o.target) * 100}%` } })), h('small', { class: 'pm-dim' }, `${prog}/${o.target} · Reward: ${rewardText(o.reward)}`)),
-          claimed ? h('span', { class: 'pm-chip' }, 'Claimed') : h('button', {
-            class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: !done,
-            onclick: () => { const r = UT.claimObjective(s, o.id); if (r) { persist(app); app.toast(`Claimed: ${r.join(', ')}`, 'good'); app.refresh(); } },
-          }, 'Claim'));
-      })));
     },
   };
 }
@@ -451,6 +439,7 @@ async function startBattle(app, opp) {
   if (!result) return;
   const r = UT.applyBattleResult(s, opp, result, 'home');
   persist(app);
+  app.afterMatch({ team, result, side: 'home', mode: 'squadbattles' });
   app.push(resultView({
     title: 'Squad Battles', kicker: DIFF_LABEL[opp.difficulty], home: team, away, result, userSide: 'home',
     extra: h('section', { class: 'pm-rewards' }, h('div', null, h('span', { class: 'pm-dim' }, 'Coins'), h('b', null, `+${fmtNum(r.coins)}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Points'), h('b', null, `+${r.points}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Rank'), h('b', null, UT.rankFor(s.battles.points).name))),

@@ -15,6 +15,15 @@ export const PHYS = {
   netE: 0.12,          // net restitution (very soft)
 };
 
+const PHYS_BASE = { ...PHYS };
+// Weather changes the pitch: 'rain' = skiddy, quicker ball; 'snow' = heavy, slow ball.
+export function setWeather(w) {
+  Object.assign(PHYS, PHYS_BASE);
+  if (w === 'rain') { PHYS.roll0 *= 0.7; PHYS.roll1 *= 0.8; PHYS.bounceGrip = 0.9; PHYS.restLo = 0.36; }
+  else if (w === 'snow') { PHYS.roll0 *= 1.7; PHYS.roll1 *= 1.45; PHYS.bounceGrip = 0.7; PHYS.restHi = 0.5; PHYS.restLo = 0.3; }
+  return w === 'rain' ? 1 : w === 'snow' ? 2 : 0;
+}
+
 export function createBall() {
   return { p: { x: 0, y: BALL_R, z: 0 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 } };
 }

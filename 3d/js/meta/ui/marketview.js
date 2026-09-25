@@ -8,10 +8,11 @@ import * as PM from '../core/pmarket.js';
 import { getPlayer } from '../core/players.js';
 import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, POSITIONS } from '../core/data.js';
 import { playerModal } from './utview.js';
+import { setFlag } from '../core/objectives.js';
 
 const persist = (app) => app.saveUT();
 const isTop = (app, view) => app.stack[app.stack.length - 1] === view;
-const RARITIES = [['', 'Any rarity'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['star', 'Stars'], ['icon', 'Icons'], ['special', 'Any special']];
+const RARITIES = [['', 'Any rarity'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['lotg', 'Legends of the Game'], ['special', 'Any special']];
 const STATUS_LABEL = { active: 'Active', sold: 'Sold', expired: 'Expired', pending: 'Pending' };
 
 function metaLine(p) {
@@ -70,7 +71,7 @@ function renderPlayerMarket(body, app, st, view) {
   const listedN = (s.listed || []).length;
   const sub = h('div', { class: 'pm-subtabs' },
     [['search', 'Search'], ['mine', `My listings${listedN ? ` (${listedN})` : ''}`]].map(([id, label]) => h('button', {
-      class: `pm-chip ${st.sub === id ? 'on' : ''}`, 'aria-pressed': st.sub === id ? 'true' : 'false', onclick: () => { st.sub = id; app.refresh(); },
+      class: `pm-chip ${st.sub === id ? 'on' : ''}`, 'aria-pressed': st.sub === id ? 'true' : 'false', onclick: () => { st.sub = id; if (id === 'mine') st.mine = null; app.refresh(); },
     }, label)),
     h('button', { class: 'pm-btn pm-btn--accent pm-btn--sm', onclick: () => listPickerModal(app, () => { st.mine = null; if (isTop(app, view)) app.refresh(); }) }, '+ List a card'),
     h('span', { class: 'pm-dim pm-subnote' }, `Buying uses your ${app.coinSourceLabel()} · 5% tax on sales`));
@@ -135,7 +136,7 @@ function renderSearch(body, app, st, view) {
   q.addEventListener('input', () => { f.q = q.value; });
   const num = (key, label) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', min: '0', value: String(f[key] || ''), placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
   add(body,
-    h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); f.page = 0; run(); } },
+    h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); setFlag(s, 'marketSearch'); f.page = 0; run(); } },
       q,
       select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),
       select(RARITIES, f.rarity, (v) => { f.rarity = v; }, { 'aria-label': 'Rarity' }),
@@ -169,6 +170,7 @@ function renderMine(body, app, st, view) {
     box.appendChild(h('section', { class: 'pm-panel pm-claimbar' },
       h('div', null, h('b', null, `${rows.filter((r) => r.status === 'active').length} active · ${sold.length} sold · ${rows.filter((r) => r.status === 'expired').length} expired`),
         h('small', { class: 'pm-dim' }, 'Listed cards leave your club until sold or cancelled. Sale proceeds (minus 5% tax) are claimed to your online balance.')),
+      h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => { st.mine = null; load(); } }, '↻ Refresh'),
       h('button', {
         class: 'pm-btn pm-btn--accent', disabled: !sold.length,
         onclick: async () => {
@@ -287,12 +289,12 @@ function renderAiMarket(body, app, st) {
   const num = (key, label, min, max) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', min: String(min), max: String(max), value: String(f[key] || ''), placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
   add(body,
     h('div', { class: 'pm-ainote' }, h('span', { class: 'pm-chip on' }, 'AI'), h('span', { class: 'pm-dim' }, `Simulated market with computer traders — separate from the Player Market. Uses your ${app.coinSourceLabel()}.`)),
-    h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); f.seed++; st.results = UT.marketSearch({ ...f, maxOvr: f.maxOvr || 99 }, `${Date.now() >> 16}-${f.seed}`); drawList(); } },
+    h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); setFlag(s, 'marketSearch'); f.seed++; st.results = UT.marketSearch({ ...f, maxOvr: f.maxOvr || 99 }, `${Date.now() >> 16}-${f.seed}`); drawList(); } },
       name,
       select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),
-      select([['', 'Any quality'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['star', 'Stars'], ['icon', 'Icons'], ['special', 'Special']], f.tier, (v) => { f.tier = v; }, { 'aria-label': 'Quality' }),
+      select([['', 'Any quality'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['lotg', 'Legends of the Game'], ['special', 'Special']], f.tier, (v) => { f.tier = v; }, { 'aria-label': 'Quality' }),
       select([['', 'Any nation'], ...NATIONS.map((n) => [n.code, n.name])], f.nat, (v) => { f.nat = v; }, { 'aria-label': 'Nation' }),
-      select([['', 'Any league'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Icons']], f.league, (v) => { f.league = v; }, { 'aria-label': 'League' }),
+      select([['', 'Any league'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Legends of the Game']], f.league, (v) => { f.league = v; }, { 'aria-label': 'League' }),
       num('minOvr', 'Min OVR', 40, 99), num('maxOvr', 'Max OVR', 40, 99), num('maxPrice', 'Max price', 0, 100000000),
       h('button', { class: 'pm-btn pm-btn--primary', type: 'submit' }, 'Search')),
     list);

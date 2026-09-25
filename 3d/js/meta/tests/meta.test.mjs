@@ -12,9 +12,13 @@ import { getNationalTeams, getSavedUltimateTeam, mountMeta } from '../index.js';
 import { POSITIONS, NATIONS } from '../core/data.js';
 
 let passed = 0, failed = 0;
-function test(name, fn) {
-  try { fn(); passed++; console.log(`  ok  ${name}`); }
-  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.stack.split('\n').slice(0, 3).join('\n       ')}`); }
+const queue = [];
+function test(name, fn) { queue.push([name, fn]); }
+async function runAll() {
+  for (const [name, fn] of queue) {
+    try { await fn(); passed++; console.log(`  ok  ${name}`); }
+    catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.stack.split('\n').slice(0, 3).join('\n       ')}`); }
+  }
 }
 const fingerprint = (db) => db.all.map((p) => `${p.id}|${p.name}|${p.nat}|${p.club}|${p.pos}|${p.ovr}|${p.pot}|${p.stats.pac}`).join('\n');
 
@@ -229,5 +233,325 @@ test('buildTeam enforces unique numbers and contract shape', () => {
   assert.equal(new Set(t.players.concat(t.bench).map((p) => p.number)).size, t.players.length + t.bench.length);
 });
 
+// ---------------- V2 ----------------
+const PM = await import('../core/pmarket.js');
+const RV = await import('../core/rivals.js');
+const SS = await import('../core/seasons.js');
+const OBJ = await import('../core/objectives.js');
+const EVO = await import('../core/evolutions.js');
+const DR = await import('../core/draft.js');
+const EVT = await import('../core/events.js');
+const TAC = await import('../core/tactics.js');
+const { totwCards } = await import('../core/totw.js');
+const { PLAYSTYLES, styleCountRange, maxPlus } = await import('../core/physique.js');
+const { getPlayer } = await import('../core/players.js');
+const { REAL_ROW_COUNT } = await import('../core/realplayers.js');
+const { effectiveOvr, positionFit } = await import('../core/formations.js');
+
+const EXPECTED_REAL = ['Lionel Messi', 'Pelé', 'Diego Maradona', 'Cristiano Ronaldo', 'Johan Cruyff', 'Alfredo Di Stéfano', 'Franz Beckenbauer', 'Zinedine Zidane', 'George Best', 'Michel Platini', 'Ronaldo Nazário', 'Ronaldinho', 'Paolo Maldini', 'Garrincha', 'Lev Yashin', 'Stanley Matthews', 'Roberto Baggio', 'Thierry Henry', 'Marco van Basten', 'Xavi Hernández', 'Andrés Iniesta', 'Luís Figo', 'Romário', 'Eusébio', 'Karl-Heinz Rummenigge', 'Fabio Cannavaro', 'Iker Casillas', 'Raúl González', 'Neymar Jr.', 'Sergio Ramos', 'Paolo Rossi', 'Roberto Carlos', 'Kylian Mbappé', 'Luka Modrić', 'Gheorghe Hagi', 'Zlatan Ibrahimović', 'Frank Lampard', 'Steven Gerrard', 'David Beckham', 'Clarence Seedorf', 'Dani Alves', 'Patrick Vieira', 'Ronald Koeman', 'Giacinto Facchetti', 'Philipp Lahm', 'Javier Zanetti', 'Sándor Kocsis', 'Just Fontaine', 'Teófilo Cubillas', 'Mario Kempes', 'Jimmy Johnstone', 'Eric Cantona', 'Kevin De Bruyne', 'Alessandro Del Piero', 'Francesco Totti', 'Diego Forlán', 'Rivaldo', 'Michael Laudrup', 'Johan Neeskens', 'Hristo Stoichkov', 'Didier Drogba', 'Paul Scholes', 'Gunnar Nordahl', 'Arjen Robben', 'Raul Meireles', 'Fernandinho', 'Edinson Cavani', 'Karim Benzema', 'Toni Kroos', 'Ivan Rakitić', 'Sergio Busquets', 'Gianluigi Buffon', 'Manuel Neuer', 'Kaká', 'Roberto Mancini', 'Hakan Şükür', 'Wayne Rooney', 'Alessandro Nesta', 'Sol Campbell', 'Patrick Kluivert', 'Dino Zoff', 'Sócrates', 'Cafu', 'Lothar Matthäus', 'Daniel Passarella', 'Fernando Hierro', 'Javier Mascherano', 'David Villa', 'Gary Lineker', 'Romelu Lukaku', 'Karim Bagheri', 'Didier Deschamps', 'Emmanuel Petit', 'Paulo Futre', 'Hristo Bonev', 'Mohamed Salah', 'Ray Clemence'];
+
+test('real players: every requested player present once per version, LOTG rarity, valid stats', () => {
+  const db = getDB();
+  assert.equal(db.real.length, REAL_ROW_COUNT);
+  const names = new Set(db.real.map((p) => p.name));
+  for (const n of EXPECTED_REAL) assert.ok(names.has(n), `missing ${n}`);
+  const versions = new Set(db.real.map((p) => `${p.person}|${p.era}`));
+  assert.equal(versions.size, db.real.length, 'duplicate real player version');
+  assert.equal(new Set(db.real.map((p) => p.person)).size, EXPECTED_REAL.length);
+  for (const p of db.real) {
+    assert.equal(p.special, 'lotg'); assert.ok(p.real);
+    assert.ok(['prime', 'current'].includes(p.era));
+    assert.equal(p.ovr, p.intended, `${p.name} ovr ${p.ovr} != ${p.intended}`);
+    if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 98, `${p.name} prime ovr`);
+    assert.ok(p.wf >= 1 && p.wf <= 5 && p.sm >= 1 && p.sm <= 5 && ['L', 'R'].includes(p.foot));
+    assert.ok((p.alt || []).length <= 3 && !(p.alt || []).includes(p.pos));
+    const face = p.pos === 'GK' ? p.gk : p.stats;
+    for (const v of Object.values(face)) assert.ok(v >= 1 && v <= 99);
+    if (p.pos === 'GK') assert.ok(p.gk.div >= 80 && p.gk.ref >= 80, `${p.name} GK stats`);
+  }
+  assert.equal(getPlayer('ic_pele').ovr, 98);
+  assert.equal(getPlayer('rs_messi').era, 'current');
+  assert.equal(getPlayer('ic_messi').era, 'prime');
+});
+
+test('physique + PlayStyles: heights/weights in range, counts respect OVR bands, ids valid', () => {
+  const db = getDB();
+  for (const p of db.all) {
+    assert.ok(p.height >= 162 && p.height <= 202, `${p.id} height ${p.height}`);
+    if (p.pos === 'GK' && !p.real) assert.ok(p.height >= 184, `${p.id} GK height`);
+    assert.ok(p.weight >= 58 && p.weight <= 100, `${p.id} weight`);
+    assert.ok(Array.isArray(p.playstyles));
+    const [lo, hi] = styleCountRange(p.ovr);
+    if (!p.special || p.special === 'lotg') assert.ok(p.playstyles.length >= Math.min(lo, 4) && p.playstyles.length <= hi, `${p.id} ${p.ovr} has ${p.playstyles.length} styles`);
+    assert.ok(p.playstyles.length <= 4);
+    assert.ok(p.playstyles.filter((x) => x.plus).length <= Math.max(maxPlus(p.ovr), 0) || p.special === 'inform', `${p.id} plus count`);
+    for (const x of p.playstyles) assert.ok(PLAYSTYLES[x.id], `${p.id} bad style ${x.id}`);
+    const gkStyle = p.playstyles.some((x) => PLAYSTYLES[x.id][1] === 'gk');
+    if (gkStyle) assert.equal(p.pos, 'GK', `${p.id} outfield GK style`);
+  }
+  const t = getNationalTeams()[0];
+  for (const p of t.players) { assert.ok(p.height >= 1.62 && p.height <= 2.02); assert.ok(p.weight >= 58 && p.weight <= 100); assert.ok(Array.isArray(p.playstyles)); }
+});
+
+test('alternate positions: 0-3 sensible alts, in-position chemistry and full rating', () => {
+  const db = getDB();
+  let withAlt = 0;
+  for (const p of db.players) { assert.ok(p.alt.length <= 3); if (p.pos === 'GK') assert.equal(p.alt.length, 0); if (p.alt.length) withAlt++; }
+  assert.ok(withAlt / db.players.length > 0.6, 'most players have alternates');
+  const cm = db.players.find((p) => p.pos === 'CM' && p.alt.includes('CDM'));
+  assert.equal(positionFit(cm, 'CDM'), 1);
+  assert.equal(effectiveOvr(cm, 'CDM'), cm.ovr);
+  const slots = new Array(11).fill(null); slots[6] = cm;
+  const alone = calcChemistry('4-3-3', slots);
+  assert.ok(alone.players[6] >= 0);
+  assert.ok(effectiveOvr(cm, 'CB') < cm.ovr);
+});
+
+test('LOTG chemistry: nation links always green, full chem in any listed position', () => {
+  const db = getDB();
+  const pele = getPlayer('ic_pele');
+  const bra = db.players.find((p) => p.nat === 'BRA' && !p.real);
+  const other = db.players.find((p) => p.nat !== 'BRA' && p.league !== 'ICN');
+  assert.equal(linkStrength(pele, bra), 2);
+  assert.equal(linkStrength(pele, other), 1);
+  const slots = new Array(11).fill(null);
+  slots[9] = pele; // 4-3-3 ST (Pelé is CF, which counts as ST)
+  slots[8] = other;
+  const chem = calcChemistry('4-3-3', slots);
+  assert.equal(chem.players[9], 3);
+  const oop = new Array(11).fill(null); oop[2] = pele;
+  assert.equal(calcChemistry('4-3-3', oop).players[2], 0);
+});
+
+test('national teams include real players (all-time squads) and stay valid', () => {
+  const nts = getNationalTeams();
+  const byId = Object.fromEntries(nts.map((t) => [t.id, t]));
+  for (const code of ['BRA', 'ARG', 'ITA', 'NED', 'FRA', 'ESP', 'ENG', 'GER', 'POR', 'HUN', 'BUL', 'RUS', 'NIR', 'EGY']) {
+    const t = byId[code];
+    assert.ok(t, `no ${code}`);
+    assert.deepEqual(validateTeam(t), [], `${code}: ${validateTeam(t).join(', ')}`);
+    assert.equal(t.players.length, 11); assert.equal(t.players[0].pos, 'GK');
+    const real = t.players.filter((p) => getPlayer(p.id) && getPlayer(p.id).real);
+    assert.ok(real.length >= 1, `${code} has no real players`);
+    assert.equal(new Set(real.map((p) => getPlayer(p.id).person)).size, real.length, `${code} fields the same person twice`);
+    assert.ok(t.tactics && t.tactics.width >= 1);
+  }
+  assert.ok(byId.BRA.players.some((p) => p.id === 'ic_pele'));
+  assert.ok(byId.ARG.players.some((p) => p.id === 'ic_messi' || p.id === 'ic_maradona'));
+  assert.ok(nts.length >= 49);
+});
+
+function mockOnline() {
+  const listings = [];
+  let seq = 1;
+  return {
+    listings,
+    market: {
+      async list(card, price) { const l = { listingId: `L${seq++}`, card, price, status: 'active', mine: true }; listings.push(l); return { ok: true, listingId: l.listingId }; },
+      async cancel(id) { const l = listings.find((x) => x.listingId === id && x.status === 'active'); if (!l) return { ok: false, error: 'nf' }; l.status = 'cancelled'; return { ok: true, card: l.card }; },
+      async buy(id) { const l = listings.find((x) => x.listingId === id); if (!l) return { ok: false }; l.status = 'bought'; return { ok: true, card: l.card }; },
+      async mine() { return { ok: true, items: listings.filter((l) => l.mine && l.status !== 'cancelled') }; },
+      async search() { return { ok: true, items: listings.filter((l) => l.status === 'active') }; },
+      async claimSales() { return { ok: true, coins: 0 }; },
+    },
+  };
+}
+
+test('player market: listing removes the card (and from squad), cancel returns it; untradeables blocked', async () => {
+  const s = UT.createUTState({ clubName: 'Mkt FC' }, new Rng(5));
+  UT.migrateUT(s);
+  const on = mockOnline();
+  const pid = s.squad.slots[5];
+  const p = getPlayer(pid);
+  const r = PM.priceRange(p);
+  assert.ok(r.min < r.max);
+  const bad = await PM.listCard(s, on, pid, r.max * 10);
+  assert.equal(bad.ok, false);
+  const res = await PM.listCard(s, on, pid, r.min);
+  assert.ok(res.ok, res.error);
+  assert.ok(!s.club.includes(pid));
+  assert.ok(!s.squad.slots.includes(pid));
+  assert.equal(s.listed.length, 1);
+  const c = await PM.cancelListing(s, on, res.listingId);
+  assert.ok(c.ok);
+  assert.ok(s.club.includes(pid));
+  assert.equal(s.listed.length, 0);
+  s.untradeable.push(pid);
+  assert.equal((await PM.listCard(s, on, pid, r.min)).ok, false);
+  assert.equal(PM.afterTax(1000), 950);
+  // buying a card from another user
+  const other = db2card('rs_salah');
+  on.listings.push({ listingId: 'X1', card: other, price: 5000, status: 'active', mine: false });
+  const b = await PM.buyListing(s, on, { listingId: 'X1', card: other, price: 5000 });
+  assert.ok(b.ok && s.club.includes('rs_salah'));
+  // unknown foreign card is sanitised + registered
+  const foreign = { ...db2card('p10'), id: 'zz_foreign_1', stats: { pac: 200, sho: 50, pas: 50, dri: 50, def: 50, phy: 50 } };
+  const pid2 = PM.acceptCard(s, foreign);
+  assert.equal(pid2, 'zz_foreign_1');
+  assert.equal(getPlayer('zz_foreign_1').stats.pac, 99);
+});
+function db2card(id) { return JSON.parse(JSON.stringify(getPlayer(id))); }
+
+test('old v1 UT saves migrate', () => {
+  const s = UT.createUTState({ clubName: 'Old FC' }, new Rng(8));
+  const v1 = JSON.parse(JSON.stringify(s));
+  for (const k of ['listed', 'untradeable', 'foreign', 'admin', 'tacticSets', 'activeTactic']) delete v1[k];
+  v1.v = 1; v1.packs.push({ type: 'nonexistent' });
+  const m = UT.migrateUT(v1);
+  assert.equal(m.v, 2);
+  assert.ok(Array.isArray(m.listed) && Array.isArray(m.untradeable));
+  assert.ok(m.packs.every((pk) => UT.PACK_BY_ID[pk.type]));
+  assert.deepEqual(validateTeam(UT.utTeam(m)), []);
+});
+
+test('tactics: sanitised on every Team, presets valid, user tactics used', () => {
+  for (const id of TAC.PRESET_IDS) assert.deepEqual(validateTeam({ ...getNationalTeams()[1], tactics: TAC.sanitizeTactics(TAC.presetTactics(id)) }), []);
+  const s = UT.createUTState({ clubName: 'Tac FC' }, new Rng(9));
+  UT.migrateUT(s);
+  const t0 = UT.utTeam(s);
+  TAC.activeTactics(s).defensiveStyle = 'dropBack';
+  TAC.activeTactics(s).width = 99;
+  TAC.activeTactics(s).instructions = { [t0.players[9].id]: { attack: 'getInBehind' }, nobody: { attack: 'stayForward' } };
+  const t = UT.utTeam(s);
+  assert.equal(t.tactics.defensiveStyle, 'dropBack');
+  assert.equal(t.tactics.width, 10);
+  assert.deepEqual(Object.keys(t.tactics.instructions), [t0.players[9].id]);
+  assert.ok(t.tactics.setPieceTakers.captain);
+  assert.ok(t.tactics.quick.length >= 1 && t.tactics.quick.length <= 4);
+  const c = C.newCareer({ clubId: 'ISL02', seed: 'tac' });
+  const { home } = C.matchTeams(c, 'ISL02', 'ISL03');
+  assert.ok(home.tactics);
+});
+
+test('rivals ladder: points, rank up, milestones, weekly rewards', () => {
+  const r = RV.newRivals(10);
+  const t = RV.rankUpTarget(10);
+  let res;
+  for (let i = 0; i < Math.ceil(t / 3); i++) res = RV.applyRivalsResult(r, 'W');
+  assert.equal(r.division, 9);
+  assert.ok(res.rankedUp && res.milestone);
+  assert.ok(RV.claimableWeekly(r));
+  const w = RV.takeWeekly(r);
+  assert.ok(w.coins > 0 && w.packs.length);
+  assert.equal(RV.claimableWeekly(r), null);
+  RV.applyRivalsResult(r, 'W');
+  RV.rollWeek(r, 11);
+  assert.equal(r.pending, null, 'already claimed that week');
+  const r2 = RV.newRivals(20);
+  RV.applyRivalsResult(r2, 'W');
+  RV.rollWeek(r2, 21);
+  assert.ok(r2.pending && RV.claimableWeekly(r2).reward.coins > 0);
+  assert.equal(r2.weeklyWins, 0);
+  const opp = RV.aiOpponent('t', 'world');
+  assert.deepEqual(validateTeam(opp.team), []);
+});
+
+test('objectives hub: per-player stats with fallback to scorers, chains lock, claims grant rewards', () => {
+  const s = UT.createUTState({ clubName: 'Obj FC' }, new Rng(11));
+  UT.migrateUT(s);
+  s.club.push('ic_pele'); s.squad.slots[9] = 'ic_pele';
+  const team = UT.utTeam(s);
+  const res = { homeGoals: 2, awayGoals: 0, scorers: [{ playerId: 'ic_pele', team: 'home', minute: 10 }, { playerId: 'ic_pele', team: 'home', minute: 50 }], playerRatings: {} };
+  const m = OBJ.userMatchStats(team, res, 'home');
+  assert.equal(m.outcome, 'W'); assert.equal(m.stats.ic_pele.goals, 2); assert.ok(m.cleanSheet);
+  const m2 = OBJ.userMatchStats(team, { ...res, playerStats: { ic_pele: { goals: 1, assists: 2, headerGoals: 1 } } }, 'home');
+  assert.equal(m2.stats.ic_pele.goals, 1); assert.equal(m2.stats.ic_pele.assists, 2);
+  assert.equal(OBJ.metricGain({ type: 'goals', f: { special: 'lotg' } }, m), 2);
+  assert.equal(OBJ.metricGain({ type: 'winWith', count: 1, f: { nat: 'BRA' } }, m), 1);
+  assert.equal(OBJ.metricGain({ type: 'headerGoals', f: { minHeight: 170 } }, m2), 1);
+  OBJ.recordObjectiveMatch(s, m);
+  const list = OBJ.objectiveList(s);
+  for (const sec of ['daily', 'weekly', 'player', 'season', 'milestone', 'foundation']) assert.ok(list.some((o) => o.section === sec), sec);
+  assert.ok(list.find((o) => o.id === 'c-samba-1').locked);
+  const ready = list.find((o) => o.ready && o.bucket !== 'legacy');
+  if (ready) { const before = s.coins + s.packs.length; assert.ok(OBJ.claimObjectiveById(s, ready.id)); assert.ok(s.coins + s.packs.length > before || (s.picks || []).length || s.club.length); }
+  OBJ.setFlag(s, 'tactics');
+  assert.ok(OBJ.objectiveList(s).find((o) => o.id === 'f-tactics').ready);
+});
+
+test('evolutions + position modifier create untradeable upgraded cards', () => {
+  const s = UT.createUTState({ clubName: 'Evo FC' }, new Rng(12));
+  UT.migrateUT(s);
+  const evo = EVO.EVO_BY_ID.rising;
+  const p = UT.clubPlayers(s).find((x) => x.pos !== 'GK' && EVO.eligibility(x, evo)[0]);
+  assert.ok(EVO.startEvolution(s, 'rising', p.id).ok);
+  assert.equal(EVO.startEvolution(s, 'rising', p.id).ok, false);
+  const m = { starters: [p.id], stats: { [p.id]: { goals: 0 } }, outcome: 'W', cleanSheet: false };
+  EVO.recordEvoMatch(s, m); EVO.recordEvoMatch(s, m);
+  const card = EVO.claimEvolution(s, 0);
+  assert.ok(card && card.ovr > p.ovr && card.evo === 1);
+  assert.ok(s.club.includes(card.id) && !s.club.includes(p.id));
+  assert.ok(s.untradeable.includes(card.id));
+  assert.equal(card.ovr, computeOvr(card.pos, card));
+  s.items.posmod = 1;
+  const target = ['CB', 'LB', 'RB', 'CDM', 'CM', 'ST'].find((x) => x !== card.pos && !card.alt.includes(x));
+  const pm = card.alt.length < 3 ? EVO.applyPositionModifier(s, card.id, target) : { ok: true, card: { alt: [target] } };
+  assert.ok(pm.ok, pm.error);
+  assert.ok(pm.card.alt.includes(target));
+  const saved = JSON.parse(JSON.stringify(s));
+  const back = UT.migrateUT(saved);
+  assert.ok(back.club.includes(pm.card.id || card.id));
+});
+
+test('draft: formation, captain, 1-of-5 picks, valid team, knockout rewards', () => {
+  const d = DR.newDraft('t1');
+  DR.chooseFormation(d, '4-2-3-1');
+  assert.equal(d.captainOptions.length, 5);
+  DR.chooseCaptain(d, d.captainOptions[0]);
+  let i;
+  while ((i = DR.nextOpenSlot(d)) >= 0) { const o = DR.slotOptions(d, i); assert.equal(o.length, 5); DR.pickSlot(d, i, o[0]); }
+  assert.equal(d.stage, 'play');
+  const t = DR.draftTeam(d);
+  assert.deepEqual(validateTeam(t), []);
+  DR.applyDraftResult(d, 'W'); DR.applyDraftResult(d, 'L');
+  assert.ok(d.done && d.wins === 1);
+  assert.ok(DR.draftReward(d).coins > 0);
+});
+
+test('tournaments, TOTW, picks and season track', () => {
+  const evs = EVT.activeEvents(3);
+  assert.equal(evs.length, 3);
+  const s = UT.createUTState({ clubName: 'Evt FC' }, new Rng(13));
+  UT.migrateUT(s);
+  const info = UT.squadInfo(s);
+  const checks = EVT.checkRules([{ t: 'maxSpecial', special: 'lotg', v: 1 }], info.slots, info.rating);
+  assert.ok(checks[0].ok);
+  const tw = totwCards(5);
+  assert.ok(tw.length >= 12);
+  for (const p of tw) { assert.equal(getPlayer(p.id), p); assert.equal(p.special, 'inform'); }
+  UT.addPick(s, { pool: 'lotg', n: 3 }, 'test', new Rng(1));
+  const pk = s.picks[0];
+  assert.equal(pk.options.length, 3);
+  assert.ok(pk.options.every((id) => getPlayer(id).special === 'lotg'));
+  UT.choosePick(s, pk.id, pk.options[0]);
+  assert.ok(s.club.includes(pk.options[0]));
+  const ss = SS.newSeason();
+  const r = SS.addXp(ss, 2500);
+  assert.deepEqual(r.levelsGained, [1, 2]);
+  assert.deepEqual(SS.claimableLevels(ss), [1, 2]);
+  for (let l = 1; l <= 30; l++) assert.ok(SS.levelReward(l));
+});
+
+test('career: create-a-club, player career, scouting network, training', () => {
+  const s = C.newCareer({ clubId: 'SOL05', seed: 'cc', custom: { name: 'Test Utd', short: 'TUT', primary: '#112233', secondary: '#FFFFFF' } });
+  assert.equal(s.clubs.SOL05.name, 'Test Utd');
+  const { home } = C.matchTeams(s, 'SOL05', 'SOL06');
+  assert.equal(home.name, 'Test Utd');
+  s.budget = 5e6;
+  const sc = C.sendScouts(s, 'samerica');
+  assert.ok(sc.found.length >= 2 && sc.found.every((p) => p.potHidden && p.potRange[0] <= p.pot && p.potRange[1] >= p.pot));
+  C.scoutFurther(s, sc.found[0].id);
+  assert.equal(sc.found[0].potHidden, false);
+  const pc = C.newCareer({ clubId: 'ISL07', seed: 'pro1', pro: { first: 'Test', last: 'Pro', pos: 'CM', nat: 'ENG' } });
+  const pro = C.proPlayer(pc);
+  assert.ok(pro && pro.isPro && pro.ovr >= 55);
+  assert.ok(C.setTraining(pc, pro.id, 'playmaking'));
+  let g = 0;
+  while (pc.phase === 'season' && g++ < 100) C.advance(pc);
+  assert.ok(pro.apps >= 15, `pro apps ${pro.apps}`);
+  assert.ok(pro.ovr >= 62);
+});
+
+await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

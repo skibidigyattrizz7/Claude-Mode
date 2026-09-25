@@ -100,7 +100,7 @@ export function adminView() {
       const drawResults = () => {
         clear(results);
         const q = st.q.trim().toLowerCase();
-        if (q.length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 letters (searches every card, including Icons and Stars).')); return; }
+        if (q.length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 letters (searches every card, including Legends of the Game).')); return; }
         const db = getDB();
         const hits = db.all.filter((p) => p.name.toLowerCase().includes(q) || p.last.toLowerCase().includes(q)).sort((a, b) => b.ovr - a.ovr).slice(0, 24);
         if (!hits.length) results.appendChild(h('p', { class: 'pm-dim' }, 'No players found.'));

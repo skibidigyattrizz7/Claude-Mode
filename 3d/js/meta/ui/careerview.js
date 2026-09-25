@@ -10,6 +10,9 @@ import { LEAGUES, CLUBS, NATION_BY_CODE, POSITIONS } from '../core/data.js';
 import { getDB } from '../core/players.js';
 import { bestLineup } from '../core/teams.js';
 import { teamRating } from '../core/chemistry.js';
+import { tacticsEditor } from './tacticsview.js';
+import { FORMATIONS } from '../core/formations.js';
+import { reseat } from '../core/teams.js';
 
 const persist = (app) => C.saveCareer(app.career);
 const DIFFS = [['amateur', 'Amateur'], ['pro', 'Professional'], ['world', 'World Class'], ['legendary', 'Legendary']];
@@ -40,12 +43,21 @@ export function careerHomeView() {
   };
 }
 
+const PRO_POS = ['ST', 'CF', 'LW', 'RW', 'CAM', 'CM', 'CDM', 'LB', 'RB', 'CB', 'GK'];
 function newCareerView(slot) {
-  const st = { league: null, club: null, manager: 'Alex Morgan-Reyes' };
+  const st = { mode: null, league: null, club: null, manager: 'Alex Morgan-Reyes', custom: { name: 'Pitchside Athletic', short: 'PAT', primary: '#0E7C66', secondary: '#F5C542' }, pro: { first: 'Alex', last: 'Rookie', pos: 'ST', nat: 'ENG', foot: 'R' } };
   return {
     title: 'New Career', kicker: `Slot ${slot}`, cls: 'pm-main--wide',
     render(main, app) {
       const db = getDB();
+      if (!st.mode) {
+        const modeBtn = (id, title, sub) => h('button', { class: 'pm-tile pm-tile--wide pm-careermode', onclick: () => { st.mode = id; app.refresh(); } }, h('div', { class: 'pm-tile-body' }, h('h2', null, title), h('p', null, sub)));
+        add(main, h('h3', { class: 'pm-h' }, 'Choose a career'), h('div', { class: 'pm-tiles' },
+          modeBtn('manager', 'Manager Career', 'Take over an existing club: transfers, tactics, youth, scouting network.'),
+          modeBtn('custom', 'Create-a-Club', 'Your own name, badge colours and identity — replaces a club in a league.'),
+          modeBtn('player', 'Player Career', 'Create a 17-year-old pro. Train, earn caps, request moves to bigger clubs.')));
+        return;
+      }
       if (!st.league) {
         add(main, h('h3', { class: 'pm-h' }, '1 · Choose a league'),
           h('div', { class: 'pm-leaguegrid' }, LEAGUES.map((l) => h('button', { class: 'pm-league', style: { '--lc': l.color }, onclick: () => { st.league = l.id; app.refresh(); } },
@@ -60,7 +72,7 @@ function newCareerView(slot) {
         frag(crestSVG(c, 'pm-crest')), h('div', null, h('b', null, c.name), h('small', { class: 'pm-dim' }, `${stars(c.rep)} · Rating ${ratingOf(c)}`)));
       add(main, 
         h('div', { class: 'pm-btnrow' }, h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => { st.league = null; st.club = null; app.refresh(); } }, '‹ Change league'), h('b', null, lg.name)),
-        h('h3', { class: 'pm-h' }, '2 · Choose your club'),
+        h('h3', { class: 'pm-h' }, st.mode === 'custom' ? '2 · Choose the club your new club replaces' : st.mode === 'player' ? '2 · Choose the club you join' : '2 · Choose your club'),
         h('div', { class: 'pm-kicker' }, lg.name),
         h('div', { class: 'pm-clubgrid' }, clubs.filter((c) => c.tier === 1).map(clubBtn)),
         h('div', { class: 'pm-kicker' }, lg.tier2Name),
@@ -68,10 +80,19 @@ function newCareerView(slot) {
       if (st.club) {
         const name = h('input', { class: 'pm-input', value: st.manager, maxlength: '28', 'aria-label': 'Manager name' });
         name.addEventListener('input', () => { st.manager = name.value; });
-        add(main, h('section', { class: 'pm-panel pm-startbar' },
-          h('label', null, h('span', { class: 'pm-dim' }, '3 · Manager name'), name),
+        const inp = (obj, key, label, attrs = {}) => { const i = h('input', { class: 'pm-input', value: obj[key], 'aria-label': label, ...attrs }); i.addEventListener('input', () => { obj[key] = i.value; }); return h('label', null, h('span', { class: 'pm-dim' }, label), i); };
+        const extra = st.mode === 'custom' ? h('div', { class: 'pm-form pm-ccform' },
+          inp(st.custom, 'name', 'Club name', { maxlength: '28' }), inp(st.custom, 'short', 'Short (3)', { maxlength: '3' }),
+          inp(st.custom, 'primary', 'Primary colour', { type: 'color' }), inp(st.custom, 'secondary', 'Secondary colour', { type: 'color' }))
+          : st.mode === 'player' ? h('div', { class: 'pm-form pm-ccform' },
+            inp(st.pro, 'first', 'First name', { maxlength: '16' }), inp(st.pro, 'last', 'Last name', { maxlength: '20' }),
+            h('label', null, h('span', { class: 'pm-dim' }, 'Position'), select(PRO_POS, st.pro.pos, (v) => { st.pro.pos = v; })),
+            h('label', null, h('span', { class: 'pm-dim' }, 'Nation'), select(NATIONS_LIST(), st.pro.nat, (v) => { st.pro.nat = v; })),
+            h('label', null, h('span', { class: 'pm-dim' }, 'Preferred foot'), select([['R', 'Right'], ['L', 'Left']], st.pro.foot, (v) => { st.pro.foot = v; }))) : null;
+        add(main, extra, h('section', { class: 'pm-panel pm-startbar' },
+          st.mode === 'player' ? h('span', { class: 'pm-dim' }, '3 · Your pro starts at 62 OVR with 90 potential.') : h('label', null, h('span', { class: 'pm-dim' }, '3 · Manager name'), name),
           h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
-            app.career = C.newCareer({ clubId: st.club, manager: (st.manager || 'Manager').trim(), slot });
+            app.career = C.newCareer({ clubId: st.club, manager: (st.mode === 'player' ? `${st.pro.first} ${st.pro.last}` : st.manager || 'Manager').trim(), slot, custom: st.mode === 'custom' ? st.custom : null, pro: st.mode === 'player' ? st.pro : null });
             app.career.settings = { halfMinutes: app.settings.halfMinutes, difficulty: app.settings.difficulty };
             persist(app);
             app.replace(careerHubView());
@@ -82,7 +103,9 @@ function newCareerView(slot) {
 }
 
 // ---------- hub ----------
-const TABS = [['overview', 'Overview'], ['squad', 'Squad'], ['lineup', 'Lineup'], ['table', 'Table'], ['fixtures', 'Fixtures'], ['cup', 'Cup'], ['stats', 'Stats'], ['transfers', 'Transfers'], ['academy', 'Academy'], ['club', 'Club']];
+const TABS = [['overview', 'Overview'], ['squad', 'Squad'], ['lineup', 'Lineup'], ['tactics', 'Tactics'], ['training', 'Training'], ['table', 'Table'], ['fixtures', 'Fixtures'], ['cup', 'Cup'], ['stats', 'Stats'], ['transfers', 'Transfers'], ['academy', 'Scouting'], ['club', 'Club']];
+const PRO_TABS = [['pro', 'My Player'], ['overview', 'Overview'], ['table', 'Table'], ['fixtures', 'Fixtures'], ['cup', 'Cup'], ['stats', 'Stats'], ['club', 'Club']];
+const NATIONS_LIST = () => getDB() && Object.values(NATION_BY_CODE).filter((n) => !n.extra).map((n) => [n.code, n.name]);
 
 export function careerHubView() {
   const ui = { tab: 'overview', tier: null, md: null, search: null, filters: { pos: '', minOvr: 0, maxAge: 99, maxValue: 0, league: '', name: '' } };
@@ -93,16 +116,18 @@ export function careerHubView() {
       const s = app.career;
       if (!s) { app.pop(); return; }
       this.title = s.clubs[s.userClub].name;
-      this.kicker = `${s.manager} · ${C.seasonLabel(s)}`;
+      this.kicker = `${s.mode === 'player' ? 'Player Career · ' : ''}${s.manager} · ${C.seasonLabel(s)}`;
       app.renderTop(this);
+      const tabList = s.mode === 'player' ? PRO_TABS : TABS;
+      if (!tabList.some((t) => t[0] === ui.tab)) ui.tab = tabList[0][0];
       add(main, nextCard(app, s));
-      const tabs = h('div', { class: 'pm-tabs', role: 'tablist' }, TABS.map(([id, label]) => h('button', {
+      const tabs = h('div', { class: 'pm-tabs', role: 'tablist' }, tabList.map(([id, label]) => h('button', {
         class: `pm-tab ${ui.tab === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false',
         onclick: () => { ui.tab = id; app.refresh(); },
       }, label, id === 'overview' && s.offers.length ? h('span', { class: 'pm-dotbadge' }, s.offers.length) : null)));
       const body = h('div', { class: 'pm-tabbody', role: 'tabpanel' });
       add(main, tabs, body);
-      ({ overview: tabOverview, squad: tabSquad, lineup: tabLineup, table: tabTable, fixtures: tabFixtures, cup: tabCup, stats: tabStats, transfers: tabTransfers, academy: tabAcademy, club: tabClub })[ui.tab](body, app, s, ui);
+      ({ pro: tabPro, overview: tabOverview, squad: tabSquad, lineup: tabLineup, tactics: tabTactics, training: tabTraining, table: tabTable, fixtures: tabFixtures, cup: tabCup, stats: tabStats, transfers: tabTransfers, academy: tabAcademy, club: tabClub })[ui.tab](body, app, s, ui);
     },
   };
 }
@@ -162,6 +187,7 @@ async function playUserMatch(app, simulate) {
   persist(app);
   const u = summary && summary.user;
   if (!u) { app.refresh(); return; }
+  try { app.afterMatch({ team: uf.home ? u.home : u.away, result: u.result, side: uf.home ? 'home' : 'away', mode: 'career', ut: false }); } catch (e) { console.warn('[meta] career xp', e); }
   const f = u.fixture;
   const res = { ...u.result, homeGoals: f.hg, awayGoals: f.ag, pens: f.pens || null };
   app.push(resultView({
@@ -209,18 +235,18 @@ function miniTable(s, rows, tier) {
 }
 
 function careerPlayerModal(app, s, p) {
-  const mine = p.club === s.userClub;
+  const mine = p.club === s.userClub && s.mode !== 'player';
   const avg = C.avgRating(p);
   const extra = [
     ['Club', C.clubNameOf(s, p.club)], ['Value', C.money(p.value)], ['Wage', `${C.money(p.wage)}/wk`],
     ...(p.contract !== undefined ? [['Contract', `${p.contract} yr${p.contract === 1 ? '' : 's'} (to ${s.year + p.contract})`]] : []),
-    ...(p.fitness !== undefined ? [['Fitness', `${Math.round(p.fitness)}%`], ['Morale', moraleLabel(p.morale)], ['Season', `${p.apps} apps · ${p.goals} goals · avg ${avg ? avg.toFixed(2) : '–'}`], ['Status', p.injury ? `Injured (${p.injury})` : p.listed ? 'Transfer listed' : 'Available']] : []),
+    ...(p.fitness !== undefined ? [['Fitness', `${Math.round(p.fitness)}%`], ['Sharpness', `${Math.round(p.sharp ?? 60)}%`], ['Morale', moraleLabel(p.morale)], ['Season', `${p.apps} apps · ${p.goals} goals · avg ${avg ? avg.toFixed(2) : '–'}`], ['Status', p.injury ? `Injured (${p.injury})` : p.listed ? 'Transfer listed' : 'Available']] : []),
   ];
   const actions = mine ? [
     { label: 'Renew contract', onClick: () => { const r = C.renewContract(s, p.id); persist(app); app.toast(r.message); app.refresh(); } },
     { label: p.listed ? 'Remove from list' : 'Transfer list', onClick: () => { if (p.listed) { p.listed = false; persist(app); app.toast(`${p.name} removed from the transfer list.`); } else { const r = C.listPlayer(s, p.id); persist(app); app.toast(r.message); } app.refresh(); } },
     { label: 'Release', danger: true, onClick: () => { setTimeout(async () => { if (await confirmBox(app.root, 'Release player', `Release ${p.name}? Severance will be paid from your budget.`, 'Release', true)) { const r = C.releasePlayer(s, p.id); persist(app); app.toast(r.message); app.refresh(); } }, 0); } },
-  ] : [
+  ] : s.mode === 'player' ? [] : [
     { label: 'Make bid', primary: true, disabled: !C.transferWindow(s), onClick: () => { setTimeout(() => bidModal(app, s, p), 0); } },
   ];
   playerModal(app, p, { extra, actions });
@@ -392,14 +418,18 @@ function tabTransfers(body, app, s, ui) {
 }
 
 function tabAcademy(body, app, s) {
-  add(body, 
+  add(body,
     h('section', { class: 'pm-panel pm-window' },
-      h('div', null, h('div', { class: 'pm-kicker' }, 'Youth academy'), h('h3', null, `${s.youth.length} prospect${s.youth.length === 1 ? '' : 's'} under observation`), h('small', { class: 'pm-dim' }, `Send scouts to find three new prospects for ${C.money(C.YOUTH_SCOUT_COST)}.`)),
-      h('button', { class: 'pm-btn pm-btn--accent', disabled: s.budget < C.YOUTH_SCOUT_COST, onclick: () => { const r = C.scoutYouth(s); persist(app); app.toast(r.message, 'good'); app.refresh(); } }, 'Scout youth')),
+      h('div', null, h('div', { class: 'pm-kicker' }, 'Youth academy'), h('h3', null, `${s.youth.length} prospect${s.youth.length === 1 ? '' : 's'} under observation`), h('small', { class: 'pm-dim' }, `Local academy scouting finds three prospects for ${C.money(C.YOUTH_SCOUT_COST)}. Budget: ${C.money(s.budget)}.`)),
+      h('button', { class: 'pm-btn pm-btn--accent', disabled: s.budget < C.YOUTH_SCOUT_COST, onclick: () => { const r = C.scoutYouth(s); persist(app); app.toast(r.message, 'good'); app.refresh(); } }, 'Scout locally')),
+    h('section', { class: 'pm-panel' }, h('h3', null, 'Scouting network'), h('p', { class: 'pm-dim' }, 'Send scouts abroad. Their reports give a potential range; pay for a full report to reveal the true ceiling.'),
+      h('div', { class: 'pm-scoutgrid' }, C.SCOUT_REGIONS.map((r) => h('button', { class: 'pm-scoutreg', disabled: s.budget < r.cost, onclick: () => { const res = C.sendScouts(s, r.id); persist(app); app.toast(res.message, 'good'); app.refresh(); } },
+        h('b', null, r.name), h('small', { class: 'pm-dim' }, C.money(r.cost)))))),
     s.youth.length ? h('div', { class: 'pm-youthgrid' }, s.youth.map((p) => {
-      const lo = Math.max(p.ovr, p.pot - 4), hi = Math.min(99, p.pot + 3);
+      const [lo, hi] = p.potHidden && p.potRange ? p.potRange : p.potHidden === false ? [p.pot, p.pot] : [Math.max(p.ovr, p.pot - 4), Math.min(99, p.pot + 3)];
       return h('div', { class: 'pm-youth' }, playerCard(p, { size: 'sm', club: s.clubs[s.userClub] }),
-        h('div', null, h('b', null, p.name), h('small', { class: 'pm-dim' }, `${p.age} · ${p.pos} · ${NATION_BY_CODE[p.nat]?.name}`), h('small', null, `Potential ${lo}–${hi}`)),
+        h('div', null, h('b', null, p.name), h('small', { class: 'pm-dim' }, `${p.age} · ${p.pos} · ${NATION_BY_CODE[p.nat]?.name}${p.scoutedIn ? ` · ${p.scoutedIn}` : ''}`), h('small', null, lo === hi ? `Potential ${lo} (full report)` : `Potential ${lo}–${hi}`),
+          p.potHidden ? h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', disabled: s.budget < C.SCOUT_FURTHER_COST, onclick: () => { const r = C.scoutFurther(s, p.id); persist(app); app.toast(r.message, 'good'); app.refresh(); } }, `Full report · ${C.money(C.SCOUT_FURTHER_COST)}`) : null),
         h('div', { class: 'pm-btnrow' },
           h('button', { class: 'pm-btn pm-btn--primary pm-btn--sm', onclick: () => { const r = C.promoteYouth(s, p.id); persist(app); app.toast(r.message, 'good'); app.refresh(); } }, 'Promote'),
           h('button', { class: 'pm-btn pm-btn--sm', onclick: () => { C.releaseYouth(s, p.id); persist(app); app.refresh(); } }, 'Release')));
@@ -424,6 +454,54 @@ function tabClub(body, app, s) {
       h('div', { class: 'pm-btnrow' },
         h('button', { class: 'pm-btn', onclick: () => { app.toast(persist(app) ? 'Career saved.' : 'Save failed (storage full?).', 'good'); } }, 'Save now'),
         h('button', { class: 'pm-btn pm-btn--ghost', onclick: () => { persist(app); app.career = null; app.pop(); } }, 'Exit to career menu')))));
+}
+
+function tabTactics(body, app, s) {
+  C.ensureLineup(s);
+  const ed = tacticsEditor({
+    holder: s, root: app.root,
+    xi: () => { const f = FORMATIONS[s.lineup.formation]; return s.lineup.slots.map((id, i) => { const p = s.players[id]; return p ? { id: p.id, name: p.name, pos: f.slots[i].pos, ovr: p.ovr } : null; }); },
+    formation: () => s.lineup.formation,
+    setFormation: (fm) => { const seats = reseat(s.lineup.slots.map((id) => s.players[id] || null), fm); s.lineup.formation = fm; s.lineup.slots = seats.map((p) => (p ? p.id : null)); C.ensureLineup(s); persist(app); },
+    onSave: () => persist(app),
+  });
+  add(body, h('p', { class: 'pm-dim' }, 'The tactic marked “Used in matches” is sent with your team for played and simulated matches.'), ed.el);
+}
+
+function tabTraining(body, app, s) {
+  const ps = C.userPlayers(s).sort((a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr);
+  s.training = s.training || {};
+  add(body, h('p', { class: 'pm-dim' }, 'Training plans apply after every matchday. Young players grow fastest; Sharpness boosts match form (up to +3% attributes), Recovery restores fitness.'),
+    h('div', { class: 'pm-tablewrap' }, h('table', { class: 'pm-table' },
+      h('thead', null, h('tr', null, h('th', { class: 'l' }, 'Player'), h('th', null, 'Pos'), h('th', null, 'Age'), h('th', null, 'OVR'), h('th', null, 'POT'), h('th', null, 'Sharp'), h('th', { class: 'l' }, 'Plan'))),
+      h('tbody', null, ps.map((p) => h('tr', null, h('td', { class: 'l' }, p.name), h('td', null, p.pos), h('td', null, p.age), h('td', null, h('b', { class: `ovr ${p.tier}` }, p.ovr)), h('td', null, p.pot),
+        h('td', null, h('span', { class: 'pm-fitbar' }, h('i', { style: { width: `${p.sharp ?? 60}%`, background: 'var(--acc3)' } }))),
+        h('td', { class: 'l' }, select(C.TRAINING_PLANS.map((x) => [x[0], x[1]]), s.training[p.id] || 'balanced', (v) => { C.setTraining(s, p.id, v); persist(app); }, { 'aria-label': `Training plan for ${p.name}` }))))))));
+}
+
+function tabPro(body, app, s) {
+  const p = C.proPlayer(s);
+  if (!p) { add(body, h('p', { class: 'pm-empty' }, 'Your player has left the game.')); return; }
+  const ps = s.proStats || { caps: 0, intGoals: 0, ratings: [], transfers: [] };
+  const avg = ps.ratings.length ? ps.ratings.reduce((a, b) => a + b, 0) / ps.ratings.length : 0;
+  const plan = (s.training || {})[p.id] || 'balanced';
+  add(body, h('div', { class: 'pm-two' },
+    h('section', { class: 'pm-panel pm-pro' }, h('div', { class: 'pm-pdetail' }, playerCard(p, { size: 'md', club: s.clubs[p.club] }),
+      h('div', null, h('h2', null, `${p.first} ${p.last}`), h('p', { class: 'pm-dim' }, `${p.age} · ${p.pos} · ${NATION_BY_CODE[p.nat]?.name} · #${p.number || '–'} at ${s.clubs[p.club].name}`),
+        h('div', { class: 'pm-chiprow' },
+          h('span', { class: 'pm-stat-chip' }, h('span', null, 'OVR'), h('b', null, p.ovr)), h('span', { class: 'pm-stat-chip' }, h('span', null, 'POT'), h('b', null, p.pot)),
+          h('span', { class: 'pm-stat-chip' }, h('span', null, 'Apps'), h('b', null, p.apps)), h('span', { class: 'pm-stat-chip' }, h('span', null, 'Goals'), h('b', null, p.goals)),
+          h('span', { class: 'pm-stat-chip' }, h('span', null, 'Avg'), h('b', null, avg ? avg.toFixed(2) : '–')), h('span', { class: 'pm-stat-chip' }, h('span', null, 'Caps'), h('b', null, `${ps.caps} (${ps.intGoals}g)`))),
+        h('div', { class: 'pm-conf' }, h('span', { class: 'pm-dim' }, 'Sharpness'), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${p.sharp ?? 60}%` } })), h('b', null, `${Math.round(p.sharp ?? 60)}%`)),
+        h('div', { class: 'pm-conf' }, h('span', { class: 'pm-dim' }, 'Fitness'), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${p.fitness}%` } })), h('b', null, `${Math.round(p.fitness)}%`)))),
+      h('h3', null, 'Training focus'),
+      h('div', { class: 'pm-chips' }, C.TRAINING_PLANS.map(([id, label, desc]) => h('button', { class: `pm-chip ${plan === id ? 'on' : ''}`, title: desc, onclick: () => { C.setTraining(s, p.id, id); persist(app); app.refresh(); } }, label))),
+      h('h3', null, 'Career moves'),
+      s.transferRequest ? h('p', null, `Transfer request accepted — joining ${s.clubs[s.transferRequest].name} when the window opens.`) : h('button', { class: 'pm-btn', onclick: () => { const r = C.requestTransfer(s); persist(app); app.toast(r.message); app.refresh(); } }, 'Request a transfer'),
+      ps.transfers.length ? h('p', { class: 'pm-dim' }, `Moves: ${ps.transfers.map((t) => `${s.clubs[t.from]?.name || t.from} → ${s.clubs[t.to]?.name || t.to} (S${t.season})`).join(' · ')}`) : null),
+    h('section', { class: 'pm-panel' }, h('h3', null, 'Recent match ratings'),
+      ps.ratings.length ? h('div', { class: 'pm-formguide pm-proratings' }, ps.ratings.slice(-12).map((r) => h('i', { class: r >= 7.5 ? 'f-W' : r >= 6.3 ? 'f-D' : 'f-L', title: String(r) }, r.toFixed(1)))) : h('p', { class: 'pm-dim' }, 'Play your first match!'),
+      h('h3', null, 'News'), h('ul', { class: 'pm-news' }, s.news.slice(0, 10).map((n) => h('li', { class: `k-${n.kind}` }, n.text))))));
 }
 
 // ---------- season end ----------

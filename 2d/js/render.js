@@ -3,7 +3,7 @@
 import { PITCH, CX, CY, GOAL, BOX, SIX, PEN_SPOT, CIRCLE_R, CORNER_R, POST_R, SHOT_TYPES } from './constants.js';
 import { clamp, fmtClock, luminance, TAU } from './util.js';
 import { aimPointOnGoal, snapInsideFrame, isOnTarget } from './shooting.js';
-import { choosePassTarget } from './passing.js';
+import { choosePassTarget, PASS_CONES } from './passing.js';
 import { simulatePath } from './physics.js';
 import { predictSetPiece, SP_LABEL } from './setpieces.js';
 import { keyLabel } from './keybinds.js';
@@ -278,7 +278,7 @@ function drawAim(ctx, m, h, settings) {
     let y = aimPointOnGoal(m.ball, aim, side);
     if (y == null) return;
     let z = 0.8;
-    const mode = settings.assist;
+    const mode = m.gp(h).shot;
     const ang = Math.acos(clamp((aim.x * (gx - p.x) + aim.y * (CY - p.y)) / Math.hypot(gx - p.x, CY - p.y), -1, 1));
     if (mode === 'Assisted' && ang < 0.87) { const s = snapInsideFrame(y, z, 0.25); y = s.y; }
     const on = isOnTarget(y, z);
@@ -303,8 +303,10 @@ function drawAim(ctx, m, h, settings) {
     ctx.lineTo(ex - aim.x * 0.6 + aim.y * 0.4, ey - aim.y * 0.6 - aim.x * 0.4); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
     ctx.globalAlpha = 1;
   }
-  // likely pass receiver
-  const sel = choosePassTarget(p, m.mates(p.team), m.opps(p.team), aim, 'ground', m.attackDir(p.team));
+  // likely pass receiver (with the player's ground-pass assistance; none in Manual)
+  const pm = m.gp(h).passGround;
+  const C = PASS_CONES[pm];
+  const sel = C ? choosePassTarget(p, m.mates(p.team), m.opps(p.team), aim, 'ground', m.attackDir(p.team), { cone: C.ground * Math.PI / 180, wide: C.wide * Math.PI / 180, alignW: C.alignW }) : null;
   if (sel) {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 0.07;
     ctx.beginPath(); ctx.arc(sel.mate.x, sel.mate.y, 0.75 * PS, 0, TAU); ctx.stroke();
@@ -354,6 +356,25 @@ export function drawMatch(ctx, m, cam, settings) {
     const p = hh.player; if (!p || p.sentOff) continue;
     ctx.strokeStyle = P_COLORS[hh.ctrl]; ctx.lineWidth = 0.1;
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.05, 0.7 * PS, 0.55 * PS, 0, 0, TAU); ctx.stroke();
+  }
+  // switch indicator: who the Switch button would pick next
+  if (m.state === 'play') {
+    for (const hh of m.humans) {
+      const q = hh.next;
+      if (!q || q === hh.player || q.sentOff || !m.gp(hh).switchIndicator) continue;
+      ctx.save();
+      ctx.strokeStyle = P_COLORS[hh.ctrl]; ctx.globalAlpha = 0.75; ctx.lineWidth = 0.08;
+      ctx.setLineDash([0.35, 0.25]);
+      ctx.beginPath(); ctx.ellipse(q.x, q.y + 0.05, 0.7 * PS, 0.55 * PS, 0, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // jockey / shield stance: a short arc in front of the controlled player
+  for (const hh of m.humans) {
+    const p = hh.player; if (!p || !(p.jockey || p.shield)) continue;
+    ctx.strokeStyle = p.shield ? 'rgba(255,209,102,0.85)' : 'rgba(255,255,255,0.8)'; ctx.lineWidth = 0.12;
+    const a = p.shield ? p.facing + Math.PI : p.facing;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 1.25, a - 0.6, a + 0.6); ctx.stroke();
   }
   // pass target marker
   if (m.pass && m.pass.receiver && m.state === 'play') {
@@ -413,6 +434,36 @@ export function drawMatch(ctx, m, cam, settings) {
       ctx.font = 'bold 10px Arial, sans-serif';
       ctx.fillText(SHOT_TYPES[type].label.toUpperCase(), q.x, py - 8);
     }
+    // pass power (Semi / Manual passing)
+    if (p.passHold) {
+      const pw = 56, ph = 7, px = q.x - pw / 2, py = top - 30;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(px - 2, py - 2, pw + 4, ph + 4);
+      ctx.fillStyle = '#6ec8ff'; ctx.fillRect(px, py, pw * Math.min(1, p.passHold.t), ph);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Arial, sans-serif';
+      ctx.fillText({ ground: 'PASS', through: 'THROUGH', lob: 'LOB' }[p.passHold.kind], q.x, py - 7);
+    }
+    // timed finishing: the ring closes on the moment of contact
+    if (p.windup) {
+      const k = clamp(1 - p.windup.t / p.windup.contact, 0, 1);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(q.x, q.y, 12 + 26 * k, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(125,255,160,0.9)';
+      ctx.beginPath(); ctx.arc(q.x, q.y, 12, 0, TAU); ctx.stroke();
+    }
+  }
+  // timed finishing result (stays on the shooter even after control moves on)
+  for (const p of m.players) {
+    if (!p.timedFx || p.timedFx.grade === 'none') continue;
+    const q = w2s(cam, p.x, p.y), top = q.y - s * 1.05 * PS;
+    const good = p.timedFx.grade === 'perfect';
+    ctx.globalAlpha = clamp(1.2 - p.timedFx.t, 0, 1);
+    ctx.fillStyle = good ? '#7dffa0' : '#ff6b6b';
+    ctx.beginPath(); ctx.arc(q.x, top - 24, 6, 0, TAU); ctx.fill();
+    ctx.font = 'bold 12px Arial, sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3;
+    const label = { perfect: 'PERFECT TIMING', early: 'TOO EARLY', late: 'TOO LATE' }[p.timedFx.grade];
+    ctx.strokeText(label, q.x, top - 38); ctx.fillText(label, q.x, top - 38);
+    ctx.globalAlpha = 1;
   }
   drawHUD(ctx, m, cam, settings);
 }
@@ -594,11 +645,14 @@ export function drawHUD(ctx, m, cam, settings, binds) {
     ctx.restore();
   });
   drawSetPieceHUD(ctx, m, w, h, drawHUD.binds || { p1: {}, p2: {} });
-  if (m.state === 'replay') {
+  if (m.state === 'replay' || m.state === 'ireplay') {
+    const label = m.state === 'ireplay' ? 'INSTANT REPLAY' : 'REPLAY';
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, w, 36); ctx.fillRect(0, h - 36, w, 36);
-    ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(w - 120, 18, 7, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'italic 900 20px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('REPLAY', w - 106, 19);
+    ctx.font = 'italic 900 20px Arial';
+    const lw = ctx.measureText(label).width;
+    ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(w - lw - 34, 18, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, w - lw - 20, 19);
     ctx.font = '12px Arial'; ctx.textAlign = 'center'; ctx.fillText('Press any key / tap to skip', w / 2, h - 18);
   }
   drawBanners(ctx, m, w, h);

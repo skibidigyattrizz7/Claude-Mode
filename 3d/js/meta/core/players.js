@@ -321,7 +321,7 @@ export function getDB() {
     p.special = 'objective'; p.rare = true; p.tier = 'gold'; p.pot = Math.max(p.pot, p.ovr);
     const extra = genPhysique({ ...p, id: `${p.id}-x` }).playstyles;
     p.playstyles = (b.playstyles || []).slice(0, 2).concat(extra.filter((x) => !(b.playstyles || []).some((y) => y.id === x.id))).slice(0, 3);
-    if (p.playstyles[0]) p.playstyles[0] = { ...p.playstyles[0], plus: p.ovr >= 85 };
+    p.playstyles = p.playstyles.map((x, k) => ({ id: x.id, plus: k === 0 && p.ovr >= 85 }));
     p.value = marketValue(p);
     specials.push(p);
   }

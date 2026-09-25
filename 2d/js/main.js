@@ -35,7 +35,7 @@ function resize() {
 class MatchScene {
   constructor(opts) {
     this.opts = opts;
-    this.m = new Match({ ...opts, settings, ctrls: input.ctrls, minutes: opts.minutes || settings.matchMinutes, difficulty: settings.difficulty });
+    this.m = new Match({ ...opts, settings, ctrls: input.ctrls, minutes: opts.minutes || settings.matchMinutes, difficulty: settings.difficulty, autoKicks: !!opts.demo });
     this.cam = makeCamera();
     this.kick = null;
     this.demo = !!opts.demo;
@@ -53,6 +53,7 @@ class MatchScene {
     if (!this.demo) {
       m.aimWorld[0] = mouseAimActive() ? s2w(this.cam, input.mouse.x, input.mouse.y) : null;
       m.mouseClick = input.mouse.pressed && !input.touchMode;
+      m.mouseDown = input.mouse.down && !input.touchMode;
       if (input.anyPressed || input.mouse.pressed) m.skipRequest = true;
     }
     m.update(dt);
@@ -194,12 +195,14 @@ const app = {
     if (this.scene.kick) this.scene.kick.paused = true;
     releaseAll();
     const restart = this.scene instanceof MatchScene && !this.scene.demo ? () => this.startMatch(this.lastMatch) : this.scene instanceof KickOnlyScene ? () => this.startKickOnly(this.lastKick) : null;
+    const m = this.scene instanceof MatchScene && !this.scene.demo && !this.scene.kick ? this.scene.m : null;
     const showP = () => UI.showPause({
       resume: () => this.resume(),
       restart,
+      replay: m && m.canInstantReplay() ? () => { this.resume(); m.startInstantReplay(); } : null,
       settings: () => UI.showSettings(showP, true),
       quit: () => { crowdAmbience(false); this.toMenu(); },
-    });
+    }, m);
     showP();
   },
   resume() {

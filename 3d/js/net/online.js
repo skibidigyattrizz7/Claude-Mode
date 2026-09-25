@@ -161,12 +161,12 @@ export function mountOnline(root, ctx) {
           h('span', { class: 'hint', id: 'net-offline-reason' }, `${s2.message || 'The online server is unreachable.'} Quick Search, friends and coins are unavailable — Play with a Code still works.`));
       } else {
         const p = s2.profile;
-        profileBar.replaceChildren(h('span', { class: 'pill pill--on', id: 'net-pill' }, h('i', { class: 'dot' }), 'Online'),
+        profileBar.replaceChildren(...[h('span', { class: 'pill pill--on', id: 'net-pill' }, h('i', { class: 'dot' }), 'Online'),
           p ? h('span', { class: 'np-name' }, p.name) : null,
           p ? h('span', { class: 'np-stat', id: 'np-coins' }, h('small', null, 'Coins'), h('b', null, fmtNum(p.coins))) : null,
           p ? h('span', { class: 'np-stat' }, h('small', null, 'Rating'), h('b', null, p.rating)) : null,
           p ? h('span', { class: 'np-stat' }, h('small', null, 'Division'), h('b', null, p.division)) : null,
-          p ? h('span', { class: 'np-stat np-record' }, h('small', null, 'W-D-L'), h('b', null, `${p.wins}-${p.draws}-${p.losses}`)) : null);
+          p ? h('span', { class: 'np-stat np-record' }, h('small', null, 'W-D-L'), h('b', null, `${p.wins}-${p.draws}-${p.losses}`)) : null].filter(Boolean));
       }
       updateFind();
     }
@@ -266,7 +266,7 @@ export function mountOnline(root, ctx) {
       h('span', { class: 'friend-actions' }, ...kids));
     const modeSeg = seg('Challenge mode', [['friendly', 'Friendly'], ['ut', 'Ultimate Team']], st.challengeMode, (v) => { st.challengeMode = v; });
     modeSeg.classList.add('challenge-mode');
-    body.replaceChildren(
+    body.replaceChildren(...[
       h('div', { class: 'friend-add' }, addIn, addBtn),
       groups.incoming.length ? h('div', { class: 'friend-group' }, h('h3', null, `Requests (${groups.incoming.length})`),
         h('ul', { class: 'friend-list' }, groups.incoming.map((f) => row(f, act(f, 'accept', 'Accept', 'btn--primary'), act(f, 'decline', 'Decline'))))) : null,
@@ -279,7 +279,7 @@ export function mountOnline(root, ctx) {
         h('ul', { class: 'friend-list' }, groups.outgoing.map((f) => row(f, h('span', { class: 'hint' }, 'Pending'), act(f, 'remove', 'Cancel'))))) : null,
       groups.blocked.length ? h('details', { class: 'friend-group' }, h('summary', null, `Blocked (${groups.blocked.length})`),
         h('ul', { class: 'friend-list' }, groups.blocked.map((f) => row(f, act(f, 'unblock', 'Unblock'))))) : null,
-    );
+    ].flat().filter(Boolean));
   }
   function confirmAction(msg) { try { return window.confirm(msg); } catch { return true; } }
 
@@ -379,7 +379,7 @@ export function mountOnline(root, ctx) {
     if (!res.ok) {
       if (ctx.autoQuick && ctx.onAutoEnd) { renderHome(res.cancelled ? '' : res.message || ''); ctx.onAutoEnd(res); return; }
       if (res.cancelled) renderHome();
-      else renderHome(res.message || 'Quick search failed.');
+      else renderHome(res.message || 'Quick search failed.', () => doQuickSearch(mode, clean));
       return;
     }
     st.quick.opponent = res.opponent;
@@ -400,7 +400,10 @@ export function mountOnline(root, ctx) {
   function cancelSearch() {
     if (services) services.matchmaking.cancelSearch();
     stopSearchClock();
-    if (st.phase === 'searching') renderHome();
+    if (st.phase === 'searching') {
+      renderHome();
+      if (ctx.autoQuick && ctx.onAutoEnd) ctx.onAutoEnd({ ok: false, cancelled: true, reason: 'cancelled' });
+    }
   }
 
   function peerCfg() {
@@ -419,6 +422,7 @@ export function mountOnline(root, ctx) {
     // broker / network problems after connecting: never fail silently
     s.on('status', (state, detail) => {
       if (state !== 'error' || !detail || st.session !== s) return;
+      if (!s.code) return; // failures while creating/joining are reported by doHost/doJoin
       if (st.phase === 'hosting') renderHome(`Your room stopped working: ${detail}`, () => doHost());
       else ctx.toast(detail, 'bad');
     });
@@ -969,7 +973,7 @@ export function mountOnline(root, ctx) {
 
   ctx.setBack(() => {
     if (st.phase === 'home') { ctx.nav.back(); return; }
-    if (st.phase === 'searching') { cancelSearch(); if (ctx.autoQuick && ctx.onAutoEnd) ctx.onAutoEnd({ ok: false, cancelled: true, reason: 'cancelled' }); return; }
+    if (st.phase === 'searching') { cancelSearch(); return; }
     if (st.phase === 'inviting') { services.friends.cancelChallenge(); return; }
     if ((st.phase === 'lobby' || st.phase === 'hosting' || st.phase === 'result') && st.session && !confirmLeave()) return;
     renderHome();

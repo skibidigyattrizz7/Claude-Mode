@@ -26,6 +26,7 @@
   //   ?offline=1           mock backend unreachable (Player Market / admin show their offline states)
   //   ?noonline=1          mount without `online` / `startOnlineMatch` at all
   //   ?admincode=XYZ       the ONLY code the mock admin.verify() accepts (nothing is hard-coded here)
+  //   ?noopp=1             mock matchmaking finds no opponent (Rivals offers an AI Rival)
   import { mountMeta, getNationalTeams, getSavedUltimateTeam } from './js/meta/index.js';
   import { getDB } from './js/meta/core/players.js';
 
@@ -61,7 +62,7 @@
   const wait = (ms = 120) => new Promise((r) => setTimeout(r, ms));
   const db = getDB();
   const mock = {
-    balance: 50000, rating: 1180, division: 7, seq: 1,
+    balance: 50000, rating: 1180, division: 7, seq: 1, rvPoints: 4, rvWins: 2, rvClaimed: false,
     listings: [], // { listingId, card, price, seller, listedAt, mine, status, buyer }
   };
   const seedIds = ['rs_mbappe', 'rs_salah', 'ic_maldini', 'rs_cavani'];
@@ -128,7 +129,11 @@
         mock.balance += delta; console.log('[mock] coins.add', delta, reason, '->', mock.balance); return { ok: true, coins: mock.balance };
       },
     },
-    matchmaking: { async quickSearch() { return off; }, cancelSearch() {} },
+    matchmaking: { async quickSearch() { return off; }, cancelSearch() { console.log('[mock] cancelSearch'); } },
+    rivals: {
+      async status() { await wait(); if (offline) return off; return { ok: true, division: mock.division, points: mock.rvPoints, stageTargets: [3, 6, 9], weeklyWins: mock.rvWins, rewardsReady: mock.rvWins >= 3 && !mock.rvClaimed }; },
+      async claimWeekly() { await wait(); if (offline) return off; if (mock.rvWins < 3 || mock.rvClaimed) return { ok: false, error: 'Not ready' }; mock.rvClaimed = true; mock.balance += 5000; return { ok: true, coins: 5000, packs: ['gold', 'premium'] }; },
+    },
     async reportResult() { return { ok: true, coinsAwarded: 0, rating: mock.rating }; },
     admin: {
       async verify(code) { await wait(); if (offline) return false; return !!adminCode && code === adminCode; },
@@ -138,12 +143,13 @@
   async function mockStartOnlineMatch({ mode, team }) {
     console.log('[mock] startOnlineMatch', mode, team && team.name);
     await wait(600);
+    if (q.get('noopp') === '1') return { ok: false, error: 'No opponent found (timeout)' };
     const opp = getNationalTeams()[Math.floor(Math.random() * 12)];
     const r = fakeResult(team, opp);
     const won = r.homeGoals > r.awayGoals, drawn = r.homeGoals === r.awayGoals;
     const coinsAwarded = won ? 1200 : drawn ? 600 : 300;
     mock.balance += coinsAwarded; mock.rating += won ? 25 : drawn ? 5 : -15;
-    if (won && mock.division > 1) mock.division--;
+    if (mode === 'rivals') { mock.rvPoints += won ? 3 : drawn ? 1 : 0; if (won) mock.rvWins++; if (mock.rvPoints >= 9 && mock.division > 0) { mock.division--; mock.rvPoints = 0; } }
     return { ...r, userSide: 'home', opponent: { name: 'RivalBot' }, coinsAwarded, rating: mock.rating, division: mock.division };
   }
 

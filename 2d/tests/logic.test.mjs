@@ -2,7 +2,12 @@
 import { PITCH, CY, GOAL, BALL_R, PHYS, POST_R } from '../js/constants.js';
 import { makeBall, stepBallWorld, integrate, solveKick } from '../js/physics.js';
 import { goalScored, keeperMaySave, resolveKeeperContact, outOfPlay, restartFor, judgeTackle, isFromBehind, applyCard, tackleSweep } from '../js/rules.js';
-import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk } from '../js/passing.js';
+import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk, planPass, manualPassSpeed } from '../js/passing.js';
+import { touchHeaviness, savedKickRestart, timedFinishGrade, shoulderWinChance } from '../js/feel.js';
+import { defensiveRoles, markTargets } from '../js/ai.js';
+import { sanitizeGameplay, GAMEPLAY_DEFAULTS } from '../js/settings.js';
+import { sanitizeBinds } from '../js/keybinds.js';
+import { makePlayer, stepPlayer } from '../js/player.js';
 import { planShot, shotVelocity, isOnTarget } from '../js/shooting.js';
 import { defaultBinds, setBind, saveBinds, loadBinds, STORAGE_KEY, keyLabel } from '../js/keybinds.js';
 import { makeRng } from '../js/util.js';
@@ -300,13 +305,37 @@ test('shoulder-to-shoulder challenge for the ball is not a body foul', () => {
   const sw = tackleSweep(tackler, Math.atan2(ball.y - tackler.y, ball.x - tackler.x), 0.9, ball, [victim]);
   assert(sw.first !== 'body', 'side-on challenge reached the ball, got ' + sw.first);
 });
-test('through ball is played into reachable space, not 40 m ahead', () => {
+test('through ball goes well into space: lead = runner speed x arrival time, 20-35 m pass', () => {
   const from = { x: 30, y: 27 };
   const runner = { x: 45, y: 20, vx: 6, vy: 0 };
   const lt = leadTarget(from, runner, 'through', 1);
   const lead = Math.hypot(lt.target.x - runner.x, lt.target.y - runner.y);
-  assert(lead >= 3 && lead <= 14.5, 'lead ' + lead.toFixed(1));
-  assert(lt.target.x > runner.x, 'ahead of the runner');
+  const len = Math.hypot(lt.target.x - from.x, lt.target.y - from.y);
+  assert(lt.target.x > runner.x + 8, 'well ahead of the runner');
+  assert(len >= 20 && len <= 35, 'pass length ' + len.toFixed(1));
+  assert(lead <= 28, 'not absurdly far ahead: ' + lead.toFixed(1));
+  // the runner (sprinting ~7 m/s after a short reaction) gets there just as the ball does
+  const runT = lead / 7.2 + 0.25;
+  assert(Math.abs(runT - lt.t) < 0.35, `runner ${runT.toFixed(2)}s vs ball ${lt.t.toFixed(2)}s`);
+  // the ball is still rolling when it gets there (it does not die in front of him)
+  const v = passVelocity(from, lt.target, 'through');
+  const b = makeBall(from.x, from.y); b.vx = v.vx; b.vy = v.vy;
+  let t = 0; while (t < v.t) { integrate(b, PHYS.DT); t += PHYS.DT; }
+  assert(Math.hypot(b.vx, b.vy) > 5, 'arrives with pace ' + Math.hypot(b.vx, b.vy).toFixed(1));
+});
+test('ground passes are firm: quick arrival, speed grows with distance, never a weak roll', () => {
+  let prev = 0;
+  for (const d of [6, 12, 20, 30, 40]) {
+    const v = passVelocity({ x: 10, y: 27 }, { x: 10 + d, y: 27 }, 'ground');
+    const v0 = Math.hypot(v.vx, v.vy);
+    assert(v0 > prev, 'speed grows with distance');
+    assert(v0 >= 9.5, `d=${d} launch speed ${v0.toFixed(1)} too weak`);
+    assert(v.t < 0.25 + d / 11, `d=${d} takes ${v.t.toFixed(2)}s`);
+    const b = makeBall(10, 27); b.vx = v.vx;
+    let t = 0; while (t < v.t) { integrate(b, PHYS.DT); t += PHYS.DT; }
+    assert(Math.hypot(b.vx, b.vy) >= 7.5, `d=${d} arrives at ${Math.hypot(b.vx, b.vy).toFixed(1)} m/s`);
+    prev = v0;
+  }
 });
 test('lane risk: blocked lane is risky, open lane is safe', () => {
   const a = { x: 30, y: 27 }, b = { x: 45, y: 27 };
@@ -350,6 +379,161 @@ test('free kicks: a well-struck kick into the corner beats a Normal keeper somet
   const r = goals / N;
   assert(r > 0.2 && r < 0.7, 'FK goal rate ' + r.toFixed(2));
   assert(saves > 0, 'keeper still makes saves');
+});
+
+console.log('Gameplay settings: pass assistance');
+test('assisted pass always reaches the target team-mate when unobstructed', () => {
+  const rng = makeRng(31);
+  for (let i = 0; i < 60; i++) {
+    const passer = { x: 20 + rng() * 30, y: 10 + rng() * 34 };
+    const ang = (rng() - 0.5) * 2 * Math.PI;
+    const d = 8 + rng() * 22;
+    const mate = { x: passer.x + Math.cos(ang) * d, y: passer.y + Math.sin(ang) * d, vx: (rng() - 0.5) * 8, vy: (rng() - 0.5) * 8 };
+    if (mate.x < 6 || mate.x > PITCH.L - 6 || mate.y < 6 || mate.y > PITCH.W - 6) continue;
+    const off = (rng() - 0.5) * 1.0;                                   // aim up to ~30 degrees off
+    const aimDir = { x: Math.cos(ang + off), y: Math.sin(ang + off) };
+    for (const kind of ['ground', 'lob']) {
+      const plan = planPass({ passer, from: passer, mates: [passer, mate], opps: [], aimDir, kind, attackDir: 1, mode: 'Assisted', power: rng() });
+      assert(plan.mate === mate, 'assisted pass picked the team-mate');
+      assert(plan.err === 0, 'no error in assisted passing');
+      const b = makeBall(passer.x, passer.y); Object.assign(b, { vx: plan.v.vx, vy: plan.v.vy, vz: plan.v.vz, z: plan.v.vz ? 0.01 : 0 });
+      let t = 0, best = 1e9;
+      while (t < plan.v.t + 0.6) {
+        integrate(b, PHYS.DT); t += PHYS.DT;
+        const mx = mate.x + mate.vx * t, my = mate.y + mate.vy * t;   // he keeps his run
+        if (b.z < 1.2) best = Math.min(best, Math.hypot(b.x - mx, b.y - my));
+      }
+      assert(best < 1.0, `${kind} pass misses the runner by ${best.toFixed(2)} m`);
+    }
+  }
+});
+test('semi-assisted pass uses a narrower cone than assisted', () => {
+  const passer = { x: 30, y: 27 };
+  const mate = { x: 30 + 15 * Math.cos(50 * Math.PI / 180), y: 27 + 15 * Math.sin(50 * Math.PI / 180), vx: 0, vy: 0 };   // 50 deg off the aim
+  const o = { passer, from: passer, mates: [passer, mate], opps: [], aimDir: { x: 1, y: 0 }, kind: 'ground', attackDir: 1, power: 0.5, passing: 0.8 };
+  assert(planPass({ ...o, mode: 'Assisted' }, makeRng(1)).mate === mate, 'assisted finds him');
+  assert(planPass({ ...o, mode: 'Semi' }, makeRng(1)).mate === null, 'semi relies on the aim: nobody in its cone');
+  const near = { x: 45, y: 29, vx: 0, vy: 0 };                          // ~8 deg off: both find him
+  assert(planPass({ ...o, mates: [passer, near], mode: 'Semi' }, makeRng(1)).mate === near);
+  // semi: hold time changes the weight of the pass
+  const soft = planPass({ ...o, mates: [passer, near], mode: 'Semi', power: 0.05 }, makeRng(2));
+  const hard = planPass({ ...o, mates: [passer, near], mode: 'Semi', power: 1 }, makeRng(2));
+  assert(Math.hypot(hard.v.vx, hard.v.vy) > Math.hypot(soft.v.vx, soft.v.vy) * 1.2, 'power from hold time');
+});
+test('manual pass goes exactly where aimed with the power held (no targeting)', () => {
+  const passer = { x: 30, y: 27 };
+  const mate = { x: 44, y: 31, vx: 0, vy: 0 };
+  for (const aimDir of [{ x: 1, y: 0 }, { x: 0.6, y: 0.8 }, { x: -0.8, y: 0.6 }]) {
+    let prev = 0;
+    for (const power of [0.1, 0.5, 1]) {
+      const pl = planPass({ passer, from: passer, mates: [passer, mate], opps: [], aimDir, kind: 'ground', mode: 'Manual', power });
+      assert(pl.mate === null, 'no receiver chosen');
+      const sp = Math.hypot(pl.v.vx, pl.v.vy);
+      assert(Math.abs(pl.v.vx / sp - aimDir.x) < 1e-9 && Math.abs(pl.v.vy / sp - aimDir.y) < 1e-9, 'exact direction');
+      assert(near(sp, manualPassSpeed('ground', power), 1e-9) && sp > prev, 'speed from power');
+      prev = sp;
+    }
+    const lob = planPass({ passer, from: passer, mates: [passer, mate], opps: [], aimDir, kind: 'lob', mode: 'Manual', power: 0.5 });
+    const d = Math.hypot(lob.target.x - passer.x, lob.target.y - passer.y);
+    assert(near(d, manualPassSpeed('lob', 0.5), 1e-6), 'lob distance from power');
+    assert(Math.abs((lob.target.x - passer.x) / d - aimDir.x) < 1e-9, 'lob lands along the aim');
+  }
+});
+
+console.log('Gameplay settings: defending / marking');
+const P = (x, y, human = -1, extra = {}) => ({ x, y, human, role: 'DF', vx: 0, vy: 0, ...extra });
+test('AI defending: Assisted helps (press or contain), Tactical leaves it to you', () => {
+  const carrier = { x: 40, y: 27 };
+  const me = P(41.5, 27, 0), a1 = P(44, 27), a2 = P(50, 30), a3 = P(55, 20);
+  const field = [me, a1, a2, a3];
+  let r = defensiveRoles(field, carrier, { mode: 'Assisted' });
+  assert(r.container === a1 && !r.presser && r.cover === a2, 'you engage, nearest mate contains, next covers');
+  const far = P(60, 40, 0);
+  r = defensiveRoles([far, a1, a2, a3], carrier, { mode: 'Assisted' });
+  assert(r.presser === a1, 'nearest AI presses when he is closer than you');
+  r = defensiveRoles(field, carrier, { mode: 'Tactical' });
+  assert(!r.presser && !r.container, 'tactical: nobody presses for you');
+  r = defensiveRoles([far, a1, a2, a3], carrier, { mode: 'Tactical' });
+  assert(!r.presser && r.container === a1, 'tactical: someone contains only when you are far away');
+  r = defensiveRoles([a1, a2, a3], carrier, {});
+  assert(r.presser === a1 && r.cover === a2, 'CPU team presses and covers');
+});
+test('auto marking: runners are tracked when on, zones held when off', () => {
+  const goal = { x: 0, y: CY };
+  const d1 = P(15, 20), d2 = P(15, 34), me = P(25, 27, 0);
+  const runner = { x: 18, y: 22 }, other = { x: 20, y: 36 }, far = { x: 60, y: 27 };
+  const homes = new Map([[d1, { x: 15, y: 20 }], [d2, { x: 15, y: 34 }], [me, { x: 25, y: 27 }]]);
+  const on = markTargets([d1, d2, me], [runner, other, far], (p) => homes.get(p), goal, { autoMarking: true });
+  assert(on.get(d1) === runner && on.get(d2) === other, 'each runner picked up by the defender of that zone');
+  assert(!on.has(me), 'the human-controlled player is never assigned');
+  assert(![...on.values()].includes(far), 'far attacker (out of every zone) is left');
+  const off = markTargets([d1, d2, me], [runner, other, far], (p) => homes.get(p), goal, { autoMarking: false });
+  assert(off.size === 0, 'no man-marking with auto marking off');
+});
+
+console.log('Feel');
+test('first touch gets heavier with ball speed, sprinting and pressure, cleaner with dribbling', () => {
+  const base = { relSpeed: 14, dribbling: 0.6, sprinting: false, pressure: 0, height: 0 };
+  assert(touchHeaviness({ ...base, relSpeed: 6 }) === 0, 'a soft pass is cushioned dead');
+  assert(touchHeaviness({ ...base, relSpeed: 22 }) > touchHeaviness(base), 'faster ball = heavier');
+  assert(touchHeaviness({ ...base, sprinting: true }) > touchHeaviness(base), 'sprinting = heavier');
+  assert(touchHeaviness({ ...base, pressure: 1 }) > touchHeaviness(base), 'pressure = heavier');
+  const hard = { ...base, relSpeed: 20, sprinting: true, pressure: 0.8 };
+  assert(touchHeaviness({ ...hard, dribbling: 0.95 }) < touchHeaviness({ ...hard, dribbling: 0.3 }) * 0.6, 'good dribblers are much cleaner');
+  assert(touchHeaviness({ ...hard, relSpeed: 40, dribbling: 0 }) <= 0.9, 'bounded');
+});
+test('momentum: no instant 180 at full sprint (braking arc), easy turn when slow', () => {
+  const info = { role: 'MF', num: 8, name: 'T', attrs: { pace: 0.7, dribbling: 0.7, stamina: 0.7, shooting: 0.5, passing: 0.5, tackling: 0.5, keeping: 0.3 } };
+  const p = makePlayer(0, 3, info);
+  p.x = 40; p.y = 27; p.vx = 9; p.vy = 0; p.facing = 0; p.sprint = true;
+  p.want.x = -9; p.want.y = 0;
+  let t = 0, maxLat = 0;
+  while (p.vx > -6 && t < 3) { stepPlayer(p, PHYS.DT); t += PHYS.DT; maxLat = Math.max(maxLat, Math.abs(p.y - 27)); }
+  assert(t > 0.5, 'reversing from a sprint takes time: ' + t.toFixed(2));
+  assert(maxLat > 0.3, 'the turn is an arc, not a stop on a sixpence');
+  const q = makePlayer(0, 3, info);
+  q.x = 40; q.y = 27; q.vx = 2; q.vy = 0; q.want.x = -2; q.want.y = 0;
+  let t2 = 0; while (q.vx > -2 && t2 < 3) { stepPlayer(q, PHYS.DT); t2 += PHYS.DT; }
+  assert(t2 < 0.25, 'jogging turn is quick: ' + t2.toFixed(2));
+});
+test('shoulder duel: strength decides, shielding helps the carrier', () => {
+  const strong = { attrs: { strength: 0.9 } }, weak = { attrs: { strength: 0.4 } };
+  assert(shoulderWinChance(strong, weak) > 0.7 && shoulderWinChance(weak, strong) < 0.2);
+  assert(shoulderWinChance(strong, weak, { shielding: true }) < shoulderWinChance(strong, weak));
+});
+test('timed finishing: tap at contact = green, early / late = red, none = normal', () => {
+  assert(timedFinishGrade(0.02).grade === 'perfect' && timedFinishGrade(0.02).errMul < 1);
+  assert(timedFinishGrade(-0.15).grade === 'early' && timedFinishGrade(-0.15).errMul > 1);
+  assert(timedFinishGrade(0.2).grade === 'late');
+  assert(timedFinishGrade(null).grade === 'none' && timedFinishGrade(null).errMul === 1);
+});
+test('saved penalty / free kick restarts vary: catch, corner, parry into play', () => {
+  const rng = makeRng(9);
+  const seen = { catch: 0, corner: 0, parry: 0 };
+  for (let i = 0; i < 400; i++) seen[savedKickRestart(rng() < 0.45, CY + (rng() - 0.5) * 6, rng, CY).type]++;
+  assert(seen.catch > 60 && seen.corner > 60 && seen.parry > 60, JSON.stringify(seen));
+  for (let i = 0; i < 20; i++) assert(savedKickRestart(true, CY, rng, CY).type === 'catch', 'a held ball is always a catch');
+  const c = savedKickRestart(false, CY - 2, () => 0.1, CY);
+  assert(c.type === 'corner' && c.upper, 'corner on the side the ball was saved');
+  const pr = savedKickRestart(false, CY + 2, () => 0.9, CY);
+  assert(pr.type === 'parry' && pr.dy > 0 && pr.dist > 0 && pr.speed > 0, 'parry has a rebound');
+});
+test('gameplay settings: per-player defaults, legacy shot assist migrates, junk dropped', () => {
+  const g = sanitizeGameplay({ p1: { passGround: 'Manual', autoTackle: 'yes', defending: 'Bogus' }, p2: { receiverLock: true } }, 'Precision');
+  assert(g.p1.passGround === 'Manual' && g.p1.autoTackle === GAMEPLAY_DEFAULTS.autoTackle && g.p1.defending === GAMEPLAY_DEFAULTS.defending);
+  assert(g.p1.shot === 'Precision' && g.p2.shot === 'Precision', 'old single assist setting kept');
+  assert(g.p2.receiverLock === true && g.p2.passGround === GAMEPLAY_DEFAULTS.passGround);
+  assert(sanitizeGameplay(null).p1.autoSwitch === 'Auto');
+});
+test('jockey action: default V, rebindable, old saves get it unless V is taken', () => {
+  const b = defaultBinds();
+  assert(b.p1.jockey === 'KeyV' && b.p2.jockey);
+  const r = setBind(b, 'p1', 'jockey', 'KeyG');
+  assert(r.binds.p1.jockey === 'KeyG' && !r.swapped);
+  const old = defaultBinds(); delete old.p1.jockey; delete old.p2.jockey;
+  assert(sanitizeBinds(old).p1.jockey === 'KeyV', 'added to an old save');
+  old.p1.skill = 'KeyV';
+  assert(sanitizeBinds(old).p1.jockey === '', 'left unbound instead of clashing');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

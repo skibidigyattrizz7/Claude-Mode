@@ -6,8 +6,8 @@ import { NATION_BY_CODE, clubById } from '../core/data.js';
 import { isWalkout } from '../core/ut.js';
 
 const FLARE = { bronze: '#a9b1bf', silver: '#e4ecf6', gold: '#ffc933', walkout: '#b44dff' };
-const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', icon: '#fff6d8', star: '#ffd54a' };
-const SPECIAL_BADGE = { inform: 'In-Form', hero: 'Hero', legend: 'Legend', icon: 'Icon', star: 'Star' };
+const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', lotg: '#ffd35a', objective: '#6ee7ff' };
+const SPECIAL_BADGE = { inform: 'In-Form', hero: 'Hero', legend: 'Classic', lotg: 'Legend of the Game', objective: 'Pathfinder' };
 
 class Particles {
   constructor(canvas) {
@@ -87,7 +87,8 @@ export function runPackOpening(root, opts) {
   const best = players[0].p;
   const walk = isWalkout(best);
   const flareKey = walk ? 'walkout' : best.tier;
-  const flare = best.special === 'icon' ? '#ffe7a3' : best.special === 'star' ? '#ffcf3d' : FLARE[flareKey];
+  const lotg = best.special === 'lotg';
+  const flare = lotg ? '#ffcc33' : FLARE[flareKey];
   const accent = best.special ? SPECIAL_FLARE[best.special] : flare;
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const T = reduce ? 0.45 : 1;
@@ -122,7 +123,7 @@ export function runPackOpening(root, opts) {
     phase = 'shake';
     openBtn.disabled = true;
     ov.classList.add('is-shaking');
-    if (best.special === 'icon') ov.classList.add('is-icon');
+    if (lotg) ov.classList.add('is-lotg');
     packEl.classList.add('shake');
     at(1150, () => {
       phase = 'flare';
@@ -131,7 +132,15 @@ export function runPackOpening(root, opts) {
       packEl.classList.add('burst');
       particles.burst(flare, reduce ? 60 : 220, walk ? 13 : 9, null, null, walk ? [flare, accent, '#ffffff'] : null);
     });
-    if (walk) {
+    if (lotg) {
+      // Legend of the Game: longer walkout with a title card and fireworks
+      at(1700, () => showStage('lotg'));
+      at(3600, () => showStage('flag'));
+      at(5200, () => showStage('pos'));
+      at(6500, () => showStage('club'));
+      at(8000, () => revealCard());
+      [2000, 2600, 3200, 4200, 5600, 7000].forEach((ms) => at(ms, () => particles.burst(['#ffcc33', '#ffffff', '#ff9f1c'][ms % 3], reduce ? 30 : 140, 10, particles.w * (0.2 + Math.random() * 0.6), particles.h * (0.2 + Math.random() * 0.4), ['#ffcc33', '#fff6d8', '#ff9f1c'])));
+    } else if (walk) {
       at(1700, () => showStage('flag'));
       at(3200, () => showStage('pos'));
       at(4400, () => showStage('club'));
@@ -143,7 +152,9 @@ export function runPackOpening(root, opts) {
     phase = kind;
     clear(stage);
     let inner;
-    if (kind === 'flag') {
+    if (kind === 'lotg') {
+      inner = h('div', { class: 'pm-wo pm-wo-lotg' }, h('div', { class: 'pm-wo-lotgtitle' }, 'LEGEND', h('small', null, 'OF THE GAME')), h('div', { class: 'pm-wo-label' }, best.era === 'prime' ? 'Prime' : 'Real-world star'));
+    } else if (kind === 'flag') {
       const n = NATION_BY_CODE[best.nat];
       inner = h('div', { class: 'pm-wo pm-wo-flag' }, frag(flagSVG(best.nat, 'pm-wo-flagsvg')), h('div', { class: 'pm-wo-label' }, n ? n.name : best.nat));
     } else if (kind === 'pos') {
@@ -166,7 +177,7 @@ export function runPackOpening(root, opts) {
       h('div', { class: 'pm-po-revealname' }, best.name, best.special ? h('span', { class: `pm-sp-badge sp-${best.special}` }, SPECIAL_BADGE[best.special] || best.special) : null),
       cont));
     particles.burst(accent, reduce ? 50 : 200, 11, null, null, [accent, flare, '#ffffff']);
-    if (walk && !reduce) particles.fountain(accent, 2600, [accent, flare, '#ffffff']);
+    if (walk && !reduce) particles.fountain(accent, lotg ? 5200 : 2600, [accent, flare, '#ffffff']);
     setTimeout(() => cont.focus(), 50);
   }
 

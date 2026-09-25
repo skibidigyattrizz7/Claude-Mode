@@ -71,10 +71,10 @@ function approach(p, tx, ty, accel, dt) {
 /** Turn rate (rad/s) at speed sp: agile at jogging pace, wide arcs at full sprint. */
 export function maxTurnRate(p, sp) {
   const agility = 0.75 + 0.5 * (((p.attrs.pace ?? 0.6) + (p.attrs.dribbling ?? 0.6)) / 2);
-  const k = clamp((sp - MOMENTUM_SPEED) / 4, 0, 1);
-  return (9 - 5 * k) * agility * (p.onBall ? 0.85 : 1);
+  const k = Math.pow(MOMENTUM_SPEED / Math.max(sp, MOMENTUM_SPEED), 1.5);
+  return 8.5 * k * agility * (p.onBall ? 0.85 : 1);
 }
-export const MOMENTUM_SPEED = 5.2;
+export const MOMENTUM_SPEED = 4.4;
 
 /**
  * Momentum-based turning: above jogging pace a change of direction is an arc (limited turn
@@ -82,7 +82,7 @@ export const MOMENTUM_SPEED = 5.2;
  * Returns false when the normal acceleration model should be used instead.
  */
 export function turnWithMomentum(p, tx, ty, wm, sp, dt) {
-  if (globalThis.__noMomentum || p.jockey || p.shield || p.role === 'GK' || sp < MOMENTUM_SPEED || wm < 0.5) return false;
+  if (p.jockey || p.shield || p.role === 'GK' || sp < MOMENTUM_SPEED || wm < 0.5) return false;
   const cur = Math.atan2(p.vy, p.vx);
   const d = angDiff(cur, Math.atan2(ty, tx));
   const step = maxTurnRate(p, sp) * dt;
@@ -90,7 +90,7 @@ export function turnWithMomentum(p, tx, ty, wm, sp, dt) {
   const h = cur + Math.sign(d) * step;
   const ad = Math.abs(d);
   let ns = ad > 0.9
-    ? sp - (10 + 16 * (ad - 0.9) / (Math.PI - 0.9)) * dt              // plant and brake
+    ? sp - (8 + 8 * (ad - 0.9) / (Math.PI - 0.9)) * dt                // plant and brake
     : wm > sp ? Math.min(wm, sp + 19 * dt) : Math.max(wm, sp - 26 * dt);
   ns = Math.max(0, ns);
   p.vx = Math.cos(h) * ns; p.vy = Math.sin(h) * ns;

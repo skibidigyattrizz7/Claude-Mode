@@ -458,7 +458,7 @@ function browserOnline() {
     mock,
     configured: mock || !!(SUPABASE_URL && SUPABASE_KEY),
     identityKey: mock ? 'pitchside.mock.identity' : 'pitchside.online.identity',
-    transportKind: ['bc', 'loopback'].includes(net) ? net : mock ? 'bc' : 'peer',
+    transportKind: ['bc', 'loopback', 'peer'].includes(net) ? net : mock ? 'bc' : 'peer',
     peerCfg: () => {
       const p = netPrefs();
       return p.host ? { host: p.host, port: p.port || undefined, path: p.path || '/', secure: p.secure !== false } : {};

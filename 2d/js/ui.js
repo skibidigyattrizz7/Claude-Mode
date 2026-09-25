@@ -3,10 +3,9 @@
 import { TEAMS, teamByCode, chooseKits } from './data.js';
 import { ACTIONS, ACTION_LABELS, keyLabel, setBind, defaultBinds } from './keybinds.js';
 import { input, applyBinds } from './input.js';
-import { settings, saveSettings } from './settings.js';
+import { settings, saveSettings, GAMEPLAY_OPTIONS, GAMEPLAY_DEFAULTS } from './settings.js';
 import { setMuted, sfx } from './audio.js';
 import { standings, STAGE_LABEL, resultFor } from './tournament.js';
-import { ASSIST_MODES } from './shooting.js';
 
 const root = () => document.getElementById('ui');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -67,7 +66,7 @@ export function showMenu(h) {
         <button data-go="howto">How to Play</button>
         <button data-go="settings">Settings</button>
       </div>
-      <div class="foot">7-a-side · ${TEAMS.length} nations · Assist: ${esc(settings.assist)} · ${esc(settings.difficulty)}</div>
+      <div class="foot">7-a-side · ${TEAMS.length} nations · Shot assist: ${esc(settings.gameplay.p1.shot)} · Passing: ${esc(settings.gameplay.p1.passGround)} · ${esc(settings.difficulty)}</div>
     </div>`, 'menu-screen');
   on(r, '[data-go]', (e, el) => h[el.dataset.go]());
 }
@@ -126,8 +125,34 @@ export function showTeamSelect(mode, cb, back) {
 }
 
 // ---------- settings ----------
+/** Gameplay settings shown per player, grouped like FIFA's controller settings. */
+const GP_GROUPS = [
+  ['Passing', [
+    ['passGround', 'Ground pass', { Assisted: 'Picks the team-mate nearest your aim (wide cone), auto power, leads him — only an interception stops it.', Semi: 'Narrower cone, the aim matters more; hold longer for a firmer pass; small skill-based error.', Manual: 'No targeting: exactly where you aim with the power you hold.' }],
+    ['passThrough', 'Through ball', { Assisted: 'Played into space ahead of the runner your aim picks, perfectly weighted.', Semi: 'Narrower cone; hold time sets the weight of the ball.', Manual: 'Straight along your aim with the power you hold.' }],
+    ['passLob', 'Lob / cross', { Assisted: 'Lofted onto the team-mate nearest your aim, landing in his stride.', Semi: 'Narrower cone; hold time sets the distance.', Manual: 'Lands where you aim; hold time sets the distance.' }],
+  ]],
+  ['Shooting', [
+    ['shot', 'Shot assistance', { Assisted: 'Aim roughly at goal and the shot is always on target.', Precision: 'Exactly where you aim; on target it is faster and more accurate.', Manual: 'Exactly where you aim, full error from skill, power and pressure.' }],
+    ['timedFinishing', 'Timed finishing', 'Tap Shoot again as the foot meets the ball: green = better shot, red = worse.'],
+    ['shotError', 'Shot error realism', 'On: skill, sprinting and pressure affect accuracy. Off: only power does.'],
+  ]],
+  ['Defending', [
+    ['defending', 'AI defending', { Assisted: 'The nearest team-mate presses or contains the carrier for you; others cut passing lanes.', Tactical: 'You do the work: team-mates hold shape and only contain when you are far away.' }],
+    ['autoMarking', 'Auto marking', 'Team-mates track runners man-to-man (off: they hold their zones).'],
+    ['autoTackle', 'Auto tackle', 'Your player pokes the ball away by himself when it is clearly there to win.'],
+    ['autoClear', 'Auto clearances', 'In your own box under pressure your player clears first time.'],
+  ]],
+  ['Switching', [
+    ['autoSwitch', 'Auto switching', { Auto: 'Switches to the best-placed player while defending and for high balls.', Air: 'Only switches for high balls (crosses, clearances, lobs).', Manual: 'Only when you press Switch (and to your pass receiver).' }],
+    ['switchIndicator', 'Switch indicator', 'Marks the player the Switch button will select next.'],
+    ['receiverLock', 'Pass receiver lock', 'Stay locked on the pass receiver until the ball arrives (no switching away).'],
+  ]],
+];
+
 export function showSettings(back, inGame = false) {
   let note = '';
+  let gpPl = 'p1';
   const render = () => {
     const opt = (v, cur, label = v) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
     const bindRows = (pl) => ACTIONS.filter((a) => !(pl === 'p2' && a === 'pause')).map((a) => `
@@ -139,13 +164,21 @@ export function showSettings(back, inGame = false) {
         <div class="grid2">
           <label class="set"><span>Match length</span><select id="sLen">${[2, 4, 6, 8, 10].map((v) => opt(v, settings.matchMinutes, `${v} min`)).join('')}</select></label>
           <label class="set"><span>Difficulty</span><select id="sDiff">${['Easy', 'Normal', 'Hard', 'Legend'].map((v) => opt(v, settings.difficulty)).join('')}</select></label>
-          <label class="set"><span>Shooting assist</span><select id="sAssist">${ASSIST_MODES.map((v) => opt(v, settings.assist)).join('')}</select></label>
           <label class="set"><span>Penalty power</span><select id="sPen">${opt('hold', settings.penaltyPower, 'Hold to charge')}${opt('slider', settings.penaltyPower, 'Slider + KICK')}</select></label>
           <label class="set"><span>Camera zoom <b id="zv">${settings.zoom.toFixed(2)}</b></span><input id="sZoom" type="range" min="0.7" max="1.5" step="0.05" value="${settings.zoom}"></label>
           <label class="set"><span>Sound</span><input id="sSound" type="checkbox" ${settings.sound ? 'checked' : ''}></label>
           <label class="set"><span>Show aim line</span><input id="sAim" type="checkbox" ${settings.aimLine ? 'checked' : ''}></label>
         </div>
-        <p class="hint">${esc({ Assisted: 'Assisted: shots aimed broadly at goal are always on target.', Precision: 'Precision: shoots exactly where you aim; on-target aim gets less error and +10% pace.', Manual: 'Manual: exact direction, error from attributes, power, sprinting and pressure.' }[settings.assist])}</p>
+        <h3>Gameplay <small>assists are saved per player and apply immediately</small></h3>
+        <div class="gptabs"><button data-gp="p1" class="${gpPl === 'p1' ? 'sel' : ''}">Player 1</button><button data-gp="p2" class="${gpPl === 'p2' ? 'sel' : ''}">Player 2</button><button data-act="gpreset">Defaults</button></div>
+        <div class="gpgroups">${GP_GROUPS.map(([title, rows]) => `<div class="gpg"><h4>${esc(title)}</h4>${rows.map(([k, label, desc]) => {
+          const g = settings.gameplay[gpPl];
+          const ctl = GAMEPLAY_OPTIONS[k]
+            ? `<select data-gpk="${k}">${GAMEPLAY_OPTIONS[k].map((v) => opt(v, g[k], v === 'Air' ? 'Air balls only' : v === 'Semi' ? 'Semi-assisted' : v)).join('')}</select>`
+            : `<input type="checkbox" data-gpk="${k}" ${g[k] ? 'checked' : ''}>`;
+          const d = typeof desc === 'string' ? desc : desc[g[k]];
+          return `<label class="gprow"><span class="gpl">${esc(label)}</span>${ctl}<small>${esc(d)}</small></label>`;
+        }).join('')}</div>`).join('')}</div>
         <h3>Controls <small>click a key, then press the new key (Esc cancels). Conflicts are swapped.</small></h3>
         <div class="binds"><div><h4>Player 1</h4>${bindRows('p1')}<p class="hint">Also: left mouse = pass, mouse = aim.</p></div><div><h4>Player 2</h4>${bindRows('p2')}</div></div>
         <div class="note" id="bindNote">${esc(note)}</div>
@@ -154,7 +187,13 @@ export function showSettings(back, inGame = false) {
     const upd = (id, fn) => r.querySelector(id).addEventListener('change', (e) => { fn(e.target); saveSettings(); render(); });
     upd('#sLen', (t) => { settings.matchMinutes = +t.value; });
     upd('#sDiff', (t) => { settings.difficulty = t.value; });
-    upd('#sAssist', (t) => { settings.assist = t.value; });
+    r.querySelectorAll('[data-gpk]').forEach((el) => el.addEventListener('change', () => {
+      const k = el.dataset.gpk;
+      settings.gameplay[gpPl][k] = el.type === 'checkbox' ? el.checked : el.value;
+      saveSettings(); render();
+    }));
+    on(r, '[data-gp]', (e, el) => { gpPl = el.dataset.gp; render(); });
+    on(r, '[data-act=gpreset]', () => { settings.gameplay[gpPl] = { ...GAMEPLAY_DEFAULTS }; saveSettings(); note = `${gpPl.toUpperCase()} gameplay settings reset.`; render(); });
     upd('#sSound', (t) => { settings.sound = t.checked; setMuted(!t.checked); });
     upd('#sAim', (t) => { settings.aimLine = t.checked; });
     upd('#sPen', (t) => { settings.penaltyPower = t.value; });
@@ -193,21 +232,23 @@ export function showHowTo(back) {
           <h3>Attacking</h3>
           <ul>
             <li><b>Aim</b> with the mouse. If you haven't moved the mouse recently, aim follows your movement direction (keyboard-only play).</li>
-            <li><b>Pass</b> picks the best teammate inside a ~45° cone in the aim direction (a little wider if nobody is there), weighs up interceptions and leads him. Control switches to the receiver, who runs onto the ball unless you steer elsewhere.</li>
+            <li><b>Pass</b> (Assisted) picks the best teammate near your aim, weighs up interceptions, leads him and zips it firmly to his feet. <b>Semi</b>: narrower cone, hold for power. <b>Manual</b>: exactly along your aim with the power you hold. Control switches to the receiver, who runs onto the ball unless you clearly steer away. Separate settings for ground / through / lob.</li>
             <li><b>Through ball</b> plays into space ahead of a runner; <b>Lob</b> lofts it over the defence.</li>
             <li><b>Shoot</b>: hold to fill the power bar, release. Past the white mark = <b>Rocket</b> (fast but wild). While holding, tap <b>Lob</b> for a <b>chip</b> or <b>Through</b> for a <b>finesse</b> curler. Hold shoot as a ball arrives for a first-time <b>volley / header</b>.</li>
             <li>The dashed line + reticle on the goal mouth show where the shot will go (green = on target).</li>
             <li><b>Skill move</b>: no direction = step-over, sideways = roulette, backwards = drag-back, while sprinting = heel flick. Timed well, standing tackles can't touch you.</li>
           </ul>
           <h3>Shooting assist (Settings)</h3>
-          <ul><li><b>Assisted</b>: broadly towards goal = always on target.</li><li><b>Precision</b>: exact aim; on target gives less error and +10% pace.</li><li><b>Manual</b>: exact aim, error from shooting skill, power, sprinting and pressure.</li></ul>
+          <ul><li><b>Assisted</b>: broadly towards goal = always on target.</li><li><b>Precision</b>: exact aim; on target gives less error and +10% pace.</li><li><b>Manual</b>: exact aim, error from shooting skill, power, sprinting and pressure.</li><li><b>Timed finishing</b> (optional): tap Shoot again as the closing ring meets the player — green = better strike, red = worse.</li></ul>
         </div>
         <div>
           <h3>Defending</h3>
           <ul>
             <li><b>Standing tackle</b>: short poke. <b>Slide tackle</b>: long reach, you're committed and need time to get up.</li>
             <li>Win the ball first from the front = always clean, and shoulder-to-shoulder challenges are fair. Going through the man before the ball, or lunging in from behind (&gt;120°) on the player in possession and missing the ball = foul. Slide from behind = yellow card; two yellows = red.</li>
-            <li><b>Switch</b> selects the teammate closest to the ball.</li>
+            <li><b>Jockey</b> (hold): face the carrier and side-step; with no direction your defender stays goal-side of him. On the ball the same key <b>shields</b> it with your body.</li>
+            <li>Running alongside the carrier you can win a <b>shoulder challenge</b> — strength decides it.</li>
+            <li><b>Switch</b> selects the teammate closest to the ball (the dashed ring shows who). Auto switching, AI defending, auto marking / tackle / clearances are in Settings.</li>
           </ul>
           <h3>Set pieces</h3>
           <ul>
@@ -223,7 +264,7 @@ export function showHowTo(back) {
             <li><b>Penalty Shootout</b>: first-person, you shoot and you keep. <b>Free-Kick Practice</b>: N = new spot, P = place the ball, curve + type, streaks. <b>Corner Practice</b>: endless corners against a live defence.</li>
           </ul>
           <h3>Other</h3>
-          <ul><li>Stamina drains while sprinting. Esc pauses. A replay of the last seconds plays after each goal (any key skips).</li></ul>
+          <ul><li>Stamina drains while sprinting; at full sprint you can't turn on the spot. Fast balls, sprinting and pressure make first touches heavier. Tap <b>Pass</b> during a throw-in / free-kick whistle to take it quickly. Esc pauses (match facts + instant replay). Replays and kick results can be skipped with any key.</li></ul>
         </div>
       </div>
       <div class="row"><button data-act="back" class="primary">Back</button></div>
@@ -232,12 +273,31 @@ export function showHowTo(back) {
 }
 
 // ---------- pause ----------
-export function showPause(h) {
+/** Compact match facts for the pause menu. */
+function matchFacts(m) {
+  const s = m.stats;
+  const tot = s[0].poss + s[1].poss || 1;
+  const pc = (t) => (s[t].passAtt ? Math.round((s[t].passCmp / s[t].passAtt) * 100) + '%' : '—');
+  const rows = [
+    ['Possession', Math.round((s[0].poss / tot) * 100) + '%', Math.round((s[1].poss / tot) * 100) + '%'],
+    ['Shots (on target)', `${s[0].shots} (${s[0].onTarget})`, `${s[1].shots} (${s[1].onTarget})`],
+    ['Pass accuracy', pc(0), pc(1)],
+    ['Fouls', s[0].fouls, s[1].fouls],
+    ['Corners', s[0].corners, s[1].corners],
+  ];
+  const min = m.noClock ? '' : ` · ${Math.min(90 + (m.added[1] || 0), Math.max(1, Math.ceil(m.clock / 60)))}'`;
+  return `<div class="facts"><div class="fscore"><img src="${kitIcon(m.kits[0], 10, 28)}"> ${esc(m.teams[0].code)} <b>${m.score[0]} – ${m.score[1]}</b> ${esc(m.teams[1].code)} <img src="${kitIcon(m.kits[1], 9, 28)}"><small>${m.half === 1 ? '1st half' : '2nd half'}${min}</small></div>
+    <table class="stats">${rows.map(([k, a, b]) => `<tr><td>${a}</td><th>${k}</th><td>${b}</td></tr>`).join('')}</table></div>`;
+}
+
+export function showPause(h, m = null) {
   const r = show(`
     <div class="panel small">
       <h2>Paused</h2>
+      ${m ? matchFacts(m) : ''}
       <div class="menu-buttons">
         <button data-act="resume" class="primary">Resume</button>
+        ${h.replay ? '<button data-act="replay">Instant replay</button>' : ''}
         ${h.restart ? '<button data-act="restart">Restart</button>' : ''}
         <button data-act="settings">Settings</button>
         <button data-act="quit">Quit to menu</button>
@@ -245,6 +305,7 @@ export function showPause(h) {
     </div>`, 'overlay');
   on(r, '[data-act=resume]', () => h.resume());
   if (h.restart) on(r, '[data-act=restart]', () => h.restart());
+  if (h.replay) on(r, '[data-act=replay]', () => h.replay());
   on(r, '[data-act=settings]', () => h.settings());
   on(r, '[data-act=quit]', () => h.quit());
 }

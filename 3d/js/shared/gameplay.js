@@ -22,6 +22,8 @@ export const GAMEPLAY_DEFAULTS = {
   nextPlayerIndicator: true,   // show who Q will switch to
   cameraShake: true,
   showAimLine: true,
+  gameplayStyle: 'competitive', // 'competitive' (snappier, consistent) | 'authentic' (more error, momentum, heavier touches)
+  commentary: 'text',          // 'off' | 'text' | 'voice' (Web Speech API)
 };
 
 const KEY = 'pitchside.gameplay';

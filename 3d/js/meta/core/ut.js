@@ -227,13 +227,35 @@ export function quickSell(state, pid) {
   return v;
 }
 
+const HEX = /^#[0-9A-Fa-f]{6}$/;
+function fullKit(k, fb) {
+  const c = (v, d) => (HEX.test(v || '') ? v.toUpperCase() : d);
+  const primary = c(k && k.primary, fb.primary), secondary = c(k && k.secondary, fb.secondary);
+  return { primary, secondary, number: c(k && k.number, contrastColor(primary, '#FFFFFF', '#111111')), shorts: c(k && k.shorts, fb.shorts), socks: c(k && k.socks, fb.socks) };
+}
+/** Home kit: custom kit editor values when set, otherwise derived from the club colours. */
 export function utKit(state) {
   const { primary, secondary } = state.kit;
-  return { primary, secondary, number: contrastColor(primary, '#FFFFFF', '#111111'), shorts: secondary, socks: primary };
+  const def = { primary, secondary, number: contrastColor(primary, '#FFFFFF', '#111111'), shorts: secondary, socks: primary };
+  return state.kits && state.kits.home ? fullKit(state.kits.home, def) : def;
 }
 export function utAwayKit(state) {
   const { primary, secondary } = state.kit;
-  return { primary: secondary, secondary: primary, number: contrastColor(secondary, '#FFFFFF', '#111111'), shorts: secondary, socks: secondary };
+  const def = { primary: secondary, secondary: primary, number: contrastColor(secondary, '#FFFFFF', '#111111'), shorts: secondary, socks: secondary };
+  return state.kits && state.kits.away ? fullKit(state.kits.away, def) : def;
+}
+export const BADGE_SHAPES = ['shield', 'round', 'diamond', 'hex', 'classic'];
+/** Save club identity edits (name, short name, badge, kits). */
+export function customiseClub(state, { clubName, short, badge, kits } = {}) {
+  if (clubName && String(clubName).trim()) state.clubName = String(clubName).trim().slice(0, 24);
+  if (short) state.short = (String(short).toUpperCase().replace(/[^A-Z]/g, '') + 'XXX').slice(0, 3);
+  if (badge) {
+    const c = (v, d) => (HEX.test(v || '') ? v : d);
+    state.badge = { shape: BADGE_SHAPES.includes(badge.shape) ? badge.shape : 'shield', c1: c(badge.c1, state.kit.primary), c2: c(badge.c2, state.kit.secondary), c3: c(badge.c3, '#FFFFFF'), text: String(badge.text || state.short).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3), stripe: !!badge.stripe };
+    state.kit = { primary: state.badge.c1, secondary: state.badge.c2 };
+  }
+  if (kits) state.kits = { home: fullKit(kits.home, utKit(state)), away: fullKit(kits.away, utAwayKit(state)) };
+  return state;
 }
 
 /** Contract Team for the user's UT squad, or null when the XI is incomplete. */

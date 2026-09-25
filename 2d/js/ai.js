@@ -102,12 +102,12 @@ export class TeamAI {
   get prof() { return this.m.prof[this.team]; }
 
   /** Earliest point on the predicted ball path player p can reach. */
-  interceptPoint(p) {
+  interceptPoint(p, reach = 0.5, early = -0.05) {
     const sp = topSpeed(p, true) * 0.95;
     for (const pt of this.m.ballPath) {
       if (pt.z > 2.2) continue;
-      const d = Math.hypot(pt.x - p.x, pt.y - p.y) - 0.5;
-      if (d / sp <= pt.t + 0.05) return { x: pt.x, y: pt.y, t: pt.t };
+      const d = Math.max(0, Math.hypot(pt.x - p.x, pt.y - p.y) - reach);
+      if (d / sp <= pt.t - early) return { x: pt.x, y: pt.y, t: pt.t };
     }
     const last = this.m.ballPath[this.m.ballPath.length - 1] || this.m.ball;
     return { x: last.x, y: last.y, t: 9 };
@@ -172,8 +172,8 @@ export class TeamAI {
     const dBall = Math.hypot(b.x - p.x, b.y - p.y);
     // go to meet the ball (the earliest point of its path he can reach); a through ball is
     // run onto at the planned spot in the stride
-    const ip = this.interceptPoint(p);
-    if (dBall < 5 || (m.pass.kind !== 'through' && ip.t < 9)) moveTo(p, ip.x, ip.y, 2);
+    const ip = this.interceptPoint(p, 0.15, 0.12);
+    if (dBall < 5 || (m.pass.kind !== 'through' && ip.t < 9)) { moveTo(p, ip.x, ip.y, 2); p.want.x *= 1.15; p.want.y *= 1.15; }
     else moveTo(p, pt.x, pt.y, 3);
   }
 
@@ -204,7 +204,7 @@ export class TeamAI {
       const n = norm(gc.x - o.x, gc.y - o.y);
       const tb = norm(m.ball.x - o.x, m.ball.y - o.y);
       // track a runner: stay goal-side and match his run
-      const running = !globalThis.__noTrack && (o.vx * n.x + o.vy * n.y) < -2;
+      const running = (o.vx * n.x + o.vy * n.y) < -2;
       const gap = running ? 1.2 : 1.8;
       let tx = o.x + n.x * gap + tb.x * 0.8 + (running ? o.vx * 0.25 : 0);
       let ty = o.y + n.y * gap + tb.y * 0.8 + (running ? o.vy * 0.25 : 0);
@@ -296,7 +296,7 @@ export class TeamAI {
       return;
     }
     // width: the wide midfielders stretch the pitch in possession (and receive near the line)
-    if (!globalThis.__noWidth && p.role === 'MF' && pw !== 0 && p !== carrier) {
+    if (p.role === 'MF' && pw !== 0 && p !== carrier) {
       const far = Math.sign(carrier.y - CY) === -pw && Math.abs(carrier.y - CY) > 8;
       f = { x: f.x, y: pw < 0 ? (far ? 5.5 : 3.2) : PITCH.W - (far ? 5.5 : 3.2) };
       if (carrierWide && finalThird) f = { x: gx - dir * 8, y: CY - cw * 6 };      // attack the far post
@@ -323,7 +323,7 @@ export class TeamAI {
     // offer an angle to a team-mate under pressure: square of him, away from the presser
     let presser = null, pd = 2.8;
     for (const o of m.opps(this.team)) { const d = dist(o, carrier); if (d < pd) { pd = d; presser = o; } }
-    if (!globalThis.__noShort && presser && p.role === 'MF' && dist(p, carrier) < 18 && p === this.nearestSupport(carrier)) {
+    if (presser && p.role === 'MF' && dist(p, carrier) < 18 && p === this.nearestSupport(carrier)) {
       const u = norm(carrier.x - presser.x, carrier.y - presser.y);            // away from the presser
       const side = Math.sign((p.x - carrier.x) * -u.y + (p.y - carrier.y) * u.x) || 1;
       const px = -u.y * side, py = u.x * side;                               // perpendicular, on my side
@@ -390,7 +390,7 @@ export class TeamAI {
     for (const o of opps) { const od = dist(o, p); if (od < nearest) { nearest = od; nOpp = o; } }
     p.sprint = nearest > 4 && p.stamina > 0.3;
     // shield the ball from a defender tight behind: turn the body, slow down, look for a pass
-    if (!globalThis.__noShield && nOpp && nearest < 1.8 && isFromBehind(nOpp, p, 100) && p.role !== 'GK') {
+    if (nOpp && nearest < 1.8 && isFromBehind(nOpp, p, 100) && p.role !== 'GK') {
       p.shield = true; p.sprint = false;
       p.faceWant = Math.atan2(p.y - nOpp.y, p.x - nOpp.x);
       p.ai.decT = Math.min(p.ai.decT, 0.25);
@@ -427,7 +427,7 @@ export class TeamAI {
         const gain = ((plan.target.x - p.x) * dir) / 22;
         const space = Math.min(...opps.map((o) => dist(o, plan.target)));
         const tGoal = dist(plan.target, gc);
-        let s = 0.45 + gain * 0.8 + clamp(space / 7, 0, 1) * 0.45 - risk * 1.5 - (tGoal < 20 ? -0.2 : 0) - (kind === 'lob' ? 0.45 : 0);
+        let s = 0.45 + Math.min(gain, kind === 'through' ? 0.7 : 1.2) * 0.8 + clamp(space / 7, 0, 1) * 0.45 - risk * 1.5 - (tGoal < 20 ? -0.2 : 0) - (kind === 'lob' ? 0.45 : 0) - (kind === 'through' ? 0.3 : 0);
         s += pressure * 0.25;
         if (gain < -0.3) s -= 0.2;
         options.push({ kind: 'pass', pass: kind, mate, score: s + noise() });

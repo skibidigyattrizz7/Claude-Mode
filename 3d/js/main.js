@@ -647,45 +647,97 @@ async function metaScreen(which) {
 }
 
 // ------------------------------------------------------------------ Online
-async function onlineScreen({ autoQuick = null, onResult = null, onClose = null } = {}) {
+let currentOnline = null; // the mounted online screen (for accepting friend invites into it)
+async function onlineScreen({ autoQuick = null, onResult = null, onClose = null, onAutoEnd = null, autoInvite = null } = {}) {
   const body = h('div', { class: 'online-root' }, h('div', { class: 'loading' }, h('div', { class: 'spinner' }), 'Loading online play…'));
   const el = screenShell('online', 'Online Match', autoQuick ? 'Quick Search' : 'Quick Search · play with a code', body);
   let mounted = null;
   let closed = false;
   const closeOnce = () => { if (!closed) { closed = true; if (onClose) try { onClose(); } catch (e) { console.error(e); } } };
-  nav.push({ el, name: 'online', destroy() { if (mounted) mounted.destroy(); closeOnce(); } });
+  nav.push({ el, name: 'online', destroy() { if (mounted) mounted.destroy(); if (currentOnline === mounted) currentOnline = null; closeOnce(); } });
   try {
     const mod = await import('./net/online.js');
     mounted = mod.mountOnline(body, {
       h, nav, toast, getTeams, getSavedUT, openMatch, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
-      online, autoQuick, onResult,
+      online, autoQuick, onResult, onAutoEnd, autoInvite,
       transportKind: ['bc', 'loopback'].includes(Q.get('net')) ? Q.get('net') : 'peer',
       dcTimeoutMs: Math.max(2000, Number(Q.get('dcTimeout')) * 1000 || 15000),
       autoAction: Q.get('online'), // 'host' | 'join:CODE' (tests / share links)
       setBack: (fn) => { el._back = fn; },
     });
+    currentOnline = mounted;
   } catch (e) {
-    body.replaceChildren(errorTile('Online play could not be loaded', e, () => { nav.back(); onlineScreen({ autoQuick, onResult, onClose }); }));
+    if (autoInvite && autoInvite.transport) try { autoInvite.transport.close(); } catch { /* ignore */ }
+    body.replaceChildren(errorTile('Online play could not be loaded', e, () => { nav.back(); onlineScreen({ autoQuick, onResult, onClose, onAutoEnd }); }));
   }
 }
 
 /**
- * startOnlineMatch({ mode:'ut'|'friendly', team }) -> Promise<result>. Handed to mountMeta.
- * Opens the online screen, runs Quick Search with `team` (defaults to the saved UT squad) and resolves
- * when the player leaves that screen: the last online result (+ userSide, mode, online:true), or
- * { abandoned:true, cancelled:true } if no match was completed.
+ * startOnlineMatch({ mode:'ut'|'rivals'|'friendly', team }) -> Promise<result>. Handed to mountMeta.
+ * Opens the online screen and runs Quick Search with `team` (defaults to the saved UT squad).
+ * Resolves when the player leaves that screen with the last online result
+ * ({ ok:true, ...engineResult, userSide, mode, online:true }), or, when no match was completed,
+ * { ok:false, abandoned:true, reason: 'no_opponent' | 'cancelled' | 'offline' | 'no_team' | ... }.
+ * If the search finds nobody / fails / is cancelled, the online screen closes by itself so meta can
+ * offer an AI opponent (e.g. an AI rival for reason 'no_opponent').
  */
 export async function startOnlineMatch({ mode = 'ut', team = null } = {}) {
-  const t = team || (mode === 'ut' ? await getSavedUT() : null);
-  if (!t) return { abandoned: true, cancelled: true, error: 'no_team' };
+  const m = ['friendly', 'ut', 'rivals'].includes(mode) ? mode : 'ut';
+  const t = team || (m !== 'friendly' ? await getSavedUT() : null);
+  if (!t) return { ok: false, abandoned: true, reason: 'no_team' };
+  const sv = await online.status();
+  if (!sv.online) return { ok: false, abandoned: true, reason: sv.reason === 'not_configured' ? 'not_configured' : 'offline', message: sv.message };
   return new Promise((resolve) => {
     let last = null;
+    let endReason = null;
     onlineScreen({
-      autoQuick: { mode: mode === 'friendly' ? 'friendly' : 'ut', team: t },
-      onResult: (r, info) => { last = { ...r, ...info }; },
-      onClose: () => resolve(last || { abandoned: true, cancelled: true }),
+      autoQuick: { mode: m, team: t },
+      onResult: (r, info) => { last = { ok: true, ...r, ...info }; },
+      onAutoEnd: (res) => {
+        endReason = (res && (res.reason || res.error)) || 'failed';
+        if (nav.top && nav.top.name === 'online') nav.back();
+      },
+      onClose: () => resolve(last || { ok: false, abandoned: true, reason: endReason || 'cancelled' }),
     });
   });
+}
+
+// ------------------------------------------------------------------ friend invites (polled while the game is open)
+const shownInvites = new Set();
+function inviteBanner(inv) {
+  const host = document.getElementById('invite-stack') || document.body.appendChild(h('div', { class: 'invite-stack', id: 'invite-stack', 'aria-live': 'polite' }));
+  let left = 55;
+  const timer = h('small', { class: 'invite-left' }, `${left}s`);
+  const close = () => { clearInterval(iv); el.remove(); };
+  const accept = h('button', { class: 'btn btn--primary btn--sm', type: 'button', 'data-invite': 'accept', onclick: async () => {
+    accept.disabled = true; decline.disabled = true; accept.textContent = 'Connecting…';
+    const res = await online.friends.acceptInvite(inv.inviteId);
+    close();
+    if (!res.ok) { toast(res.message || online.errorText(res.error), 'bad'); return; }
+    if (document.body.classList.contains('in-match')) { try { res.transport.close(); } catch { /* ignore */ } return; }
+    if (nav.top && nav.top.name === 'online' && currentOnline && !currentOnline.isBusy()) currentOnline.acceptPreconnected(res);
+    else onlineScreen({ autoInvite: res });
+  } }, 'Accept');
+  const decline = h('button', { class: 'btn btn--ghost btn--sm', type: 'button', 'data-invite': 'decline', onclick: () => { close(); online.friends.declineInvite(inv.inviteId); } }, 'Decline');
+  const el = h('div', { class: 'invite', role: 'alertdialog', 'aria-label': `Match invite from ${inv.from.name}`, 'data-invite-id': inv.inviteId },
+    h('div', { class: 'invite-text' }, h('b', null, inv.from.name), ` challenges you · ${inv.mode === 'ut' ? 'Ultimate Team' : 'Friendly'} `, timer),
+    h('div', { class: 'invite-actions' }, accept, decline));
+  const iv = setInterval(() => { left--; timer.textContent = `${left}s`; if (left <= 0) close(); }, 1000);
+  host.append(el);
+}
+function startInvitePolling() {
+  const tick = async () => {
+    if (document.hidden || document.body.classList.contains('in-match') || !online.hasIdentity()) return;
+    if (currentOnline && currentOnline.isBusy()) return;
+    const r = await online.friends.pollInvites();
+    if (!r.ok) return;
+    const badge = document.querySelector('[data-tile="online"] .tile-badge');
+    const n = r.requests + r.incoming.length;
+    if (badge) { badge.textContent = n ? String(n) : ''; badge.hidden = !n; }
+    for (const inv of r.incoming) if (!shownInvites.has(inv.inviteId)) { shownInvites.add(inv.inviteId); inviteBanner(inv); }
+  };
+  setInterval(tick, Q.get('mockOnline') === '1' ? 1500 : 5000);
+  setTimeout(tick, 1200);
 }
 
 // ------------------------------------------------------------------ Settings
@@ -963,11 +1015,14 @@ function mainMenu() {
     if (best) best.focus();
   });
   const pill = el.querySelector('#online-pill');
+  const onlineTile = el.querySelector('[data-tile="online"]');
+  if (onlineTile) onlineTile.append(h('span', { class: 'tile-badge', hidden: true, 'aria-label': 'Pending invites and friend requests' }));
   const refreshPill = async () => {
-    let up = false;
-    try { up = await online.available(); } catch { up = false; }
-    pill.dataset.state = up ? 'on' : 'off';
-    pill.querySelector('.online-pill-t').textContent = up ? 'Online: connected' : 'Online: offline';
+    let sv;
+    try { sv = await online.status(); } catch { sv = { online: false, message: '' }; }
+    pill.dataset.state = sv.online ? 'on' : 'off';
+    pill.title = sv.online ? 'Online services connected' : `${sv.message} Play with a Code still works.`;
+    pill.querySelector('.online-pill-t').textContent = sv.online ? 'Online: connected' : 'Online: offline';
   };
   refreshPill();
   nav.push({ el, name: 'menu', onReturn: refreshPill });
@@ -996,6 +1051,7 @@ else if (start === 'controls') controlsScreen();
 else if (start === 'online') onlineScreen();
 else if (start === 'career') metaScreen('career');
 else if (start === 'ut') metaScreen('ut');
+startInvitePolling();
 // warm the engine module in the background so Kick-Off starts fast (errors surface later, on use)
 setTimeout(() => { loadEngine().catch(() => {}); }, 400);
 

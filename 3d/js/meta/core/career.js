@@ -1,8 +1,10 @@
 // Career Mode — pure logic (season, fixtures, table, cup, squad, transfers, youth, season end). DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS, CLUB_BY_ID, LEAGUE_BY_ID, NATION_BY_CODE } from './data.js';
-import { getDB, adjustOvr, marketValue, weeklyWage, genProspect, niceRound } from './players.js';
-import { FORMATIONS, FORMATION_NAMES, effectiveOvr } from './formations.js';
+import { getDB, adjustOvr, marketValue, weeklyWage, genProspect, genPlayer, niceRound, computeOvr, POS_WEIGHTS, FACE, GKFACE, tierOf } from './players.js';
+import { genPhysique, ensureAlts } from './physique.js';
+import { NATIONS } from './data.js';
+import { FORMATIONS, FORMATION_NAMES, effectiveOvr, positionFit } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
 import { buildTeam, bestLineup, clubKits, gkKitFor, resolveKitClash } from './teams.js';
 import { simulateMatch, penaltyShootout } from './sim.js';
@@ -126,7 +128,11 @@ function baseBudget(club) {
 }
 
 // ---------- creation ----------
-export function newCareer({ clubId, manager = 'Manager', slot = 1, seed = null }) {
+/**
+ * custom (Create-a-Club): { name, short, primary, secondary } — replaces `clubId` in its league.
+ * pro (Player Career): { first, last, pos, nat, foot } — you are this player at `clubId`.
+ */
+export function newCareer({ clubId, manager = 'Manager', slot = 1, seed = null, custom = null, pro = null }) {
   const club0 = CLUB_BY_ID[clubId];
   const lg = LEAGUE_BY_ID[club0.league];
   const s = seed ?? `${clubId}-${Date.now()}`;
@@ -146,7 +152,17 @@ export function newCareer({ clubId, manager = 'Manager', slot = 1, seed = null }
     };
     state.tiers[c.tier].push(c.id);
   }
+  if (custom) {
+    const c = state.clubs[clubId];
+    const hex = (v, d) => (/^#[0-9A-Fa-f]{6}$/.test(v || '') ? v : d);
+    c.name = String(custom.name || c.name).trim().slice(0, 28) || c.name;
+    c.short = (String(custom.short || c.name).toUpperCase().replace(/[^A-Z]/g, '') + 'XXX').slice(0, 3);
+    c.colors = { primary: hex(custom.primary, c.colors.primary), secondary: hex(custom.secondary, c.colors.secondary) };
+    c.custom = true;
+    state.customClub = true;
+  }
   for (const p of db.players) if (state.clubs[p.club]) state.players[p.id] = freshPlayer(p, rng);
+  if (pro) createPro(state, clubId, pro, rng);
   // squad numbers
   for (const cid of Object.keys(state.clubs)) assignSquadNumbers(state, cid);
   const uc = state.clubs[clubId];
@@ -162,6 +178,155 @@ export function newCareer({ clubId, manager = 'Manager', slot = 1, seed = null }
   addNews(state, `Summer transfer window is open. Budget: ${money(state.budget)}.`);
   generateOffers(state, rng, 2);
   return state;
+}
+
+// ---------- Player Career ----------
+export const TRAINING_PLANS = [
+  ['balanced', 'Balanced', 'Small gains everywhere'], ['attacking', 'Attacking', 'Shooting & dribbling'], ['playmaking', 'Playmaking', 'Passing & vision'],
+  ['defending', 'Defending', 'Tackling & positioning'], ['physical', 'Physical', 'Pace & strength'], ['sharpness', 'Match sharpness', 'Sharpness +, no stat gains'], ['recovery', 'Recovery', 'Fitness +, no stat gains'],
+];
+const PLAN_STATS = { balanced: FACE, attacking: ['sho', 'dri'], playmaking: ['pas', 'dri'], defending: ['def', 'phy'], physical: ['pac', 'phy'] };
+
+function createPro(state, clubId, pro, rng) {
+  const club = state.clubs[clubId];
+  const pos = pro.pos || 'ST';
+  const nat = NATIONS.some((n) => n.code === pro.nat) ? pro.nat : 'ENG';
+  const p = genPlayer(new Rng(`pro-${state.seed}`), { id: `pro_${hashStr(state.seed) % 100000}`, nat, pos, target: 62, age: 17, club: clubId, league: state.league });
+  p.first = String(pro.first || 'Alex').trim().slice(0, 16) || 'Alex';
+  p.last = String(pro.last || 'Rookie').trim().slice(0, 20) || 'Rookie';
+  p.name = `${p.first[0]}. ${p.last}`;
+  p.foot = pro.foot === 'L' ? 'L' : 'R';
+  p.pot = 90;
+  Object.assign(p, genPhysique(p));
+  ensureAlts(p);
+  const q = freshPlayer(p, rng);
+  q.contract = 3; q.morale = 80; q.isPro = true; q.sharp = 60;
+  state.players[q.id] = q;
+  state.mode = 'player';
+  state.pro = q.id;
+  state.proStats = { caps: 0, intGoals: 0, ratings: [], transfers: [] };
+  state.training = { [q.id]: 'balanced' };
+  assignSquadNumbers(state, clubId);
+  addNews(state, `${q.name} (${pos}, 17) signs a first professional contract with ${club.name}.`, 'good');
+}
+export function proPlayer(state) { return state.mode === 'player' ? state.players[state.pro] || null : null; }
+
+/** Set a training plan for a user player (Player Career: the pro; Manager: any squad player). */
+export function setTraining(state, pid, plan) {
+  if (!TRAINING_PLANS.some((x) => x[0] === plan)) return false;
+  state.training = state.training || {};
+  state.training[pid] = plan;
+  return true;
+}
+function applyTraining(state, p, rng, ratingBoost = 0) {
+  const plan = (state.training || {})[p.id] || 'balanced';
+  if (plan === 'recovery') { p.fitness = clamp((p.fitness ?? 100) + 8, 0, 100); return; }
+  if (plan === 'sharpness') { p.sharp = clamp((p.sharp ?? 60) + 7, 0, 100); return; }
+  if (p.ovr >= p.pot) return;
+  const ageF = p.age < 21 ? 1.5 : p.age < 24 ? 1.1 : p.age < 28 ? 0.6 : 0.25;
+  p.txp = (p.txp || 0) + (0.12 + Math.max(0, ratingBoost) * 0.25) * ageF * (p.isPro ? 1.8 : 1);
+  while (p.txp >= 1 && p.ovr < p.pot) {
+    p.txp -= 1;
+    if (p.pos === 'GK') { const k = rng.pick(GKFACE); p.gk[k] = clamp(p.gk[k] + 1, 1, 99); }
+    else {
+      const keys = (PLAN_STATS[plan] || FACE).filter((k) => POS_WEIGHTS[p.pos][FACE.indexOf(k)] > 0) ;
+      const k = rng.pick(keys.length ? keys : FACE);
+      p.stats[k] = clamp(p.stats[k] + 1, 1, 99);
+    }
+    const before = p.ovr;
+    p.ovr = computeOvr(p.pos, p); p.tier = tierOf(p.ovr);
+    if (p.ovr > before && (p.isPro || p.club === state.userClub)) addNews(state, `${p.name} improves to ${p.ovr} OVR in training.`, 'good');
+  }
+  p.value = marketValue(p);
+}
+
+/** Club level = rating of its best XI. */
+export function clubLevel(state, clubId) { return clubStrength(state, clubId); }
+
+/** Player Career: ask to leave. Granted when the pro has outgrown the club (moves at the next window). */
+export function requestTransfer(state) {
+  const p = proPlayer(state);
+  if (!p) return { message: 'Only in Player Career.' };
+  const lvl = clubLevel(state, p.club);
+  if (p.apps < 5 && state.season === 1) return { message: 'The club wants to see more from you first (5+ appearances).' };
+  const targets = Object.keys(state.clubs).filter((c) => c !== p.club && state.clubs[c].tier === 1 && clubLevel(state, c) > lvl && clubLevel(state, c) <= p.ovr + 6)
+    .sort((a, b) => clubLevel(state, b) - clubLevel(state, a));
+  if (!targets.length) return { message: p.ovr < lvl + 2 ? 'The manager refuses: you are not yet good enough to move up.' : 'No bigger club is interested yet. Keep performing!' };
+  state.transferRequest = targets[0];
+  addNews(state, `${p.name} has handed in a transfer request. ${state.clubs[targets[0]].name} are interested.`, 'offer');
+  if (transferWindow(state)) return completeProMove(state);
+  return { message: `Request accepted. You will join ${state.clubs[targets[0]].name} when the window opens.` };
+}
+function completeProMove(state) {
+  const p = proPlayer(state);
+  const to = state.transferRequest;
+  if (!p || !to || !state.clubs[to]) return { message: 'Transfer fell through.' };
+  const from = p.club;
+  p.club = to; p.number = null; p.contract = 4; p.morale = 90;
+  state.userClub = to;
+  state.transferRequest = null;
+  state.proStats.transfers.push({ from, to, season: state.season });
+  assignSquadNumbers(state, to);
+  refillClub(state, from, rngFor(state, 'promove'));
+  state.lineup = null;
+  autoLineup(state);
+  addNews(state, `DONE DEAL: ${p.name} joins ${state.clubs[to].name}!`, 'good');
+  return { message: `You joined ${state.clubs[to].name}!` };
+}
+function callUpThreshold(nat) { const n = NATIONS.find((x) => x.code === nat); return 58 + (n ? n.str : 3) * 4; }
+function internationalBreak(state, rng) {
+  const p = proPlayer(state);
+  if (!p) return;
+  if (p.ovr >= callUpThreshold(p.nat)) {
+    const n = NATIONS.find((x) => x.code === p.nat);
+    state.proStats.caps++;
+    const g = ['ST', 'CF', 'LW', 'RW', 'CAM'].includes(p.pos) ? (rng.chance(0.4) ? 1 : 0) : rng.chance(0.08) ? 1 : 0;
+    state.proStats.intGoals += g;
+    addNews(state, `International duty: ${p.name} earns cap #${state.proStats.caps} for ${n ? n.name : p.nat}${g ? ' and scores!' : '.'}`, 'good');
+  } else if (p.ovr >= callUpThreshold(p.nat) - 4) addNews(state, `${p.name} is on the national team's radar (needs ${callUpThreshold(p.nat)} OVR).`);
+}
+
+// ---------- scouting network ----------
+export const SCOUT_REGIONS = [
+  { id: 'home', name: 'Domestic', cost: 150000, nats: null, q: 0 },
+  { id: 'europe', name: 'Europe', cost: 300000, nats: ['FRA', 'GER', 'ESP', 'ITA', 'POR', 'NED', 'BEL', 'CRO', 'DEN', 'SWE', 'NOR', 'POL', 'SUI', 'AUT', 'SRB', 'CZE', 'UKR'], q: 1 },
+  { id: 'samerica', name: 'South America', cost: 350000, nats: ['BRA', 'ARG', 'URU', 'COL', 'CHI', 'ECU'], q: 1.5 },
+  { id: 'africa', name: 'Africa', cost: 250000, nats: ['NGA', 'SEN', 'MAR', 'GHA', 'CMR', 'EGY', 'CIV'], q: 1 },
+  { id: 'asia', name: 'Asia & Oceania', cost: 200000, nats: ['JPN', 'KOR', 'AUS'], q: 0.5 },
+  { id: 'namerica', name: 'North America', cost: 200000, nats: ['USA', 'MEX', 'CAN'], q: 0.5 },
+];
+export const SCOUT_FURTHER_COST = 60000;
+/** Send scouts to a region: 2–4 prospects whose potential is hidden (range shown). */
+export function sendScouts(state, regionId) {
+  const r = SCOUT_REGIONS.find((x) => x.id === regionId);
+  if (!r) return { message: 'Unknown region.' };
+  if (state.budget < r.cost) return { message: 'Not enough budget for this scouting mission.' };
+  state.budget -= r.cost;
+  const rng = rngFor(state, `scout-${regionId}`);
+  const lg = LEAGUE_BY_ID[state.league];
+  const q = state.clubs[state.userClub].rep + r.q;
+  const found = [];
+  const n = rng.int(2, 4);
+  for (let i = 0; i < n; i++) {
+    const id = `sc${state.nextId++}_${hashStr(state.seed) % 1000}`;
+    const nat = r.nats ? rng.pick(r.nats) : rng.weighted(lg.home);
+    const p = genProspect(rng, { id, nat, club: state.userClub, league: state.league, quality: q });
+    const spread = rng.int(5, 9);
+    p.potHidden = true;
+    p.potRange = [clamp(p.pot - rng.int(0, spread), p.ovr, 99), clamp(p.pot + (spread - rng.int(0, spread)), p.ovr, 99)];
+    p.scoutedIn = r.name;
+    found.push(p); state.youth.push(p);
+  }
+  addNews(state, `Scouts return from ${r.name} with ${found.length} prospects.`, 'good');
+  return { message: `Scouts found ${found.length} prospects in ${r.name}. Potential is an estimate until scouted further.`, found };
+}
+export function scoutFurther(state, pid) {
+  const p = state.youth.find((x) => x.id === pid);
+  if (!p || !p.potHidden) return { message: 'Nothing more to learn.' };
+  if (state.budget < SCOUT_FURTHER_COST) return { message: 'Not enough budget.' };
+  state.budget -= SCOUT_FURTHER_COST;
+  p.potHidden = false;
+  return { message: `Full report: ${p.name} has ${p.pot} potential.` };
 }
 
 function assignSquadNumbers(state, clubId) {
@@ -229,6 +394,17 @@ export function ensureLineup(state) {
       changes.push(`${pick.name} drafted in at ${pos}`);
     }
   }
+  // Player Career: the pro always starts (in one of his positions when possible)
+  const pro = state.mode === 'player' ? mine.get(state.pro) : null;
+  if (pro && !pro.injury && !L.slots.includes(pro.id)) {
+    const bi = L.bench.indexOf(pro.id); if (bi >= 0) L.bench[bi] = null;
+    let i = f.slots.findIndex((sl) => positionFit(pro, sl.pos) === 2);
+    if (i < 0) i = f.slots.findIndex((sl) => positionFit(pro, sl.pos) >= 1);
+    if (i < 0) i = f.slots.length - 1;
+    const out = L.slots[i];
+    L.slots[i] = pro.id;
+    const free = L.bench.indexOf(null); if (out && free >= 0) L.bench[free] = out;
+  }
   // refill bench
   const rest = [...mine.values()].filter((p) => !p.injury && !L.slots.includes(p.id) && !L.bench.includes(p.id)).sort((a, b) => b.ovr - a.ovr);
   for (let i = 0; i < 7; i++) if (!L.bench[i] && rest.length) L.bench[i] = rest.shift().id;
@@ -236,8 +412,8 @@ export function ensureLineup(state) {
 }
 
 function scaleFor(p) {
-  const fit = p.fitness ?? 100, mor = p.morale ?? 70;
-  return clamp(1 - Math.max(0, 75 - fit) / 250 + (mor - 65) / 1500, 0.82, 1.03);
+  const fit = p.fitness ?? 100, mor = p.morale ?? 70, sharp = p.sharp ?? 70;
+  return clamp(1 - Math.max(0, 75 - fit) / 250 + (mor - 65) / 1500 + (sharp - 70) / 1500, 0.82, 1.04);
 }
 
 /** Contract Team for any club in the career world. */
@@ -342,6 +518,13 @@ function userPostMatch(state, fx, played, ratings, rng) {
   const won = fx.winner ? fx.winner === state.userClub : gf > ga;
   const lost = fx.winner ? fx.winner !== state.userClub : gf < ga;
   for (const p of userPlayers(state)) {
+    const r0 = ratings[p.id];
+    p.sharp = clamp((p.sharp ?? 60) + (played.has(p.id) ? 10 : -5), 20, 100);
+    applyTraining(state, p, rng, played.has(p.id) && r0 !== undefined ? r0 - 6.5 : 0);
+    if (p.isPro && played.has(p.id)) {
+      state.proStats.ratings = (state.proStats.ratings || []).concat(Math.round((r0 ?? 6.2) * 10) / 10).slice(-38);
+      if ((r0 ?? 6) >= 8) addNews(state, `Man of the match display from ${p.name} (${(r0).toFixed(1)}).`, 'good');
+    }
     if (played.has(p.id)) {
       p.fitness = clamp(p.fitness - rng.int(14, 24), 30, 100);
       p.morale = clamp(p.morale + (won ? 4 : lost ? -3 : 1), 15, 100);
@@ -403,7 +586,7 @@ export function advance(state, userResult = null) {
     recordFixture(state, fx, home, away, result, ev.type === 'cup', rng);
     if (isUser) userSummary = { fixture: fx, home, away, result, ev };
   }
-  if (ev.type === 'cup') nextCupRound(state, rng);
+  if (ev.type === 'cup') { nextCupRound(state, rng); internationalBreak(state, rng); }
   recoverAll(state);
   state.calIdx++;
   if (userSummary) {
@@ -412,6 +595,7 @@ export function advance(state, userResult = null) {
     addNews(state, `${ev.type === 'cup' ? 'Cup' : 'League'}: ${cn(f.h)} ${f.hg}–${f.ag} ${cn(f.a)}${f.pens ? ` (${f.pens.home}–${f.pens.away} pens)` : ''}`, 'match');
   }
   const win = transferWindow(state);
+  if (win && state.transferRequest) completeProMove(state);
   if (win === 'Winter' && ev.type === 'league' && ev.md === WINTER_AFTER_MD) {
     addNews(state, 'The winter transfer window is now open until the next league matchday.', 'info');
     generateOffers(state, rng, 2);
@@ -735,10 +919,17 @@ export function startNewSeason(state) {
     else d = rng.int(-5, -1);
     const played = p.rN ? avgRating(p) : 6.2;
     if (played >= 7.2 && d < 3) d++;
+    // dynamic potential: form moves young players' ceilings up or down
+    if (p.age <= 25 && p.rN >= 5) {
+      const avg = avgRating(p);
+      if (avg >= 7.3) p.pot = Math.min(95, p.pot + rng.int(1, 3));
+      else if (avg < 6.2) p.pot = Math.max(p.ovr, p.pot - rng.int(1, 2));
+    }
     if (d > 0) d = Math.min(d, Math.max(0, p.pot - p.ovr));
+    if (p.isPro && d < 0 && p.age < 30) d = 0;
     adjustOvr(p, d);
     p.value = marketValue(p);
-    const retireChance = p.age >= 38 ? 1 : p.age >= 33 ? (p.age - 32) * 0.17 : 0;
+    const retireChance = p.isPro ? 0 : p.age >= 38 ? 1 : p.age >= 33 ? (p.age - 32) * 0.17 : 0;
     const isUser = p.club === state.userClub;
     if (rng.chance(retireChance)) {
       if (isUser) news.push(`${p.name} (${p.age}) has retired from professional football.`);
@@ -747,7 +938,7 @@ export function startNewSeason(state) {
       if (!isUser) refillClub(state, clubId, rng);
       continue;
     }
-    if (isUser) {
+    if (isUser && state.mode !== 'player') {
       p.contract--;
       if (p.contract <= 0) {
         news.push(`${p.name}'s contract expired and he left the club.`);

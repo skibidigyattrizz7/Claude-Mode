@@ -11,6 +11,7 @@ const BUTTONS = [
   { a: 'slide', label: 'SLIDE' },
   { a: 'switch', label: 'SWITCH' },
   { a: 'skill', label: 'SKILL' },
+  { a: 'jockey', label: 'JOCKEY', cls: 'small' },
 ];
 
 let root = null, base = null, knob = null, zone = null;

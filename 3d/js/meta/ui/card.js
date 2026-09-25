@@ -7,7 +7,7 @@ import { PLAYSTYLES } from '../core/physique.js';
 
 const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
 const GK_LABELS = ['DIV', 'HAN', 'KIC', 'REF', 'SPD', 'POS'];
-const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'LEGEND', icon: 'ICON', star: 'STAR' };
+const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'CLASSIC', lotg: 'LEGEND OF THE GAME', objective: 'PATHFINDER' };
 
 /** Small round PlayStyle badge (gold ring = PlayStyle+). */
 export function psBadgeHtml(ps) {
@@ -31,6 +31,9 @@ export function cardClasses(p) {
   const c = ['pm-card', `t-${p.tier}`];
   if (p.rare) c.push('rare');
   if (p.special) c.push(`sp-${p.special}`);
+  if (p.era === 'prime') c.push('era-prime');
+  if (p.evo) c.push('is-evo');
+  if (p.totw) c.push('is-totw');
   return c;
 }
 
@@ -65,7 +68,9 @@ export function playerCard(p, opts = {}) {
       ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
       <div class="pc-name">${esc(cardName(p))}</div>
       ${statsHtml}
-      ${p.special ? `<div class="pc-tag">${SPECIAL_LABEL[p.special]}</div>` : ''}
+      ${p.special || p.evo ? `<div class="pc-tag">${p.totw ? 'TEAM OF THE WEEK' : p.special ? SPECIAL_LABEL[p.special] || '' : 'EVOLUTION'}</div>` : ''}
+      ${p.era === 'prime' ? '<div class="pc-era">PRIME</div>' : ''}
+      ${p.evo ? `<div class="pc-evo" title="Evolved ×${p.evo}">EVO${p.evo > 1 ? ` ${p.evo}` : ''}</div>` : ''}
     </div>
   </div>`;
   const el = frag(html);

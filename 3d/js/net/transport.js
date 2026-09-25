@@ -272,7 +272,7 @@ export class PeerTransport extends BaseTransport {
     this._retry = null;
   }
   _peerOptions() {
-    const o = { debug: 1, config: { iceServers: ICE_SERVERS, sdpSemantics: 'unified-plan' } };
+    const o = { debug: 0, config: { iceServers: ICE_SERVERS, sdpSemantics: 'unified-plan' } };
     const c = this.cfg;
     if (!c.host) {
       // PeerJS public cloud broker, spelled out so it never depends on page protocol/port

@@ -38,6 +38,13 @@
 //          rv increments on every roster change (rebuild shirt number / name)
 //   scr    scorers [[playerId, team, minute, ownGoal]];  gt time of last goal;  pt phase start time
 //   fin    final result object (only at full time)
+//   h      also 3|4 = extra-time halves (15 game-minutes each; clock base from constants.halfBase)
+//   ns     [homeIdx, awayIdx] player the switch key would select (next-player indicator), -1 = none
+//   sa     set-piece aim of the human taker or null: [spType, aimZ, aimY, kx, ky, ring 0..1, crosshair 0|1]
+//          (crosshair = penalty / direct free kick reticle on the goal plane at x = attacked goal line;
+//          kx/ky = ball contact point -1..1; ring = shrinking timing circle radius, 0 = best moment)
+//   pk     penalty shootout kicks [[1,0,..],[..]] (1 = scored) or absent
+//   wx     weather 0 clear / 1 rain / 2 snow
 // Local-only fields added by index.js before calling renderer.render(view, dt) (not in snapshots):
 //   aim     [ {x,z} | null, {x,z} | null ]  unit aim direction of each LOCAL human's controlled
 //           player (draw a faint ground arrow), null when not applicable
@@ -97,7 +104,19 @@ export function viewFromSim(sim) {
     gt: sim.goalT || 0,
     pt: sim.phaseT,
     fin: sim.result || null,
+    ns: [sim.human[0] ? sim.nextSw[0] : -1, sim.human[1] ? sim.nextSw[1] : -1],
+    sa: setPieceAim(sim),
+    pk: sim.shootout ? sim.shootout.kicks : null,
+    wx: sim.weather || 0,
   };
+}
+
+function setPieceAim(sim) {
+  const sp = sim.sp;
+  if (!sp || sp.done || (sim.phase !== PHASE.SETPIECE && sim.phase !== PHASE.KICKOFF)) return null;
+  if (!sim.human[sp.team] || sim.ctrl[sp.team] !== sp.taker) return null;
+  const r = sp.t0 != null ? Math.abs(Math.cos((Math.PI * (sim.t - sp.t0)) / (sp.period || 1.3))) : 1;
+  return [sp.type, sp.aimZ || 0, sp.aimY || 0, sp.kx || 0, sp.ky || 0, r, sp.cross ? 1 : 0];
 }
 
 // Compact, JSON-safe snapshot (floats rounded to 2 dp).
@@ -117,6 +136,9 @@ export function encodeSnapshot(sim) {
   });
   if (!v.fin) delete v.fin;
   if (!v.subs.length) delete v.subs;
+  if (v.sa) v.sa = v.sa.map(r2); else delete v.sa;
+  if (!v.pk) delete v.pk;
+  if (!v.wx) delete v.wx;
   return v;
 }
 
