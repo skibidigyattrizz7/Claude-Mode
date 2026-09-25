@@ -249,7 +249,10 @@ export class TeamAI {
   press(p, c, dt) {
     const m = this.m, prof = this.prof;
     const gc = m.goalCenter(m.ownSide(this.team));
-    const n = norm(gc.x - c.x, gc.y - c.y);
+    let n = norm(gc.x - c.x, gc.y - c.y);
+    // near the touchline, close him down from the inside: show him down the line / out of play
+    const edge = Math.min(c.y, PITCH.W - c.y);
+    if (edge < 9) n = norm(n.x, n.y + Math.sign(CY - c.y) * (1.4 - edge / 9));
     const d = dist(p, c);
     // approach goal-side of the carrier, then close in on the ball
     const tx = d > 3 ? c.x + n.x * 1.4 : m.ball.x + n.x * 0.4;
@@ -436,7 +439,7 @@ export class TeamAI {
     // clearance: under pressure deep in our own half, get rid of it (often into touch)
     const ownGoal = m.goalCenter(1 - side);
     const dOwn = dist(p, ownGoal);
-    if (dOwn < 26 && pressure > 0.5 && p.role !== 'GK') {
+    if (dOwn < 28 && pressure > 0.42 && p.role !== 'GK') {
       options.push({ kind: 'clear', score: 0.55 + pressure * 0.6 + (inPenaltyArea(p, 1 - side) ? 0.45 : 0) - p.attrs.passing * 0.25 + noise() });
     }
     // cross from wide areas in the final third to a team-mate attacking the box
