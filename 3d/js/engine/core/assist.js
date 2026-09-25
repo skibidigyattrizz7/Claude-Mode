@@ -128,7 +128,8 @@ export function humanThrough(sim, p, aim, power) {
       let pt, speed;
       if (mode === 'assisted') {
         const r = throughLead(sim, m, from, rx, rz, arrive);
-        pt = r.pt; speed = r.speed;
+        pt = r ? r.pt : sim._clampPt({ x: m.x + rx * 3, z: m.z + rz * 3 }, 2.5);
+        speed = r ? r.speed : Math.min(30, rollSpeedFor(Math.hypot(pt.x - from.x, pt.z - from.z), arrive));
         info.errYaw = 0; info.errSpeed = 0;
       } else {
         const lead = 3 + power * 14;
