@@ -18,6 +18,23 @@ function fnv(s) {
 const err = (e) => ({ ok: false, error: e });
 const cleanName = (n) => (String(n || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16).trim() || 'Player');
 const division = (r) => Math.max(1, Math.min(10, 10 - Math.trunc((r - 800) / 100)));
+const RIV_THR = { 10: 10, 9: 10, 8: 11, 7: 12, 6: 12, 5: 13, 4: 13, 3: 14, 2: 15, 1: 15 };
+function isoWeek(t) {
+  const d = new Date(t);
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3);
+  const y = d.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(y, 0, 4));
+  const w = 1 + Math.round(((d - jan4) / 86400000 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+  return `${y}-W${String(w).padStart(2, '0')}`;
+}
+function rivalsReward(peak, wins) {
+  const base = { 0: 25000, 1: 15000, 2: 12000, 3: 10000, 4: 8000, 5: 6500, 6: 5000, 7: 4000, 8: 3000, 9: 2000 }[peak] || 1500;
+  const packs = peak === 0 ? ['stars', 'rare', 'premium'] : peak <= 2 ? ['rare', 'premium'] : peak <= 5 ? ['premium', 'gold'] : peak <= 8 ? ['gold'] : ['silver'];
+  if (wins >= 10) packs.push('rare');
+  if (wins >= 20) packs.push('stars');
+  return { coins: base + 300 * Math.min(Math.max(wins || 0, 0), 20), packs };
+}
 const POS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
 
 /** Storage adapter backed by a Web Storage object (localStorage). */
@@ -37,8 +54,31 @@ export function memoryStore() {
  * @param {{ now?:()=>number, rand?:()=>number, latencyMs?:number, down?:boolean }} opts
  */
 export function createMockBackend(store, { now = () => Date.now(), rand = Math.random, latencyMs = 0, down = false } = {}) {
-  const fresh = () => ({ profiles: {}, listings: [], queue: [], adminHash: null, adminFails: {} });
-  const load = () => { const d = store.load(); return d && d.profiles ? d : fresh(); };
+  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: null, adminFails: {} });
+  const load = () => {
+    const d = store.load();
+    if (!d || !d.profiles) return fresh();
+    d.friends = d.friends || []; d.invites = d.invites || [];
+    return d;
+  };
+  const CODE_A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const newCode = (db) => {
+    for (;;) {
+      let c = '';
+      for (let i = 0; i < 8; i++) c += CODE_A[Math.floor(rand() * 32)];
+      if (!Object.values(db.profiles).some((p) => p.friendCode === c)) return c;
+    }
+  };
+  const pairKey = (x, y) => (x < y ? [x, y] : [y, x]);
+  const findF = (db, x, y) => { const [a, b] = pairKey(x, y); return db.friends.find((f) => f.a === a && f.b === b) || null; };
+  const seen = (p) => { p.lastSeen = now(); };
+  function rollover(p) {
+    const w = isoWeek(now());
+    if (p.rivalsWeek === w) return;
+    if (p.rivalsWeek && p.rivalsWeekMatches > 0) { p.rivalsPrevWeek = p.rivalsWeek; p.rivalsPrevPeak = p.rivalsPeak; p.rivalsPrevWins = p.rivalsWeekWins; }
+    Object.assign(p, { rivalsWeek: w, rivalsWeekWins: 0, rivalsWeekMatches: 0, rivalsPeak: p.rivalsDivision });
+  }
+  const rivalsDefaults = { rivalsDivision: 10, rivalsPoints: 0, rivalsWeek: null, rivalsWeekWins: 0, rivalsWeekMatches: 0, rivalsPeak: 10, rivalsPrevWeek: null, rivalsPrevPeak: null, rivalsPrevWins: null, rivalsClaimedWeek: null };
 
   function auth(db, id, secret) {
     if (typeof secret !== 'string' || !/^[0-9a-f]{64}$/.test(secret)) return null;
@@ -53,7 +93,8 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     const t = now();
     const cands = db.queue.filter((q) => q.mode === me.mode && q.matchedWith == null && q.id !== me.id && q.playerId !== me.playerId
       && q.lastPoll > t - 20000 && (q.createdAt < me.createdAt || (q.createdAt === me.createdAt && q.id < me.id))
-      && Math.abs(q.rating - me.rating) <= Math.min(1000, 100 + Math.floor(10 * (t - q.createdAt) / 1000)))
+      && Math.abs(q.rating - me.rating) <= Math.min(1000, 100 + Math.floor(10 * (t - q.createdAt) / 1000))
+      && (me.mode !== 'rivals' || Math.abs((q.division ?? 10) - (me.division ?? 10)) <= 1 + Math.floor((t - q.createdAt) / 20000)))
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
     const c = cands[0];
     if (!c) return me;
@@ -80,7 +121,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const ex = Object.values(db.profiles).find((p) => p.secretHash === h);
       if (ex) return ex.id;
       const id = uuid(rand);
-      db.profiles[id] = { id, secretHash: h, name: cleanName(p_name), coins: 5000, rating: 1000, division: 8, wins: 0, draws: 0, losses: 0, lastReward: 0, windowStart: 0, windowCount: 0 };
+      db.profiles[id] = { id, secretHash: h, name: cleanName(p_name), coins: 5000, rating: 1000, division: 8, wins: 0, draws: 0, losses: 0, lastReward: 0, windowStart: 0, windowCount: 0, friendCode: newCode(db), lastSeen: 0, ...rivalsDefaults };
       store.save(db);
       return id;
     },
@@ -89,7 +130,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
       const unclaimed = db.listings.filter((l) => l.sellerId === p.id && l.status === 'sold' && !l.claimed).reduce((s, l) => s + l.credit, 0);
-      return { ok: true, id: p.id, name: p.name, coins: p.coins, rating: p.rating, division: p.division, wins: p.wins, draws: p.draws, losses: p.losses, unclaimed };
+      return { ok: true, id: p.id, name: p.name, coins: p.coins, rating: p.rating, division: p.division, wins: p.wins, draws: p.draws, losses: p.losses, unclaimed, friendCode: p.friendCode, rivalsDivision: p.rivalsDivision ?? 10 };
     },
     set_name({ p_id, p_secret, p_name }) {
       const db = load();
@@ -100,7 +141,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       return { ok: true, name: p.name };
     },
     report_result({ p_id, p_secret, p_mode, p_won, p_drawn, p_gf, p_ga }) {
-      if (!['friendly', 'ut', 'offline'].includes(p_mode)) return err('bad_mode');
+      if (!['friendly', 'ut', 'rivals', 'offline'].includes(p_mode)) return err('bad_mode');
       if (p_won && p_drawn) return err('bad_result');
       if (!Number.isInteger(p_gf) || !Number.isInteger(p_ga) || p_gf < 0 || p_ga < 0 || p_gf > 50 || p_ga > 50) return err('bad_score');
       const db = load();
@@ -114,11 +155,11 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       }
       const coins = p_won ? 800 : p_drawn ? 400 : 200;
       const score = p_won ? 1 : p_drawn ? 0.5 : 0;
-      let opp = p.rating, k = 16;
+      let opp = p.rating, k = 16, matched = false;
       if (p_mode !== 'offline') {
         const q = db.queue.filter((x) => x.playerId === p.id && x.matchedWith != null && !x.reported && x.mode === p_mode && x.matchedAt > t - 3 * 3600000)
           .sort((a, b) => b.matchedAt - a.matchedAt)[0];
-        if (q) { q.reported = true; opp = q.oppRating; k = 32; }
+        if (q) { q.reported = true; opp = q.oppRating; k = 32; matched = true; }
       } else k = 0;
       const exp = 1 / (1 + 10 ** ((opp - p.rating) / 400));
       const old = p.rating;
@@ -127,8 +168,17 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       p.coins += coins;
       if (p_won) p.wins++; else if (p_drawn) p.draws++; else p.losses++;
       p.lastReward = t; p.windowStart = ws; p.windowCount = count + 1;
+      let rivals = null;
+      if (p_mode === 'rivals' && matched) {
+        Object.assign(p, { ...rivalsDefaults, ...p });
+        rollover(p);
+        let div = p.rivalsDivision, pts = p.rivalsPoints + (p_won ? 3 : p_drawn ? 1 : 0), promoted = false;
+        while (RIV_THR[div] && pts >= RIV_THR[div]) { pts -= RIV_THR[div]; div--; promoted = true; }
+        Object.assign(p, { rivalsDivision: div, rivalsPoints: pts, rivalsPeak: Math.min(p.rivalsPeak, div), rivalsWeekWins: p.rivalsWeekWins + (p_won ? 1 : 0), rivalsWeekMatches: p.rivalsWeekMatches + 1 });
+        rivals = { division: div, points: pts, threshold: RIV_THR[div] ?? null, promoted, weekWins: p.rivalsWeekWins };
+      }
       store.save(db);
-      return { ok: true, capped: false, coinsAwarded: coins, coins: p.coins, rating: p.rating, ratingDelta: p.rating - old, division: p.division };
+      return { ok: true, capped: false, coinsAwarded: coins, coins: p.coins, rating: p.rating, ratingDelta: p.rating - old, division: p.division, rivals };
     },
     spend_coins({ p_id, p_secret, p_amount }) {
       const db = load();
@@ -241,12 +291,14 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
-      if (!['friendly', 'ut'].includes(p_mode)) return err('bad_mode');
+      if (!['friendly', 'ut', 'rivals'].includes(p_mode)) return err('bad_mode');
       if (typeof p_peer_id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(p_peer_id)) return err('bad_peer');
       purge(db);
+      Object.assign(p, { ...rivalsDefaults, ...p });
+      rollover(p);
       db.queue = db.queue.filter((q) => !(q.playerId === p.id && q.matchedWith == null));
       const t = now();
-      const r = { id: uuid(rand), playerId: p.id, mode: p_mode, peerId: p_peer_id, rating: p.rating, name: p.name, createdAt: t, lastPoll: t, matchedWith: null, matchedAt: null, host: false, token: null, reported: false };
+      const r = { id: uuid(rand), playerId: p.id, mode: p_mode, peerId: p_peer_id, rating: p.rating, name: p.name, division: p.rivalsDivision, createdAt: t, lastPoll: t, matchedWith: null, matchedAt: null, host: false, token: null, reported: false };
       db.queue.push(r);
       pair(db, r);
       store.save(db);
@@ -274,6 +326,188 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       db.queue = db.queue.filter((q) => q !== r);
       store.save(db);
       return { ok: true, matched: false };
+    },
+
+    // ---------------------------------------------------------------- rivals
+    rivals_status({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      Object.assign(p, { ...rivalsDefaults, ...p });
+      rollover(p);
+      store.save(db);
+      const claimable = !!p.rivalsPrevWeek && p.rivalsPrevWeek !== p.rivalsClaimedWeek;
+      const d = new Date(now()); const day = (d.getUTCDay() + 6) % 7;
+      const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day + 7);
+      return {
+        ok: true, division: p.rivalsDivision, points: p.rivalsPoints, threshold: RIV_THR[p.rivalsDivision] ?? null, week: p.rivalsWeek,
+        weekWins: p.rivalsWeekWins, weekMatches: p.rivalsWeekMatches, peak: p.rivalsPeak, claimable,
+        claimWeek: claimable ? p.rivalsPrevWeek : null, reward: claimable ? rivalsReward(p.rivalsPrevPeak, p.rivalsPrevWins) : null,
+        nextResetAt: new Date(next).toISOString(),
+      };
+    },
+    rivals_claim_weekly({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      Object.assign(p, { ...rivalsDefaults, ...p });
+      rollover(p);
+      if (!p.rivalsPrevWeek) { store.save(db); return err('nothing_to_claim'); }
+      if (p.rivalsPrevWeek === p.rivalsClaimedWeek) { store.save(db); return err('already_claimed'); }
+      const rw = rivalsReward(p.rivalsPrevPeak, p.rivalsPrevWins);
+      p.coins += rw.coins;
+      p.rivalsClaimedWeek = p.rivalsPrevWeek;
+      store.save(db);
+      return { ok: true, week: p.rivalsClaimedWeek, coins: rw.coins, packs: rw.packs, balance: p.coins };
+    },
+    /** test hook: pretend the current rivals week is over */
+    _rivals_end_week({ p_id }) {
+      const db = load();
+      const p = db.profiles[p_id];
+      if (p) { p.rivalsWeek = '2000-W01'; store.save(db); }
+      return true;
+    },
+
+    // ---------------------------------------------------------------- friends + invites
+    heartbeat({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      seen(p);
+      store.save(db);
+      return {
+        ok: true, invites: db.invites.filter((i) => i.toId === p.id && i.status === 'pending' && i.createdAt > now() - 60000).length,
+        requests: db.friends.filter((f) => (f.a === p.id || f.b === p.id) && f.status === 'pending' && f.requestedBy !== p.id).length,
+      };
+    },
+    add_friend({ p_id, p_secret, p_code }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const code = String(p_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!/^[A-Z0-9]{8}$/.test(code)) return err('bad_code');
+      const o = Object.values(db.profiles).find((x) => x.friendCode === code);
+      if (!o) return err('not_found');
+      if (o.id === p.id) return err('self');
+      const f = findF(db, p.id, o.id);
+      if (f) {
+        if (f.status === 'blocked') return err(f.blockedBy === p.id ? 'blocked' : 'not_found');
+        if (f.status === 'accepted') return err('already_friends');
+        if (f.requestedBy === p.id) return err('already_requested');
+        f.status = 'accepted';
+        store.save(db);
+        return { ok: true, status: 'friend', friend: { id: o.id, name: o.name } };
+      }
+      const [a, b] = pairKey(p.id, o.id);
+      db.friends.push({ a, b, status: 'pending', requestedBy: p.id, blockedBy: null });
+      store.save(db);
+      return { ok: true, status: 'outgoing', friend: { id: o.id, name: o.name } };
+    },
+    respond_friend({ p_id, p_secret, p_friend, p_action }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!['accept', 'decline', 'remove', 'block', 'unblock'].includes(p_action)) return err('bad_action');
+      if (!p_friend || p_friend === p.id || !db.profiles[p_friend]) return err('not_found');
+      const f = findF(db, p.id, p_friend);
+      const cancelInv = () => { for (const i of db.invites) if (i.status === 'pending' && ((i.fromId === p.id && i.toId === p_friend) || (i.fromId === p_friend && i.toId === p.id))) i.status = 'cancelled'; };
+      if (p_action === 'block') {
+        if (f && f.status === 'blocked') return { ok: true };
+        if (f) Object.assign(f, { status: 'blocked', blockedBy: p.id, requestedBy: p.id });
+        else { const [a, b] = pairKey(p.id, p_friend); db.friends.push({ a, b, status: 'blocked', requestedBy: p.id, blockedBy: p.id }); }
+        cancelInv();
+        store.save(db);
+        return { ok: true };
+      }
+      if (!f || (f.status === 'blocked' && f.blockedBy !== p.id)) return err('not_found');
+      if (p_action === 'unblock') {
+        if (f.status !== 'blocked') return err('not_found');
+        db.friends = db.friends.filter((x) => x !== f);
+      } else if (p_action === 'accept') {
+        if (f.status !== 'pending' || f.requestedBy === p.id) return err('not_found');
+        f.status = 'accepted';
+      } else {
+        if (f.status === 'blocked') return err('blocked');
+        db.friends = db.friends.filter((x) => x !== f);
+        cancelInv();
+      }
+      store.save(db);
+      return { ok: true };
+    },
+    list_friends({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      seen(p);
+      store.save(db);
+      const items = db.friends.filter((f) => (f.a === p.id || f.b === p.id) && !(f.status === 'blocked' && f.blockedBy !== p.id)).map((f) => {
+        const o = db.profiles[f.a === p.id ? f.b : f.a];
+        const acc = f.status === 'accepted';
+        return {
+          id: o.id, name: o.name,
+          status: acc ? 'friend' : f.status === 'blocked' ? 'blocked' : f.requestedBy === p.id ? 'outgoing' : 'incoming',
+          online: acc && o.lastSeen > now() - 60000, rating: acc ? o.rating : null, division: acc ? o.division : null, rivalsDivision: acc ? (o.rivalsDivision ?? 10) : null,
+        };
+      }).sort((x, y) => (y.online - x.online) || x.name.localeCompare(y.name));
+      return { ok: true, code: p.friendCode, items };
+    },
+    send_invite({ p_id, p_secret, p_friend, p_mode, p_peer_id }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!['friendly', 'ut'].includes(p_mode)) return err('bad_mode');
+      if (typeof p_peer_id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(p_peer_id)) return err('bad_peer');
+      const f = findF(db, p.id, p_friend);
+      if (!f || f.status !== 'accepted') return err('not_friends');
+      const recent = db.invites.filter((i) => i.fromId === p.id && i.createdAt > now() - 600000).length;
+      if (recent >= 20) return err('rate_limited');
+      for (const i of db.invites) if (i.fromId === p.id && i.status === 'pending') i.status = 'cancelled';
+      const inv = { id: uuid(rand), fromId: p.id, toId: p_friend, mode: p_mode, peerId: p_peer_id, token: hex(32, rand), status: 'pending', createdAt: now() };
+      db.invites.push(inv);
+      db.invites = db.invites.filter((i) => i.createdAt > now() - 3600000);
+      seen(p);
+      store.save(db);
+      return { ok: true, inviteId: inv.id, token: inv.token, expiresInMs: 60000 };
+    },
+    poll_invites({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      seen(p);
+      store.save(db);
+      const t = now();
+      const incoming = db.invites.filter((i) => i.toId === p.id && i.status === 'pending' && i.createdAt > t - 60000 && (findF(db, i.fromId, i.toId) || {}).status === 'accepted')
+        .map((i) => ({ inviteId: i.id, mode: i.mode, createdAt: new Date(i.createdAt).toISOString(), from: { id: i.fromId, name: db.profiles[i.fromId].name, rating: db.profiles[i.fromId].rating } }));
+      const outgoing = db.invites.filter((i) => i.fromId === p.id && i.createdAt > t - 120000)
+        .map((i) => ({ inviteId: i.id, mode: i.mode, toId: i.toId, status: i.status === 'pending' && i.createdAt <= t - 60000 ? 'expired' : i.status }));
+      const requests = db.friends.filter((f) => (f.a === p.id || f.b === p.id) && f.status === 'pending' && f.requestedBy !== p.id).length;
+      return { ok: true, incoming, outgoing, requests };
+    },
+    respond_invite({ p_id, p_secret, p_invite, p_accept }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const i = db.invites.find((x) => x.id === p_invite && x.toId === p.id);
+      if (!i) return err('not_found');
+      if (i.status !== 'pending') return err('unavailable');
+      if (i.createdAt <= now() - 60000) { i.status = 'expired'; store.save(db); return err('expired'); }
+      if (!p_accept) { i.status = 'declined'; store.save(db); return { ok: true, accepted: false }; }
+      if ((findF(db, i.fromId, i.toId) || {}).status !== 'accepted') { i.status = 'cancelled'; store.save(db); return err('unavailable'); }
+      i.status = 'accepted';
+      store.save(db);
+      const o = db.profiles[i.fromId];
+      return { ok: true, accepted: true, mode: i.mode, peerId: i.peerId, token: i.token, from: { id: o.id, name: o.name, rating: o.rating } };
+    },
+    cancel_invite({ p_id, p_secret, p_invite }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const i = db.invites.find((x) => x.id === p_invite && x.fromId === p.id);
+      if (!i) return { ok: true, status: 'not_found' };
+      if (i.status !== 'pending') return { ok: true, status: i.status };
+      i.status = 'cancelled';
+      store.save(db);
+      return { ok: true, status: 'cancelled' };
     },
   };
 
