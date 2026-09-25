@@ -66,9 +66,12 @@ export function sanitizeCard(c) {
 export function validateListingInput(card, price) {
   const p = typeof price === 'string' && /^\d+$/.test(price.trim()) ? Number(price.trim()) : price;
   if (!intStrict(p, MARKET.minPrice, MARKET.maxPrice)) return { ok: false, error: 'bad_price' };
+  let raw;
+  try { raw = JSON.stringify(card); } catch { return { ok: false, error: 'bad_card' }; }
+  if (typeof raw !== 'string') return { ok: false, error: 'bad_card' };
+  if (byteLength(raw) > MARKET.maxCardBytes) return { ok: false, error: 'card_too_large' };
   const c = sanitizeCard(card);
   if (!c) return { ok: false, error: 'bad_card' };
-  if (byteLength(JSON.stringify(c)) > MARKET.maxCardBytes) return { ok: false, error: 'card_too_large' };
   return { ok: true, card: c, price: p };
 }
 

@@ -1,5 +1,11 @@
 // Authoritative match simulation (fixed timestep). No DOM, no THREE — runs in node for tests.
-import { PITCH, GOAL, BOX, SIX, PEN_SPOT, CIRCLE_R, BALL_R, ANIM, PHASE, SP, DIFFICULTY } from './constants.js';
+import { PITCH, GOAL, BOX, SIX, PEN_SPOT, CIRCLE_R, BALL_R, ANIM, PHASE, SP, DIFFICULTY, halfLen, halfBase } from './constants.js';
+import { GAMEPLAY_DEFAULTS } from '../../shared/gameplay.js';
+import { humanGround, humanThrough, humanLob, humanShot, passArrive } from './assist.js';
+import { parsePlaystyles, ps } from './playstyles.js';
+import { computeRatings, playerOfMatch } from './ratings.js';
+import * as KO from './knockout.js';
+import * as HSP from './humansp.js';
 import { clamp, lerp, wrapAngle, angleTo, mulberry32 } from './mathx.js';
 import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine } from './physics.js';
 import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
@@ -9,14 +15,32 @@ import * as AI from './ai.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
 const HUMAN_AI = { ...DIFFICULTY.world, err: 1 };
-const HOLD_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse', 'tackle', 'switchP', 'skill'];
+const HOLD_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse', 'tackle', 'switchP', 'skill', 'jockey'];
 const KICK_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse'];
 export const REPLAY_LEN = 12; // max wait; the UI ends replays earlier via skipReplay()
-const EMPTY_IN = { mx: 0, my: 0, aimX: 0, aimY: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false };
+const EMPTY_IN = { mx: 0, my: 0, aimX: 0, aimY: 0, cx: 0, cy: 0, kx: 0, ky: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false, jockey: false };
+const GP_ENUMS = {
+  passAssist: ['assisted', 'semi', 'manual'], throughAssist: ['assisted', 'semi', 'manual'], lobAssist: ['assisted', 'semi', 'manual'],
+  shotAssist: ['assisted', 'precision', 'manual'], autoSwitch: ['auto', 'airballs', 'manual'], autoSwitchAssist: ['none', 'low', 'high'],
+  aiDefending: ['assisted', 'tactical'], passReceiverLock: ['off', 'earlyRelease', 'lateRelease'], switchOnPass: ['instant', 'release', 'receive'],
+};
+// Merge per-side gameplay settings over the defaults, rejecting unknown values.
+export function mergeGameplay(g) {
+  const o = { ...GAMEPLAY_DEFAULTS };
+  if (g && typeof g === 'object') {
+    for (const k in GAMEPLAY_DEFAULTS) {
+      if (!(k in g)) continue;
+      const v = g[k], def = GAMEPLAY_DEFAULTS[k];
+      if (GP_ENUMS[k]) { if (GP_ENUMS[k].includes(v)) o[k] = v; }
+      else if (typeof def === 'boolean') o[k] = !!v;
+    }
+  }
+  return o;
+}
 const SKILL_KINDS = ['stepover', 'roulette', 'ballroll', 'heel'];
 
 const faceVec = (p) => ({ x: Math.cos(p.face), z: Math.sin(p.face) });
-const newStats = () => ({ goals: 0, assists: 0, shots: 0, sot: 0, passes: 0, passAtt: 0, tackles: 0, saves: 0, fouls: 0, conceded: 0, touches: 0, yellow: 0, red: 0, mins: 0 });
+const newStats = () => ({ goals: 0, assists: 0, kp: 0, shots: 0, sot: 0, passes: 0, passAtt: 0, tackles: 0, int: 0, saves: 0, fouls: 0, conceded: 0, touches: 0, yellow: 0, red: 0, og: 0, err: 0, mins: 0 });
 
 function strHash(s) {
   let h = 2166136261;
@@ -34,6 +58,20 @@ export class MatchSim {
     this.controllers = [c.home || 'ai', c.away || 'ai'];
     this.human = this.controllers.map((k) => k !== 'ai');
     this.halfMinutes = o.halfMinutes || 3;
+    this.gp = [mergeGameplay(o.gameplay && o.gameplay.home), mergeGameplay(o.gameplay && o.gameplay.away)];
+    this.knockout = !!o.knockout;
+    this.shootout = null;
+    this.breakNext = 'half';
+    this.switchT = [-9, -9];
+    this.recvLock = [null, null];
+    this.pendingSwitch = [null, null];
+    this.pendingShot = [null, null];
+    this.tfBlock = [0, 0];
+    this.tfLate = [null, null];
+    this.nextSw = [-1, -1];
+    this.passLink = [null, null];
+    this.lastLoss = [null, null];
+    this.nextAuto = 0;
     this.gameRate = 2700 / (this.halfMinutes * 60);
     this.players = [];
     this.pstats = {};
@@ -112,11 +150,21 @@ export class MatchSim {
     const k = 1 + clamp(((chem ?? 50) - 50) / 1000, -0.05, 0.05);
     for (const key in a) a[key] = clamp((+a[key] || 50) * k, 1, 99);
     p.a = a;
+    // V2.1 physique + PlayStyles (defaults when absent)
+    p.h = clamp(Number.isFinite(+pd.height) && +pd.height > 1.4 ? +pd.height : 1.8, 1.55, 2.08);
+    p.w = clamp(Number.isFinite(+pd.weight) && +pd.weight > 40 ? +pd.weight : 75, 50, 110);
+    p.ps = parsePlaystyles(pd.playstyles);
     const pace = p.isGK ? a.spd * 0.6 + a.pac * 0.4 : a.pac;
-    p.vmax = 5.9 + pace * 0.031;
-    p.acc = 6.5 + pace * 0.05 + a.phy * 0.012;
+    // attributes must be felt: top speed and acceleration spread widely with pace
+    p.vmax = 4.95 + pace * 0.046 - Math.max(0, p.w - 85) * 0.012;
+    p.acc = 3.6 + pace * 0.072 + ps(p, 'quickstep') * 0.9 - (p.w - 75) * 0.025 - (p.h - 1.8) * 2.5;
+    // agility (turning) from dribbling/pace, strength from physical + body mass
+    p.agil = clamp((a.dri * 0.6 + a.pac * 0.4) / 100 - (p.h - 1.8) * 0.4 - Math.max(0, p.w - 80) * 0.004, 0.3, 1.05);
+    p.str = a.phy * 0.75 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10;
+    // standing reach / jump used for headers and keeper handling
+    p.jump = 0.28 + a.phy * 0.0025 + (p.isGK ? a.div * 0.002 : 0) + ps(p, 'aerial') * 0.08;
     p.hash = strHash(String(pd.id ?? pd.name ?? p.idx));
-    p.st = this.pstats[pd.id] || (this.pstats[pd.id] = { ...newStats(), team: p.team, gk: p.isGK });
+    p.st = this.pstats[pd.id] || (this.pstats[pd.id] = { ...newStats(), team: p.team, gk: p.isGK, def: p.group === 'DEF' });
   }
 
   // ------------------------------------------------------------------ helpers
@@ -129,7 +177,7 @@ export class MatchSim {
   diffFor(team) { return this.human[team] ? HUMAN_AI : this.diff; }
   isHumanCtrl(p) { return this.human[p.team] && this.ctrl[p.team] === p.idx; }
   stamFactor(p) { return (0.8 + 0.2 * p.stam) * (p.burst > this.t ? 1.1 : 1); }
-  dribbleFactor(p, sprint) { return Math.min(1, (sprint ? 0.88 : 0.95) * (0.92 + p.a.dri * 0.001)); }
+  dribbleFactor(p, sprint) { return Math.min(1, (sprint ? 0.84 : 0.93) * (0.9 + p.a.dri * 0.0012) + ps(p, 'rapid') * 0.035); }
   fromBehind(tackler, victim) { return isFromBehind(tackler, victim, victim.face); }
   minute() { return Math.floor(((this.half - 1) * 2700 + this.clock) / 60) + 1; }
   sideName(team) { return team === 0 ? 'home' : 'away'; }

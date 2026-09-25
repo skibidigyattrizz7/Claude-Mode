@@ -7,10 +7,15 @@ import { choosePassTarget, clampToPitch } from './passing.js';
 import { formationPos } from './ai.js';
 import { stepPlayer, topSpeed } from './player.js';
 import { clamp, dist, norm } from './util.js';
+import { simulateDeadBall } from './kickphys.js';
 
 export const SP_LABEL = { throw: 'Throw-in', corner: 'Corner kick', goalkick: 'Goal kick', freekick: 'Free kick', fk3d: 'Free kick', penalty: 'Penalty' };
 
-export function beginSetPiece(m, r) {
+/**
+ * Start a restart. opts.quick = a human tapped Pass to take a throw-in / free kick quickly:
+ * nobody lines up, the nearest team-mate runs to the ball and plays it short at once.
+ */
+export function beginSetPiece(m, r, opts = {}) {
   m.state = 'setpiece'; m.stateT = 0;
   m.owner = null; m.pass = null; m.shot = null; m.pendingSave = null; m.kickRequest = null;
   const bx = clamp(r.x, 0, PITCH.L), by = clamp(r.y, 0, PITCH.W);
@@ -27,6 +32,14 @@ export function beginSetPiece(m, r) {
   sp.taker = taker;
   const h = m.humans.find((hh) => hh.team === r.team);
   if (h) { sp.human = h; if (taker.role !== 'GK') m.setHumanPlayer(h, taker); }
+  if (opts.quick && (r.type === 'throw' || r.type === 'freekick')) {
+    sp.phase = 'quick'; sp.quick = true;
+    sp.aim = { x: bx + m.attackDir(r.team) * 8, y: by };
+    for (const p of m.players) p.spTarget = null;
+    taker.spTarget = r.type === 'throw' ? { x: bx, y: by < CY ? -0.35 : PITCH.W + 0.35 } : { x: bx - m.attackDir(r.team) * 0.6, y: by };
+    m.banner('QUICK ' + (r.type === 'throw' ? 'THROW' : 'FREE KICK'), '', '#ffffff', 1.0);
+    return;
+  }
   if (r.type === 'penalty' || r.type === 'fk3d') {
     m.banner(r.type === 'penalty' ? 'PENALTY!' : 'FREE KICK', m.teams[r.team].name, '#ffffff', 1.6);
     sp.phase = 'kickscene';
@@ -117,6 +130,31 @@ export function updateSetPiece(m, dt) {
         humanShooter: sp.human ? sp.human.ctrl : null, humanKeeper: sp.type === 'penalty' && hk ? hk.ctrl : null,
       };
       sp.phase = 'waiting';
+      // AI-only matches (menu demo, simulations) resolve the kick without the first-person view
+      if (m.autoKicks) m.resumeFromKick(simulateDeadBall(m.kickRequest));
+    }
+    return;
+  }
+  if (sp.phase === 'quick') {
+    // only the taker moves: he runs to the ball and plays it short straight away
+    for (const p of m.players) {
+      if (p.sentOff) continue;
+      if (p === sp.taker) walk(p, p.spTarget, dt);
+      else { p.want.x *= 0.85; p.want.y *= 0.85; stepPlayer(p, dt); }
+    }
+    const t = sp.taker;
+    if (dist(t, t.spTarget) < 0.5 || sp.t > 2.5) {
+      t.x = t.spTarget.x; t.y = t.spTarget.y;
+      const h = sp.human;
+      let aim = null;
+      if (h) {
+        const c = m.ctrls[h.ctrl], aw = m.aimWorld[h.ctrl], mv = c ? c.move() : { x: 0, y: 0 };
+        if (aw) aim = { x: aw.x, y: aw.y };
+        else if (mv.x || mv.y) aim = { x: sp.x + mv.x * 10, y: sp.y + mv.y * 10 };
+      }
+      if (!aim) aim = sp.aim;
+      if (sp.type === 'throw') placeBall(m.ball, t.x, t.y);
+      executeSetPiece(m, 'short', clampToPitch(aim, 1, 1), 0.5, 0);
     }
     return;
   }
@@ -127,6 +165,12 @@ export function updateSetPiece(m, dt) {
     p.faceWant = Math.atan2(m.ball.y - p.y, m.ball.x - p.x);
   }
   if (sp.phase === 'setup') {
+    // tap Pass while everyone is still getting into position: take it quickly
+    if (sp.t > 0.15 && (sp.type === 'throw' || sp.type === 'freekick') && m.quickRestartWanted(sp)) {
+      const r = { type: sp.type, team: sp.team, x: sp.x, y: sp.y };
+      beginSetPiece(m, r, { quick: true });
+      return;
+    }
     if (sp.t > 1.3) {
       for (const p of m.players) if (p.spTarget && !p.sentOff && dist(p, p.spTarget) > 1.5) { p.x = p.spTarget.x; p.y = p.spTarget.y; p.vx = p.vy = 0; }
       sp.phase = 'aim'; sp.t = 0;

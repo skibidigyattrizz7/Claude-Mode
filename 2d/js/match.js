@@ -1143,17 +1143,34 @@ export class Match {
     if (res.result === 'save') {
       this.stats[team].onTarget++;
       const gk = this.keeper(def);
-      if (res.caught && gk) {
+      const sy = clamp(res.y != null ? res.y : CY, CY - GOAL.W / 2, CY + GOAL.W / 2);
+      const out = savedKickRestart(!!res.caught && !!gk, sy, Math.random, CY);
+      this.lastSavedRestart = out.type;
+      if (out.type === 'catch') {
         gk.x = gx + inward * 1.5; gk.y = CY;
         placeBall(this.ball, gk.x, gk.y);
         this.state = 'play'; this.stateT = 0;
         this.setOwner(gk, true); gk.state = 'hold'; gk.holdT = 0;
-        this.banner('SAVED!', gk.name, '#8ecae6', 1.6);
+        this.banner('SAVED!', `${gk.name} holds on`, '#8ecae6', 1.6);
         return;
       }
-      this.banner('SAVED!', gk ? gk.name : '', '#8ecae6', 1.6);
-      this.stats[team].corners++;
-      beginSetPiece(this, { type: 'corner', team, x: gx + inward * 0.4, y: res.y != null && res.y < CY ? 0.4 : PITCH.W - 0.4 });
+      if (out.type === 'corner' || !gk) {
+        this.banner('SAVED!', `${gk ? gk.name : ''} turns it behind`, '#8ecae6', 1.6);
+        this.stats[team].corners++;
+        beginSetPiece(this, { type: 'corner', team, x: gx + inward * 0.4, y: out.upper ? 0.4 : PITCH.W - 0.4 });
+        return;
+      }
+      // parried back into play: everyone was waiting on the edge of the box — scramble!
+      this.arrangeRebound(team, gx, inward);
+      gk.x = gx + inward * 0.9; gk.y = sy; gk.vx = gk.vy = 0;
+      gk.state = 'down'; gk.stateT = 0; gk.stateDur = 0.7; gk.facing = inward > 0 ? 0 : Math.PI;
+      placeBall(this.ball, gk.x + inward * 0.8, sy);
+      const n = norm(inward * out.dist, out.dy);
+      this.ball.vx = n.x * out.speed; this.ball.vy = n.y * out.speed; this.ball.vz = 1.5; this.ball.z = 0.4;
+      this.ball.kickId++;
+      this.lastTouch = gk; this.owner = null; this.pass = null; this.shot = null;
+      this.state = 'play'; this.stateT = 0;
+      this.banner('SAVED!', `${gk.name} parries — rebound!`, '#8ecae6', 1.6);
       return;
     }
     if (res.result === 'wall') {
@@ -1169,5 +1186,58 @@ export class Match {
     }
     // miss / post: goal kick
     beginSetPiece(this, { type: 'goalkick', team: def, x: gx + inward * 5.5, y: CY + (Math.random() < 0.5 ? -4.5 : 4.5) });
+  }
+
+  /** Line both teams up around the edge of the box for a rebound (after a parried kick). */
+  arrangeRebound(team, gx, inward) {
+    const att = this.mates(team).filter((p) => p.role !== 'GK');
+    const def = this.mates(1 - team).filter((p) => p.role !== 'GK');
+    att.forEach((p, i) => {
+      p.x = gx + inward * (13 + (i % 3) * 2.5); p.y = CY + (i - (att.length - 1) / 2) * 5.5;
+      p.vx = p.vy = 0; p.state = 'run'; p.facing = inward > 0 ? Math.PI : 0;
+    });
+    def.forEach((p, i) => {
+      const a = att[i % Math.max(1, att.length)];
+      p.x = a ? a.x - inward * 1.6 : gx + inward * 10; p.y = a ? a.y + 0.8 : CY;
+      p.vx = p.vy = 0; p.state = 'run'; p.facing = inward > 0 ? Math.PI : 0;
+    });
+  }
+
+  // ---------- quick restarts ----------
+  /** Did a human on the restarting team tap Pass to take a throw-in / free kick quickly? */
+  quickRestartWanted(r) {
+    if (!r || !(r.type === 'throw' || r.type === 'freekick')) return false;
+    return this.humans.some((h) => h.team === r.team && this.ctrls[h.ctrl] && (this.ctrls[h.ctrl].wasPressed('pass') || (h.ctrl === 0 && this.mouseClick)));
+  }
+
+  // ---------- instant replay (pause menu) ----------
+  canInstantReplay() { return ['play', 'out', 'foul', 'setpiece'].includes(this.state) && this.replay.len > 60 && !this.sp?.phase?.startsWith('kick') && this.sp?.phase !== 'waiting'; }
+
+  startInstantReplay() {
+    if (!this.canInstantReplay() || !this.replay.begin(8)) return false;
+    const b = this.ball;
+    this.irSnap = {
+      state: this.state, stateT: this.stateT,
+      ball: { x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, rot: b.rot, spin: b.spin, topspin: b.topspin },
+      players: this.players.map((p) => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, facing: p.facing, anim: p.anim, state: p.state, stateT: p.stateT, sentOff: p.sentOff })),
+    };
+    this.state = 'ireplay'; this.stateT = 0;
+    this.emit('replayStart');
+    return true;
+  }
+
+  updateInstantReplay(dt) {
+    this.replay.pos = Math.min(this.replay.frames - 1, this.replay.pos + dt * 60 * 0.75);
+    this.replay.apply(this);
+    if (this.replay.done || (this.skipRequest && this.stateT > 0.3)) this.endInstantReplay();
+  }
+
+  endInstantReplay() {
+    const s = this.irSnap; if (!s) return;
+    Object.assign(this.ball, s.ball);
+    this.players.forEach((p, i) => Object.assign(p, s.players[i]));
+    this.state = s.state; this.stateT = s.stateT;
+    this.irSnap = null;
+    this.emit('replayEnd');
   }
 }
