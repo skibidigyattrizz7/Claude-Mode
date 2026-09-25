@@ -4,7 +4,8 @@
 // (no shared RNG is consumed, so the generated database and existing saves are unaffected).
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS } from './data.js';
-import { parseStyles } from './physique.js';
+import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES } from './physique.js';
+import { REG_ROWS } from './realregulars.js';
 
 // Row: [slug, full name, card name, nation, pos, alt positions, foot, weak foot, skill moves, OVR,
 //       face stats (outfield: pac sho pas dri def phy | GK: div han kic ref spd pos), age, height, skin tone 0..5, extra]
@@ -221,6 +222,9 @@ const PHYS = {
 };
 
 export const REAL_ROW_COUNT = ICON_ROWS.length + STAR_ROWS.length;
+export const REG_ROW_COUNT = REG_ROWS.length;
+/** Every real person's full name per list (for duplicate checks). */
+export const REAL_NAMES = { icons: ICON_ROWS.map((r) => r[1]), stars: STAR_ROWS.map((r) => r[1]), regulars: REG_ROWS.map((r) => r[1]) };
 
 const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
 const GKFACE = ['div', 'han', 'kic', 'ref', 'spd', 'pos'];
@@ -252,6 +256,17 @@ function fitStats(src, keys, w, target) {
     src[kk] += up ? 1 : -1;
   }
   return src;
+}
+
+/** Keep authored PlayStyles inside the V2.1 OVR-band rules (count + PlayStyle+ limits); top up from the generator. */
+function normStyles(p, list) {
+  const isGK = p.pos === 'GK';
+  let out = list.filter((x) => PLAYSTYLES[x.id] && (PLAYSTYLES[x.id][1] === 'gk') === isGK);
+  const [lo, hi] = styleCountRange(p.ovr);
+  out = out.slice(0, hi);
+  if (out.length < lo) for (const x of genPhysique({ ...p, id: `${p.id}-fill` }).playstyles) if (out.length < lo && !out.some((y) => y.id === x.id)) out.push({ id: x.id, plus: false });
+  let plus = maxPlus(p.ovr);
+  return out.map((x) => { const keep = x.plus && plus > 0; if (keep) plus--; return { id: x.id, plus: keep }; });
 }
 
 function starClub(slug, lg) {
@@ -319,5 +334,23 @@ export function buildRealPlayers(helpers) {
   };
   const icons = ICON_ROWS.map((r) => make(r, 'icon'));
   const stars = STAR_ROWS.map((r) => make(r, 'star'));
-  return { icons, stars };
+  // V3 regulars: ordinary gold / rare gold cards of real active players (no special version).
+  const regulars = REG_ROWS.map((row) => {
+    const [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, weight, skin, lg, styles] = row;
+    const base = make([slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, { lg }], 'star');
+    const p = { ...base, id: `rp_${slug}`, person: slug };
+    delete p.era;
+    p.special = null;
+    p.rare = true;
+    p.tier = helpers.tierOf(p.ovr);
+    p.weight = clamp(weight, 58, 100);
+    p.playstyles = normStyles(p, parseStyles(String(styles).split(/\s+/).filter(Boolean)));
+    const growth = age <= 20 ? 6 : age <= 22 ? 4 : age <= 24 ? 2 : 0;
+    p.pot = Math.min(95, p.ovr + growth);
+    p.value = marketValue(p);
+    p.wage = weeklyWage(p);
+    p.look = hashStr(p.id) % 997;
+    return p;
+  });
+  return { icons, stars, regulars };
 }

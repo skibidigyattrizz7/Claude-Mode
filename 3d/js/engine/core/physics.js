@@ -13,15 +13,36 @@ export const PHYS = {
   roll1: 0.32,         // rolling resistance, linear part (1/s)
   postE: 0.7,          // woodwork restitution
   netE: 0.12,          // net restitution (very soft)
+  g: G,                // gravity (m/s^2); admin 'moon gravity' lowers it temporarily
 };
 
 const PHYS_BASE = { ...PHYS };
-// Weather changes the pitch: 'rain' = skiddy, quicker ball; 'snow' = heavy, slow ball.
-export function setWeather(w) {
+let curWeather = 'clear', curMods = null;
+function applyPhys() {
   Object.assign(PHYS, PHYS_BASE);
+  const w = curWeather;
   if (w === 'rain') { PHYS.roll0 *= 0.7; PHYS.roll1 *= 0.8; PHYS.bounceGrip = 0.9; PHYS.restLo = 0.36; }
   else if (w === 'snow') { PHYS.roll0 *= 1.7; PHYS.roll1 *= 1.45; PHYS.bounceGrip = 0.7; PHYS.restHi = 0.5; PHYS.restLo = 0.3; }
+  const m = curMods;
+  if (m) {
+    // temporary admin ball modifiers (multipliers; rest/grip are absolute overrides)
+    const f = (v, d = 1) => (Number.isFinite(v) && v > 0 ? v : d);
+    PHYS.g *= f(m.g); PHYS.drag *= f(m.drag); PHYS.magnus *= f(m.magnus); PHYS.spinDecay *= f(m.spinDecay);
+    PHYS.roll0 *= f(m.roll); PHYS.roll1 *= f(m.roll);
+    if (Number.isFinite(m.restHi)) { PHYS.restHi = Math.min(0.95, Math.max(0.02, m.restHi)); PHYS.restLo = Math.min(PHYS.restHi, Math.max(0.01, m.restLo ?? m.restHi * 0.8)); }
+    if (Number.isFinite(m.grip)) PHYS.bounceGrip = Math.min(0.99, Math.max(0.3, m.grip));
+  }
+}
+// Weather changes the pitch: 'rain' = skiddy, quicker ball; 'snow' = heavy, slow ball.
+export function setWeather(w) {
+  curWeather = w; curMods = null;
+  applyPhys();
   return w === 'rain' ? 1 : w === 'snow' ? 2 : 0;
+}
+// Admin fun effects: temporary ball-physics modifiers on top of the weather (null = none).
+export function setPhysMods(m) {
+  curMods = m || null;
+  applyPhys();
 }
 
 export function createBall() {
@@ -74,7 +95,7 @@ function subStep(b, dt, ev) {
     magnusAccel(v, w, _m);
     const k = PHYS.drag * s;
     v.x += (-k * v.x + _m.x) * dt;
-    v.y += (-G - k * v.y + _m.y) * dt;
+    v.y += (-PHYS.g - k * v.y + _m.y) * dt;
     v.z += (-k * v.z + _m.z) * dt;
     p.x += v.x * dt; p.y += v.y * dt; p.z += v.z * dt;
     const d = Math.exp(-PHYS.spinDecay * dt);

@@ -314,7 +314,8 @@ function extraNationPools() {
 /** Real players of a nation, one version per person (highest overall). */
 export function nationRealPlayers(code) {
   const best = new Map();
-  for (const p of getDB().real) {
+  const db = getDB();
+  for (const p of db.real.concat(db.regulars || [])) {
     if (p.nat !== code) continue;
     const cur = best.get(p.person);
     if (!cur || p.ovr > cur.ovr) best.set(p.person, p);

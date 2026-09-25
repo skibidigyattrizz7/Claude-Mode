@@ -3,6 +3,7 @@ import { Rng, clamp, hashStr } from './rng.js';
 import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP } from './data.js';
 import { buildRealPlayers } from './realplayers.js';
 import { genPhysique, ensurePhysique, ensureAlts } from './physique.js';
+import { buildPromoCards, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID } from './promos.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -101,11 +102,12 @@ export function utPrice(p) {
   if (p.special === 'hero') v *= 2.4;
   if (p.special === 'legend') v *= 3.2;
   if (p.special === 'lotg') v *= p.era === 'prime' ? 4.5 : 2.6;
-  return niceRound(v);
+  if (isPromoSpecial(p.special)) v *= 3;
+  return niceRound(Math.min(v, 15000000));
 }
 export function quickSellValue(p) {
   const base = p.ovr < 65 ? 40 + (p.ovr - 45) * 3 : p.ovr < 75 ? 150 + (p.ovr - 65) * 15 : 400 + Math.max(0, p.ovr - 75) * 90;
-  const spec = p.special === 'lotg' ? (p.era === 'prime' ? 9 : 6) : p.special ? 2.5 : 1;
+  const spec = p.special === 'lotg' ? (p.era === 'prime' ? 9 : 6) : isPromoSpecial(p.special) ? 5 : p.special ? 2.5 : 1;
   return Math.round((base * (p.rare ? 1.3 : 1) * spec) / 10) * 10;
 }
 
@@ -292,13 +294,15 @@ export function getDB() {
   for (const b of informBase) {
     const p = structuredClone(b);
     p.id = `if_${b.id}`; p.baseId = b.id;
-    adjustOvr(p, rng.int(2, 5));
+    rng.int(2, 5); // V3: still consumed so the shared RNG sequence (and every generated id) is unchanged
+    adjustOvr(p, informBoost(b.ovr)); // V3: boost scaled to the base card (+3..+8)
     p.special = 'inform'; p.rare = true; p.tier = tierOf(p.ovr);
     specials.push(p);
   }
 
   // V2.1 physique + PlayStyles for generated players (private per-player RNG; see physique.js)
   for (const p of players.concat(specials)) { Object.assign(p, genPhysique(p)); ensureAlts(p); }
+  for (const p of specials) if (p.special === 'inform') upgradeStyles(p, 1); // V3: better PlayStyles for In-Forms
 
   // V2 real players (appended last and generated without the shared RNG, so every id above is unchanged).
   // Stars play for fictional clubs (they are part of `players`, so Career Mode includes them);
@@ -306,6 +310,8 @@ export function getDB() {
   const real = buildRealPlayers({ POS_WEIGHTS, computeOvr, marketValue, weeklyWage, tierOf });
   for (const p of real.stars) players.push(p);
   for (const p of real.icons) specials.push(p);
+  // V3 real regulars: ordinary gold / rare gold cards at fictional clubs (packs, market, career, national teams).
+  for (const p of real.regulars) players.push(p);
 
   // V2 "Pathfinder" cards: exclusive objective rewards (boosted versions of generated players, private RNG).
   const prng = new Rng('pathfinder-v1');
@@ -326,9 +332,14 @@ export function getDB() {
     specials.push(p);
   }
 
+  // V3 promo campaigns (TOTY, TOTS, Future Stars, Flashback, Birthday, RTTK, Moments) — no shared RNG used.
+  const generated = players.filter((p) => !p.real);
+  const promos = buildPromoCards({ stars: real.stars, icons: real.icons, regulars: real.regulars, generated }, { adjustOvr, computeOvr, tierOf, marketValue });
+  for (const p of promos) specials.push(p);
+
   const all = players.concat(specials);
   const byId = new Map(all.map((p) => [p.id, p]));
-  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars) };
+  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, promos };
   for (const c of _foreign.values()) if (!byId.has(c.id)) byId.set(c.id, c);
   return _db;
 }
@@ -361,7 +372,8 @@ export function sanitizeCard(c) {
   p.wr = Array.isArray(c.wr) && c.wr.length === 2 ? c.wr.map((x) => (['Low', 'Med', 'High'].includes(x) ? x : 'Med')) : ['Med', 'Med'];
   p.height = num(c.height, 150, 210, 180);
   p.rare = !!c.rare;
-  p.special = ['inform', 'hero', 'legend', 'lotg', 'objective'].includes(c.special) ? c.special : null;
+  p.special = ['inform', 'hero', 'legend', 'lotg', 'objective'].includes(c.special) || PROMO_BY_ID[c.special] ? c.special : null;
+  if (PROMO_BY_ID[p.special]) p.promo = p.special;
   if (p.special === 'lotg') p.era = c.era === 'prime' ? 'prime' : 'current';
   p.tier = p.special ? 'gold' : tierOf(p.ovr);
   if (c.real) p.real = true;
@@ -390,8 +402,10 @@ export function registerCard(card) {
 /** Test helper: drop the cached database so the next getDB() regenerates it. */
 export function _resetDB() { _db = null; }
 
-/** All real players (Icons + Stars). */
+/** All real players (Icons + Stars = Legends of the Game). */
 export function realPlayers() { return getDB().real; }
+/** V3: real players with regular (gold / rare gold) cards. */
+export function realRegulars() { return getDB().regulars; }
 
 const _resolvers = [];
 /** Register a resolver for dynamic card ids (e.g. Team of the Week `tw…`). fn(id) -> player | null. */

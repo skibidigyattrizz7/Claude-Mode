@@ -60,6 +60,9 @@ const EXTRA_NATION_ROWS = [
   ['IRN', 'Iran', 'fa', 3, { t: 'h', c: ['#239F40', '#FFFFFF', '#DA0000'] }, ['#FFFFFF', '#DA0000', '#DA0000', '#FFFFFF', '#FFFFFF'], ['#DA0000', '#FFFFFF', '#FFFFFF', '#DA0000', '#DA0000'], '4-2-3-1'],
   ['RUS', 'Russia', 'sl', 3, { t: 'h', c: ['#FFFFFF', '#0039A6', '#D52B1E'] }, ['#D52B1E', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#D52B1E'], ['#FFFFFF', '#0039A6', '#0039A6', '#0039A6', '#FFFFFF'], '4-2-3-1'],
   ['NIR', 'Northern Ireland', 'en', 2, { t: 'cross', c: ['#FFFFFF', '#CE1124'] }, ['#00843D', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#00843D'], ['#FFFFFF', '#00843D', '#00843D', '#00843D', '#FFFFFF'], '4-4-2'],
+  // V3: nations of real regular players
+  ['GEO', 'Georgia', 'sl', 3, { t: 'cross', c: ['#FFFFFF', '#E8112D'] }, ['#FFFFFF', '#E8112D', '#E8112D', '#FFFFFF', '#FFFFFF'], ['#E8112D', '#FFFFFF', '#FFFFFF', '#E8112D', '#E8112D'], '4-2-3-1'],
+  ['SVN', 'Slovenia', 'sl', 3, { t: 'h', c: ['#FFFFFF', '#005DA4', '#ED1C24'] }, ['#FFFFFF', '#005DA4', '#005DA4', '#FFFFFF', '#FFFFFF'], ['#1E7F3C', '#FFFFFF', '#FFFFFF', '#1E7F3C', '#1E7F3C'], '4-4-2'],
 ];
 const toNation = ([code, name, region, str, flag, home, away, formation]) => ({
   code, name, region, str, flag, formation, kit: K(home), away: K(away),
