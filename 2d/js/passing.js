@@ -23,10 +23,11 @@ export function groundPassSpeed(d, va) {
 }
 
 /**
- * Arrival speed we want for a ground pass of length d: firm enough to beat defenders, soft
- * enough to control and not to run on out of play if the receiver misses it.
+ * Arrival speed we want for a ground pass of length d: a firm, zipped pass that reaches the
+ * receiver quickly (never dribbling in), still controllable; through balls keep rolling into
+ * the runner's stride.
  */
-export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(3.5 + d * 0.06, 3.8, 5.5) : clamp(5 + d * 0.12, 5.5, 8.5));
+export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(5.5 + d * 0.08, 6, 8.5) : clamp(7 + d * 0.16, 8, 12.5));
 
 /** Lofted ball: find horizontal speed & vz so the ball lands at distance d after ~T seconds. */
 export function lobParams(d, T) {
@@ -112,7 +113,7 @@ export function laneRisk(a, b, opps, kind = 'ground') {
 const CONES = { ground: 45 * DEG, through: 55 * DEG, lob: 50 * DEG };
 const WIDE_CONE = 80 * DEG;
 
-const RUN_SPEED = 6.8;   // how fast a receiver sprints onto a through ball
+const RUN_SPEED = 7.2;   // how fast a receiver sprints onto a through ball
 
 /**
  * Where to play the ball so the receiver meets it.
@@ -127,19 +128,20 @@ export function leadTarget(from, mate, kind, attackDir = 1, full = false) {
     return kind === 'lob' ? lobTimeFor(d) : groundPassSpeed(d, arriveSpeedFor(d, kind)).t;
   };
   if (kind === 'through') {
+    // Into space ahead of the runner: he sprints on (at least RUN_SPEED) towards goal and the
+    // ball is aimed where he will be when it arrives: lead = runner speed x arrival time.
     const sp = Math.hypot(vx, vy);
     let dir = sp > 1.5 ? norm(vx, vy) : { x: attackDir, y: 0 };
-    // bias the run towards goal so the ball is played in behind, not square
     dir = norm(dir.x + attackDir * 0.6, dir.y);
-    let best = null;
-    for (let s = 3; s <= 14; s += 0.5) {
-      const tgt = clampToPitch({ x: mate.x + dir.x * s, y: mate.y + dir.y * s }, 4, 2.5);
-      const t = ballTime(tgt);
-      const tr = Math.hypot(tgt.x - mate.x, tgt.y - mate.y) / RUN_SPEED + 0.25;
-      best = { target: tgt, t };
-      if (t >= tr) break;          // the runner gets there first: ball rolls into his stride
+    const run = Math.max(RUN_SPEED, sp);
+    let L = 6, tgt = null, t = 0;
+    for (let i = 0; i < 8; i++) {
+      tgt = clampToPitch({ x: mate.x + dir.x * L, y: mate.y + dir.y * L }, 4, 2.5);
+      t = ballTime(tgt);
+      L = clamp(run * Math.max(0, t - 0.25), 4, 28);
     }
-    return best;
+    tgt = clampToPitch({ x: mate.x + dir.x * L, y: mate.y + dir.y * L }, 4, 2.5);
+    return { target: tgt, t: ballTime(tgt) };
   }
   // full lead (assisted passing): the ball meets the runner exactly where he will be
   let tgt = { x: mate.x, y: mate.y }, t = 0;
@@ -159,7 +161,7 @@ export function leadTarget(from, mate, kind, attackDir = 1, full = false) {
  * Returns {mate, target, score} or null if nobody is in the cone.
  */
 export function choosePassTarget(passer, mates, opps, aimDir, kind = 'ground', attackDir = 1, opts = {}) {
-  const maxD = kind === 'lob' ? 60 : kind === 'through' ? 45 : 40;
+  const maxD = kind === 'lob' ? 60 : kind === 'through' ? 50 : 42;
   const alignW = opts.alignW || 1.8;
   const scan = (cone) => {
     let best = null;
@@ -196,14 +198,14 @@ export const PASS_MODES = ['Assisted', 'Semi', 'Manual'];
 export function manualPassSpeed(kind, power) {
   const f = clamp(power, 0, 1);
   if (kind === 'lob') return 8 + 44 * f;                  // metres to the landing spot
-  return (kind === 'through' ? 6 : 5) + 23 * f;          // m/s along the ground
+  return (kind === 'through' ? 10 : 9) + 19 * f;         // m/s along the ground: never a weak roll
 }
 
 /** The hold-time power that would play a perfect pass of length d (inverse of manualPassSpeed). */
 export function idealPassPower(kind, d) {
   if (kind === 'lob') return clamp((d - 8) / 44, 0, 1);
   const v0 = groundPassSpeed(d, arriveSpeedFor(d, kind)).v0;
-  return clamp((v0 - (kind === 'through' ? 6 : 5)) / 23, 0, 1);
+  return clamp((v0 - (kind === 'through' ? 10 : 9)) / 19, 0, 1);
 }
 
 function rotate(v, a, s = 1) {
