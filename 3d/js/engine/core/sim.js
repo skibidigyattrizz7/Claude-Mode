@@ -6,7 +6,7 @@ import { parsePlaystyles, ps } from './playstyles.js';
 import { computeRatings, playerOfMatch } from './ratings.js';
 import * as KO from './knockout.js';
 import * as HSP from './humansp.js';
-import { clamp, lerp, wrapAngle, angleTo, mulberry32 } from './mathx.js';
+import { clamp, lerp, wrapAngle, angleTo, mulberry32, segDist } from './mathx.js';
 import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine } from './physics.js';
 import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
 import { leadPass, rollSpeedFor, solveLob, solveShot, groundVel } from './passing.js';
@@ -63,6 +63,7 @@ export class MatchSim {
     this.shootout = null;
     this.breakNext = 'half';
     this.switchT = [-9, -9];
+    this.switchAuto = [false, false];
     this.recvLock = [null, null];
     this.pendingSwitch = [null, null];
     this.pendingShot = [null, null];
@@ -380,18 +381,65 @@ export class MatchSim {
     return { x, z, l: Math.min(1, l) };
   }
 
+  _setCtrl(team, idx, auto = false) {
+    if (this.ctrl[team] === idx) return;
+    this.ctrl[team] = idx;
+    this.switchT[team] = this.t;
+    this.switchAuto[team] = auto;
+    this.holds[team].armed = false;
+  }
+
+  // human keeper control: holding the keeper key while defending, or (manualKeeper) a shot coming in
+  _keeperMode(team, inp) {
+    const b = this.ball, g = this.gk(team);
+    if (!g || g.sentOff) return false;
+    const o = this.owner();
+    if (inp.keeper && (!o || o.team !== team)) return true;
+    if (!this.gp[team].manualKeeper) return false;
+    const sh = this.shotTracker.shot;
+    if (sh && sh.team !== team && b.owner < 0 && this.t - sh.t < 1.6 && -this.dir[team] * b.v.x > 3) return true;
+    const cur = this.players[this.ctrl[team]];
+    return !!(cur && cur.isGK && g.act && g.act.type === 'dive');
+  }
+
+  _assistActive(team) {
+    const win = { none: 0, low: 0.35, high: 0.85 }[this.gp[team].autoSwitchAssist] || 0;
+    return this.t - this.switchT[team] < win;
+  }
+
+  // where an AI brain would take the controlled player right now (used by switch assist)
+  _assistTarget(p) {
+    const o = this.owner(), team = p.team;
+    if (o && o.team !== team && !this.ball.inHands) {
+      const gx = this.ownGoalX(team) - o.x, gz = -o.z, gl = Math.hypot(gx, gz) || 1;
+      return { x: o.x + o.vx * 0.3 + (gx / gl) * 1.6, z: o.z + o.vz * 0.3 + (gz / gl) * 1.6 };
+    }
+    if (this.ball.owner < 0) return this.intercept(p);
+    return null;
+  }
+
   _human(team, dt, inp) {
     const t = this.t, b = this.ball;
     const prev = this.prevIn[team] || EMPTY_IN;
     const H = this.holds[team];
+    const gp = this.gp[team];
     const pressed = (k) => !!inp[k] && !prev[k];
     const released = (k) => !inp[k] && !!prev[k];
     for (const k of HOLD_KEYS) if (inp[k]) H[k] = (H[k] || 0) + dt;
+    if (pressed('shoot') || pressed('finesse')) { (H.taps || (H.taps = [])).push(t); if (H.taps.length > 6) H.taps.shift(); }
     let p = this.players[this.ctrl[team]];
-    if (!p || p.sentOff || p.team !== team) { p = this.nearestToBall(team); this.ctrl[team] = p.idx; }
+    if (!p || p.sentOff || p.team !== team) { p = this.nearestToBall(team); this._setCtrl(team, p.idx); }
+    const keeperMode = this._keeperMode(team, inp);
     // a controlled keeper without the ball hands control back to an outfielder
-    if (p.isGK && b.owner !== p.idx && !(b.owner < 0 && b.intended === p.idx)) {
-      p = this.nearestToBall(team, p.idx); this.ctrl[team] = p.idx;
+    if (p.isGK && b.owner !== p.idx && !(b.owner < 0 && b.intended === p.idx) && !keeperMode) {
+      p = this.nearestToBall(team, p.idx); this._setCtrl(team, p.idx);
+    }
+    if (keeperMode && !p.isGK && b.owner !== p.idx) { p = this.gk(team); this._setCtrl(team, p.idx); }
+    // pending switch-on-pass ('release' when the ball is halfway)
+    const ps0 = this.pendingSwitch[team];
+    if (ps0 && t >= ps0.at) {
+      this.pendingSwitch[team] = null;
+      if (b.owner < 0 && b.intended === ps0.idx) { this._setCtrl(team, ps0.idx); p = this.players[ps0.idx]; }
     }
     const mv = this._worldMove(inp);
     const hasMove = mv.l > 0.2;
@@ -401,42 +449,127 @@ export class MatchSim {
     else if (hasMove) aim = { x: mv.x / mv.l, z: mv.z / mv.l };
     else aim = faceVec(p);
     const own = b.owner === p.idx;
-    if (pressed('switchP') && !own) {
+    const lock = this.recvLock[team];
+    const lockOn = lock && t < lock.until && b.owner < 0 && b.intended === lock.idx;
+    if (pressed('switchP') && !own && !lockOn && !keeperMode) {
       this._switch(team, hasMove ? mv : null);
       p = this.players[this.ctrl[team]];
     }
     const locked = p.act && ['slide', 'dive', 'fall', 'down', 'tackle', 'throw', 'sentoff'].includes(p.act.type);
+    const opp = this.owner();
+    const oppHas = !!opp && opp.team !== team && !b.inHands;
+    const jockey = !!inp.jockey && !own && oppHas && !p.isGK;
+    const ctrlSprint = !!inp.jockey && own && !!inp.sprint && !b.inHands;
+    const shield = !!inp.jockey && own && !inp.sprint && !b.inHands && !p.isGK;
+    const style = gp.gameplayStyle === 'authentic' ? 0.93 : 1;
     if (!locked) {
-      const smax = p.vmax * this.stamFactor(p) * (inp.sprint ? 1 : 0.7) * (own ? this.dribbleFactor(p, inp.sprint) : 1);
-      if (hasMove) { p.des.x = mv.x * smax; p.des.z = mv.z * smax; }
-      else if (!own && b.owner < 0 && (b.intended === p.idx)) {
+      let spMul = (inp.sprint ? 1 : 0.7) * style;
+      if (own) spMul *= this.dribbleFactor(p, inp.sprint);
+      if (ctrlSprint) spMul = 0.86 * this.dribbleFactor(p, false);
+      if (jockey) spMul = 0.56 * (1 + ps(p, 'jockey') * 0.12);
+      if (shield) spMul = 0.42;
+      const smax = p.vmax * this.stamFactor(p) * spMul;
+      const assist = !own && !jockey && this._assistActive(team) ? this._assistTarget(p) : null;
+      if (jockey && gp.jockeyAssist) {
+        // contain: stay goal-side of the carrier, mirroring him; the stick adds side-steps
+        const gx = this.ownGoalX(team) - opp.x, gz = -opp.z, gl = Math.hypot(gx, gz) || 1;
+        const tx = opp.x + opp.vx * 0.3 + (gx / gl) * 1.8, tz = opp.z + opp.vz * 0.3 + (gz / gl) * 1.8;
+        let dx = (tx - p.x) * 3, dz = (tz - p.z) * 3;
+        if (hasMove) { dx += mv.x * smax * 0.8; dz += mv.z * smax * 0.8; }
+        const l = Math.hypot(dx, dz);
+        if (l > smax) { dx *= smax / l; dz *= smax / l; }
+        p.des.x = dx; p.des.z = dz;
+      } else if (hasMove) {
+        let mx = mv.x, mz = mv.z;
+        if (assist && gp.autoSwitchAssist === 'high') {
+          const ax = assist.x - p.x, az = assist.z - p.z, a2 = Math.hypot(ax, az) || 1;
+          mx = mx * 0.65 + (ax / a2) * 0.35; mz = mz * 0.65 + (az / a2) * 0.35;
+          const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l;
+        }
+        p.des.x = mx * smax; p.des.z = mz * smax;
+      } else if (!own && b.owner < 0 && b.intended === p.idx) {
         AI.goTo(this, p, this.intercept(p), 'run', 0);
+      } else if (assist) {
+        AI.goTo(this, p, assist, 'run', 0.3);
       } else { p.des.x = 0; p.des.z = 0; }
-      p.sprint = !!inp.sprint && hasMove;
+      p.sprint = !!inp.sprint && hasMove && !jockey && !shield && !ctrlSprint;
       p.faceBall = own ? null : Math.atan2(b.p.z - p.z, b.p.x - p.x);
+      if (jockey) {
+        p.jockeyT = t;
+        if (gp.jockeyAssist) { p.faceHold = Math.atan2(opp.z - p.z, opp.x - p.x); p.faceHoldT = t + 0.05; }
+      }
+      if (ctrlSprint) p.ctrlSprintT = t;
+      if (shield) {
+        p.shieldT = t;
+        let near = null, nd = 3.5;
+        for (const o of this.teamList[1 - team]) { const dd = Math.hypot(o.x - p.x, o.z - p.z); if (dd < nd) { nd = dd; near = o; } }
+        if (near && !hasMove) { p.faceHold = Math.atan2(p.z - near.z, p.x - near.x); p.faceHoldT = t + 0.05; }
+      }
     }
+    // human keeper: dive with the tackle key
+    if (p.isGK && !own && pressed('tackle') && !locked) { HSP.humanDive(this, p, mv, inp); return this._humanEnd(team, H, inp, aim); }
     if (own) {
       const pw = (k, full = 1) => clamp((H[k] || 0) / full, 0.05, 1);
+      const pend = this.pendingShot[team];
+      // shot modifiers collected while charging
+      if (inp.shoot) {
+        const m = H.mods || (H.mods = {});
+        if (inp.finesse) m.fin = true;
+        if (inp.switchP) m.chip = true;
+        if (inp.jockey) m.triv = true;
+      } else if (!prev.shoot) H.mods = null;
+      if (inp.pass && inp.jockey) H.flair = true;
       if (b.inHands) {
         p.des.x *= 0.5; p.des.z *= 0.5;
-        if (t - p.gainT > 6) { p.holdStart = t - 10; AI.gkDistribute(this, p); return; }
+        if (t - p.gainT > 6) { p.holdStart = t - 10; AI.gkDistribute(this, p); return this._humanEnd(team, H, inp, aim); }
         if (released('pass') || released('through')) this._humanKick(p, 'gkthrow', aim, pw('pass', 0.9));
         else if (released('lob') || released('shoot') || released('finesse')) this._humanKick(p, 'punt', aim, pw(released('lob') ? 'lob' : 'shoot'));
+      } else if (pend) {
+        p.windup = 1;
+        if (t >= pend.tc) { this.pendingShot[team] = null; this._strikeShot(p, pend); }
       } else if (!locked) {
-        if (released('pass')) this._humanKick(p, 'ground', aim, pw('pass', 0.9));
+        const tfb = t < this.tfBlock[team];
+        if (released('pass')) { const fl = H.flair || inp.jockey; H.flair = false; this._humanKick(p, 'ground', aim, pw('pass', 0.9), { flair: fl }); }
         else if (released('through')) this._humanKick(p, 'through', aim, pw('through', 0.9));
         else if (released('lob')) this._humanKick(p, this._isCrossZone(p) ? 'cross' : 'lob', aim, pw('lob', 1));
-        else if (released('shoot')) this._humanKick(p, 'shot', aim, pw('shoot', 1));
-        else if (released('finesse')) this._humanKick(p, 'finesse', aim, pw('finesse', 1));
-        else if (pressed('skill')) this.doSkill(p, hasMove ? mv : null);
-        p.windup = inp.shoot ? pw('shoot') : inp.finesse ? pw('finesse') : 0;
+        else if (released('shoot') && !tfb) {
+          const m = H.mods || {};
+          H.mods = null;
+          if (inp.finesse || m.fin) H.skipFin = true;
+          const power = pw('shoot', 1);
+          const kind = m.chip ? 'chip' : m.fin ? (power < 0.45 ? 'lowdriven' : 'powershot') : m.triv ? 'trivela' : 'shot';
+          this._shootRelease(p, kind, aim, kind === 'lowdriven' ? 0.78 : power);
+        } else if (released('finesse') && !tfb) {
+          if (H.skipFin || inp.shoot) H.skipFin = false;
+          else this._shootRelease(p, 'finesse', aim, pw('finesse', 1));
+        } else if (pressed('skill')) this.doSkill(p, hasMove ? mv : null);
+        p.windup = inp.shoot ? pw('shoot') : inp.finesse && !inp.shoot ? pw('finesse') : 0;
+        // arcade auto-shot: a clear sight of goal close in
+        if (gp.autoShots && !inp.shoot && !inp.pass && this._autoShotChance(p)) this._shootRelease(p, 'shot', this._goalAim(p), 0.62);
       }
     } else {
       p.windup = 0;
+      this.pendingShot[team] = null;
+      H.mods = null;
       for (const k of KICK_KEYS) {
-        if (released(k)) this.buffer[team] = { k, power: clamp((H[k] || 0) / 1, 0.1, 1), aim, until: t + 0.9, idx: p.idx };
+        if (!released(k)) continue;
+        if ((k === 'shoot' || k === 'finesse') && t < this.tfBlock[team]) continue;
+        this.buffer[team] = { k, power: clamp((H[k] || 0) / 1, 0.1, 1), aim, until: t + 0.9, idx: p.idx, tRel: t };
       }
-      if (!locked && !p.act) {
+      // late timed-finishing tap (just after contact): red, a slight deviation
+      const late = this.tfLate[team];
+      if (late && (pressed('shoot') || pressed('finesse'))) {
+        this.tfLate[team] = null;
+        if (t - late.tc < 0.12 && b.owner < 0 && b.kicker === late.idx) {
+          const g = this.rng.gauss, sp = Math.hypot(b.v.x, b.v.z) || 1, yaw = g() * 0.05;
+          const c = Math.cos(yaw), sn = Math.sin(yaw);
+          const vx = b.v.x * c - b.v.z * sn, vz = b.v.x * sn + b.v.z * c;
+          b.v.x = vx; b.v.z = vz; b.v.y += g() * 0.05 * sp;
+          this.path = null;
+          this.fxPush('timed', { pi: late.idx, q: 2 });
+        }
+      }
+      if (!locked && !p.act && !p.isGK) {
         if (pressed('tackle')) {
           if (t - (H.lastTap || -9) < 0.3) { this.startSlide(p); H.armed = false; }
           else H.armed = true;
@@ -444,36 +577,152 @@ export class MatchSim {
         }
         if (H.armed && inp.tackle && (H.tackle || 0) >= 0.22) { H.armed = false; this.startSlide(p); }
         if (H.armed && released('tackle')) { H.armed = false; this.startTackle(p); }
+        // auto-tackle: poke when the ball comes within reach while defending
+        if (gp.autoTackle && oppHas && !H.armed && t > (H.autoTk || 0) && Math.hypot(b.p.x - p.x, b.p.z - p.z) < 1.05) {
+          H.autoTk = t + 0.45;
+          if (this.rng() < 0.55) this.startTackle(p);
+        }
       } else if (released('tackle')) H.armed = false;
     }
+    return this._humanEnd(team, H, inp, aim);
+  }
+
+  _humanEnd(team, H, inp, aim) {
     for (const k of HOLD_KEYS) if (!inp[k]) H[k] = 0;
     this.aimInfo[team] = { x: aim.x, z: aim.z };
+  }
+
+  _goalAim(p) {
+    const gx = this.goalX(p.team), dx = gx - p.x, dz = -p.z, l = Math.hypot(dx, dz) || 1;
+    return { x: dx / l, z: dz / l };
+  }
+
+  _autoShotChance(p) {
+    const X = this.X(p.team, p.x);
+    if (X < 88 || Math.abs(p.z) > 12 || this.t - p.gainT > 0.6) return false;
+    const gx = this.goalX(p.team);
+    for (const o of this.teamList[1 - p.team]) {
+      if (o.isGK) continue;
+      const sd = segDist(o.x, o.z, p.x, p.z, gx, 0);
+      if (sd.t > 0.05 && sd.d < 1.1) return false;
+    }
+    return true;
+  }
+
+  // shoot key released: strike now, or (timed finishing) after a short backswing
+  _shootRelease(p, kind, aim, power) {
+    const team = p.team, t = this.t;
+    const back = kind === 'powershot' ? 0.42 : 0.24;
+    if (this.gp[team].timedFinishing || kind === 'powershot') {
+      this.pendingShot[team] = { kind, aim, power, tRel: t, tc: t + back, idx: p.idx };
+      this.tfBlock[team] = t + back + 0.35;
+      p.windup = 1;
+      return;
+    }
+    this._humanKick(p, kind, aim, power);
+  }
+
+  _strikeShot(p, pend) {
+    if (this.ball.owner !== p.idx) return;
+    const q = this.gp[p.team].timedFinishing ? this._timedQuality(p.team, pend.tRel, this.t) : -1;
+    this._humanKick(p, pend.kind, pend.aim, pend.power, { timed: q });
+  }
+
+  // timed finishing: a second tap within ~0.12 s before contact = green (0), slightly early =
+  // amber (1), mashed early = red (2), no tap = -1 (then a late tap may still turn it red)
+  _timedQuality(team, tRel, tc) {
+    const taps = (this.holds[team].taps || []).filter((x) => x > tRel + 1e-6 && x <= tc + 1e-6);
+    let q = -1;
+    if (taps.length) {
+      const last = taps[taps.length - 1];
+      q = tc - last <= 0.12 ? 0 : tc - last <= 0.2 ? 1 : 2;
+    }
+    this.holds[team].taps = [];
+    if (q < 0) this.tfLate[team] = { tc, idx: this.ctrl[team] };
+    return q;
   }
 
   _isCrossZone(p) {
     return this.X(p.team, p.x) > 76 && Math.abs(p.z) > 12;
   }
 
-  _switch(team, dir) {
+  // who the switch key would select (also drawn as the next-player indicator)
+  _switchCandidate(team, dir = null) {
     const cur = this.players[this.ctrl[team]];
+    if (!cur) return -1;
     const b = this.ball;
     const tgt = b.owner < 0 && this.path ? this.intercept(cur) : { x: b.p.x, z: b.p.z };
     let best = null, bs = 1e9;
     for (const m of this.teamList[team]) {
       if (m === cur || m.isGK) continue;
       let s = Math.hypot(m.x - tgt.x, m.z - tgt.z);
+      // prefer goal-side players when defending
+      if (b.owner >= 0 && this.players[b.owner].team !== team && this.X(team, m.x) < this.X(team, b.p.x)) s -= 3;
       if (dir) {
         const dx = m.x - cur.x, dz = m.z - cur.z, dl = Math.hypot(dx, dz) || 1;
         s -= 12 * ((dx * dir.x + dz * dir.z) / dl / (dir.l || 1));
       }
       if (s < bs) { bs = s; best = m; }
     }
-    if (best) { this.ctrl[team] = best.idx; this.holds[team].armed = false; }
+    return best ? best.idx : -1;
   }
 
-  _humanKick(p, kind, aim, power) {
-    const plan = this._plan(p, kind, { dir: aim, power, human: true });
-    if (plan) this._execute(p, plan);
+  _switch(team, dir) {
+    const i = this._switchCandidate(team, dir);
+    if (i >= 0) this._setCtrl(team, i);
+  }
+
+  // automatic switching (gameplay setting autoSwitch: auto | airballs | manual)
+  _autoSwitch(team) {
+    const g = this.gp[team], t = this.t, b = this.ball;
+    if (g.autoSwitch === 'manual' || this.phase !== PHASE.PLAY) return;
+    if (t - this.switchT[team] < 0.9) return;
+    const lock = this.recvLock[team];
+    if (lock && t < lock.until) return;
+    const cur = this.players[this.ctrl[team]];
+    if (!cur || cur.isGK) return;
+    if (b.owner >= 0) {
+      const o = this.players[b.owner];
+      if (o.team === team || g.autoSwitch !== 'auto') return;
+      const dc = Math.hypot(cur.x - o.x, cur.z - o.z);
+      if (dc < 12) return;
+      const n = this._switchCandidate(team);
+      if (n >= 0) {
+        const m = this.players[n];
+        if (Math.hypot(m.x - o.x, m.z - o.z) < dc - 6) this._setCtrl(team, n, true);
+      }
+      return;
+    }
+    if (b.intended >= 0 && this.players[b.intended].team === team) return;
+    let air = b.p.y > 1.3;
+    if (!air && this.path) for (const s of this.path) { if (s.t > 1.2) break; if (s.y > 2.2) { air = true; break; } }
+    if (g.autoSwitch === 'airballs' && !air) return;
+    const info = this.info[team];
+    if (info.chaser < 0 || info.chaser === cur.idx) return;
+    const ch = this.players[info.chaser];
+    if (ch.isGK || !ch.ic) return;
+    const ic = cur.ic || this.intercept(cur);
+    if (ch.ic.t < ic.t - 0.6) this._setCtrl(team, ch.idx, true);
+  }
+
+  _humanKick(p, kind, aim, power, extra = {}) {
+    let plan;
+    switch (kind) {
+      case 'ground': plan = humanGround(this, p, aim, power, 'ground'); break;
+      case 'gkthrow': plan = humanGround(this, p, aim, power, 'gkthrow'); break;
+      case 'through': plan = humanThrough(this, p, aim, power); break;
+      case 'lob': case 'cross': plan = humanLob(this, p, aim, power, kind); break;
+      case 'shot': case 'finesse': case 'lowdriven': case 'powershot': case 'trivela': case 'chip':
+        plan = humanShot(this, p, kind, aim, power); break;
+      default: plan = this._plan(p, kind, { dir: aim, power, human: true });
+    }
+    if (!plan) return;
+    if (extra.flair && plan.info.pass) plan.info.flair = true;
+    if (extra.timed != null && extra.timed >= 0) {
+      plan.info.timed = extra.timed;
+      this.fxPush('timed', { pi: p.idx, q: extra.timed });
+    }
+    this._execute(p, plan);
   }
 
   // ------------------------------------------------------------------ actions

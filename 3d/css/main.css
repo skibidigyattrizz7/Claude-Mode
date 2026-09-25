@@ -422,3 +422,87 @@ button.picker-card:hover { border-color: var(--acc); transform: translateY(-2px)
   background: repeating-linear-gradient(0deg, #0d5c2e 0 60px, #0b5229 60px 120px); color: #fff; }
 .stub-badge { justify-self: center; padding: 4px 10px; border-radius: 999px; background: var(--warn); color: #000; font: 900 12px var(--display); letter-spacing: .2em; }
 .stub-clock { font: 900 48px var(--display); }
+
+/* ------------------------------------------------ online status pill (main menu) */
+.online-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line2); background: rgba(5,8,16,.6); color: var(--mut); font: 800 12px var(--display); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.online-pill:hover { border-color: var(--acc3); color: var(--txt); }
+.online-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
+.online-pill[data-state="on"] { color: var(--acc); border-color: rgba(25,245,164,.45); }
+.online-pill[data-state="on"] .dot { background: var(--acc); box-shadow: 0 0 0 0 rgba(25,245,164,.6); animation: ping 1.6s infinite; }
+.online-pill[data-state="off"] .dot { background: var(--warn); }
+@media (max-width: 520px) { .online-pill { order: 3; margin-left: auto; min-height: 30px; padding: 4px 10px; font-size: 11px; } }
+
+/* ------------------------------------------------ online: profile bar, quick search, code card */
+.net-profile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; margin-bottom: 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); min-height: 52px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px; border-radius: 999px; font: 800 12px var(--display); letter-spacing: .12em; text-transform: uppercase; border: 1px solid var(--line2); color: var(--mut); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.pill--on { color: var(--acc); border-color: rgba(25,245,164,.45); } .pill--on .dot { background: var(--acc); }
+.pill--off { color: var(--warn); border-color: rgba(255,176,32,.45); } .pill--off .dot { background: var(--warn); }
+.pill--wait .dot { background: var(--acc3); animation: ping 1.6s infinite; }
+.np-name { font: 900 18px var(--display); font-style: italic; text-transform: uppercase; }
+.np-stat { display: inline-flex; flex-direction: column; line-height: 1.1; }
+.np-stat small { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--mut); }
+.np-stat b { font: 900 17px var(--display); }
+#np-coins b { color: var(--gold); }
+.online-card .seg, .online-card .field { width: 100%; }
+.quick-card { border-color: rgba(25,245,164,.35); background: radial-gradient(120% 80% at 0% 0%, rgba(25,245,164,.12), transparent 60%), var(--panel); }
+.quick-team { width: 100%; }
+.quick-team .picker-card { padding: 12px 10px; }
+.quick-team .picker-shirt svg { width: 64px; height: 64px; }
+.quick-team .picker-name { font-size: 20px; }
+.quick-team .picker-lines { display: none; }
+.quick-ut { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line2); background: radial-gradient(100% 90% at 0% 0%, color-mix(in srgb, var(--kit1, #333) 30%, transparent), transparent 70%), rgba(5,8,16,.5); }
+.quick-ut.empty { flex-direction: column; align-items: flex-start; gap: 2px; border-style: dashed; }
+.quick-ut-name { font: 900 20px var(--display); font-style: italic; text-transform: uppercase; }
+.quick-note { min-height: 1.2em; margin: 0; }
+.quick-note.warn, .hint.warn { color: var(--warn); }
+.online-card .btn--xl { align-self: stretch; }
+.or-line { display: flex; align-items: center; gap: 10px; width: 100%; color: var(--dim); font: 800 11px var(--display); letter-spacing: .16em; text-transform: uppercase; }
+.or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--line2); }
+.loading--sm { padding: 18px 8px; }
+
+/* searching */
+.searching { gap: 8px; padding: 26px 18px; }
+.search-team { margin: 0; color: #c3cee8; }
+.search-clock { display: flex; flex-direction: column; align-items: center; margin: 6px 0 2px; }
+.search-clock small { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--mut); }
+.search-time { font: 900 46px/1 var(--display); color: var(--acc); font-variant-numeric: tabular-nums; }
+.search-status { min-height: 2.6em; margin: 4px 0 0; color: var(--mut); max-width: 420px; }
+.radar { position: relative; width: 120px; height: 120px; display: grid; place-items: center; margin-bottom: 6px; }
+.radar i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(25,245,164,.5); animation: radar 2.4s ease-out infinite; opacity: 0; }
+.radar i:nth-child(2) { animation-delay: .8s; } .radar i:nth-child(3) { animation-delay: 1.6s; }
+.radar svg { position: relative; filter: drop-shadow(0 6px 12px rgba(0,0,0,.5)); }
+@keyframes radar { from { transform: scale(.35); opacity: .9; } to { transform: scale(1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .radar i { animation: none; opacity: .4; } }
+
+/* reward line after online matches */
+.reward { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 18px; min-height: 28px; margin: 0 auto 12px; max-width: 760px; padding: 8px 14px; border-radius: 12px; background: rgba(245,197,66,.08); border: 1px solid rgba(245,197,66,.3); }
+.reward:empty { display: none; }
+.reward-coins b { color: var(--gold); font: 900 22px var(--display); }
+.reward-rating b { font: 900 18px var(--display); }
+.reward-rating.up { color: var(--ok); } .reward-rating.down { color: #ff8da2; }
+.reward-div, .reward-bal { color: var(--mut); }
+.ended .reward { margin-top: 10px; }
+
+/* ------------------------------------------------ settings tabs + gameplay */
+.settings-shell { max-width: 820px; margin: 0 auto; display: grid; gap: 16px; }
+.tabs { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(5,8,16,.6); border: 1px solid var(--line); }
+.tab { flex: 1; min-height: 44px; min-width: 0; border: 0; border-radius: 10px; background: transparent; color: var(--mut); cursor: pointer; font: 900 15px var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.tab:hover { color: var(--txt); background: rgba(255,255,255,.05); }
+.tab.on { background: var(--panel2); color: var(--txt); box-shadow: inset 0 -3px 0 var(--acc); }
+.tabs--sm .tab { min-height: 38px; font-size: 13px; }
+.settings-shell .settings { max-width: none; }
+.gp-wrap { display: grid; gap: 14px; }
+.gp-who { display: grid; gap: 6px; }
+.gp-who .hint { margin: 0; }
+.gp-group { display: grid; gap: 16px; }
+.gp-group h3 { margin-bottom: 0; color: var(--acc); }
+.gp-field { display: grid; gap: 6px; }
+.gp-desc { margin: 0; color: var(--mut); font-size: 13px; line-height: 1.4; }
+@media (max-width: 520px) {
+  .net-profile { gap: 6px 14px; }
+  .np-name { flex-basis: 100%; }
+  .search-time { font-size: 40px; }
+  .gp-group { padding: 14px; }
+  .seg button { font-size: 12.5px; padding: 6px 3px; }
+}
