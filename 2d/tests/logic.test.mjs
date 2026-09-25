@@ -131,7 +131,7 @@ test('pass target selection picks the teammate in the aim direction', () => {
 test('pass avoids a blocked lane when an alternative exists', () => {
   const passer = { x: 30, y: 27 };
   const a = { x: 45, y: 27, vx: 0, vy: 0 };
-  const b = { x: 44, y: 33, vx: 0, vy: 0 };
+  const b = { x: 43, y: 37, vx: 0, vy: 0 };
   const opp = { x: 38, y: 27 };
   const res = choosePassTarget(passer, [a, b], [opp], { x: 1, y: 0.2 });
   assert(res && res.mate === b, 'should avoid interception');

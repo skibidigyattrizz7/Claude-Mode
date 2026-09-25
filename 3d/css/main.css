@@ -352,8 +352,10 @@ button.picker-card:hover { border-color: var(--acc); transform: translateY(-2px)
 .slabel { text-align: center; font: 800 11px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--mut); margin-bottom: 4px; }
 .sbar { display: flex; gap: 3px; height: 8px; }
 .sbar i { display: block; height: 100%; border-radius: 4px; animation: grow .9s cubic-bezier(.2,.8,.2,1) both; }
-.sbar i.l { background: var(--c1); box-shadow: 0 0 10px -2px var(--c1); } .sbar i.r { background: var(--c2); box-shadow: 0 0 10px -2px var(--c2); }
-@keyframes grow { from { width: 0 !important; } }
+.sbar i.l { background: var(--c1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25), 0 0 10px -2px var(--c1); }
+.sbar i.r { background: var(--c2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25), 0 0 10px -2px var(--c2); }
+@keyframes grow { from { transform: scaleX(0); } }
+.sbar i.l { transform-origin: 100% 50%; } .sbar i.r { transform-origin: 0 50%; }
 .potm-card { --kit1: #333; position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 12px; border-radius: 14px; overflow: hidden;
   background: radial-gradient(100% 70% at 50% 0%, color-mix(in srgb, var(--kit1) 40%, transparent), transparent), linear-gradient(160deg, #2b2208, #120e04); border: 1px solid rgba(245,197,66,.5); }
 .potm-rating { position: absolute; top: 10px; right: 12px; font: 900 28px var(--display); color: var(--gold); }

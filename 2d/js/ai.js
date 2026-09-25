@@ -276,7 +276,7 @@ export class TeamAI {
         const gain = ((plan.target.x - p.x) * dir) / 22;
         const space = Math.min(...opps.map((o) => dist(o, plan.target)));
         const tGoal = dist(plan.target, gc);
-        let s = 0.45 + gain * 0.8 + clamp(space / 7, 0, 1) * 0.45 - risk * 1.5 - (tGoal < 20 ? -0.2 : 0) - (kind === 'lob' ? 0.2 : 0);
+        let s = 0.45 + gain * 0.8 + clamp(space / 7, 0, 1) * 0.45 - risk * 1.5 - (tGoal < 20 ? -0.2 : 0) - (kind === 'lob' ? 0.45 : 0);
         s += pressure * 0.25;
         if (gain < -0.3) s -= 0.2;
         options.push({ kind: 'pass', pass: kind, mate, score: s + noise() });

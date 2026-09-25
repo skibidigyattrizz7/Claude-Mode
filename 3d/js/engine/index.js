@@ -40,6 +40,7 @@ export function createMatch(container, opts = {}) {
   const quality = opts.quality || (touch ? 'med' : 'high');
   const local = SIDES.map((s) => (controllers[s] === 'p1' || controllers[s] === 'p2' ? controllers[s] : null));
   const localCount = local.filter(Boolean).length;
+  const timeScale = Math.max(1, Math.min(20, +opts.timeScale || 1)); // dev/testing only
 
   // ---------------------------------------------------------------- DOM
   let restorePos = null;
@@ -303,11 +304,12 @@ export function createMatch(container, opts = {}) {
     let view;
     if (sim) {
       if (!paused && !ended) {
-        acc += dt;
+        acc += dt * timeScale;
         const ins = [sideInput(0, canon), sideInput(1, canon)];
         let n = 0;
-        while (acc >= DT && n < 14) { sim.step(DT, ins); acc -= DT; n++; }
-        if (n >= 14) acc = 0;
+        const maxSteps = 14 * timeScale;
+        while (acc >= DT && n < maxSteps) { sim.step(DT, ins); acc -= DT; n++; }
+        if (n >= maxSteps) acc = 0;
         for (const e of sim.drainEvents()) safe(onEvent, e);
       }
       view = viewFromSim(sim);

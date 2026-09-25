@@ -63,6 +63,14 @@ const CSS = `
 .ps3d-btns button.big{background:rgba(200,16,46,.6)}.ps3d-btns button.wide{grid-column:span 3;width:100%;border-radius:32px;height:44px}
 .ps3d-btns button.on{background:rgba(63,169,255,.8)}
 .ps3d-tpause{position:absolute;right:16px;top:14px;width:44px;height:40px;border-radius:6px;border:0;background:rgba(10,16,34,.7);color:#fff;font-weight:900;pointer-events:auto}
+
+.ps3d-hud.compact .ps3d-radar{transform:translateX(-50%) scale(.62);transform-origin:50% 100%}
+.ps3d-hud.compact .ps3d-hint{bottom:100px;font-size:11px;padding:5px 10px}
+.ps3d-hud.compact .ps3d-panel{transform:scale(.8);transform-origin:left bottom;min-width:170px}
+.ps3d-hud.compact .ps3d-panel.p2{transform-origin:right bottom}
+.ps3d-hud.compact .ps3d-sb{transform:scale(.8);transform-origin:left top}
+.ps3d-hud.compact .ps3d-banner .big{font-size:40px}
+.ps3d-hud.compact .ps3d-stats{transform:translate(-50%,-50%) scale(.8)}
 @media (max-width:700px){.ps3d-banner .big{font-size:40px}.ps3d-sb{transform:scale(.85);transform-origin:left top}.ps3d-hint{bottom:210px;font-size:12px}}
 `;
 
@@ -171,6 +179,8 @@ export class Hud {
 
   update(view, ctx) {
     const dt = ctx.dt;
+    const compact = this.root.clientHeight < 560 || this.root.clientWidth < 760;
+    if (compact !== this.compact) { this.compact = compact; this.el.classList.toggle('compact', compact); }
     if (!view) return;
     // scoreboard
     const sc = `${view.sc[0]} - ${view.sc[1]}`;

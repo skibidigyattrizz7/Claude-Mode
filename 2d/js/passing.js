@@ -26,7 +26,7 @@ export function groundPassSpeed(d, va) {
  * Arrival speed we want for a ground pass of length d: firm enough to beat defenders, soft
  * enough to control and not to run on out of play if the receiver misses it.
  */
-export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(3 + d * 0.05, 3.2, 4.5) : clamp(3 + d * 0.1, 3.5, 6.5));
+export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(3.5 + d * 0.06, 3.8, 5.5) : clamp(5 + d * 0.12, 5.5, 8.5));
 
 /** Lofted ball: find horizontal speed & vz so the ball lands at distance d after ~T seconds. */
 export function lobParams(d, T) {
@@ -54,31 +54,57 @@ function lobLanding(vh, vz) {
   return { d: b.x, t };
 }
 
-export const lobTimeFor = (d) => clamp(0.75 + d / 30, 0.9, 2.2);
+export const lobTimeFor = (d) => clamp(0.95 + d / 24, 1.25, 2.5);
 
 /** Keep a target point inside the pitch with a margin. */
 export function clampToPitch(p, mx = 1.2, my = 1.2) {
   return { x: clamp(p.x, mx, PITCH.L - mx), y: clamp(p.y, my, PITCH.W - my) };
 }
 
+/** Time for a rolling ball launched at v0 to cover distance s (Infinity if it stops short). */
+export function rollTimeTo(v0, s) {
+  const K = PHYS.ROLL_K;
+  const tStop = Math.log((v0 + CK) / CK) / K;
+  const distAt = (t) => ((v0 + CK) / K) * (1 - Math.exp(-K * t)) - CK * t;
+  if (distAt(tStop) < s) return Infinity;
+  let lo = 0, hi = tStop;
+  for (let i = 0; i < 22; i++) { const mid = (lo + hi) / 2; if (distAt(mid) < s) lo = mid; else hi = mid; }
+  return hi;
+}
+
+const OPP_RUN = 6.0, OPP_REACT = 0.45, OPP_REACH = 0.7;
+
 /**
- * Risk (0..1) that an opponent intercepts a pass from `a` to `b`.
- * kind 'lob' only considers opponents near the landing spot.
+ * Risk (0..1) that an opponent intercepts a pass from `a` to `b`, from a race between the
+ * ball (real rolling times) and each opponent (reaction + running) to points along the lane.
+ * kind 'lob' only considers opponents who can reach the landing spot in time.
  */
 export function laneRisk(a, b, opps, kind = 'ground') {
+  const D = Math.max(0.5, Math.hypot(b.x - a.x, b.y - a.y));
   let risk = 0;
+  if (kind === 'lob') {
+    const T = lobTimeFor(D);
+    for (const o of opps) {
+      if (o.sentOff) continue;
+      const to = Math.max(0, Math.hypot(o.x - b.x, o.y - b.y) - 1.2) / OPP_RUN + OPP_REACT;
+      risk = Math.max(risk, clamp(0.5 + (T - to) / 0.8, 0, 1) * 0.85);
+    }
+    return risk;
+  }
+  const v0 = groundPassSpeed(D, arriveSpeedFor(D, kind)).v0;
+  const N = Math.max(4, Math.min(12, Math.ceil(D / 2.5)));
+  const ts = [];
+  for (let i = 1; i <= N; i++) ts.push(rollTimeTo(v0, (D * i) / N));
   for (const o of opps) {
     if (o.sentOff) continue;
-    if (kind === 'lob') {
-      const d = Math.hypot(o.x - b.x, o.y - b.y);
-      risk = Math.max(risk, clamp(1 - (d - 1) / 3, 0, 1) * 0.8);
-      continue;
+    for (let i = 1; i <= N; i++) {
+      const f = i / N;
+      const px = a.x + (b.x - a.x) * f, py = a.y + (b.y - a.y) * f;
+      const to = Math.max(0, Math.hypot(o.x - px, o.y - py) - OPP_REACH) / OPP_RUN + OPP_REACT;
+      const margin = ts[i - 1] - to;        // > 0: the opponent gets there before the ball
+      risk = Math.max(risk, clamp(0.5 + margin / 0.45, 0, 1));
+      if (risk >= 1) return 1;
     }
-    const { d, t } = distToSegment(o, a, b);
-    // Opponents closer to the passer have less time to react; far along the lane more time.
-    const reach = 0.9 + t * 1.8;
-    const r = clamp(1 - (d - reach * 0.4) / reach, 0, 1) * (t < 0.05 ? 0.3 : 1);
-    risk = Math.max(risk, r);
   }
   return risk;
 }

@@ -578,6 +578,10 @@ export function mountOnline(root, ctx) {
     try { return window.confirm('Leave this online room?'); } catch { return true; }
   }
 
+  // closing the tab = leaving on purpose (tells the peer immediately instead of a 15 s timeout)
+  const onPageHide = () => { if (st.session) st.session.close(); };
+  window.addEventListener('pagehide', onPageHide);
+
   renderHome();
   if (ctx.autoAction === 'host') doHost();
   else if (ctx.autoAction && ctx.autoAction.startsWith('join:')) doJoin(ctx.autoAction.slice(5));
@@ -585,6 +589,7 @@ export function mountOnline(root, ctx) {
   return {
     destroy() {
       st.destroyed = true;
+      window.removeEventListener('pagehide', onPageHide);
       teardownSession();
       if (window.__net === st) delete window.__net;
     },

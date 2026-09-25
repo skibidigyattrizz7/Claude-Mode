@@ -22,13 +22,14 @@
   //   ?ai=1        AI vs AI           ?p2=1   local 2 players (P1 home, P2 away)
   //   ?half=N      real minutes/half  ?night=1  night stadium   ?diff=amateur|pro|world|legendary
   //   ?net=1       host + guest side by side in one page (snapshot/input roundtrip test)
-  //   ?away=1      human plays the away side
+  //   ?away=1      human plays the away side    ?speed=N  dev-only time scale    ?q=low|med|high
   import { createMatch } from './js/engine/index.js';
   import { BRAZIL, FRANCE } from './js/engine/tests/sampleTeams.mjs';
   const q = new URLSearchParams(location.search);
   const half = +(q.get('half') || 3);
   const stadium = q.get('night') ? 'night' : 'day';
   const difficulty = q.get('diff') || 'pro';
+  const timeScale = +(q.get('speed') || 1); // dev only: simulate faster than real time
   const controllers = q.get('ai') ? { home: 'ai', away: 'ai' } : q.get('p2') ? { home: 'p1', away: 'p2' } : q.get('away') ? { home: 'ai', away: 'p1' } : { home: 'p1', away: 'ai' };
   const events = [];
   window.__events = events;
@@ -55,7 +56,7 @@
     }, 50);
     window.__match = host;
   } else {
-    window.__match = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, controllers, onEvent, onEnd });
+    window.__match = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, controllers, onEvent, onEnd, timeScale, quality: q.get('q') || undefined });
   }
   // fps meter
   const dbg = document.getElementById('dbg');

@@ -330,7 +330,8 @@ function buildStands(root, home, away, night) {
       roof.compose(new THREE.Vector3(st.sign * (back - 9), topY + 6, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -st.sign * 0.12)), new THREE.Vector3(21, 0.5, st.len + 4));
     }
     stepGeos.push({ geo: box, matrix: wall, color: night ? '#2a2c33' : '#5b5f69' });
-    stepGeos.push({ geo: box, matrix: roof, color: night ? '#1b1d22' : '#c9ccd2' });
+    // no roof over the main (camera) stand so the broadcast camera can see the pitch
+    if (!(st.axis === 'x' && st.sign > 0)) stepGeos.push({ geo: box, matrix: roof, color: night ? '#1b1d22' : '#c9ccd2' });
   }
   // corner fill blocks
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {

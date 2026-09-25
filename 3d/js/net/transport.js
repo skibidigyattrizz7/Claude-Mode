@@ -21,9 +21,10 @@ class BaseTransport {
     this.role = null;
     this.status = 'idle';
     this.closed = false;
+    this.blackhole = false; // test hook: silently drop all traffic both ways (simulated network outage)
   }
   _emitRaw(raw) {
-    if (this.closed) return;
+    if (this.closed || this.blackhole) return;
     const m = decode(raw);
     if (m && this.onMessage) {
       try { this.onMessage(m); } catch (e) { console.error('[net] handler error', e); }
@@ -75,7 +76,7 @@ export class LoopbackTransport extends BaseTransport {
   }
   send(obj) {
     const p = this.peer;
-    if (!p || this.closed) return false;
+    if (!p || this.closed || this.blackhole) return false;
     const raw = encode(obj);
     setTimeout(() => { if (p.peer === this) p._emitRaw(raw); }, this.latency);
     return true;
@@ -165,10 +166,10 @@ export class BroadcastChannelTransport extends BaseTransport {
     });
   }
   reconnect() {
-    if (this.role === 'guest' && this.ch && !this.closed) this.ch.postMessage({ k: 'hello', from: this.me });
+    if (this.role === 'guest' && this.ch && !this.closed && !this.blackhole) this.ch.postMessage({ k: 'hello', from: this.me });
   }
   send(obj) {
-    if (!this.ch || !this.other || this.closed) return false;
+    if (!this.ch || !this.other || this.closed || this.blackhole) return false;
     this.ch.postMessage({ k: 'm', from: this.me, to: this.other, d: encode(obj) });
     return true;
   }
@@ -341,6 +342,7 @@ export class PeerTransport extends BaseTransport {
     } catch (e) { console.warn('[net] reconnect failed', e); }
   }
   send(obj, { rt = false } = {}) {
+    if (this.blackhole) return false;
     const raw = encode(obj);
     const c = rt && this.rt && this.rt.open ? this.rt : this.ctl;
     if (!c || !c.open || this.closed) return false;
