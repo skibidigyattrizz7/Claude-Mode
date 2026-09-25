@@ -683,7 +683,7 @@ export class Match {
       if (h) this.setHumanPlayer(h, receiver);   // control follows the ball
     }
     // give-and-go: an AI passer keeps running into space after playing it forward
-    if (!human && receiver && p.role !== 'GK' && (target.x - from.x) * dir > 4 && Math.random() < 0.5) {
+    if (!globalThis.__noGG && !human && receiver && p.role !== 'GK' && (target.x - from.x) * dir > 4 && Math.random() < 0.5) {
       p.ai.runT = 1.6;
       p.ai.runTo = clampToPitch({ x: p.x + dir * 12, y: p.y + (CY - p.y) * 0.2 }, 3, 3);
     }

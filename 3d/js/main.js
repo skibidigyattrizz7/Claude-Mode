@@ -2,7 +2,10 @@
 // and the startMatch() wrapper around the engine's createMatch(). Engine + meta are loaded with
 // dynamic import() so a broken module shows a friendly error instead of a blank page.
 import { DEFAULT_KEYBINDS, loadKeybinds, saveKeybinds, resetKeybinds } from './shared/keybinds.js';
+import { GAMEPLAY_DEFAULTS, loadGameplay, saveGameplay } from './shared/gameplay.js';
 import { dedupeTeams } from './net/protocol.js';
+import { gameplayGroups, sanitizeGameplay } from './net/gameplaymeta.js';
+import { online } from './net/services.js';
 
 const Q = new URLSearchParams(location.search);
 const STUB_ENGINE = Q.get('stubEngine') === '1';
@@ -60,6 +63,35 @@ export function loadSettings() {
   return s;
 }
 function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
+
+// Gameplay assists: P1 uses shared/gameplay.js storage; P2 (local 2-player) has its own profile.
+const GP_P2_KEY = 'pitchside.gameplay.p2';
+export function loadGameplayFor(player) {
+  if (player === 'p2') return sanitizeGameplay({ ...GAMEPLAY_DEFAULTS, ...lsGet(GP_P2_KEY, {}) });
+  return sanitizeGameplay(loadGameplay());
+}
+function saveGameplayFor(player, g) {
+  const clean = sanitizeGameplay(g);
+  if (player === 'p2') lsSet(GP_P2_KEY, clean); else saveGameplay(clean);
+}
+
+// Keybinds: extra actions not (yet) in DEFAULT_KEYBINDS are merged in here.
+const EXTRA_BINDS = { p1: { jockey: 'KeyF' }, p2: { jockey: 'Numpad7' } };
+function withExtraBinds(b) {
+  for (const p of ['p1', 'p2']) {
+    const cur = b[p] || {};
+    for (const [a, code] of Object.entries(EXTRA_BINDS[p])) {
+      if (cur[a] !== undefined) continue;
+      // never silently double-bind: if the default key is taken, leave the action unbound
+      const taken = ['p1', 'p2'].some((q) => Object.values(b[q] || {}).includes(code));
+      cur[a] = taken ? '' : code;
+    }
+    b[p] = cur;
+  }
+  return b;
+}
+export function loadBinds() { return withExtraBinds(loadKeybinds()); }
+const defaultBindsFor = (p) => ({ ...structuredClone(DEFAULT_KEYBINDS[p]), ...Object.fromEntries(Object.entries(EXTRA_BINDS[p]).filter(([a]) => DEFAULT_KEYBINDS[p][a] === undefined)) });
 
 // ------------------------------------------------------------------ module loading
 let enginePromise = null;
@@ -316,6 +348,11 @@ export async function openMatch(opts) {
   let resolve;
   const done = new Promise((r) => { resolve = r; });
   const controllers = opts.controllers || (opts.userSide === 'away' ? { home: 'ai', away: 'p1' } : { home: 'p1', away: 'ai' });
+  // each human side gets its own assist profile (online matches pass opts.gameplay explicitly)
+  const gpFor = (c) => (c === 'p1' ? loadGameplayFor('p1') : c === 'p2' ? loadGameplayFor('p2') : sanitizeGameplay(null));
+  const gameplay = opts.gameplay && typeof opts.gameplay === 'object'
+    ? { home: sanitizeGameplay(opts.gameplay.home), away: sanitizeGameplay(opts.gameplay.away) }
+    : { home: gpFor(controllers.home), away: gpFor(controllers.away) };
   const userOnEnd = opts.onEnd;
   const userOnEvent = opts.onEvent;
   const full = {
@@ -323,7 +360,8 @@ export async function openMatch(opts) {
     camera: s.camera, quality: s.quality, volume: s.volume / 100,
     ...opts,
     controllers,
-    keybinds: loadKeybinds(),
+    gameplay,
+    keybinds: loadBinds(),
     onEvent: (e) => { if (userOnEvent) try { userOnEvent(e); } catch (err) { console.error(err); } },
     onEnd: (r) => { if (userOnEnd) try { userOnEnd(r); } catch (err) { console.error(err); } resolve(r); },
   };
@@ -601,7 +639,7 @@ async function metaScreen(which) {
   if (nav.top !== screen) return;
   holder.replaceChildren();
   try {
-    metaMount = meta.mountMeta(holder, { startMatch, onExit: () => nav.back() });
+    metaMount = meta.mountMeta(holder, { startMatch, startOnlineMatch, online, onExit: () => nav.back() });
     if (which === 'ut') metaMount.showUltimateTeam(); else metaMount.showCareer();
   } catch (e) {
     holder.replaceChildren(screenShell('meta-err', 'Game modes', 'Pitchside 3D', errorTile('Career & Ultimate Team failed to start', e, () => { nav.back(); metaScreen(which); })));
@@ -609,42 +647,101 @@ async function metaScreen(which) {
 }
 
 // ------------------------------------------------------------------ Online
-async function onlineScreen() {
+async function onlineScreen({ autoQuick = null, onResult = null, onClose = null } = {}) {
   const body = h('div', { class: 'online-root' }, h('div', { class: 'loading' }, h('div', { class: 'spinner' }), 'Loading online play…'));
-  const el = screenShell('online', 'Online Match', 'Head to head · peer-to-peer', body);
+  const el = screenShell('online', 'Online Match', autoQuick ? 'Quick Search' : 'Quick Search · play with a code', body);
   let mounted = null;
-  nav.push({ el, name: 'online', destroy() { if (mounted) mounted.destroy(); } });
+  let closed = false;
+  const closeOnce = () => { if (!closed) { closed = true; if (onClose) try { onClose(); } catch (e) { console.error(e); } } };
+  nav.push({ el, name: 'online', destroy() { if (mounted) mounted.destroy(); closeOnce(); } });
   try {
     const mod = await import('./net/online.js');
     mounted = mod.mountOnline(body, {
       h, nav, toast, getTeams, getSavedUT, openMatch, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
+      online, autoQuick, onResult,
       transportKind: ['bc', 'loopback'].includes(Q.get('net')) ? Q.get('net') : 'peer',
       dcTimeoutMs: Math.max(2000, Number(Q.get('dcTimeout')) * 1000 || 15000),
       autoAction: Q.get('online'), // 'host' | 'join:CODE' (tests / share links)
       setBack: (fn) => { el._back = fn; },
     });
   } catch (e) {
-    body.replaceChildren(errorTile('Online play could not be loaded', e, () => { nav.back(); onlineScreen(); }));
+    body.replaceChildren(errorTile('Online play could not be loaded', e, () => { nav.back(); onlineScreen({ autoQuick, onResult, onClose }); }));
   }
 }
 
+/**
+ * startOnlineMatch({ mode:'ut'|'friendly', team }) -> Promise<result>. Handed to mountMeta.
+ * Opens the online screen, runs Quick Search with `team` (defaults to the saved UT squad) and resolves
+ * when the player leaves that screen: the last online result (+ userSide, mode, online:true), or
+ * { abandoned:true, cancelled:true } if no match was completed.
+ */
+export async function startOnlineMatch({ mode = 'ut', team = null } = {}) {
+  const t = team || (mode === 'ut' ? await getSavedUT() : null);
+  if (!t) return { abandoned: true, cancelled: true, error: 'no_team' };
+  return new Promise((resolve) => {
+    let last = null;
+    onlineScreen({
+      autoQuick: { mode: mode === 'friendly' ? 'friendly' : 'ut', team: t },
+      onResult: (r, info) => { last = { ...r, ...info }; },
+      onClose: () => resolve(last || { abandoned: true, cancelled: true }),
+    });
+  });
+}
+
 // ------------------------------------------------------------------ Settings
-function settingsScreen() {
+function settingsScreen(tab = 'general') {
   const s = loadSettings();
   const upd = (k) => (v) => { s[k] = v; saveSettings(s); toast('Saved'); };
   const vol = h('input', { type: 'range', min: '0', max: '100', step: '5', value: String(s.volume), id: 'set-volume', 'aria-label': 'Sound volume' });
   const volOut = h('output', { for: 'set-volume' }, `${s.volume}%`);
   vol.addEventListener('input', () => { volOut.textContent = `${vol.value}%`; });
   vol.addEventListener('change', () => upd('volume')(Number(vol.value)));
-  const el = screenShell('settings', 'Settings', 'Match defaults',
-    h('div', { class: 'panel settings' },
-      segmented('Default difficulty', DIFFICULTIES, s.difficulty, upd('difficulty'), 'set-diff'),
-      segmented('Default half length', HALF_LENGTHS.map((m) => [m, `${m} min`]), s.halfMinutes, upd('halfMinutes'), 'set-half'),
-      segmented('Default stadium', STADIUMS, s.stadium, upd('stadium'), 'set-stadium'),
-      segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
-      segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
-      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
-      h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.')));
+  const general = h('div', { class: 'panel settings', id: 'settings-general' },
+    segmented('Default difficulty', DIFFICULTIES, s.difficulty, upd('difficulty'), 'set-diff'),
+    segmented('Default half length', HALF_LENGTHS.map((m) => [m, `${m} min`]), s.halfMinutes, upd('halfMinutes'), 'set-half'),
+    segmented('Default stadium', STADIUMS, s.stadium, upd('stadium'), 'set-stadium'),
+    segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
+    segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
+    h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
+    h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'));
+  const gameplay = h('div', { class: 'gp-wrap', id: 'settings-gameplay' });
+  let gpPlayer = 'p1';
+  const renderGameplay = () => {
+    const g = loadGameplayFor(gpPlayer);
+    const set = (k) => (v) => { g[k] = v; saveGameplayFor(gpPlayer, g); toast('Saved'); };
+    const who = h('div', { class: 'gp-who' },
+      h('div', { class: 'tabs tabs--sm', role: 'tablist', 'aria-label': 'Gameplay profile' },
+        [['p1', 'Player 1'], ['p2', 'Player 2 · Local 2P']].map(([p, label]) => h('button', {
+          type: 'button', role: 'tab', class: `tab ${p === gpPlayer ? 'on' : ''}`, 'aria-selected': String(p === gpPlayer), 'data-gp-player': p,
+          onclick: () => { gpPlayer = p; renderGameplay(); },
+        }, label))),
+      h('p', { class: 'hint' }, gpPlayer === 'p1'
+        ? 'Used for your side in Kick-Off, Career, Ultimate Team and online matches (online, each player brings their own).'
+        : 'Used by Player 2 in Local 2-Player matches.'));
+    gameplay.replaceChildren(who, ...gameplayGroups().map((grp) => h('section', { class: 'panel gp-group', 'data-group': grp.id },
+      h('h3', null, grp.label),
+      ...grp.fields.map((f) => h('div', { class: 'gp-field', 'data-key': f.key },
+        f.options.length > 1
+          ? segmented(f.label, f.options, g[f.key], set(f.key), `gp-${gpPlayer}-${f.key}`)
+          : h('div', { class: 'field' }, h('div', { class: 'field-label' }, f.label), h('div', { class: 'hint' }, String(g[f.key]))),
+        f.desc ? h('p', { class: 'gp-desc' }, f.desc) : null)))),
+    h('div', { class: 'row center' }, h('button', { class: 'btn btn--danger', type: 'button', id: 'gp-reset', onclick: () => {
+      saveGameplayFor(gpPlayer, GAMEPLAY_DEFAULTS); renderGameplay(); toast(`${gpPlayer === 'p1' ? 'Player 1' : 'Player 2'} gameplay reset`);
+    } }, 'Reset to defaults')));
+  };
+  renderGameplay();
+  const tabs = h('div', { class: 'tabs settings-tabs', role: 'tablist', 'aria-label': 'Settings sections' });
+  const panes = { general, gameplay };
+  const select = (t) => {
+    for (const [k, pane] of Object.entries(panes)) pane.hidden = k !== t;
+    for (const b of tabs.children) { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+    lsSet('pitchside.settingsTab', t);
+  };
+  tabs.append(...[['general', 'General'], ['gameplay', 'Gameplay']].map(([t, label]) => h('button', {
+    type: 'button', role: 'tab', class: 'tab', 'data-tab': t, id: `tab-${t}`, onclick: () => select(t),
+  }, label)));
+  const el = screenShell('settings', 'Settings', 'Match defaults · gameplay assists', h('div', { class: 'settings-shell' }, tabs, general, gameplay));
+  select(panes[tab] ? tab : 'general');
   nav.push({ el, name: 'settings' });
 }
 
@@ -653,7 +750,7 @@ const ACTIONS = [
   ['up', 'Move up'], ['down', 'Move down'], ['left', 'Move left'], ['right', 'Move right'],
   ['sprint', 'Sprint'], ['pass', 'Pass'], ['through', 'Through ball'], ['lob', 'Lob / Cross'],
   ['shoot', 'Shoot'], ['finesse', 'Finesse shot'], ['switchP', 'Switch player'], ['tackle', 'Tackle / Slide'],
-  ['skill', 'Skill move'], ['pause', 'Pause'],
+  ['skill', 'Skill move'], ['jockey', 'Jockey / Contain'], ['pause', 'Pause'],
 ];
 const ACTION_LABEL = Object.fromEntries(ACTIONS);
 const KEY_NAMES = {
@@ -675,19 +772,19 @@ export function keyLabel(code) {
 }
 
 function controlsScreen() {
-  let binds = loadKeybinds();
+  let binds = loadBinds();
   let listening = null; // { player, action, btn }
   const status = h('div', { class: 'bind-status', role: 'status', 'aria-live': 'polite' });
   const table = h('div', { class: 'bind-table', role: 'table', 'aria-label': 'Key bindings' });
 
   const findConflicts = (player, action, code) => {
     const out = [];
-    for (const p of ['p1', 'p2']) for (const [a] of ACTIONS) if (!(p === player && a === action) && binds[p][a] === code) out.push({ player: p, action: a });
+    for (const p of ['p1', 'p2']) for (const [a] of ACTIONS) if (!(p === player && a === action) && code && binds[p][a] === code) out.push({ player: p, action: a });
     return out;
   };
   const who = (p, a) => `${p.toUpperCase()} · ${ACTION_LABEL[a]}`;
 
-  const commit = () => { saveKeybinds(binds); binds = loadKeybinds(); render(); };
+  const commit = () => { saveKeybinds(binds); binds = loadBinds(); render(); };
 
   const stopListening = () => {
     if (!listening) return;
@@ -760,7 +857,7 @@ function controlsScreen() {
 
   function render() {
     const dup = new Map();
-    for (const p of ['p1', 'p2']) for (const [a] of ACTIONS) { const c = binds[p][a]; dup.set(c, (dup.get(c) || 0) + 1); }
+    for (const p of ['p1', 'p2']) for (const [a] of ACTIONS) { const c = binds[p][a]; if (c) dup.set(c, (dup.get(c) || 0) + 1); }
     table.replaceChildren(
       h('div', { class: 'bind-row bind-head', role: 'row' }, h('span', { role: 'columnheader' }, 'Action'), h('span', { role: 'columnheader' }, 'Player 1'), h('span', { role: 'columnheader' }, 'Player 2')),
       ...ACTIONS.map(([a, label]) => h('div', { class: 'bind-row', role: 'row' },
@@ -778,7 +875,14 @@ function controlsScreen() {
   }
   render();
 
-  const resetOne = (p) => { binds[p] = structuredClone(DEFAULT_KEYBINDS[p]); commit(); status.textContent = `${p.toUpperCase()} controls reset to defaults.`; };
+  const resetOne = (p) => {
+    binds[p] = defaultBindsFor(p);
+    // resolving a clash with the other player's keys: their conflicting action becomes unbound
+    const other = p === 'p1' ? 'p2' : 'p1';
+    for (const [a, c] of Object.entries(binds[other])) if (c && Object.values(binds[p]).includes(c)) binds[other][a] = '';
+    commit();
+    status.textContent = `${p.toUpperCase()} controls reset to defaults.`;
+  };
   const el = screenShell('controls', 'Controls', 'Keyboard · gamepad · touch',
     h('div', { class: 'panel controls' },
       h('p', { class: 'hint' }, 'Click a key, then press the new key. Esc cancels. If the key is already used you can swap the two bindings. Changes save instantly.'),
@@ -787,11 +891,12 @@ function controlsScreen() {
       h('div', { class: 'row' },
         h('button', { class: 'btn', type: 'button', 'data-reset': 'p1', onclick: () => resetOne('p1') }, 'Reset P1'),
         h('button', { class: 'btn', type: 'button', 'data-reset': 'p2', onclick: () => resetOne('p2') }, 'Reset P2'),
-        h('button', { class: 'btn btn--danger', type: 'button', 'data-reset': 'all', onclick: () => { binds = resetKeybinds(); render(); status.textContent = 'All controls reset to defaults.'; } }, 'Reset all'))),
+        h('button', { class: 'btn btn--danger', type: 'button', 'data-reset': 'all', onclick: () => { resetKeybinds(); binds = { p1: defaultBindsFor('p1'), p2: defaultBindsFor('p2') }; saveKeybinds(binds); render(); status.textContent = 'All controls reset to defaults.'; } }, 'Reset all'))),
     h('div', { class: 'panel info-grid' },
       h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works — press a button on it to wake it up. Left stick moves, face buttons pass and shoot, triggers sprint. In Local 2-Player each pad can take a side.')),
       h('div', null, h('h3', null, 'Touch'), h('p', null, 'On phones and tablets an on-screen stick and action buttons appear during the match.')),
-      h('div', null, h('h3', null, 'Shooting'), h('p', null, 'Hold shoot to build power, release to strike. Finesse curls it; lob chips the keeper.'))));
+      h('div', null, h('h3', null, 'Shooting'), h('p', null, 'Hold shoot to build power, release to strike. Finesse curls it; lob chips the keeper.')),
+      h('div', null, h('h3', null, 'Defending'), h('p', null, 'Hold Jockey to contain the ball carrier without diving in; press Tackle to win the ball. Assists are in Settings → Gameplay.'))));
   nav.push({ el, name: 'controls', destroy: () => stopListening() });
 }
 
@@ -816,10 +921,10 @@ function mainMenu() {
     { id: 'kickoff', cls: 'hero', title: 'Kick-Off', sub: 'Quick match against the CPU', go: () => teamSelectScreen('kickoff') },
     { id: 'career', cls: 'big career', title: 'Career Mode', sub: 'Manage a club through the seasons', go: () => metaScreen('career') },
     { id: 'ut', cls: 'big ut', title: 'Ultimate Team', sub: 'Packs, squads & Squad Battles', go: () => metaScreen('ut') },
-    { id: 'online', cls: 'online', title: 'Online Match', sub: 'Play a friend peer-to-peer', go: onlineScreen },
+    { id: 'online', cls: 'online', title: 'Online Match', sub: 'Quick Search or play a friend', go: () => onlineScreen() },
     { id: 'local', cls: 'local', title: 'Local 2-Player', sub: 'Same keyboard or gamepads', go: () => teamSelectScreen('local2p') },
     { id: 'practice', cls: 'practice', title: 'Practice', sub: 'Warm up vs a training XI', go: practice },
-    { id: 'settings', cls: 'small', title: 'Settings', sub: 'Difficulty, camera, graphics', go: settingsScreen },
+    { id: 'settings', cls: 'small', title: 'Settings', sub: 'Difficulty, camera, gameplay assists', go: () => settingsScreen(lsGet('pitchside.settingsTab', 'general')) },
     { id: 'controls', cls: 'small', title: 'Controls', sub: 'Rebind every key', go: controlsScreen },
   ];
   const el = h('section', { class: 'screen screen--menu', 'aria-label': 'Main menu' },
@@ -828,6 +933,8 @@ function mainMenu() {
       h('div', { class: 'brand' },
         h('div', { class: 'brand-mark', 'aria-hidden': 'true' }, 'P'),
         h('div', null, h('h1', { class: 'brand-name' }, 'PITCHSIDE', h('span', null, '3D')), h('div', { class: 'brand-tag' }, 'The beautiful game, in your browser'))),
+      h('button', { class: 'online-pill', type: 'button', id: 'online-pill', 'data-state': 'checking', 'aria-live': 'polite', title: 'Online services status', onclick: () => onlineScreen() },
+        h('i', { class: 'dot', 'aria-hidden': 'true' }), h('span', { class: 'online-pill-t' }, 'Online: checking…')),
       h('div', { class: 'menu-season', 'aria-hidden': 'true' }, 'SEASON 26')),
     h('nav', { class: 'tiles', 'aria-label': 'Game modes' }, tiles.map((t, i) => h('button', {
       type: 'button', class: `tile ${t.cls.split(' ').map((c) => `tile--${c}`).join(' ')}`, 'data-tile': t.id, 'data-autofocus': i === 0 ? '1' : null, style: { '--i': i }, onclick: t.go,
@@ -855,7 +962,15 @@ function mainMenu() {
     }
     if (best) best.focus();
   });
-  nav.push({ el, name: 'menu' });
+  const pill = el.querySelector('#online-pill');
+  const refreshPill = async () => {
+    let up = false;
+    try { up = await online.available(); } catch { up = false; }
+    pill.dataset.state = up ? 'on' : 'off';
+    pill.querySelector('.online-pill-t').textContent = up ? 'Online: connected' : 'Online: offline';
+  };
+  refreshPill();
+  nav.push({ el, name: 'menu', onReturn: refreshPill });
 }
 
 // Escape = back (not during a match, not inside meta which handles its own Escape, not over a modal)
@@ -876,7 +991,7 @@ document.documentElement.classList.add('ready');
 const start = Q.get('screen');
 if (start === 'kickoff') teamSelectScreen('kickoff');
 else if (start === 'local2p') teamSelectScreen('local2p');
-else if (start === 'settings') settingsScreen();
+else if (start === 'settings') settingsScreen(Q.get('tab') || 'general');
 else if (start === 'controls') controlsScreen();
 else if (start === 'online') onlineScreen();
 else if (start === 'career') metaScreen('career');
@@ -885,4 +1000,4 @@ else if (start === 'ut') metaScreen('ut');
 setTimeout(() => { loadEngine().catch(() => {}); }, 400);
 
 // Expose for tests / debugging.
-window.pitchside = { startMatch, openMatch, nav, loadSettings };
+window.pitchside = { startMatch, startOnlineMatch, openMatch, nav, loadSettings, online, loadGameplayFor, loadBinds };

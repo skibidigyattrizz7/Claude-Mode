@@ -198,7 +198,7 @@ export class TeamAI {
       const n = norm(gc.x - o.x, gc.y - o.y);
       const tb = norm(m.ball.x - o.x, m.ball.y - o.y);
       // track a runner: stay goal-side and match his run
-      const running = (o.vx * n.x + o.vy * n.y) < -2;
+      const running = !globalThis.__noTrack && (o.vx * n.x + o.vy * n.y) < -2;
       const gap = running ? 1.2 : 1.8;
       let tx = o.x + n.x * gap + tb.x * 0.8 + (running ? o.vx * 0.25 : 0);
       let ty = o.y + n.y * gap + tb.y * 0.8 + (running ? o.vy * 0.25 : 0);
@@ -316,7 +316,7 @@ export class TeamAI {
     }
     // come short to help a team-mate under pressure
     const press = Math.min(...m.opps(this.team).map((o) => dist(o, carrier)));
-    if (press < 2.8 && p.role === 'MF' && dist(p, carrier) < 16 && p === this.nearestSupport(carrier)) {
+    if (!globalThis.__noShort && press < 2.8 && p.role === 'MF' && dist(p, carrier) < 16 && p === this.nearestSupport(carrier)) {
       const away = norm(p.x - carrier.x, p.y - carrier.y);
       f = { x: carrier.x + away.x * 7 - dir * 2, y: clamp(carrier.y + away.y * 7, 3, PITCH.W - 3) };
       moveTo(p, f.x, f.y, 4);
@@ -381,7 +381,7 @@ export class TeamAI {
     for (const o of opps) { const od = dist(o, p); if (od < nearest) { nearest = od; nOpp = o; } }
     p.sprint = nearest > 4 && p.stamina > 0.3;
     // shield the ball from a defender tight behind: turn the body, slow down, look for a pass
-    if (nOpp && nearest < 1.8 && isFromBehind(nOpp, p, 100) && p.role !== 'GK') {
+    if (!globalThis.__noShield && nOpp && nearest < 1.8 && isFromBehind(nOpp, p, 100) && p.role !== 'GK') {
       p.shield = true; p.sprint = false;
       p.faceWant = Math.atan2(p.y - nOpp.y, p.x - nOpp.x);
       p.ai.decT = Math.min(p.ai.decT, 0.25);
