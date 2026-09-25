@@ -1,6 +1,7 @@
 // Deterministic fictional player database. DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
 import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP } from './data.js';
+import { buildRealPlayers } from './realplayers.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -98,6 +99,8 @@ export function utPrice(p) {
   if (p.special === 'inform') v *= 1.9;
   if (p.special === 'hero') v *= 2.4;
   if (p.special === 'legend') v *= 3.2;
+  if (p.special === 'star') v *= 1.6;
+  if (p.special === 'icon') v *= 4.5;
   return niceRound(v);
 }
 export function quickSellValue(p) {
@@ -294,14 +297,74 @@ export function getDB() {
     specials.push(p);
   }
 
+  // V2 real players (appended last and generated without the shared RNG, so every id above is unchanged).
+  // Stars play for fictional clubs (they are part of `players`, so Career Mode includes them);
+  // Icons belong to the special Icons club.
+  const real = buildRealPlayers({ POS_WEIGHTS, computeOvr, marketValue, weeklyWage, tierOf });
+  for (const p of real.stars) players.push(p);
+  for (const p of real.icons) specials.push(p);
+
   const all = players.concat(specials);
   const byId = new Map(all.map((p) => [p.id, p]));
-  _db = { players, specials, all, byId };
+  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars) };
+  for (const c of _foreign.values()) if (!byId.has(c.id)) byId.set(c.id, c);
   return _db;
+}
+
+// ---------- foreign cards (bought from other users on the online Player Market) ----------
+const _foreign = new Map();
+const POS_SET = new Set(['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']);
+const num = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? clamp(Math.round(Number(v)), lo, hi) : d);
+const str = (v, max, d = '') => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : d);
+
+/** Validate/sanitise a card object received from the network. Returns a safe player object or null. */
+export function sanitizeCard(c) {
+  if (!c || typeof c !== 'object') return null;
+  const id = str(c.id, 64);
+  if (!id || !/^[A-Za-z0-9_.:-]+$/.test(id)) return null;
+  const pos = POS_SET.has(c.pos) ? c.pos : null;
+  if (!pos) return null;
+  const s = c.stats || {}, g = c.gk || {};
+  const p = {
+    id, first: str(c.first, 30), last: str(c.last, 30, str(c.name, 30, 'Player')), name: str(c.name, 40, 'Player'),
+    age: num(c.age, 15, 50, 27), nat: str(c.nat, 3, 'ENG').toUpperCase(), club: str(c.club, 12, 'ICN'), league: str(c.league, 12, 'ICN'),
+    pos, alt: Array.isArray(c.alt) ? c.alt.filter((x) => POS_SET.has(x)).slice(0, 3) : [],
+    stats: {}, gk: {},
+  };
+  for (const k of FACE) p.stats[k] = num(s[k], 1, 99, 50);
+  for (const k of GKFACE) p.gk[k] = num(g[k], 1, 99, 10);
+  p.ovr = computeOvr(pos, p);
+  p.pot = Math.max(p.ovr, num(c.pot, 1, 99, p.ovr));
+  p.wf = num(c.wf, 1, 5, 3); p.sm = num(c.sm, 1, 5, 2); p.foot = c.foot === 'L' ? 'L' : 'R';
+  p.wr = Array.isArray(c.wr) && c.wr.length === 2 ? c.wr.map((x) => (['Low', 'Med', 'High'].includes(x) ? x : 'Med')) : ['Med', 'Med'];
+  p.height = num(c.height, 150, 210, 180);
+  p.rare = !!c.rare;
+  p.special = ['inform', 'hero', 'legend', 'icon', 'star'].includes(c.special) ? c.special : null;
+  p.tier = p.special ? 'gold' : tierOf(p.ovr);
+  if (c.real) p.real = true;
+  if (Number.isInteger(c.skin) && c.skin >= 0 && c.skin <= 5) p.skin = c.skin;
+  p.value = marketValue(p); p.wage = weeklyWage(p);
+  p.look = hashStr(id) % 997;
+  p.foreign = true;
+  return p;
+}
+
+/** Make a foreign card resolvable through getPlayer(). Known ids return the local DB copy. */
+export function registerCard(card) {
+  const db = getDB();
+  if (card && db.byId.has(card.id)) return db.byId.get(card.id);
+  const p = sanitizeCard(card);
+  if (!p) return null;
+  _foreign.set(p.id, p);
+  db.byId.set(p.id, p);
+  return p;
 }
 
 /** Test helper: drop the cached database so the next getDB() regenerates it. */
 export function _resetDB() { _db = null; }
+
+/** All real players (Icons + Stars). */
+export function realPlayers() { return getDB().real; }
 
 export function getPlayer(id) { return getDB().byId.get(id) || null; }
 

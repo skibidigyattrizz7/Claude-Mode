@@ -84,6 +84,9 @@ function buildSquad(code, rating, style) {
   const rng = makeRng(hashStr(code + ':squad'));
   const used = new Set();
   const base = clamp((rating - 50) / 45, 0.15, 0.98);
+  // strength comes from its own stream so names / other attributes stay unchanged
+  const srng = makeRng(hashStr(code + ':strength'));
+  const STR_BONUS = { GK: 0.05, DF: 0.1, MF: -0.04, FW: 0.04 };
   return FORMATION.map((f) => {
     const v = () => clamp(base + (rng() - 0.5) * 0.16, 0.1, 1);
     const a = { pace: v(), shooting: v(), passing: v(), tackling: v(), dribbling: v(), keeping: 0.3, stamina: v() };
@@ -91,6 +94,7 @@ function buildSquad(code, rating, style) {
     if (f.role === 'DF') { a.tackling = clamp(a.tackling + 0.1, 0, 1); a.shooting -= 0.1; }
     if (f.role === 'MF') a.passing = clamp(a.passing + 0.08, 0, 1);
     if (f.role === 'GK') { a.keeping = clamp(base + 0.04 + (rng() - 0.5) * 0.1, 0.2, 1); a.shooting = 0.2; }
+    a.strength = clamp(0.35 + base * 0.45 + STR_BONUS[f.role] + (srng() - 0.5) * 0.3, 0.1, 1);
     return { name: genName(style, rng, used).toUpperCase(), num: f.num, role: f.role, attrs: a };
   });
 }
