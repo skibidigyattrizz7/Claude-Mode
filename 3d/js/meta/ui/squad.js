@@ -5,6 +5,8 @@ import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr } from '../core/
 import { calcChemistry, teamRating } from '../core/chemistry.js';
 import { POS_GROUP, NATION_BY_CODE, leagueName } from '../core/data.js';
 
+const px = (x) => 5 + x * 0.9;
+const py = (y) => 2 + (96 - y) * 1.03;
 const POS_FILTERS = ['ALL', 'GK', 'DEF', 'MID', 'ATT'];
 const CHEM_CLASS = ['c0', 'c1', 'c2', 'c3'];
 
@@ -123,7 +125,7 @@ export function squadEditor(opts) {
     if (opts.chemistry !== false) {
       const lines = chem.links.map((l) => {
         const a = f.slots[l.a], b = f.slots[l.b];
-        return `<line x1="${a.x}" y1="${100 - a.y}" x2="${b.x}" y2="${100 - b.y}" class="ln-${l.color}"/>`;
+        return `<line x1="${px(a.x)}" y1="${py(a.y)}" x2="${px(b.x)}" y2="${py(b.y)}" class="ln-${l.color}"/>`;
       }).join('');
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 100 100'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'pm-chemlines');
@@ -131,7 +133,7 @@ export function squadEditor(opts) {
       pitch.appendChild(svg);
     }
     f.slots.forEach((s, i) => {
-      const wrap = h('div', { class: 'pm-slotpos', style: { left: `${5 + s.x * 0.9}%`, top: `${6 + (100 - s.y) * 0.88}%` } }, slotButton('slot', i));
+      const wrap = h('div', { class: 'pm-slotpos', style: { left: `${px(s.x)}%`, top: `${py(s.y)}%` } }, slotButton('slot', i));
       const p = player(st.slots[i]);
       if (p && opts.chemistry !== false) {
         const c = chem.players[i];

@@ -306,7 +306,7 @@ export function showWorldCup(t, h) {
   };
   const col = (stage, n) => `<div class="kcol"><h4>${STAGE_LABEL[stage]}</h4>${Array.from({ length: n }, (_, i) => tie(stage, t.ko[stage][i])).join('')}</div>`;
   const status = t.stage === 'done'
-    ? (t.champion === user ? `🏆 ${esc(teamByCode(user).name)} are WORLD CHAMPIONS!` : `Champions: ${esc(teamByCode(t.champion).name)}`)
+    ? (t.champion === user ? `${esc(teamByCode(user).name)} are WORLD CHAMPIONS!` : `Champions: ${esc(teamByCode(t.champion).name)}`)
     : t.out ? `${esc(teamByCode(user).name)} have been eliminated.` : nf ? `Next: ${esc(nf.label)} — ${esc(teamByCode(nf.home).name)} vs ${esc(teamByCode(nf.away).name)}` : '';
   const r = show(`
     <div class="panel wide wc">

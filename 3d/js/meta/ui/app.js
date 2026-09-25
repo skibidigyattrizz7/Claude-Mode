@@ -163,7 +163,7 @@ export function resultView({ title = 'Full Time', home, away, result, userSide =
       add(main, 
         h('section', { class: `pm-score pm-score--${outcome}` },
           h('div', { class: 'pm-score-team' }, h('span', { class: 'pm-kitdot', style: { background: home.kit.primary, borderColor: home.kit.secondary } }), h('b', null, home.name), h('ul', null, scorersFor('home', home))),
-          h('div', { class: 'pm-score-num' }, h('span', null, result.homeGoals), h('i', null, '–'), h('span', null, result.awayGoals),
+          h('div', { class: 'pm-score-num' }, h('div', { class: 'pm-score-digits' }, h('span', null, result.homeGoals), h('i', null, '–'), h('span', null, result.awayGoals)),
             result.pens ? h('small', null, `Pens ${result.pens.home}–${result.pens.away}`) : null,
             h('div', { class: `pm-outcome ${outcome}` }, outcome === 'win' ? 'Victory' : outcome === 'loss' ? 'Defeat' : 'Draw'),
             result.simulated ? h('small', { class: 'pm-dim' }, 'Simulated') : null),
