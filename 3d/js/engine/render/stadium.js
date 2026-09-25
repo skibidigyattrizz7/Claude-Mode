@@ -222,7 +222,7 @@ export function buildStadium(scene, opts, q, track) {
     vertexShader: crowdVS, fragmentShader: crowdFS,
     uniforms: {
       uMap: { value: atlas }, uTime: { value: 0 }, uExcite: { value: new THREE.Vector3(0, 0, 0) }, uCols: { value: COLS },
-      uLight: { value: night ? 0.5 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
+      uLight: { value: night ? 0.42 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
     },
   }));
   const cgeo = track(new THREE.PlaneGeometry(0.62, 1.24));

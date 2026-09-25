@@ -23,7 +23,7 @@ export function updateCamera(cam, target, dt, w, h, zoom, snap = false) {
   const k = snap ? 1 : 1 - Math.exp(-dt * 4);
   cam.x += (target.x - cam.x) * k;
   cam.y += (target.y - cam.y) * k;
-  const hw = w / 2 / cam.scale, hh = h / 2 / cam.scale, mg = 5;
+  const hw = w / 2 / cam.scale, hh = h / 2 / cam.scale, mg = 8;
   cam.x = PITCH.L + 2 * mg < 2 * hw ? CX : clamp(cam.x, -mg + hw, PITCH.L + mg - hw);
   cam.y = PITCH.W + 2 * mg < 2 * hh ? CY : clamp(cam.y, -mg + hh, PITCH.W + mg - hh);
 }

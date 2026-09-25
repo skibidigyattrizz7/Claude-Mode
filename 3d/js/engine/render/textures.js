@@ -42,37 +42,51 @@ export function pitchTexture(size, aniso) {
   const ppm = W / LW;
   const cv = makeCanvas(W, H);
   const g = cv.getContext('2d');
-  const img = g.createImageData(W, H);
+  // low-frequency layer (stripes, patches, wear) computed at 1/4 resolution and upscaled smoothly
+  const DS = 4, w4 = Math.ceil(W / DS), h4 = Math.ceil(H / DS), ppm4 = ppm / DS;
+  const lo = makeCanvas(w4, h4), lg = lo.getContext('2d');
+  const img = lg.createImageData(w4, h4);
   const d = img.data;
   const stripeW = PITCH.L / 18; // 18 stripes between goal lines
-  // base colours (sRGB)
   const light = [86, 150, 58], dark = [70, 128, 46];
-  for (let py = 0; py < H; py++) {
-    const zm = py / ppm - LH / 2;
-    for (let px = 0; px < W; px++) {
-      const xm = px / ppm - LW / 2;
-      let s = Math.floor((xm + PITCH.HL) / stripeW);
-      // subtle cross-mow checker
+  for (let py = 0; py < h4; py++) {
+    const zm = (py + 0.5) / ppm4 - LH / 2;
+    for (let px = 0; px < w4; px++) {
+      const xm = (px + 0.5) / ppm4 - LW / 2;
+      const s = Math.floor((xm + PITCH.HL) / stripeW);
       const cz = Math.floor((zm + PITCH.HW) / (PITCH.W / 10));
-      let shade = (s & 1) ? 1 : 0;
       const chk = ((s + cz) & 1) ? 0.016 : -0.016;
-      const base = shade ? light : dark;
-      const n1 = valueNoise(xm * 0.35, zm * 0.35) - 0.5; // large patches
-      const n2 = valueNoise(xm * 3.1, zm * 3.1) - 0.5; // mid
-      const n3 = hash2(px, py) - 0.5; // fine blades
-      const k = 1 + n1 * 0.12 + n2 * 0.07 + n3 * 0.1 + chk;
-      // worn goalmouth areas
+      const base = (s & 1) ? light : dark;
+      const n1 = valueNoise(xm * 0.35, zm * 0.35) - 0.5;
+      const n2 = valueNoise(xm * 3.1, zm * 3.1) - 0.5;
+      const k = 1 + n1 * 0.12 + n2 * 0.07 + chk;
       const gx = PITCH.HL - Math.abs(xm), gz = Math.abs(zm);
       let wear = 0;
       if (gx > -1 && gx < 7 && gz < 7) wear = Math.max(0, 1 - Math.hypot(Math.max(0, gx - 1.5) / 5.5, gz / 7)) * 0.35;
-      const o = (py * W + px) * 4;
+      const o = (py * w4 + px) * 4;
       d[o] = Math.min(255, base[0] * k + wear * 40);
       d[o + 1] = Math.min(255, base[1] * k * (1 - wear * 0.3));
       d[o + 2] = Math.min(255, base[2] * k + wear * 10);
       d[o + 3] = 255;
     }
   }
-  g.putImageData(img, 0, 0);
+  lg.putImageData(img, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(lo, 0, 0, W, H);
+  // fine grass-blade noise: tiled pattern blended on top
+  const NS = 128, nc = makeCanvas(NS, NS), ng = nc.getContext('2d');
+  const nimg = ng.createImageData(NS, NS);
+  for (let i = 0; i < NS * NS; i++) {
+    const v = hash2(i % NS, (i / NS) | 0);
+    const c = v < 0.5 ? 0 : 255;
+    nimg.data[i * 4] = c; nimg.data[i * 4 + 1] = c; nimg.data[i * 4 + 2] = c; nimg.data[i * 4 + 3] = Math.abs(v - 0.5) * 2 * 255;
+  }
+  ng.putImageData(nimg, 0, 0);
+  g.globalAlpha = 0.09;
+  g.fillStyle = g.createPattern(nc, 'repeat');
+  g.fillRect(0, 0, W, H);
+  g.globalAlpha = 1;
   // markings
   const X = (xm) => (xm + LW / 2) * ppm;
   const Z = (zm) => (zm + LH / 2) * ppm;

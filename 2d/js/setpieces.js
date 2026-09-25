@@ -15,7 +15,7 @@ export function beginSetPiece(m, r) {
   m.owner = null; m.pass = null; m.shot = null; m.pendingSave = null; m.kickRequest = null;
   const bx = clamp(r.x, 0, PITCH.L), by = clamp(r.y, 0, PITCH.W);
   placeBall(m.ball, bx, by); m.ball.kickId++;
-  const sp = m.sp = { ...r, x: bx, y: by, t: 0, phase: 'setup', taker: null, human: null, aim: null, power: 0, charging: false, curve: 0, aiT: 0 };
+  const sp = m.sp = { ...r, x: bx, y: by, t: 0, phase: 'setup', taker: null, human: null, aim: null, power: 0, charging: false, curve: 0, aiT: 0, shootArmed: false };
   for (const p of m.players) { if (!p.sentOff) { p.state = 'run'; p.tk = null; p.skill = null; p.charging = false; p.saveIntent = false; p.ai.pendingDive = null; } }
   const dir = m.attackDir(r.team);
   const mates = m.mates(r.team);
@@ -159,11 +159,13 @@ function humanAim(m, sp, dt) {
     if (c.isHeld('lob')) sp.curve = clamp(sp.curve - dt * 1.6, -1, 1);
     if (c.isHeld('through')) sp.curve = clamp(sp.curve + dt * 1.6, -1, 1);
   }
-  if (sp.t < 0.25) return;   // ignore inputs held over from before the restart
+  // A shoot button still held from open play must be released first (no accidental kick);
+  // presses are edges, so a fresh pass press is always honoured.
+  if (!c.isHeld('shoot')) sp.shootArmed = true;
   const pressedPass = c.wasPressed('pass') || (h.ctrl === 0 && m.mouseClick);
-  if (c.isHeld('shoot')) { sp.charging = true; sp.power = Math.min(1, sp.power + dt / 1.1); }
+  if (c.isHeld('shoot') && sp.shootArmed) { sp.charging = true; sp.power = Math.min(1, sp.power + dt / 1.1); }
   else if (sp.charging) { executeSetPiece(m, 'long', sp.aim, sp.power, sp.curve); return; }
-  if (pressedPass) executeSetPiece(m, 'short', sp.aim, 0.5, 0);
+  if (pressedPass && !sp.charging) executeSetPiece(m, 'short', sp.aim, 0.5, 0);
 }
 
 function aiExecute(m, sp) {
