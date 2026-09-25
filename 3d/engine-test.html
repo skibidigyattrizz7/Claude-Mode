@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pitchside 3D — engine test</title>
+<style>
+  html,body{margin:0;height:100%;background:#05070d;color:#cfd8ea;font-family:system-ui,sans-serif;overflow:hidden}
+  #wrap{position:absolute;inset:0;display:flex}
+  .pane{position:relative;flex:1;min-width:0}
+  #dbg{position:fixed;right:8px;bottom:8px;z-index:50;font:12px monospace;background:rgba(0,0,0,.55);padding:4px 8px;border-radius:4px;pointer-events:none;white-space:pre}
+  #end{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7)}
+  #end pre{background:#111a2e;padding:16px;border-radius:8px;max-width:80vw;max-height:80vh;overflow:auto;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap"><div class="pane" id="p1"></div></div>
+<div id="dbg"></div>
+<div id="end"><pre id="endtxt"></pre></div>
+<script type="module">
+  // Dev harness. URL params:
+  //   ?ai=1        AI vs AI           ?p2=1   local 2 players (P1 home, P2 away)
+  //   ?half=N      real minutes/half  ?night=1  night stadium   ?diff=amateur|pro|world|legendary
+  //   ?net=1       host + guest side by side in one page (snapshot/input roundtrip test)
+  //   ?away=1      human plays the away side
+  import { createMatch } from './js/engine/index.js';
+  import { BRAZIL, FRANCE } from './js/engine/tests/sampleTeams.mjs';
+  const q = new URLSearchParams(location.search);
+  const half = +(q.get('half') || 3);
+  const stadium = q.get('night') ? 'night' : 'day';
+  const difficulty = q.get('diff') || 'pro';
+  const controllers = q.get('ai') ? { home: 'ai', away: 'ai' } : q.get('p2') ? { home: 'p1', away: 'p2' } : q.get('away') ? { home: 'ai', away: 'p1' } : { home: 'p1', away: 'ai' };
+  const events = [];
+  window.__events = events;
+  const onEvent = (e) => { events.push(e); console.log('[event]', JSON.stringify(e)); };
+  const onEnd = (r) => {
+    window.__result = r;
+    console.log('[end]', JSON.stringify(r).slice(0, 300));
+    document.getElementById('endtxt').textContent = 'MATCH OVER\n\n' + JSON.stringify(r, null, 2);
+    document.getElementById('end').style.display = 'flex';
+  };
+  if (q.get('net')) {
+    const wrap = document.getElementById('wrap');
+    const p2 = document.createElement('div'); p2.className = 'pane'; p2.id = 'p2'; wrap.appendChild(p2);
+    const host = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, netRole: 'host', controllers: { home: q.get('ai') ? 'ai' : 'p1', away: 'remote' }, onEvent, onEnd });
+    const guest = createMatch(p2, { home: BRAZIL, away: FRANCE, halfMinutes: half, stadium, netRole: 'guest', controllers: { home: 'remote', away: 'p2' }, onEvent: (e) => console.log('[guest-event]', e.type), onEnd: (r) => console.log('[guest-end]', JSON.stringify(r).slice(0, 200)) });
+    window.__host = host; window.__guest = guest;
+    let maxSize = 0;
+    setInterval(() => {
+      const s = JSON.stringify(host.getSnapshot());
+      maxSize = Math.max(maxSize, s.length);
+      window.__snapSize = maxSize;
+      guest.applySnapshot(JSON.parse(s));
+      host.setRemoteInput('away', JSON.parse(JSON.stringify(guest.getLocalInput('away'))));
+    }, 50);
+    window.__match = host;
+  } else {
+    window.__match = createMatch(document.getElementById('p1'), { home: BRAZIL, away: FRANCE, halfMinutes: half, difficulty, stadium, controllers, onEvent, onEnd });
+  }
+  // fps meter
+  const dbg = document.getElementById('dbg');
+  let n = 0, t0 = performance.now();
+  (function tick(now) { n++; if (now - t0 > 1000) { dbg.textContent = `${Math.round((n * 1000) / (now - t0))} fps`; window.__fps = Math.round((n * 1000) / (now - t0)); n = 0; t0 = now; } requestAnimationFrame(tick); })(t0);
+</script>
+</body>
+</html>

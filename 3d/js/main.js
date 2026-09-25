@@ -829,8 +829,8 @@ function mainMenu() {
         h('div', null, h('h1', { class: 'brand-name' }, 'PITCHSIDE', h('span', null, '3D')), h('div', { class: 'brand-tag' }, 'The beautiful game, in your browser'))),
       h('div', { class: 'menu-season', 'aria-hidden': 'true' }, 'SEASON 26')),
     h('nav', { class: 'tiles', 'aria-label': 'Game modes' }, tiles.map((t, i) => h('button', {
-      type: 'button', class: `tile tile--${t.cls}`, 'data-tile': t.id, 'data-autofocus': i === 0 ? '1' : null, style: { '--i': i }, onclick: t.go,
-    }, h('span', { class: 'tile-glow', 'aria-hidden': 'true' }), icon(t.id === 'local' ? 'local' : t.id), h('span', { class: 'tile-text' }, h('span', { class: 'tile-title' }, t.title), h('span', { class: 'tile-sub' }, t.sub)), h('span', { class: 'tile-arrow', 'aria-hidden': 'true' }, '›')))),
+      type: 'button', class: `tile ${t.cls.split(' ').map((c) => `tile--${c}`).join(' ')}`, 'data-tile': t.id, 'data-autofocus': i === 0 ? '1' : null, style: { '--i': i }, onclick: t.go,
+    }, h('span', { class: 'tile-glow', 'aria-hidden': 'true' }), t.cls === 'small' ? null : h('span', { class: 'tile-mark', 'aria-hidden': 'true' }, icon(t.id)), icon(t.id), h('span', { class: 'tile-text' }, h('span', { class: 'tile-title' }, t.title), h('span', { class: 'tile-sub' }, t.sub)), h('span', { class: 'tile-arrow', 'aria-hidden': 'true' }, '›')))),
     h('footer', { class: 'menu-foot' }, h('span', null, 'Arrow keys + Enter to navigate'), h('span', null, 'All players are fictional')));
   // arrow-key navigation between tiles
   el.querySelector('.tiles').addEventListener('keydown', (e) => {

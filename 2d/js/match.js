@@ -566,15 +566,13 @@ export class Match {
         }
         continue;
       }
-      const reach = slide ? 1.0 : 0.8;
+      const reach = slide ? 1.05 : 0.9;
       const playable = !tk.first && !tk.evaded && b.z < 0.7 && !(this.owner && this.owner.team === p.team);
       const victims = this.opps(p.team).filter((v) => v.state !== 'down' && !(tk.evaded && v === tk.victim && isEvading(v)));
       // remember a near miss on the man in possession (used for the "from behind" rule)
       const fx = p.x + Math.cos(tk.dir) * reach, fy = p.y + Math.sin(tk.dir) * reach;
       for (const v of victims) {
-        if (!tk.near && Math.hypot(fx - v.x, fy - v.y) < 0.55) {
-          tk.near = v; tk.nearHadBall = this.owner === v || Math.hypot(b.x - v.x, b.y - v.y) < 1.1;
-        }
+        if (!tk.near && this.owner === v && Math.hypot(fx - v.x, fy - v.y) < 0.45) { tk.near = v; tk.nearHadBall = true; }
       }
       const sw = tackleSweep(p, tk.dir, reach, playable ? b : null, victims, slide);
       if (!tk.first && sw.first === 'ball') {

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#05070d">
+<title>Claude-Mode Football</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23fff'/%3E%3Cpath d='M32 18l10 7-4 12H26l-4-12z' fill='%23111'/%3E%3C/svg%3E">
+<style>
+  :root { --bg: #05070d; --txt: #eef3ff; --mut: #8d9bbd; --acc: #19f5a4; --acc3: #22d3ee; --warm: #ffb020;
+    --display: "Bahnschrift", "DIN Alternate", "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--txt); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+    background: radial-gradient(900px 500px at 85% -10%, rgba(123,92,255,.25), transparent 60%), radial-gradient(700px 500px at -10% 30%, rgba(25,245,164,.12), transparent 60%), var(--bg); }
+  main { flex: 1; width: 100%; max-width: 1000px; margin: 0 auto; padding: 48px 16px 32px; }
+  h1 { font: 900 clamp(34px, 7vw, 64px)/1 var(--display); font-style: italic; text-transform: uppercase; margin: 0 0 8px; letter-spacing: .01em; }
+  h1 span { color: var(--acc); }
+  .lead { color: var(--mut); margin: 0 0 32px; max-width: 60ch; }
+  .games { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .game { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 300px; padding: 24px; border-radius: 20px;
+    color: var(--txt); text-decoration: none; border: 1px solid rgba(255,255,255,.1); transition: transform .18s, box-shadow .18s, border-color .18s; }
+  .game:hover, .game:focus-visible { transform: translateY(-4px); outline: none; }
+  .game .art { position: absolute; inset: 0; z-index: 0; }
+  .game > *:not(.art) { position: relative; z-index: 1; }
+  .game .tag { align-self: flex-start; padding: 3px 10px; border-radius: 999px; font: 800 11px var(--display); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 10px; }
+  .game h2 { font: 900 40px/1 var(--display); font-style: italic; text-transform: uppercase; margin: 0 0 6px; }
+  .game p { margin: 0; color: #c8d2ea; font-size: 15px; }
+  .game .go { margin-top: 16px; font: 800 14px var(--display); letter-spacing: .14em; text-transform: uppercase; }
+  .g2d { background: linear-gradient(160deg, #3a2a05, #120c02); }
+  .g2d:hover, .g2d:focus-visible { border-color: var(--warm); box-shadow: 0 16px 40px -14px var(--warm); }
+  .g2d .tag { background: rgba(255,176,32,.18); color: var(--warm); } .g2d .go { color: var(--warm); }
+  .g2d .art { background:
+      linear-gradient(transparent 49.6%, rgba(255,255,255,.18) 49.6% 50.4%, transparent 50.4%),
+      radial-gradient(circle at 50% 50%, transparent 58px, rgba(255,255,255,.18) 59px 61px, transparent 62px),
+      repeating-linear-gradient(90deg, rgba(20,110,50,.55) 0 40px, rgba(16,95,42,.55) 40px 80px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 85%); mask-image: linear-gradient(to bottom, #000 30%, transparent 85%); }
+  .g3d { background: linear-gradient(160deg, #06322b, #04100f); }
+  .g3d:hover, .g3d:focus-visible { border-color: var(--acc); box-shadow: 0 16px 40px -14px var(--acc); }
+  .g3d .tag { background: rgba(25,245,164,.16); color: var(--acc); } .g3d .go { color: var(--acc); }
+  .g3d .art { background:
+      linear-gradient(90deg, transparent calc(50% - 1px), rgba(25,245,164,.35) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+      repeating-linear-gradient(0deg, rgba(25,245,164,.12) 0 34px, rgba(25,245,164,.03) 34px 68px);
+    transform: perspective(500px) rotateX(58deg) scale(1.6); transform-origin: 50% 0;
+    -webkit-mask-image: linear-gradient(to bottom, #000 20%, transparent 80%); mask-image: linear-gradient(to bottom, #000 20%, transparent 80%); }
+  footer { text-align: center; color: #5d6b8c; font-size: 12px; padding: 16px; }
+  @media (max-width: 640px) { main { padding-top: 28px; } .games { grid-template-columns: minmax(0, 1fr); } .game { min-height: 220px; } .game h2 { font-size: 32px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pick your <span>pitch</span></h1>
+  <p class="lead">Two browser football games. No installs, no accounts — just kick off.</p>
+  <div class="games">
+    <a class="game g2d" href="2d/index.html">
+      <div class="art" aria-hidden="true"></div>
+      <span class="tag">Classic · 2D</span>
+      <h2>Touchline 2D</h2>
+      <p>Fast top-down football with tournaments and local multiplayer.</p>
+      <span class="go">Play Touchline ›</span>
+    </a>
+    <a class="game g3d" href="3d/index.html">
+      <div class="art" aria-hidden="true"></div>
+      <span class="tag">New · 3D</span>
+      <h2>Pitchside 3D</h2>
+      <p>Full 3D matches, Career Mode, Ultimate Team, local and online multiplayer.</p>
+      <span class="go">Play Pitchside ›</span>
+    </a>
+  </div>
+</main>
+<footer>All teams' players are fictional. Works best in a recent desktop or mobile browser.</footer>
+</body>
+</html>

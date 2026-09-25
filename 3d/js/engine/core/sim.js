@@ -11,7 +11,7 @@ const HL = PITCH.HL, HW = PITCH.HW;
 const HUMAN_AI = { ...DIFFICULTY.world, err: 1 };
 const HOLD_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse', 'tackle', 'switchP', 'skill'];
 const KICK_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse'];
-export const REPLAY_LEN = 6.5;
+export const REPLAY_LEN = 12; // max wait; the UI ends replays earlier via skipReplay()
 const EMPTY_IN = { mx: 0, my: 0, aimX: 0, aimY: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false };
 const SKILL_KINDS = ['stepover', 'roulette', 'ballroll', 'heel'];
 

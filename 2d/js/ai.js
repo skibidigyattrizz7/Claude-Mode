@@ -186,7 +186,7 @@ export class TeamAI {
       const from = { x: p.x + Math.cos(toBall) * lunge, y: p.y + Math.sin(toBall) * lunge };
       return tackleSweep(from, toBall, reach, b, [c], false).first === 'ball';
     };
-    const reckless = !careful && Math.random() < 0.35;
+    const reckless = !careful && Math.random() < 0.1;
     if (dBall < 1.35 && ((!behind && clean(0.8, 0.3)) || reckless)) {
       if (Math.random() < 0.35 + 0.5 * p.attrs.tackling * prof.press) { p.facing = toBall; m.startTackle(p, 'stand', toBall); }
     } else if (dBall < 3.2 && dBall > 1.6 && Math.random() < 0.12 * prof.press && ((!behind && clean(1.0, 1.4)) || reckless) && p.stamina > 0.2) {
