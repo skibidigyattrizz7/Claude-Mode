@@ -451,12 +451,13 @@ export class KickScene {
     const bp = this.ballPos;
     const dir = norm(L - bp.x, CY - bp.y);
     const aiShooterVisible = this.humanShooter == null;
-    const back = aiShooterVisible ? 5.2 : 2.9;
+    const back = aiShooterVisible ? 5.2 : 4.6;
     let fwd = 0;
     if (this.phase === 'runup' && this.humanShooter != null) fwd = Math.min(1, this.phaseT / 0.35) * 1.4;
-    const eye = { x: bp.x - dir.x * (back - fwd), y: bp.y - dir.y * (back - fwd), z: aiShooterVisible ? 1.75 : 1.5 };
+    const eye = { x: bp.x - dir.x * (back - fwd), y: bp.y - dir.y * (back - fwd), z: aiShooterVisible ? 1.75 : this.isFK ? 1.4 : 1.5 };
     const look = { x: L, y: CY + (bp.y - CY) * 0.12, z: this.isFK ? 1.4 : 1.05 };
-    v.setup(w, h, eye, look, this.isFK ? 0.42 : 0.55);
+    // keep the ball on the spot visible near the bottom of the screen
+    v.setup(w, h, eye, look, this.isFK ? 0.42 : 0.55, { cyFrac: 0.42, keep: { x: bp.x, y: bp.y, z: 0 }, maxY: 0.86 });
 
     v.drawBackground(ctx, this.time);
     v.drawGround(ctx);

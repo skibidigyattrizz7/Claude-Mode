@@ -9,7 +9,7 @@ export class View3D {
   constructor() { this.eye = { x: 0, y: 0, z: 1.5 }; this.F = 800; this.w = 1; this.h = 1; this.cx = 0; this.cy = 0; this.crowd = null; }
 
   /** Camera at `eye` looking at `look`. `fit` = fraction of screen width the goal mouth should span. */
-  setup(w, h, eye, look, fit = 0.52) {
+  setup(w, h, eye, look, fit = 0.52, opts = {}) {
     this.w = w; this.h = h; this.eye = eye;
     let fx = look.x - eye.x, fy = look.y - eye.y, fz = look.z - eye.z;
     const fl = Math.hypot(fx, fy, fz); fx /= fl; fy /= fl; fz /= fl;
@@ -21,7 +21,13 @@ export class View3D {
     this.u = { x: fy * r.z - fz * r.y, y: fz * r.x - fx * r.z, z: fx * r.y - fy * r.x };
     const D = Math.hypot(PITCH.L - eye.x, CY - eye.y);
     this.F = clamp((fit * w * D) / GOAL.W, h * 0.9, h * 3.2);
-    this.cx = w / 2; this.cy = h * 0.5;
+    this.cx = w / 2; this.cy = h * (opts.cyFrac || 0.5);
+    // widen the lens if needed so `opts.keep` (e.g. the ball at the taker's feet) stays on screen
+    if (opts.keep) {
+      const c = this.toCam(opts.keep);
+      const room = (opts.maxY || 0.9) * h - this.cy;
+      if (c.z > NEAR && c.y < 0 && room > 0) this.F = Math.max(h * 0.55, Math.min(this.F, room / (-c.y / c.z)));
+    }
   }
 
   toCam(p) {

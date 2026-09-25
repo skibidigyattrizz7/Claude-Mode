@@ -122,7 +122,7 @@ let frames = 0, fpsT = 0, fps = 0;
 let controlled = [9, 20];
 R.setControlled(controlled);
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
   if (!paused) {
     if (sim) { const n = Math.max(1, Math.round(dt * 120)); for (let i = 0; i < n; i++) sim.step(1 / 120, [null, null]); }
     else simT += dt;
