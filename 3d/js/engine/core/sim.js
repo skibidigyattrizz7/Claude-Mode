@@ -1234,7 +1234,7 @@ export class MatchSim {
     const t = this.t;
     const side = Math.sign(plan.z - g.z) || 1;
     const need = Math.abs(plan.z - g.z) - 0.85;
-    const maxBody = (0.55 + g.a.div * 0.01) * this.diffFor(g.team).gk;
+    const maxBody = (0.55 + g.a.div * 0.01) * this.diffFor(g.team).gk * (plan.pen ? 0.72 : 1);
     const timeLeft = Math.max(0.2, plan.tc - t);
     const flight = clamp(timeLeft, 0.28, 0.5);
     const vmax = 3.2 + g.a.div * 0.02 + g.a.spd * 0.005;
@@ -1831,6 +1831,7 @@ export class MatchSim {
           else { plan.z = -Math.sign(plan.z || 1) * (1.5 + this.rng() * 1.5); plan.y = 0.3 + this.rng() * 1.6; }
         }
         plan.tReact = t + 0.02;
+        plan.pen = true;
         g.gkPlan = plan;
         if (Math.abs(plan.z) < 0.6) plan.step = true;
         else this.startDive(g, plan);

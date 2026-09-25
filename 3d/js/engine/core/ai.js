@@ -554,7 +554,7 @@ export function takeSetPiece(sim, sp) {
     }
     case SP.PENALTY: {
       const side = rng() < 0.5 ? 1 : -1;
-      const tz = side * (1.5 + rng() * 1.75);
+      const tz = side * (1.7 + rng() * 1.85);
       const ty = 0.3 + rng() * 1.5;
       sim.aiKick(p, 'penalty', { tz, ty, power: 0.62 + rng() * 0.2 });
       break;
