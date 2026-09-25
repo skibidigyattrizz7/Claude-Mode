@@ -13,6 +13,7 @@ import { settings } from './settings.js';
 import { store } from './storage.js';
 import * as UI from './ui.js';
 import { newTournament, nextUserFixture, recordUserResult, WC_KEY } from './tournament.js';
+import { openOnlineMenu } from './online.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -322,6 +323,7 @@ function wcPlay(t, nf) {
 
 const menuHandlers = {
   quick: quickMatch, worldcup: worldCup, shootout, fkpractice: fkPractice, cornerpractice: cornerPractice, versus, tutorial,
+  online: () => openOnlineMenu(app),
   howto: () => UI.showHowTo(() => app.toMenu()),
   settings: () => UI.showSettings(() => app.toMenu()),
 };
