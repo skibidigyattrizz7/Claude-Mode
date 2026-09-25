@@ -179,7 +179,9 @@ export class MatchSim {
   stamFactor(p) { return (0.8 + 0.2 * p.stam) * (p.burst > this.t ? 1.1 : 1); }
   dribbleFactor(p, sprint) { return Math.min(1, (sprint ? 0.84 : 0.93) * (0.9 + p.a.dri * 0.0012) + ps(p, 'rapid') * 0.035); }
   fromBehind(tackler, victim) { return isFromBehind(tackler, victim, victim.face); }
-  minute() { return Math.floor(((this.half - 1) * 2700 + this.clock) / 60) + 1; }
+  minute() { return Math.floor((halfBase(this.half) + this.clock) / 60) + 1; }
+  // minute a goal is credited to (capped at the end of the period + added time)
+  goalMinute() { return Math.min(this.minute(), (halfBase(this.half) + halfLen(this.half)) / 60 + (this.addedSet ? this.added : 0)); }
   sideName(team) { return team === 0 ? 'home' : 'away'; }
   openness(m) { return this.openAt(m.x, m.z, 1 - m.team); }
   openAt(x, z, oppTeam) {
@@ -257,7 +259,7 @@ export class MatchSim {
       case PHASE.KICKOFF: case PHASE.SETPIECE: this._stepSetPiece(dt); break;
       case PHASE.GOAL: this._stepGoal(dt); break;
       case PHASE.REPLAY: this._stepIdle(dt); if (this.skipReq || this.t - this.phaseT > REPLAY_LEN) this._setupKickoff(this.kickoffTeam); break;
-      case PHASE.HALFTIME: this._stepIdle(dt); if (this.t - this.phaseT > 3.5) this._secondHalf(); break;
+      case PHASE.HALFTIME: this._stepIdle(dt); if (this.skipReq || this.t - this.phaseT > 3.5) { this.skipReq = false; this._afterBreak(); } break;
       case PHASE.FULLTIME: this._stepIdle(dt); break;
     }
     this._updateAnims();
@@ -269,17 +271,26 @@ export class MatchSim {
   }
 
   skipReplay() { if (this.phase === PHASE.REPLAY || this.phase === PHASE.GOAL) this.skipReq = true; }
+  // skippable cut-scenes: goal celebration / replay / half-time break
+  skipCutscene() {
+    if (this.phase === PHASE.GOAL && this.t - this.phaseT < 0.6) return false;
+    if (this.phase === PHASE.REPLAY || this.phase === PHASE.GOAL) { this.skipReq = true; return true; }
+    if (this.phase === PHASE.HALFTIME && this.t - this.phaseT > 0.8) { this.skipReq = true; return true; }
+    return false;
+  }
 
   _clock(dt) {
+    if (this.shootout) return;
     this.clock += dt * this.gameRate;
     for (const p of this.players) if (!p.sentOff) p.st.mins += (dt * this.gameRate) / 60;
-    if (!this.addedSet && this.clock >= 2700) {
+    const HLEN = halfLen(this.half);
+    if (!this.addedSet && this.clock >= HLEN) {
       this.addedSet = true;
-      this.added = clamp(Math.round(1 + this.stoppage + this.rng() * 1.5), 1, 6);
-      this.fxPush('added', { n: this.added });
+      this.added = this.half <= 2 ? clamp(Math.round(1 + this.stoppage + this.rng() * 1.5), 1, 6) : clamp(Math.round(this.stoppage * 0.5 + this.rng() * 1.2), 0, 2);
+      if (this.added > 0) this.fxPush('added', { n: this.added });
     }
-    if (this.addedSet && this.clock >= 2700 + this.added * 60) {
-      const over = this.clock - (2700 + this.added * 60);
+    if (this.addedSet && this.clock >= HLEN + this.added * 60) {
+      const over = this.clock - (HLEN + this.added * 60);
       if (this.phase === PHASE.PLAY) {
         if (Math.abs(this.ball.p.x) < 32 || over > 45) this._endHalf();
       } else if (this.phase === PHASE.SETPIECE && this.sp && this.sp.type !== SP.PENALTY && over > 25) {
@@ -331,8 +342,9 @@ export class MatchSim {
     this._collide();
     if (this.t - this.phaseT >= this.stopDur) {
       const pd = this.pending;
-      const over = this.addedSet && this.clock >= 2700 + this.added * 60;
-      if (over && pd.type !== SP.PENALTY) this._endHalf();
+      const over = !this.shootout && this.addedSet && this.clock >= halfLen(this.half) + this.added * 60;
+      if (pd.shootout) KO.afterKick(this);
+      else if (over && pd.type !== SP.PENALTY) this._endHalf();
       else this._setupSetPiece(pd);
     }
   }
@@ -1901,56 +1913,71 @@ export class MatchSim {
   _endHalf() {
     const b = this.ball;
     b.owner = -1; b.inHands = false;
-    this.fxPush('whistle', { n: this.half === 1 ? 2 : 3 });
-    if (this.half === 1) {
-      this.phase = PHASE.HALFTIME; this.phaseT = this.t;
-      this.emit({ type: 'halftime', score: [...this.score], minute: 45 });
-      this.fxPush('halftime');
-    } else {
-      this.phase = PHASE.FULLTIME; this.phaseT = this.t;
-      this.ended = true;
-      this.result = this.buildResult(false);
-      this.emit({ type: 'fulltime', score: [...this.score], minute: 90 });
-      this.fxPush('fulltime');
-    }
+    this.pendingShot = [null, null];
+    const h = this.half, level = this.score[0] === this.score[1];
+    const brk = (next) => { this.phase = PHASE.HALFTIME; this.phaseT = this.t; this.breakNext = next; this.skipReq = false; };
+    if (h === 1 || h === 3) {
+      this.fxPush('whistle', { n: 2 });
+      brk('half');
+      if (h === 1) this.emit({ type: 'halftime', score: [...this.score], minute: 45 });
+      else this.emit({ type: 'extratime-halftime', score: [...this.score], minute: 105 });
+      this.fxPush('halftime', h === 3 ? { et: 1 } : {});
+    } else if (this.knockout && level && h === 2) {
+      this.fxPush('whistle', { n: 2 });
+      brk('half');
+      this.emit({ type: 'extratime', score: [...this.score], minute: 90 });
+      this.fxPush('etbreak');
+    } else if (this.knockout && level && h === 4) {
+      this.fxPush('whistle', { n: 2 });
+      brk('shootout');
+      this.emit({ type: 'penalties', score: [...this.score], minute: 120 });
+      this.fxPush('shootout');
+    } else this._fullTime();
   }
 
-  _secondHalf() {
-    this.half = 2; this.clock = 0; this.added = 0; this.addedSet = false; this.stoppage = 0;
+  _fullTime() {
+    this.ball.owner = -1; this.ball.inHands = false;
+    this.fxPush('whistle', { n: 3 });
+    this.phase = PHASE.FULLTIME; this.phaseT = this.t;
+    this.ended = true;
+    this.result = this.buildResult(false);
+    this.emit({ type: 'fulltime', score: [...this.score], minute: this.half <= 2 ? 90 : 120, ...(this.result.pens ? { pens: [...this.result.pens] } : {}) });
+    this.fxPush('fulltime');
+  }
+
+  _afterBreak() {
+    if (this.breakNext === 'shootout') KO.startShootout(this);
+    else this._nextHalf();
+  }
+
+  _nextHalf() {
+    this.half++; this.clock = 0; this.added = 0; this.addedSet = false; this.stoppage = 0;
     this.dir = [-this.dir[0], -this.dir[1]];
-    for (const p of this.players) p.stam = Math.min(p.stamMax, p.stam + 0.4);
-    this._setupKickoff(1 - this.firstKickoff);
+    for (const p of this.players) p.stam = Math.min(p.stamMax, p.stam + (this.half === 2 ? 0.4 : 0.25));
+    this._setupKickoff(this.half === 3 ? this.firstKickoff : 1 - this.firstKickoff);
   }
 
   // ------------------------------------------------------------------ results
   buildResult(abandoned) {
     const pt = this.stats.poss[0] + this.stats.poss[1] || 1;
     const ph = Math.round((this.stats.poss[0] / pt) * 100);
+    const ratings = this.ratings();
     const res = {
       homeGoals: this.score[0], awayGoals: this.score[1],
       scorers: this.scorers.map((s) => ({ playerId: s.playerId, team: s.team, minute: s.minute, ...(s.ownGoal ? { ownGoal: true } : {}) })),
       stats: {
         possession: [ph, 100 - ph], shots: [...this.stats.shots], shotsOnTarget: [...this.stats.sot], passes: [...this.stats.passes],
       },
-      playerRatings: this.ratings(),
+      playerRatings: ratings,
+      motm: playerOfMatch(ratings, this.pstats),
     };
+    if (this.shootout && this.shootout.done) res.pens = KO.tally(this.shootout);
+    if (this.half > 2) res.extraTime = true;
     if (abandoned) res.abandoned = true;
     return res;
   }
 
-  ratings() {
-    const out = {};
-    for (const id in this.pstats) {
-      const s = this.pstats[id];
-      if (s.mins < 0.5 && s.touches === 0) continue;
-      const team = s.team;
-      const gd = this.score[team] - this.score[1 - team];
-      let r = 6.0 + s.goals * 1.0 + s.assists * 0.6 + s.passes * 0.025 - (s.passAtt - s.passes) * 0.03 + s.tackles * 0.12 + s.sot * 0.1 - s.fouls * 0.1 - s.yellow * 0.3 - s.red * 1.5 + clamp(gd, -3, 3) * 0.15;
-      if (s.gk) r += s.saves * 0.35 - s.conceded * 0.3 + (this.score[1 - team] === 0 ? 0.5 : 0);
-      out[id] = Math.round(clamp(r, 4, 10) * 10) / 10;
-    }
-    return out;
-  }
+  ratings() { return computeRatings(this.pstats, this.score); }
 
   // ------------------------------------------------------------------ anim state
   _updateAnims() {

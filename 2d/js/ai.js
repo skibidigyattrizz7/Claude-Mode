@@ -79,7 +79,7 @@ export function markTargets(defenders, attackers, homeOf, ownGoal, o = {}) {
   if (o.autoMarking === false) return marks;
   const maxD = o.maxD ?? 18;
   const free = defenders.filter((p) => !(p.human >= 0) && !p.sentOff);
-  const threats = attackers.filter((a) => !a.sentOff).sort((a, b) => dist(a, ownGoal) - dist(b, ownGoal));
+  const threats = attackers.filter((a) => !a.sentOff).sort((a, b) => (globalThis.__oldMark ? 0 : dist(a, ownGoal) - dist(b, ownGoal)));
   const homes = new Map(free.map((p) => [p, homeOf(p)]));
   for (const a of threats) {
     let best = null, bd = maxD;
@@ -290,7 +290,7 @@ export class TeamAI {
       return;
     }
     // width: the wide midfielders stretch the pitch in possession (and receive near the line)
-    if (p.role === 'MF' && pw !== 0 && p !== carrier) {
+    if (!globalThis.__noWidth && p.role === 'MF' && pw !== 0 && p !== carrier) {
       const far = Math.sign(carrier.y - CY) === -pw && Math.abs(carrier.y - CY) > 8;
       f = { x: f.x, y: pw < 0 ? (far ? 5.5 : 3.2) : PITCH.W - (far ? 5.5 : 3.2) };
       if (carrierWide && finalThird) f = { x: gx - dir * 8, y: CY - cw * 6 };      // attack the far post

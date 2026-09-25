@@ -186,6 +186,29 @@
 .pm-card.sp-hero .pc-in::after { opacity: .45; background: radial-gradient(circle at 20% 110%, rgba(39,225,193,.6), transparent 45%), repeating-linear-gradient(45deg, rgba(255,255,255,.12) 0 .15em, transparent .15em 1.2em); mask: none; -webkit-mask: none; }
 .pm-card.sp-legend { --bord: linear-gradient(160deg, #fffbe6, #d4a72c 45%, #8a6410); --face: linear-gradient(160deg, #fffef7 0%, #f3e8c8 45%, #d8c38c 100%); --ink: #3b2a07; }
 .pm-card.sp-legend .pc-in::after { opacity: .55; background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.9), transparent 45%), repeating-conic-gradient(from 0deg at 50% 35%, rgba(212,167,44,.18) 0deg 6deg, transparent 6deg 18deg); mask: none; -webkit-mask: none; }
+.pm-card.sp-icon { --bord: linear-gradient(160deg, #ffffff, #f3dc8e 30%, #c9a227 60%, #fff6d0 85%, #a07c14); --face: linear-gradient(165deg, #ffffff 0%, #fbf6e6 40%, #efe2b8 78%, #dcc47a 100%); --ink: #4a3706; }
+.pm-card.sp-icon .pc-in::after { opacity: .7; background: radial-gradient(90% 55% at 50% 38%, rgba(255,255,255,.95), transparent 60%), repeating-linear-gradient(90deg, rgba(201,162,39,.16) 0 .08em, transparent .08em .9em), linear-gradient(0deg, rgba(201,162,39,.35), transparent 30%); mask: none; -webkit-mask: none; }
+.pm-card.sp-icon .pc-ovr { background: linear-gradient(180deg, #7a5a08, #c9a227); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.pm-card.sp-icon .pc-tag { color: #9c7a14; letter-spacing: .32em; }
+.pm-card.sp-icon { filter: drop-shadow(0 0 .35em rgba(255,226,140,.55)) drop-shadow(0 .3em .6em rgba(0,0,0,.45)); }
+.pm-card.sp-star { --bord: linear-gradient(160deg, #fffbe0, #ffcf3d 40%, #b0730a 75%, #ffe58a); --face: linear-gradient(160deg, #1d1606 0%, #3b2a06 35%, #8a6210 75%, #d6a526 100%); --ink: #ffe9a3; }
+.pm-card.sp-star .pc-in::after { opacity: .6; background: radial-gradient(circle at 80% 18%, rgba(255,214,90,.55), transparent 32%), repeating-conic-gradient(from 10deg at 80% 18%, rgba(255,214,90,.14) 0deg 4deg, transparent 4deg 14deg); mask: none; -webkit-mask: none; }
+.pm-card.sp-star .pc-tag { color: #ffd54a; }
+.pc-ps { position: absolute; right: .3em; top: 1.2em; z-index: 3; display: flex; flex-direction: column; gap: .22em; }
+.pc-ps .ps { font-size: .56em; width: 2.15em; height: 2.15em; }
+.ps { display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; font: 900 10px/1 var(--font-display); font-style: normal; letter-spacing: -.02em; color: #fff; background: #26344f; box-shadow: inset 0 0 0 .12em rgba(255,255,255,.35), 0 .08em .2em rgba(0,0,0,.4); }
+.ps.ps-attack { background: linear-gradient(160deg, #ff6b6b, #b3202f); }
+.ps.ps-passing { background: linear-gradient(160deg, #5aa9ff, #1f4fb3); }
+.ps.ps-control { background: linear-gradient(160deg, #b07bff, #5a2bb5); }
+.ps.ps-defending { background: linear-gradient(160deg, #3fd08a, #117048); }
+.ps.ps-physical { background: linear-gradient(160deg, #ffb347, #b3620c); }
+.ps.ps-gk { background: linear-gradient(160deg, #3fd6e0, #0e6f86); }
+.ps.plus { box-shadow: 0 0 0 .14em #1a1200, 0 0 0 .26em #f5c542, 0 0 .5em rgba(245,197,66,.7); }
+.pm-pslist { display: grid; gap: 8px; margin-top: 14px; }
+.pm-psrow { display: flex; gap: 10px; align-items: center; }
+.pm-psrow .ps { width: 30px; height: 30px; font-size: 11px; }
+.pm-psrow > div { display: grid; min-width: 0; }
+.pm-pdetail-info { min-width: 0; }
 .pm-card--xs { font-size: 6.3px; height: 12.2em; }
 .pm-card--xs .pc-name { font-size: 1.35em; top: 6.3em; }
 .pm-card--xs .pc-ovr { font-size: 2.7em; }
@@ -325,6 +348,9 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-pack--premium .pk-foil { background: repeating-linear-gradient(120deg, rgba(245,208,102,.0) 0 1.2em, rgba(245,208,102,.35) 1.2em 1.35em) !important; }
 .pm-pack--rare { --pk: linear-gradient(160deg, #ffe38a, #d99b1b 45%, #6a2bd1 110%); --pkink: #230a4a; }
 .pm-pack--legend { --pk: linear-gradient(160deg, #fffef6, #efe0b3 45%, #caa550); --pkink: #3b2a07; }
+.pm-pack--icon { --pk: linear-gradient(160deg, #ffffff, #f7eed2 40%, #d9bd62 80%, #a88418); --pkink: #4a3706; }
+.pm-pack--icon .pk-foil { background: repeating-linear-gradient(90deg, rgba(201,162,39,.0) 0 .9em, rgba(201,162,39,.28) .9em 1em) !important; mix-blend-mode: multiply !important; }
+.pm-pack--stars { --pk: linear-gradient(160deg, #3b2a06, #16100a 55%, #d6a526 130%); --pkink: #ffd54a; }
 .pk-foil { position: absolute; inset: 0; background: repeating-linear-gradient(120deg, rgba(255,255,255,0) 0 1.4em, rgba(255,255,255,.22) 1.4em 1.6em); mix-blend-mode: overlay; }
 .pk-shine { position: absolute; inset: -30%; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.7) 50%, transparent 60%); animation: pc-shine 3.6s ease-in-out infinite; }
 .pk-logo { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); width: 3.6em; height: 3.6em; border-radius: 50%; display: grid; place-items: center; border: .2em solid currentColor; background: rgba(255,255,255,.12); }
@@ -583,6 +609,57 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-awards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .pm-award { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 16px; border-radius: 16px; border: 1px solid var(--line2); background: var(--panel); }
 
+/* ---------- V2: wallet, admin, player market, online seasons ---------- */
+.pm-coins-src { font: 700 9px/1 var(--font-display); letter-spacing: .12em; text-transform: uppercase; padding: 3px 5px; border-radius: 5px; background: rgba(255,224,138,.14); color: #d9bf6a; }
+.pm-coins.is-online { border-color: #1f7a5a; background: #06180f; }
+.pm-coins.is-online .pm-coins-src { background: rgba(25,245,164,.16); color: var(--acc); }
+.pm-walletnote { display: block; margin-top: 2px; }
+.pm-hubfoot { display: flex; justify-content: flex-end; margin-top: 18px; }
+.pm-adminbtn { min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--mut); font-size: 12px; cursor: pointer; opacity: .75; }
+.pm-adminbtn:hover, .pm-adminbtn:focus-visible { opacity: 1; color: var(--txt); border-color: var(--line2); }
+.pm-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.pm-admin-sec { display: grid; gap: 10px; margin: 0; }
+.pm-admin-sec h3 { font-size: 16px; text-transform: uppercase; }
+.pm-admin-danger { border-color: rgba(255,77,109,.35); }
+.pm-admin-results { display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+.pm-wrap { flex-wrap: wrap; }
+.pm-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; }
+.pm-toggle input { width: 20px; height: 20px; accent-color: var(--acc); }
+.pm-warnline { color: var(--warn); font-size: 13px; }
+.pm-mkttabs .pm-tab { display: grid; justify-items: start; line-height: 1.1; padding: 8px 16px; flex: 1 1 0; min-width: 0; }
+.pm-mkttabs .pm-tab small { font: 600 11px system-ui, sans-serif; letter-spacing: 0; text-transform: none; opacity: .8; }
+.pm-subtabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.pm-subnote { margin-left: auto; font-size: 12px; }
+.pm-offline { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 34px 18px; }
+.pm-offline-ico { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; background: rgba(255,176,32,.12); color: var(--warn); border: 1px solid rgba(255,176,32,.35); }
+.pm-loading { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.pm-loading .pm-spinner { width: 22px; height: 22px; border-width: 3px; }
+.pm-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 4px; }
+.pm-status { font: 800 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.08); }
+.pm-status.s-active { background: rgba(25,245,164,.14); color: var(--acc); }
+.pm-status.s-sold { background: rgba(245,197,66,.16); color: var(--gold); }
+.pm-status.s-expired { background: rgba(255,77,109,.14); color: #ff9fb1; }
+.pm-status.s-pending { color: var(--mut); }
+.pm-mkt-side { display: grid; justify-items: end; gap: 4px; }
+.pm-mkt-side .pm-price { margin: 0; }
+.pm-mktrow.is-sold { border-color: rgba(245,197,66,.4); }
+.pm-claimbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0; }
+.pm-claimbar > div { display: grid; min-width: 0; flex: 1 1 240px; }
+.pm-listcard { display: flex; gap: 14px; align-items: flex-start; }
+.pm-listcard .pm-card--sm { flex: none; }
+.pm-taxline { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(245,197,66,.08); border: 1px solid rgba(245,197,66,.25); }
+.pm-taxline b { color: var(--gold); }
+.pm-ainote { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; border-radius: 12px; border: 1px dashed var(--line2); }
+.pm-cardtag--ut { background: #5a6478; color: #fff; }
+.pm-pickgrid { max-height: 60vh; overflow: auto; padding: 6px 2px; }
+.pm-tile--online { --tc1: #3b0f2e; --tc2: #0b0a1c; }
+.pm-tile.is-disabled { opacity: .55; filter: saturate(.4); }
+.pm-art-online span { position: absolute; right: 16px; top: 10px; font: 900 64px/1 var(--font-display); letter-spacing: -.04em; color: transparent; -webkit-text-stroke: 2px rgba(255,120,190,.35); }
+.pm-rivals { background: linear-gradient(135deg, #4a0f38, #0c1226 70%); margin-bottom: 14px; }
+.pm-onlineres { text-align: center; display: grid; gap: 10px; }
+.pm-onlineres .pm-rewards { margin: 0; }
+.pm-po.is-icon .pm-po-bg { background: radial-gradient(circle at 50% 50%, rgba(255,240,200,.55), rgba(201,162,39,.2) 40%, transparent 72%), #0b0904 !important; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 980px) {
   .pm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -630,6 +707,11 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
   .pm-po-gridhead h2 { font-size: 22px; }
   .pm-mktrow { gap: 8px; padding-right: 8px; }
   .pm-mktrow .pm-price { font-size: 14px; }
+  .pm-mktrow { flex-wrap: wrap; }
+  .pm-mktrow .pm-mkt-info { flex: 1 1 120px; }
+  .pm-admin-grid { grid-template-columns: minmax(0, 1fr); }
+  .pm-subnote { margin-left: 0; flex-basis: 100%; }
+  .pm-listcard { flex-direction: column; align-items: center; }
   .pm-filterbar .pm-select, .pm-filterbar .pm-input--num { flex: 1 1 130px; }
   .pm-vs-mid { font-size: 22px; }
   .pm-next-actions .pm-btn--lg { flex: 1 1 140px; padding: 10px 14px; }
