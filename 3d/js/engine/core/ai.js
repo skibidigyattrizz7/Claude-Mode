@@ -214,10 +214,11 @@ function press(sim, p, owner, primary) {
     if (d < 1.8 && t > p.cool.tackle && t > p.nextThink) {
       p.nextThink = t + diff.think * (0.6 + sim.rng() * 0.6);
       const behind = sim.fromBehind(p, owner);
-      const pT = 0.22 + p.a.def / 320 + diff.level * 0.05;
+      const pT = 0.3 + p.a.def / 250 + diff.level * 0.05;
+      const reckless = 0.35 * (1.1 - p.a.def / 110) + 0.06;
       if (sim.rng() < pT) {
-        if (!behind) sim.startTackle(p);
-        else if (sim.rng() < 0.12 - diff.level * 0.03) sim.startSlide(p);
+        if (!behind || sim.rng() < reckless) sim.startTackle(p);
+        else if (sim.rng() < 0.16 - diff.level * 0.03) sim.startSlide(p);
       }
     } else if (d > 1.8 && d < 3.2 && t > p.cool.tackle && t > p.nextThink && !sim.fromBehind(p, owner)) {
       p.nextThink = t + diff.think;
@@ -298,9 +299,10 @@ function decideCarrier(sim, p, pressure) {
     }
     const ang = Math.abs(Math.atan2(p.z, Math.abs(gx - p.x)));
     let q = (a.sho / 100) * clamp(1 - (D - 9) / 22, 0, 1) * (1 / (1 + blockers * 0.7)) * Math.max(0.2, Math.cos(ang));
+    if (D < 20) q += 0.12;
     if (D < 12 && ang < 0.9) q += 0.35;
     if (D < 7) q += 0.3;
-    opts.push({ type: 'shoot', s: q * 1.55 + noise() });
+    opts.push({ type: 'shoot', s: q * 2.0 + noise() });
   }
   // --- passes
   for (const m of mates) {
@@ -378,7 +380,7 @@ function aiShoot(sim, p, D) {
   const rng = sim.rng, team = p.team;
   const gk = sim.gk(1 - team);
   const side = gk && Math.abs(gk.z) > 0.3 ? -Math.sign(gk.z) : rng() < 0.5 ? 1 : -1;
-  const tz = side * (GOAL.HW - 0.45 - rng() * 1.2);
+  const tz = side * (GOAL.HW - 0.3 - rng() * 1.0);
   const ty = 0.3 + rng() * (D < 12 ? 1.2 : 1.7);
   const finesse = D > 13 && D < 26 && p.a.sho > 70 && rng() < 0.35;
   const power = clamp(0.55 + D / 45 + rng() * 0.08, 0.5, 0.88);
@@ -403,17 +405,23 @@ function gkThink(sim, p, dt) {
     const pl = p.gkPlan;
     if (t > pl.tc + 0.6 || b.owner >= 0) p.gkPlan = null;
     else if (t >= pl.tReact) {
+      if (!pl.acted && sim.path && t - (pl.refT || 0) > 0.09) {
+        const np = sim.planSave(p);
+        if (np) Object.assign(pl, { tc: np.tc, x: np.x, y: np.y, z: np.z, gz: np.gz, gy: np.gy, refT: t });
+      }
+      const dz = pl.z - p.z, timeLeft = pl.tc - t;
+      const wide = Math.abs(pl.gz) > GOAL.HW + 0.5 || pl.gy > GOAL.H + 0.6;
       if (!pl.acted) {
-        pl.acted = true;
-        const dz = pl.z - p.z;
-        const wide = Math.abs(pl.gz) > GOAL.HW + 0.5 || pl.gy > GOAL.H + 0.6;
-        if (!wide || Math.abs(dz) < 1.6) {
-          if (Math.abs(dz) < 0.75 && pl.y < 2.2) pl.step = true;
-          else sim.startDive(p, pl);
+        if (wide && Math.abs(dz) > 1.6) pl.acted = true;
+        else if (Math.abs(dz) > 0.75 || pl.y > 2.2) {
+          if (timeLeft < 0.48) { pl.acted = true; sim.startDive(p, pl); }
         }
       }
-      if (pl.step) {
-        goTo(sim, p, { x: pl.x, z: pl.z }, 'sprint', 0.05);
+      if (!pl.acted && timeLeft < 0.62 && Math.abs(dz) > 0.5) { p.des.x *= 0.5; p.des.z *= 0.5; return; }
+      if (!pl.acted || pl.step) {
+        goTo(sim, p, { x: pl.x, z: pl.z }, 'run', 0.05);
+        const sh = Math.hypot(p.des.x, p.des.z), cap = 2.6 + p.a.spd * 0.01;
+        if (sh > cap) { p.des.x *= cap / sh; p.des.z *= cap / sh; }
         return;
       }
       if (p.act) return;

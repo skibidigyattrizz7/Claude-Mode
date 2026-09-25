@@ -1,0 +1,390 @@
+// Team AI: formation shape, pressing, marking, support runs, decision making on the
+// ball, and goalkeeper positioning / shot reading / distribution.
+import { PITCH, CY, GOAL, BOX, PHYS } from './constants.js';
+import { FORMATION } from './data.js';
+import { clamp, dist, norm, angleBetween, DEG, gauss } from './util.js';
+import { laneRisk, leadTarget } from './passing.js';
+import { topSpeed, jogSpeed } from './player.js';
+import { isFromBehind, inPenaltyArea } from './rules.js';
+import { simulatePath } from './physics.js';
+
+/** Base formation position for p given the ball and possession phase. */
+export function formationPos(m, p, phase = 0) {
+  const f = FORMATION[p.idx];
+  const dir = m.attackDir(p.team);
+  const b = m.ball;
+  const prog = dir > 0 ? b.x / PITCH.L : (PITCH.L - b.x) / PITCH.L;
+  let fx = f.x + (prog - 0.45) * 0.55 + phase * 0.07;
+  const maxX = p.role === 'DF' ? 0.6 : p.role === 'MF' ? 0.8 : 0.88;
+  const minX = p.role === 'FW' ? 0.3 : 0.08;
+  fx = clamp(fx, minX, maxX);
+  let fy = f.y + (b.y / PITCH.W - 0.5) * 0.4;
+  if (phase > 0 && p.role !== 'DF') fy = 0.5 + (fy - 0.5) * 1.15;
+  if (phase < 0) fy = 0.5 + (fy - 0.5) * 0.85;
+  fy = clamp(fy, 0.06, 0.94);
+  return { x: dir > 0 ? fx * PITCH.L : PITCH.L - fx * PITCH.L, y: fy * PITCH.W };
+}
+
+function moveTo(p, tx, ty, sprintDist = 6, slow = false) {
+  const dx = tx - p.x, dy = ty - p.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 0.3) { p.want.x = 0; p.want.y = 0; p.sprint = false; return d; }
+  p.sprint = d > sprintDist && p.stamina > 0.25;
+  const sp = Math.min(topSpeed(p, p.sprint), d * 2.2 + 0.5) * (slow ? 0.7 : 1);
+  p.want.x = (dx / d) * sp; p.want.y = (dy / d) * sp;
+  return d;
+}
+
+export class TeamAI {
+  constructor(m, team) { this.m = m; this.team = team; this.path = []; this.markT = 0; }
+
+  get prof() { return this.m.prof[this.team]; }
+
+  /** Earliest point on the predicted ball path player p can reach. */
+  interceptPoint(p) {
+    const sp = topSpeed(p, true) * 0.95;
+    for (const pt of this.m.ballPath) {
+      if (pt.z > 2.2) continue;
+      const d = Math.hypot(pt.x - p.x, pt.y - p.y) - 0.5;
+      if (d / sp <= pt.t + 0.05) return { x: pt.x, y: pt.y, t: pt.t };
+    }
+    const last = this.m.ballPath[this.m.ballPath.length - 1] || this.m.ball;
+    return { x: last.x, y: last.y, t: 9 };
+  }
+
+  update(dt) {
+    const m = this.m, team = this.team;
+    const mates = m.mates(team);
+    const own = m.owner;
+    const inPoss = own && own.team === team;
+    const oppPoss = own && own.team !== team;
+    const field = mates.filter((p) => p.role !== 'GK');
+
+    // Who chases a loose ball / presses the carrier?
+    let chaser = null, presser = null, cover = null;
+    if (!own) {
+      let bestT = 1e9;
+      for (const p of field) {
+        if (m.pass && m.pass.receiver && m.pass.receiver.team === team && m.pass.receiver !== p) continue;
+        const ip = this.interceptPoint(p);
+        const t = ip.t + Math.hypot(ip.x - p.x, ip.y - p.y) * 0.02;
+        if (t < bestT) { bestT = t; chaser = p; }
+      }
+      if (chaser && chaser.human >= 0) chaser = null;  // human handles it
+    } else if (oppPoss) {
+      const sorted = field.slice().sort((a, b) => dist(a, own) - dist(b, own));
+      presser = sorted.find((p) => p.human < 0) || null;
+      if (sorted[0] && sorted[0].human >= 0 && presser && dist(presser, own) > 9) presser = null;
+      cover = sorted.find((p) => p.human < 0 && p !== presser) || null;
+    }
+
+    // Marking assignments (refresh a few times per second)
+    this.markT -= dt;
+    if (oppPoss && this.markT <= 0) { this.assignMarks(field, own); this.markT = 0.4; }
+
+    for (const p of mates) {
+      if (p.sentOff) continue;
+      if (p.role === 'GK') { updateKeeper(m, p, dt, this.prof); continue; }
+      if (p.human >= 0) continue;
+      if (p.state !== 'run') { p.want.x = p.want.y = 0; continue; }
+      p.faceWant = Math.atan2(m.ball.y - p.y, m.ball.x - p.x);
+      if (m.pass && m.pass.receiver === p && !own) { this.receive(p); continue; }
+      if (own === p) { this.carrier(p, dt); continue; }
+      if (inPoss) this.support(p, own);
+      else if (oppPoss) {
+        if (p === presser) this.press(p, own, dt);
+        else if (p === cover) this.coverPos(p, own);
+        else this.mark(p);
+      } else {
+        if (p === chaser) { const ip = this.interceptPoint(p); moveTo(p, ip.x, ip.y, 2); }
+        else { const f = formationPos(m, p, 0); moveTo(p, f.x, f.y, 10); }
+      }
+    }
+    this.separate(mates);
+  }
+
+  receive(p) {
+    const m = this.m, b = m.ball;
+    const pt = m.pass.target;
+    const dBall = Math.hypot(b.x - p.x, b.y - p.y);
+    if (dBall < 5) { const ip = this.interceptPoint(p); moveTo(p, ip.x, ip.y, 3); }
+    else moveTo(p, pt.x, pt.y, 4);
+  }
+
+  separate(mates) {
+    for (const a of mates) {
+      if (a.human >= 0 || a.role === 'GK' || a === this.m.owner) continue;
+      for (const b of mates) {
+        if (a === b || b.sentOff) continue;
+        const dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy);
+        if (d < 4 && d > 0.01) { a.want.x += (dx / d) * (4 - d) * 0.8; a.want.y += (dy / d) * (4 - d) * 0.8; }
+      }
+    }
+  }
+
+  assignMarks(field, carrier) {
+    const m = this.m;
+    const opps = m.opps(this.team).filter((o) => o.role !== 'GK' && o !== carrier);
+    const taken = new Set();
+    const order = field.filter((p) => p.human < 0).sort((a, b) => FORMATION[a.idx].x - FORMATION[b.idx].x);
+    for (const p of order) {
+      p.ai.mark = null;
+      const home = formationPos(m, p, -1);
+      let best = null, bd = 16;
+      for (const o of opps) {
+        if (taken.has(o)) continue;
+        const d = dist(o, home);
+        if (d < bd) { bd = d; best = o; }
+      }
+      if (best) { taken.add(best); p.ai.mark = best; }
+    }
+  }
+
+  mark(p) {
+    const m = this.m;
+    const o = p.ai.mark;
+    const gc = m.goalCenter(m.ownSide(this.team));
+    if (o && !o.sentOff) {
+      const n = norm(gc.x - o.x, gc.y - o.y);
+      const tb = norm(m.ball.x - o.x, m.ball.y - o.y);
+      moveTo(p, o.x + n.x * 1.8 + tb.x * 0.8, o.y + n.y * 1.8 + tb.y * 0.8, 5);
+    } else {
+      const f = formationPos(m, p, -1);
+      moveTo(p, f.x, f.y, 8);
+    }
+  }
+
+  coverPos(p, carrier) {
+    const m = this.m;
+    const gc = m.goalCenter(m.ownSide(this.team));
+    const n = norm(gc.x - carrier.x, gc.y - carrier.y);
+    moveTo(p, carrier.x + n.x * 6, carrier.y + n.y * 6, 5);
+  }
+
+  press(p, c, dt) {
+    const m = this.m, prof = this.prof;
+    const gc = m.goalCenter(m.ownSide(this.team));
+    const n = norm(gc.x - c.x, gc.y - c.y);
+    const d = dist(p, c);
+    // approach goal-side of the carrier, then close in on the ball
+    const tx = d > 3 ? c.x + n.x * 1.4 : m.ball.x + n.x * 0.4;
+    const ty = d > 3 ? c.y + n.y * 1.4 : m.ball.y + n.y * 0.4;
+    moveTo(p, tx, ty, 3);
+    p.want.x *= prof.press > 1 ? 1 : 0.85 + 0.15 * prof.press;
+    p.want.y *= prof.press > 1 ? 1 : 0.85 + 0.15 * prof.press;
+    p.ai.tackT -= dt;
+    if (p.ai.tackT > 0 || p.tackleCD > 0) return;
+    p.ai.tackT = prof.react * (0.6 + Math.random() * 0.8);
+    const b = m.ball;
+    const dBall = Math.hypot(b.x - p.x, b.y - p.y);
+    const toBall = Math.atan2(b.y - p.y, b.x - p.x);
+    const behind = isFromBehind(p, c);
+    const careful = Math.random() < prof.careful;
+    if (dBall < 1.35 && (!behind || !careful)) {
+      if (Math.random() < 0.35 + 0.5 * p.attrs.tackling * prof.press) { p.facing = toBall; m.startTackle(p, 'stand', toBall); }
+    } else if (dBall < 3.2 && dBall > 1.6 && Math.random() < 0.12 * prof.press && (!behind || !careful) && p.stamina > 0.2) {
+      p.facing = toBall; m.startTackle(p, 'slide', toBall);
+    }
+  }
+
+  support(p, carrier) {
+    const m = this.m;
+    const dir = m.attackDir(this.team);
+    let f = formationPos(m, p, 1);
+    const prog = dir > 0 ? carrier.x : PITCH.L - carrier.x;
+    if (p.role === 'FW' && prog > PITCH.L * 0.3) {
+      // run in behind: beyond the deepest defender
+      const defs = m.opps(this.team).filter((o) => o.role !== 'GK');
+      let deepest = dir > 0 ? 0 : PITCH.L;
+      for (const o of defs) deepest = dir > 0 ? Math.max(deepest, o.x) : Math.min(deepest, o.x);
+      const gx = dir > 0 ? PITCH.L - 7 : 7;
+      const rx = dir > 0 ? Math.min(gx, deepest + 2.5) : Math.max(gx, deepest - 2.5);
+      f = { x: rx, y: clamp(CY + (p.y - CY) * 0.6 + Math.sin(m.time * 0.4 + p.id) * 6, 12, PITCH.W - 12) };
+    } else if (dist(p, carrier) < 9) {
+      // open an angle away from the carrier
+      const n = norm(p.x - carrier.x, p.y - carrier.y);
+      f = { x: f.x + n.x * 4, y: f.y + n.y * 4 };
+    }
+    moveTo(p, f.x, f.y, 7);
+  }
+
+  /** Decision making for an AI player on the ball. */
+  carrier(p, dt) {
+    const m = this.m, prof = this.prof;
+    const dir = m.attackDir(this.team);
+    const side = m.attackSide(this.team);
+    const gc = m.goalCenter(side);
+    const opps = m.opps(this.team);
+    p.ai.decT -= dt;
+    if (p.ai.decT <= 0) {
+      p.ai.decT = prof.react * (0.6 + Math.random() * 0.8);
+      const choice = this.decide(p, dir, side, gc, opps);
+      if (choice.kind === 'shoot') { m.aiShoot(p, choice); return; }
+      if (choice.kind === 'pass') { m.doPass(p, choice.pass, choice.mate, null); return; }
+      if (choice.kind === 'skill') { m.startSkillMove(p, choice.mx, choice.my, false); return; }
+      p.ai.dribDir = choice.dir;
+    }
+    // dribble steering
+    let d = p.ai.dribDir || { x: dir, y: 0 };
+    const toGoal = norm(gc.x - p.x, gc.y - p.y);
+    d = norm(d.x * 0.6 + toGoal.x * 0.4, d.y * 0.6 + toGoal.y * 0.4);
+    for (const o of opps) {
+      const dx = p.x - o.x, dy = p.y - o.y, od = Math.hypot(dx, dy);
+      if (od < 4.5 && od > 0.01) { d.x += (dx / od) * (4.5 - od) * 0.25; d.y += (dy / od) * (4.5 - od) * 0.25; }
+    }
+    if (p.y < 4) d.y += 0.6; if (p.y > PITCH.W - 4) d.y -= 0.6;
+    if ((dir > 0 && p.x > PITCH.L - 3) || (dir < 0 && p.x < 3)) d.x -= dir * 0.8;
+    d = norm(d.x, d.y);
+    const nearest = Math.min(...opps.map((o) => dist(o, p)));
+    p.sprint = nearest > 4 && p.stamina > 0.3;
+    const sp = topSpeed(p, p.sprint) * 0.92;
+    p.want.x = d.x * sp; p.want.y = d.y * sp;
+  }
+
+  decide(p, dir, side, gc, opps) {
+    const m = this.m, prof = this.prof;
+    const noise = () => (Math.random() - 0.5) * (1.2 - prof.acc) * 0.8;
+    const dGoal = dist(p, gc);
+    const nearestOpp = Math.min(...opps.map((o) => dist(o, p)));
+    const pressure = clamp(1 - (nearestOpp - 1) / 5, 0, 1);
+    const options = [];
+    // shooting
+    if (dGoal < 30) {
+      const ang = angleBetween(dir, 0, gc.x - p.x, gc.y - p.y);
+      const open = laneRisk(p, gc, opps.filter((o) => o.role !== 'GK'));
+      let s = 1.45 - dGoal / 19 - ang * 0.5 - open * 0.5 + p.attrs.shooting * 0.3;
+      if (inPenaltyArea(p, side)) s += 0.35;
+      options.push({ kind: 'shoot', score: s + noise(), dGoal });
+    }
+    // passing
+    for (const mate of m.mates(this.team)) {
+      if (mate === p || mate.role === 'GK' || mate.sentOff) continue;
+      const d = dist(p, mate);
+      if (d < 4 || d > 38) continue;
+      for (const kind of ['ground', 'through', 'lob']) {
+        if (kind === 'through' && (mate.role === 'DF' || (mate.vx * dir) < 2)) continue;
+        if (kind === 'lob' && d < 16) continue;
+        const plan = leadTarget(p, mate, kind, dir);
+        const risk = laneRisk(p, plan.target, opps, kind);
+        const gain = ((plan.target.x - p.x) * dir) / 22;
+        const space = Math.min(...opps.map((o) => dist(o, plan.target)));
+        const tGoal = dist(plan.target, gc);
+        let s = 0.45 + gain * 0.8 + clamp(space / 7, 0, 1) * 0.45 - risk * 1.5 - (tGoal < 20 ? -0.2 : 0) - (kind === 'lob' ? 0.2 : 0);
+        s += pressure * 0.25;
+        if (gain < -0.3) s -= 0.2;
+        options.push({ kind: 'pass', pass: kind, mate, score: s + noise() });
+      }
+    }
+    // dribbling
+    let ahead = 0;
+    for (const o of opps) {
+      const dx = (o.x - p.x) * dir;
+      if (dx > 0 && dx < 7 && Math.abs(o.y - p.y) < 3.5) ahead++;
+    }
+    const drib = 0.62 + (ahead === 0 ? 0.35 : -0.25 * ahead) + (p.attrs.dribbling - 0.5) * 0.3 - pressure * 0.35;
+    const toGoal = norm(gc.x - p.x, gc.y - p.y);
+    options.push({ kind: 'dribble', score: drib + noise(), dir: toGoal });
+    if (pressure > 0.7 && Math.random() < 0.18 * p.attrs.dribbling) {
+      options.push({ kind: 'skill', score: 1.2, mx: toGoal.x + (Math.random() - 0.5), my: toGoal.y + (Math.random() - 0.5) });
+    }
+    options.sort((a, b) => b.score - a.score);
+    return options[0];
+  }
+}
+
+/** Goalkeeper positioning, shot reading (decides save intent) and distribution. */
+export function updateKeeper(m, gk, dt, prof) {
+  const side = m.ownSide(gk.team);
+  const gx = side === 0 ? 0 : PITCH.L;
+  const inward = side === 0 ? 1 : -1;
+  const b = m.ball;
+  const kp = clamp(gk.attrs.keeping * (gk.human >= 0 ? 1 : 1) * (m.isHumanTeam(gk.team) ? 1 : prof.keeper), 0.1, 1.15);
+
+  if (gk.state === 'hold') {
+    gk.holdT += dt;
+    gk.faceWant = inward > 0 ? 0 : Math.PI;
+    if (gk.holdT > 1.3) m.keeperDistribute(gk);
+    return;
+  }
+  if (gk.state !== 'run') return;
+
+  // --- read shots: any fast free ball heading at our goal
+  const speed = Math.hypot(b.vx, b.vy);
+  if (!m.owner && speed > 7 && b.vx * inward < 0 && b.kickId !== gk.ai.kickSeen) {
+    gk.ai.kickSeen = b.kickId;
+    const lineX = side === 0 ? Math.max(gk.x, 0.2) : Math.min(gk.x, PITCH.L - 0.2);
+    const path = simulatePath(b, 1.8, (bb) => (bb.x - lineX) * inward <= 0, 1);
+    const P = path[path.length - 1];
+    if (P && (P.x - lineX) * inward <= 0.05 && Math.abs(P.y - CY) < GOAL.W / 2 + 1.2 && P.z < GOAL.H + 0.6) {
+      const react = clamp(0.24 - 0.12 * kp, 0.06, 0.3) + Math.random() * 0.06;
+      gk.ai.pendingDive = { at: m.time + react, P, tHit: m.time + P.t, kick: b.kickId, speed };
+    } else gk.ai.pendingDive = null;
+  }
+  const pd = gk.ai.pendingDive;
+  if (pd && m.time >= pd.at) {
+    gk.ai.pendingDive = null;
+    if (pd.kick === b.kickId && !m.owner) {
+      const P = pd.P;
+      const tAvail = Math.max(0.02, pd.tHit - m.time);
+      const D = Math.abs(P.y - gk.y);
+      const reach = 1.0 + 0.8 * kp;
+      const diveSpeed = 4.5 + 3.2 * kp;
+      const reachable = D - reach <= diveSpeed * tAvail;
+      const nearPost = Math.abs(P.y - CY) > GOAL.W / 2 - 1.1;
+      const high = P.z > 1.75;
+      let prob = 0.96 - Math.max(0, pd.speed - 13) * 0.022 - (nearPost ? 0.16 : 0) - (high ? 0.1 : 0) - (D > 2.2 ? 0.1 : 0);
+      prob *= 0.78 + 0.25 * kp;
+      if (!reachable) prob = 0.05;
+      if (D < 0.7) prob = Math.max(prob, 0.9 * (0.8 + 0.2 * kp));
+      gk.saveIntent = Math.random() < clamp(prob, 0.03, 0.97);
+      gk.saveKick = pd.kick;
+      const s = Math.sign(P.y - gk.y) || 1;
+      const bodyY = gk.saveIntent ? P.y - s * Math.min(D, reach * 0.7) : P.y - s * (reach + 0.9);
+      const bodyX = lineX + inward * 0.15;
+      if (D > 0.9) {
+        gk.state = 'dive'; gk.stateT = 0; gk.stateDur = 0.75;
+        gk.dive = { dir: s, z: P.z };
+        const t = Math.max(0.12, tAvail);
+        const vy = clamp((bodyY - gk.y) / t, -diveSpeed * 1.4, diveSpeed * 1.4);
+        const vx = clamp((bodyX - gk.x) / t, -3, 3);
+        gk.vx = vx; gk.vy = vy;
+        gk.facing = inward > 0 ? 0 : Math.PI;
+      }
+      m.emit('keeperDive', { gk, save: gk.saveIntent });
+    }
+    return;
+  }
+
+  // --- positioning on the ball–goal angle
+  const gc = { x: gx, y: CY };
+  const toBall = norm(b.x - gc.x, b.y - gc.y);
+  const db = dist(b, gc);
+  let out = clamp(0.8 + db * 0.07, 0.8, 4.2);
+  let tx = gc.x + toBall.x * out, ty = gc.y + toBall.y * out;
+  ty = clamp(ty, CY - GOAL.W / 2 - 0.6, CY + GOAL.W / 2 + 0.6);
+  tx = side === 0 ? clamp(tx, 0.3, 5.5) : clamp(tx, PITCH.L - 5.5, PITCH.L - 0.3);
+
+  const own = m.owner;
+  const inBox = inPenaltyArea(b, side);
+  if (!own && inBox && speed < 12) {
+    // collect loose balls in the box if we are the closest
+    const opps = m.opps(gk.team);
+    const myD = dist(gk, b);
+    const oppD = Math.min(...opps.map((o) => dist(o, b)));
+    if (myD < oppD + 1.5 || myD < 3) { tx = b.x; ty = b.y; }
+  } else if (own && own.team !== gk.team && inBox && dist(own, gc) < 13) {
+    // 1v1: narrow the angle
+    const n = norm(own.x - gc.x, own.y - gc.y);
+    const d = clamp(dist(own, gc) - 2.2, 1, 9);
+    tx = gc.x + n.x * d; ty = gc.y + n.y * d;
+    if (dist(gk, own) < 1.6 && gk.tackleCD <= 0 && Math.random() < 0.05 + 0.1 * kp) {
+      m.startTackle(gk, 'stand', Math.atan2(b.y - gk.y, b.x - gk.x));
+      return;
+    }
+  }
+  const dx = tx - gk.x, dy = ty - gk.y, d = Math.hypot(dx, dy);
+  const sp = Math.min(d * 3, topSpeed(gk, d > 4));
+  gk.sprint = d > 4;
+  gk.want.x = d > 0.05 ? (dx / d) * sp : 0; gk.want.y = d > 0.05 ? (dy / d) * sp : 0;
+  gk.faceWant = Math.atan2(b.y - gk.y, b.x - gk.x);
+}

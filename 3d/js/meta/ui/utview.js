@@ -1,0 +1,494 @@
+// Pitchside Ultimate Team screens.
+import { h, clear, frag, modal, confirmBox, fmtNum, select } from './dom.js';
+import { playerCard } from './card.js';
+import { flagSVG, crestSVG } from './art.js';
+import { squadEditor } from './squad.js';
+import { runPackOpening, packArt } from './packopen.js';
+import { resultView } from './app.js';
+import * as UT from '../core/ut.js';
+import { getPlayer, quickSellValue, utPrice } from '../core/players.js';
+import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, clubById, POS_GROUP, POSITIONS } from '../core/data.js';
+import { resolveKitClash, gkKitFor } from '../core/teams.js';
+import { Rng } from '../core/rng.js';
+
+const persist = (app) => UT.saveUT(app.ut);
+const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary } });
+const DIFF_LABEL = { amateur: 'Amateur', pro: 'Professional', world: 'World Class', legendary: 'Legendary' };
+
+export function ensureUTView(app) {
+  if (!app.ut) app.ut = UT.loadUT();
+  return app.ut ? utHomeView() : onboardView();
+}
+
+// ---------- onboarding ----------
+const SWATCHES = [['#19F5A4', '#0B0F1A'], ['#E63946', '#FFFFFF'], ['#1D4ED8', '#F5D130'], ['#111111', '#F4B400'], ['#7B2CBF', '#27E1C1'], ['#FFFFFF', '#0A2463'], ['#FF7A00', '#111827'], ['#0F7B3F', '#FFFFFF']];
+
+function onboardView() {
+  return {
+    title: 'Create your club', kicker: 'Pitchside Ultimate Team',
+    render(main, app) {
+      const st = { name: 'Pitchside FC', short: 'PFC', c1: SWATCHES[0][0], c2: SWATCHES[0][1] };
+      const preview = h('div', { class: 'pm-ob-crest' });
+      const drawPreview = () => { clear(preview); preview.appendChild(frag(crestSVG({ id: 'UT-' + st.short, name: st.name, short: st.short, colors: { primary: st.c1, secondary: st.c2 } }, 'pm-crest pm-crest--xl'))); };
+      const name = h('input', { class: 'pm-input', value: st.name, maxlength: '24', 'aria-label': 'Club name', 'data-autofocus': '1' });
+      const short = h('input', { class: 'pm-input pm-input--short', value: st.short, maxlength: '3', 'aria-label': 'Short name (3 letters)' });
+      name.addEventListener('input', () => {
+        st.name = name.value.trim() || 'Pitchside FC';
+        const ini = st.name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().replace(/[^A-Z]/g, '');
+        if (!short.dataset.touched) { st.short = (ini + 'FC').slice(0, 3); short.value = st.short; }
+        drawPreview();
+      });
+      short.addEventListener('input', () => { short.dataset.touched = '1'; st.short = (short.value.toUpperCase().replace(/[^A-Z]/g, '') + 'XXX').slice(0, 3); drawPreview(); });
+      const c1 = h('input', { type: 'color', value: st.c1, 'aria-label': 'Primary colour' });
+      const c2 = h('input', { type: 'color', value: st.c2, 'aria-label': 'Secondary colour' });
+      c1.addEventListener('input', () => { st.c1 = c1.value.toUpperCase(); drawPreview(); });
+      c2.addEventListener('input', () => { st.c2 = c2.value.toUpperCase(); drawPreview(); });
+      drawPreview();
+      main.append(h('section', { class: 'pm-panel pm-ob' },
+        preview,
+        h('div', { class: 'pm-form' },
+          h('label', null, h('span', null, 'Club name'), name),
+          h('label', null, h('span', null, 'Short name'), short),
+          h('div', { class: 'pm-lbl' }, 'Kit colours'),
+          h('div', { class: 'pm-swatches' }, SWATCHES.map(([a, b]) => h('button', {
+            class: 'pm-swatch', 'aria-label': `Colours ${a} and ${b}`, style: { background: `linear-gradient(135deg, ${a} 50%, ${b} 50%)` },
+            onclick: () => { st.c1 = a; st.c2 = b; c1.value = a; c2.value = b; drawPreview(); },
+          })), h('label', { class: 'pm-colorpick' }, c1, c2)),
+          h('p', { class: 'pm-dim' }, 'You start with 10,000 coins, a starter squad and two welcome packs. All coins are earned by playing — no real money, ever.'),
+          h('button', {
+            class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
+              app.ut = UT.createUTState({ clubName: st.name, short: st.short, primary: st.c1, secondary: st.c2 });
+              persist(app);
+              app.replace(utHomeView());
+              app.toast('Club created! Head to the Store to open your welcome packs.', 'good');
+            },
+          }, 'Create club'))));
+    },
+  };
+}
+
+// ---------- home ----------
+export function utHomeView() {
+  return {
+    title: 'Ultimate Team', kicker: 'Pitchside', coins: true,
+    render(main, app) {
+      const s = app.ut;
+      if (!s) { app.replace(onboardView()); return; }
+      const info = UT.squadInfo(s);
+      const rank = UT.rankFor(s.battles.points);
+      const claimable = UT.OBJECTIVES.filter((o) => !s.obj[o.id] && UT.objectiveProgress(s, o) >= o.target).length;
+      const tile = (cls, title, sub, onclick, badge = null, art = null) => h('button', { class: `pm-tile ${cls}`, onclick },
+        art, badge ? h('span', { class: 'pm-badge' }, badge) : null,
+        h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
+      main.append(
+        h('section', { class: 'pm-clubhead' },
+          frag(crestSVG(userClubObj(s), 'pm-crest pm-crest--lg')),
+          h('div', null, h('div', { class: 'pm-kicker' }, 'Your club'), h('h2', null, s.clubName),
+            h('div', { class: 'pm-chiprow' },
+              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Rating'), h('b', null, info.rating || '–')),
+              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Chem'), h('b', null, info.chem.scaled)),
+              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Club'), h('b', null, s.club.length)),
+              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`))))),
+        h('div', { class: 'pm-tiles' },
+          tile('pm-tile--wide pm-tile--squad', 'Squad', `${s.squad.formation} · Rating ${info.rating} · Chemistry ${info.chem.scaled}`, () => app.push(squadView()), info.complete ? null : '!',
+            h('div', { class: 'pm-tile-art pm-art-pitch', 'aria-hidden': 'true' })),
+          tile('pm-tile--wide pm-tile--play', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()), null,
+            h('div', { class: 'pm-tile-art pm-art-play', 'aria-hidden': 'true' }, h('span', null, '▶'))),
+          tile('pm-tile--store', 'Store', 'Packs with transparent odds', () => app.push(storeView()), s.packs.length ? `${s.packs.length}` : null, h('div', { class: 'pm-tile-art pm-art-pack', 'aria-hidden': 'true' })),
+          tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView())),
+          tile('pm-tile--obj', 'Objectives', 'Earn coins & packs', () => app.push(objectivesView()), claimable ? `${claimable}` : null),
+          tile('pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
+          tile('pm-tile--market', 'Transfer Market', 'Buy & sell players', () => app.push(marketView())),
+        ));
+    },
+  };
+}
+
+// ---------- player details ----------
+export function playerModal(app, p, { actions = [], extra = null } = {}) {
+  const n = NATION_BY_CODE[p.nat];
+  const c = clubById(p.club);
+  const facts = [
+    ['Nation', n ? n.name : p.nat], ['Club', c ? c.name : p.club], ['League', leagueName(p.league)],
+    ['Age', p.age], ['Height', `${p.height} cm`], ['Foot', p.foot === 'L' ? 'Left' : 'Right'],
+    ['Weak foot', '★'.repeat(p.wf) + '☆'.repeat(5 - p.wf)], ['Skill moves', '★'.repeat(p.sm) + '☆'.repeat(5 - p.sm)],
+    ['Work rates', `${p.wr[0]} / ${p.wr[1]}`], ['Positions', [p.pos, ...(p.alt || [])].join(', ')],
+    ['Potential', p.pot],
+  ];
+  if (extra) facts.push(...extra);
+  return modal(app.root, {
+    title: p.name, wide: true, className: 'pm-pmodal',
+    body: h('div', { class: 'pm-pdetail' }, playerCard(p, { size: 'md' }),
+      h('dl', { class: 'pm-facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, String(v))]))),
+    actions: actions.concat([{ label: 'Close' }]),
+  });
+}
+
+// ---------- squad ----------
+function squadView() {
+  return {
+    title: 'Squad', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    render(main, app) {
+      const s = app.ut;
+      const autoBtn = h('button', { class: 'pm-btn pm-btn--accent', onclick: () => { UT.autoSquad(s, ed.get().formation); persist(app); ed.set(s.squad); app.toast('Best squad selected (rating + chemistry).', 'good'); } }, 'Auto-build best squad');
+      const ed = squadEditor({
+        formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
+        getPlayer, pool: () => UT.clubPlayers(s),
+        onChange: (v) => { s.squad = v; persist(app); },
+        toolbar: [autoBtn],
+      });
+      main.append(ed.el);
+    },
+  };
+}
+
+// ---------- club collection ----------
+function clubView() {
+  const f = { q: '', group: 'ALL', tier: '', sort: 'ovr', league: '' };
+  return {
+    title: 'Club', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    render(main, app) {
+      const s = app.ut;
+      const grid = h('div', { class: 'pm-cardgrid' });
+      const count = h('span', { class: 'pm-dim' });
+      const draw = () => {
+        clear(grid);
+        const q = f.q.trim().toLowerCase();
+        let list = UT.clubPlayers(s).filter((p) => (!q || p.name.toLowerCase().includes(q))
+          && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group)
+          && (!f.tier || (f.tier === 'special' ? !!p.special : f.tier === 'rare' ? p.rare : p.tier === f.tier && !p.special))
+          && (!f.league || p.league === f.league));
+        const sorters = { ovr: (a, b) => b.ovr - a.ovr, name: (a, b) => a.name.localeCompare(b.name), pos: (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr, value: (a, b) => utPrice(b) - utPrice(a), nation: (a, b) => a.nat.localeCompare(b.nat) || b.ovr - a.ovr, league: (a, b) => a.league.localeCompare(b.league) || b.ovr - a.ovr };
+        list.sort(sorters[f.sort]);
+        count.textContent = `${list.length} of ${s.club.length} players`;
+        const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
+        for (const p of list) {
+          const tag = inSquad.has(p.id) ? h('div', { class: 'pm-cardtag' }, s.squad.slots.includes(p.id) ? 'XI' : 'SUB') : null;
+          grid.appendChild(playerCard(p, { size: 'sm', extra: tag, onClick: () => clubPlayerModal(app, p, draw) }));
+        }
+        if (!list.length) grid.appendChild(h('p', { class: 'pm-empty' }, 'No players match these filters.'));
+      };
+      const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search name…', value: f.q, 'aria-label': 'Search club' });
+      search.addEventListener('input', () => { f.q = search.value; draw(); });
+      main.append(
+        h('div', { class: 'pm-filterbar' },
+          search,
+          select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),
+          select([['', 'All tiers'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special']], f.tier, (v) => { f.tier = v; draw(); }, { 'aria-label': 'Tier' }),
+          select([['', 'All leagues'], ...LEAGUES.map((l) => [l.id, l.name]), ['LEG', 'Legends'], ['HER', 'Heroes']], f.league, (v) => { f.league = v; draw(); }, { 'aria-label': 'League' }),
+          select([['ovr', 'Sort: Rating'], ['name', 'Sort: Name'], ['pos', 'Sort: Position'], ['value', 'Sort: Value'], ['nation', 'Sort: Nation'], ['league', 'Sort: League']], f.sort, (v) => { f.sort = v; draw(); }, { 'aria-label': 'Sort' }),
+          count),
+        grid);
+      draw();
+    },
+  };
+}
+
+function clubPlayerModal(app, p, redraw) {
+  const s = app.ut;
+  const qs = quickSellValue(p);
+  playerModal(app, p, {
+    extra: [['Market price', `${fmtNum(utPrice(p))} coins`], ['Quick sell', `${fmtNum(qs)} coins`]],
+    actions: [
+      { label: 'List on market', onClick: () => { setTimeout(() => sellModal(app, p, redraw), 0); } },
+      { label: `Quick sell +${fmtNum(qs)}`, danger: true, onClick: () => {
+        setTimeout(async () => {
+          if (await confirmBox(app.root, 'Quick sell', `Quick sell ${p.name} for ${fmtNum(qs)} coins?`, 'Quick sell', true)) {
+            UT.quickSell(s, p.id); persist(app); app.toast(`+${fmtNum(qs)} coins`, 'good'); app.renderTop(app.stack[app.stack.length - 1]); redraw();
+          }
+        }, 0);
+      } },
+    ],
+  });
+}
+
+function sellModal(app, p, redraw) {
+  const s = app.ut;
+  const fair = utPrice(p);
+  const input = h('input', { class: 'pm-input', type: 'number', min: '100', step: '50', value: String(fair), 'aria-label': 'Asking price' });
+  modal(app.root, {
+    title: `List ${p.name}`,
+    body: h('div', { class: 'pm-form' }, h('p', null, `Estimated market value: ${fmtNum(fair)} coins. A 5% market tax applies. Higher prices are less likely to sell.`), h('label', null, h('span', null, 'Price'), input)),
+    actions: [{ label: 'Cancel' }, { label: 'List', primary: true, onClick: () => {
+      const price = Math.max(100, Math.round(Number(input.value) || fair));
+      const r = UT.sellOnMarket(s, p.id, price);
+      if (r.sold) { persist(app); app.toast(`${p.name} sold! +${fmtNum(r.received)} coins`, 'good'); app.renderTop(app.stack[app.stack.length - 1]); redraw(); }
+      else app.toast(`No buyer found at ${fmtNum(price)} coins. Try a lower price.`, 'warn');
+    } }],
+  });
+}
+
+// ---------- store & packs ----------
+function oddsModal(app, pack) {
+  const cats = Object.keys(UT.CATEGORIES).filter((c) => pack.slots.some((sl) => sl.odds[c]));
+  const pct = (v) => (v >= 0.1 ? `${(v * 100).toFixed(1)}%` : v >= 0.001 ? `${(v * 100).toFixed(2)}%` : `${(v * 100).toFixed(3)}%`);
+  modal(app.root, {
+    title: `${pack.name} — odds`, wide: true,
+    body: h('div', null,
+      h('p', { class: 'pm-dim' }, 'Every item is drawn independently using these published probabilities.'),
+      h('div', { class: 'pm-tablewrap' }, h('table', { class: 'pm-table' },
+        h('thead', null, h('tr', null, h('th', null, 'Category'), pack.slots.map((sl, i) => h('th', null, `Slot group ${i + 1} (${sl.n}×)`)), h('th', null, 'At least one'))),
+        h('tbody', null, cats.map((c) => h('tr', null, h('td', null, UT.CATEGORIES[c].label), pack.slots.map((sl) => h('td', null, sl.odds[c] ? pct(sl.odds[c]) : '—')), h('td', null, h('b', null, pct(UT.packAtLeastOne(pack, c)))))))))),
+    actions: [{ label: 'Close', primary: true }],
+  });
+}
+
+export function openPackFlow(app, packType, onDone) {
+  const s = app.ut;
+  const pack = UT.PACK_BY_ID[packType];
+  const items = UT.openPack(packType, UT.ownedSet(s), new Rng());
+  s.stats.packsOpened++;
+  persist(app);
+  runPackOpening(app.root, {
+    pack, items, getPlayer,
+    sellValue: (p) => quickSellValue(p),
+    onSend: (pid) => { UT.addToClub(s, pid); persist(app); },
+    onSell: (pid) => { const v = quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
+    onDone: (sum) => { persist(app); app.refresh(); if (onDone) onDone(sum); },
+  });
+}
+
+function storeView() {
+  return {
+    title: 'Store', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    render(main, app) {
+      const s = app.ut;
+      const mine = h('section', { class: 'pm-section' });
+      if (s.packs.length) {
+        mine.append(h('h3', { class: 'pm-h' }, `My packs (${s.packs.length})`),
+          h('div', { class: 'pm-packrow' }, s.packs.map((pk, i) => {
+            const pack = UT.PACK_BY_ID[pk.type];
+            return h('div', { class: 'pm-packitem' }, packArt(pack, 'sm'),
+              h('div', null, h('b', null, pack.name), h('small', { class: 'pm-dim' }, pk.from || '')),
+              h('button', { class: 'pm-btn pm-btn--primary', onclick: () => { s.packs.splice(i, 1); openPackFlow(app, pk.type); } }, 'Open'));
+          })));
+      }
+      const store = h('section', { class: 'pm-section' }, h('h3', { class: 'pm-h' }, 'Buy packs'),
+        h('div', { class: 'pm-storegrid' }, UT.PACKS.map((pack) => h('div', { class: 'pm-storeitem' },
+          packArt(pack, 'md'),
+          h('div', { class: 'pm-storeinfo' }, h('h4', null, pack.name), h('p', { class: 'pm-dim' }, pack.desc),
+            h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(pack.price)),
+            h('div', { class: 'pm-btnrow' },
+              h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => oddsModal(app, pack) }, 'View odds'),
+              h('button', {
+                class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: s.coins < pack.price,
+                onclick: async () => {
+                  if (!(await confirmBox(app.root, 'Buy pack', `Buy ${pack.name} for ${fmtNum(pack.price)} coins?`, 'Buy & open'))) return;
+                  if (s.coins < pack.price) return;
+                  s.coins -= pack.price; persist(app); app.renderTop(app.stack[app.stack.length - 1]);
+                  openPackFlow(app, pack.id);
+                },
+              }, 'Buy & open')))))));
+      main.append(mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
+    },
+  };
+}
+
+// ---------- SBC ----------
+function sbcListView() {
+  return {
+    title: 'Squad Building Challenges', kicker: 'Ultimate Team', coins: true,
+    render(main, app) {
+      const s = app.ut;
+      const groups = [...new Set(UT.SBCS.map((x) => x.group))];
+      for (const g of groups) {
+        main.append(h('h3', { class: 'pm-h' }, g), h('div', { class: 'pm-sbcgrid' }, UT.SBCS.filter((x) => x.group === g).map((sbc) => {
+          const done = s.sbc[sbc.id] || 0;
+          const avail = UT.sbcAvailable(s, sbc);
+          return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
+            h('div', { class: 'pm-sbc-top' }, h('h4', null, sbc.name), sbc.repeatable ? h('span', { class: 'pm-chip on' }, 'Repeatable') : null),
+            h('p', null, sbc.desc),
+            h('ul', { class: 'pm-reqmini' }, sbc.reqs.filter((r) => r.t !== 'count').map((r) => h('li', null, UT.reqLabel(r)))),
+            h('div', { class: 'pm-sbc-reward' }, h('span', { class: 'pm-dim' }, 'Reward'), h('b', null, rewardText(sbc.reward))),
+            done ? h('div', { class: 'pm-sbc-done' }, avail ? `Completed ×${done}` : '✓ Completed') : null);
+        })));
+      }
+    },
+  };
+}
+function rewardText(r) {
+  const parts = [];
+  if (r.coins) parts.push(`${fmtNum(r.coins)} coins`);
+  if (r.pack) parts.push(UT.PACK_BY_ID[r.pack].name);
+  if (r.player) { const p = getPlayer(r.player); parts.push(`${p.name} (${p.ovr} Hero)`); }
+  return parts.join(' + ');
+}
+
+function sbcDetailView(id) {
+  const sbc = UT.SBC_BY_ID[id];
+  const local = { formation: '4-4-2', slots: new Array(11).fill(null) };
+  return {
+    title: sbc.name, kicker: 'SBC', coins: true, cls: 'pm-main--wide',
+    render(main, app) {
+      const s = app.ut;
+      const checklist = h('ul', { class: 'pm-checklist', 'aria-live': 'polite' });
+      const submit = h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', disabled: true, onclick: doSubmit }, 'Submit');
+      const inSquad = () => new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
+      const update = () => {
+        const slots = local.slots.map((x) => (x ? getPlayer(x) : null));
+        const ev = UT.evaluateSbc(sbc, local.formation, slots);
+        clear(checklist);
+        for (const c of ev.checks) checklist.appendChild(h('li', { class: c.ok ? 'ok' : 'no' }, h('i', { 'aria-hidden': 'true' }, c.ok ? '✓' : '✕'), h('span', null, c.label), h('b', null, String(c.cur))));
+        submit.disabled = !ev.ok;
+      };
+      const ed = squadEditor({
+        formation: local.formation, slots: local.slots, bench: null, getPlayer,
+        pool: () => UT.clubPlayers(s),
+        rowInfo: (p) => (inSquad().has(p.id) ? 'In active squad' : `QS ${fmtNum(quickSellValue(p))}`),
+        onChange: (v) => { local.formation = v.formation; local.slots = v.slots; update(); },
+        toolbar: [
+          h('button', { class: 'pm-btn pm-btn--accent', onclick: () => { local.slots = UT.sbcAutoFill(s, sbc, local.formation); ed.set({ formation: local.formation, slots: local.slots }); update(); } }, 'Auto-fill'),
+          h('button', { class: 'pm-btn pm-btn--ghost', onclick: () => { local.slots = new Array(11).fill(null); ed.set({ slots: local.slots }); update(); } }, 'Clear'),
+        ],
+      });
+      async function doSubmit() {
+        const inSq = local.slots.filter((x) => x && inSquad().has(x)).length;
+        const ok = await confirmBox(app.root, 'Submit SBC', `The ${local.slots.filter(Boolean).length} players in this challenge will be exchanged${inSq ? ` (${inSq} from your active squad)` : ''}. Reward: ${rewardText(sbc.reward)}.`, 'Submit');
+        if (!ok) return;
+        try {
+          const got = UT.submitSbc(s, sbc.id, local.formation, local.slots);
+          persist(app);
+          local.slots = new Array(11).fill(null);
+          app.pop();
+          app.toast(`SBC complete! Received ${got.join(', ')}`, 'good');
+        } catch (e) { app.toast(e.message, 'bad'); }
+      }
+      main.append(h('div', { class: 'pm-sbcdetail' },
+        h('section', { class: 'pm-panel pm-sbcreq' },
+          h('p', null, sbc.desc), h('h3', null, 'Requirements'), checklist,
+          h('div', { class: 'pm-sbc-reward' }, h('span', { class: 'pm-dim' }, 'Reward'), h('b', null, rewardText(sbc.reward))),
+          submit, h('p', { class: 'pm-hint' }, 'Submitted players are removed from your club.')),
+        ed.el));
+      update();
+    },
+  };
+}
+
+// ---------- objectives ----------
+function objectivesView() {
+  return {
+    title: 'Objectives', kicker: 'Ultimate Team', coins: true,
+    render(main, app) {
+      const s = app.ut;
+      main.append(h('div', { class: 'pm-objlist' }, UT.OBJECTIVES.map((o) => {
+        const prog = UT.objectiveProgress(s, o);
+        const done = prog >= o.target, claimed = !!s.obj[o.id];
+        return h('div', { class: `pm-obj ${claimed ? 'is-claimed' : done ? 'is-ready' : ''}` },
+          h('div', { class: 'pm-obj-main' }, h('b', null, o.label), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${(prog / o.target) * 100}%` } })), h('small', { class: 'pm-dim' }, `${prog}/${o.target} · Reward: ${rewardText(o.reward)}`)),
+          claimed ? h('span', { class: 'pm-chip' }, 'Claimed') : h('button', {
+            class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: !done,
+            onclick: () => { const r = UT.claimObjective(s, o.id); if (r) { persist(app); app.toast(`Claimed: ${r.join(', ')}`, 'good'); app.refresh(); } },
+          }, 'Claim'));
+      })));
+    },
+  };
+}
+
+// ---------- squad battles ----------
+function battlesView() {
+  return {
+    title: 'Squad Battles', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    render(main, app) {
+      const s = app.ut;
+      const b = s.battles;
+      const rank = UT.rankFor(b.points);
+      const nextPts = rank.next ? rank.next[1] : b.points;
+      const prevPts = UT.RANKS[rank.index][1];
+      const pct = rank.next ? ((b.points - prevPts) / (nextPts - prevPts)) * 100 : 100;
+      const opps = UT.battleOpponents(b.week);
+      const canClaim = b.played >= UT.WEEK_MATCHES;
+      const rw = UT.weeklyReward(rank.index);
+      main.append(
+        h('section', { class: 'pm-rankcard' },
+          h('div', { class: `pm-rankbadge r${Math.floor(rank.index / 3)}` }, rank.name.split(' ')[0][0], h('small', null, rank.name.split(' ')[1] || '★')),
+          h('div', { class: 'pm-rankinfo' },
+            h('div', { class: 'pm-kicker' }, `Week ${b.week} · ${b.played}/${UT.WEEK_MATCHES} matches`),
+            h('h2', null, rank.name), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${Math.min(100, pct)}%` } })),
+            h('small', { class: 'pm-dim' }, rank.next ? `${b.points} pts · ${nextPts - b.points} to ${rank.next[0]}` : `${b.points} pts · Top rank!`),
+            h('small', { class: 'pm-dim' }, `Weekly reward at this rank: ${fmtNum(rw.coins)} coins + ${UT.PACK_BY_ID[rw.pack].name}`)),
+          h('div', { class: 'pm-rankside' },
+            h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Half length'),
+              select([[2, '2 min'], [3, '3 min'], [4, '4 min'], [6, '6 min']], app.settings.halfMinutes, (v) => { app.settings.halfMinutes = Number(v); app.saveSettings(); }, { 'aria-label': 'Half length' })),
+            canClaim ? h('button', { class: 'pm-btn pm-btn--accent', onclick: () => { const r = UT.claimWeek(s); if (r) { persist(app); app.toast(`Week complete (${r.rank}): ${r.rewards.join(', ')}`, 'good'); app.refresh(); } } }, 'Claim weekly rewards') : null)),
+        canClaim ? h('p', { class: 'pm-hint' }, 'Week complete! Claim your rewards to start the next week.') : null,
+        ...UT.DIFFICULTIES.map((d) => h('section', { class: 'pm-section' },
+          h('h3', { class: 'pm-h' }, DIFF_LABEL[d], h('span', { class: `pm-diff d-${d}` }, d === 'amateur' ? '×0.8' : d === 'pro' ? '×1.0' : d === 'world' ? '×1.3' : '×1.7')),
+          h('div', { class: 'pm-oppgrid' }, opps.filter((o) => o.difficulty === d).map((o) => h('button', {
+            class: 'pm-opp', disabled: canClaim, onclick: () => startBattle(app, o),
+          }, frag(crestSVG({ id: o.id, name: o.name, short: o.team.short, colors: o.colors }, 'pm-crest')),
+          h('div', null, h('b', null, o.name), h('small', { class: 'pm-dim' }, `${o.team.formation} · Rating ${o.rating}`)),
+          h('span', { class: 'pm-opp-go', 'aria-hidden': 'true' }, '▶')))))),
+        b.history.length ? h('section', { class: 'pm-section' }, h('h3', { class: 'pm-h' }, 'Recent results'),
+          h('div', { class: 'pm-history' }, b.history.slice(0, 8).map((r) => h('div', { class: `pm-hrow o-${r.outcome}` }, h('b', null, r.outcome), h('span', null, `${r.gf}–${r.ga} vs ${r.opp}`), h('small', { class: 'pm-dim' }, `+${r.points} pts · +${fmtNum(r.coins)}`))))) : null,
+      );
+    },
+  };
+}
+
+async function startBattle(app, opp) {
+  const s = app.ut;
+  const team = UT.utTeam(s);
+  if (!team) { app.toast('Your starting XI is incomplete. Fill every slot in Squad first.', 'warn'); app.push(squadView()); return; }
+  const ok = await confirmBox(app.root, `vs ${opp.name}`, `${DIFF_LABEL[opp.difficulty]} · Rating ${opp.rating}. Kick off with ${app.settings.halfMinutes}-minute halves?`, 'Kick off');
+  if (!ok) return;
+  const away = structuredClone(opp.team);
+  away.kit = resolveKitClash(team.kit, away.kit, opp.awayKit);
+  away.gkKit = gkKitFor(team.kit, away.kit, team.gkKit);
+  const result = await app.playMatch(team, away, { halfMinutes: app.settings.halfMinutes, difficulty: opp.difficulty, userSide: 'home', mode: 'ut' });
+  if (!result) return;
+  const r = UT.applyBattleResult(s, opp, result, 'home');
+  persist(app);
+  app.push(resultView({
+    title: 'Squad Battles', kicker: DIFF_LABEL[opp.difficulty], home: team, away, result, userSide: 'home',
+    extra: h('section', { class: 'pm-rewards' }, h('div', null, h('span', { class: 'pm-dim' }, 'Coins'), h('b', null, `+${fmtNum(r.coins)}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Points'), h('b', null, `+${r.points}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Rank'), h('b', null, UT.rankFor(s.battles.points).name))),
+    onContinue: (a) => a.pop(),
+  }));
+}
+
+// ---------- transfer market ----------
+function marketView() {
+  const f = { name: '', pos: '', tier: '', nat: '', league: '', minOvr: 0, maxOvr: 99, maxPrice: 0, seed: 0 };
+  let results = null;
+  return {
+    title: 'Transfer Market', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    render(main, app) {
+      const s = app.ut;
+      const list = h('div', { class: 'pm-mktlist' });
+      const drawList = () => {
+        clear(list);
+        if (!results) { list.appendChild(h('p', { class: 'pm-empty' }, 'Set your filters and search the market.')); return; }
+        if (!results.length) { list.appendChild(h('p', { class: 'pm-empty' }, 'No listings found. Try broader filters.')); return; }
+        for (const l of results) {
+          const p = getPlayer(l.pid);
+          const owned = s.club.includes(l.pid);
+          list.appendChild(h('div', { class: 'pm-mktrow' },
+            playerCard(p, { size: 'xs' }),
+            h('div', { class: 'pm-mkt-info' }, h('b', null, p.name), h('span', { class: 'pm-dim' }, `${p.pos} · ${NATION_BY_CODE[p.nat]?.name} · ${leagueName(p.league)}`), h('small', { class: 'pm-dim' }, `Ends in ${l.mins} min`)),
+            h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(l.price)),
+            h('button', {
+              class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: owned || s.coins < l.price,
+              onclick: async () => {
+                if (!(await confirmBox(app.root, 'Buy Now', `Buy ${p.name} for ${fmtNum(l.price)} coins?`, 'Buy'))) return;
+                try { UT.buyListing(s, l); persist(app); app.toast(`${p.name} joined your club!`, 'good'); results = results.filter((x) => x !== l); app.renderTop(app.stack[app.stack.length - 1]); drawList(); } catch (e) { app.toast(e.message, 'bad'); }
+              },
+            }, owned ? 'Owned' : 'Buy Now')));
+        }
+      };
+      const name = h('input', { class: 'pm-input', type: 'search', placeholder: 'Player name', value: f.name, 'aria-label': 'Player name' });
+      name.addEventListener('input', () => { f.name = name.value; });
+      const num = (key, label, min, max) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', min: String(min), max: String(max), value: String(f[key] || ''), placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
+      main.append(
+        h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); f.seed++; results = UT.marketSearch({ ...f, maxOvr: f.maxOvr || 99 }, `${Date.now() >> 16}-${f.seed}`); drawList(); } },
+          name,
+          select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),
+          select([['', 'Any quality'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special']], f.tier, (v) => { f.tier = v; }, { 'aria-label': 'Quality' }),
+          select([['', 'Any nation'], ...NATIONS.map((n) => [n.code, n.name])], f.nat, (v) => { f.nat = v; }, { 'aria-label': 'Nation' }),
+          select([['', 'Any league'], ...LEAGUES.map((l) => [l.id, l.name])], f.league, (v) => { f.league = v; }, { 'aria-label': 'League' }),
+          num('minOvr', 'Min OVR', 40, 99), num('maxOvr', 'Max OVR', 40, 99), num('maxPrice', 'Max price', 0, 10000000),
+          h('button', { class: 'pm-btn pm-btn--primary', type: 'submit' }, 'Search')),
+        list);
+      drawList();
+    },
+  };
+}
+
