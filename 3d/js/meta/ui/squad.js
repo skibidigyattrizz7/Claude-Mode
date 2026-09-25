@@ -131,7 +131,7 @@ export function squadEditor(opts) {
       pitch.appendChild(svg);
     }
     f.slots.forEach((s, i) => {
-      const wrap = h('div', { class: 'pm-slotpos', style: { left: `${s.x}%`, top: `${100 - s.y}%` } }, slotButton('slot', i));
+      const wrap = h('div', { class: 'pm-slotpos', style: { left: `${5 + s.x * 0.9}%`, top: `${6 + (100 - s.y) * 0.88}%` } }, slotButton('slot', i));
       const p = player(st.slots[i]);
       if (p && opts.chemistry !== false) {
         const c = chem.players[i];

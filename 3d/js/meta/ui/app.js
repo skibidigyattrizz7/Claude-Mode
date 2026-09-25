@@ -10,7 +10,7 @@ const SETTINGS_KEY = 'meta.settings';
 
 function ensureCss(root) {
   try {
-    const has = [...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => /\/css\/meta\.css(\?|$)/.test(l.getAttribute('href') || '') || l.dataset.pmCss);
+    const has = [...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => /(^|\/)css\/meta\.css(\?|#|$)/.test(l.getAttribute('href') || '') || l.dataset.pmCss);
     if (has) return;
     const href = new URL('../../../css/meta.css', import.meta.url).href;
     root.appendChild(h('link', { rel: 'stylesheet', href, 'data-pm-css': '1' }));

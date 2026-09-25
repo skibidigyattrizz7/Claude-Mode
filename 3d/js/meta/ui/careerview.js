@@ -300,7 +300,7 @@ function tabTable(body, app, s, ui) {
       h('tbody', null, rows.map((r, i) => h('tr', { class: `${r.club === s.userClub ? 'me' : ''} ${tier === 1 && i === 0 ? 'z-champ' : ''} ${tier === 1 && i >= n - 2 ? 'z-rel' : ''} ${tier === 2 && i < 2 ? 'z-pro' : ''}` },
         h('td', null, i + 1), h('td', { class: 'l' }, h('span', { class: 'pm-clubcell' }, crest(s, r.club, 'pm-crest pm-crest--xs'), s.clubs[r.club].name)),
         h('td', null, r.P), h('td', null, r.W), h('td', null, r.D), h('td', null, r.L), h('td', { class: 'hide-sm' }, r.GF), h('td', { class: 'hide-sm' }, r.GA), h('td', null, r.GD > 0 ? `+${r.GD}` : r.GD), h('td', null, h('b', null, r.Pts)),
-        h('td', { class: 'hide-xs' }, h('span', { class: 'pm-form' }, r.form.map((x) => h('i', { class: `f-${x}` }, x))))))))),
+        h('td', { class: 'hide-xs' }, h('span', { class: 'pm-formguide' }, r.form.map((x) => h('i', { class: `f-${x}` }, x))))))))),
     h('p', { class: 'pm-hint' }, tier === 1 ? 'Top: champions. Bottom two are relegated.' : 'Top two are promoted.'));
 }
 

@@ -94,11 +94,11 @@ export function utHomeView() {
             h('div', { class: 'pm-tile-art pm-art-pitch', 'aria-hidden': 'true' })),
           tile('pm-tile--wide pm-tile--play', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()), null,
             h('div', { class: 'pm-tile-art pm-art-play', 'aria-hidden': 'true' }, h('span', null, '▶'))),
-          tile('pm-tile--store', 'Store', 'Packs with transparent odds', () => app.push(storeView()), s.packs.length ? `${s.packs.length}` : null, h('div', { class: 'pm-tile-art pm-art-pack', 'aria-hidden': 'true' })),
+          tile('pm-tile--wide pm-tile--store', 'Store', 'Packs with transparent odds', () => app.push(storeView()), s.packs.length ? `${s.packs.length}` : null, h('div', { class: 'pm-tile-art pm-art-pack', 'aria-hidden': 'true' })),
           tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView())),
           tile('pm-tile--obj', 'Objectives', 'Earn coins & packs', () => app.push(objectivesView()), claimable ? `${claimable}` : null),
-          tile('pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
-          tile('pm-tile--market', 'Transfer Market', 'Buy & sell players', () => app.push(marketView())),
+          tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
+          tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Buy & sell players', () => app.push(marketView())),
         ));
     },
   };

@@ -607,7 +607,7 @@ export class MatchSim {
           const dd = Math.hypot(pt.x - from.x, pt.z - from.z);
           if (dd > 26) pt = { x: from.x + ((pt.x - from.x) / dd) * 26, z: from.z + ((pt.z - from.z) / dd) * 26 };
         }
-        pt = this._clampPt(pt, 1);
+        if (!o.noClamp) pt = this._clampPt(pt, 1);
         const dist = Math.hypot(pt.x - from.x, pt.z - from.z);
         const elev = o.elev ?? (kind === 'cross' ? 0.4 : kind === 'throw' ? 0.42 : kind === 'punt' ? 0.62 : dist > 30 ? 0.55 : 0.72);
         let spinY = 0;
@@ -1355,7 +1355,7 @@ export class MatchSim {
       if (d.act || d.fooledUntil > t || d.cool.steal > t || d.isGK) continue;
       const bd = Math.hypot(b.p.x - d.x, b.p.z - d.z);
       const pd = Math.hypot(o.x - d.x, o.z - d.z);
-      if (bd < 0.72) {
+      if (bd < 0.8) {
         d.cool.steal = t + 0.35;
         let pr = clamp(0.2 + (d.a.def - o.a.dri) * 0.007 + (this.fromBehind(d, o) ? -0.12 : 0), 0.03, 0.45);
         if (this.isHumanCtrl(d)) pr *= 0.6;

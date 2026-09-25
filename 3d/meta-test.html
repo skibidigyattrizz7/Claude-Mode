@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pitchside 3D — meta dev harness</title>
+<style>
+  html, body { margin: 0; background: #05070d; min-height: 100%; }
+  #dev { position: fixed; right: 8px; bottom: 8px; z-index: 5000; display: flex; gap: 6px; font: 12px system-ui; opacity: .75; }
+  #dev button { padding: 4px 8px; border-radius: 6px; border: 1px solid #334; background: #111a2c; color: #cde; cursor: pointer; }
+  #dev:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="meta"></div>
+<div id="dev">
+  <button id="nt">Log national teams</button>
+  <button id="ut">Log UT team</button>
+  <button id="reset">Reset saves</button>
+</div>
+<script type="module">
+  import { mountMeta, getNationalTeams, getSavedUltimateTeam } from './js/meta/index.js';
+
+  // Stub match engine: resolves a fake (but contract-shaped) result after 500 ms.
+  function stubStartMatch(home, away, opts) {
+    console.log('[stub] startMatch', home.name, 'vs', away.name, opts);
+    return new Promise((resolve) => setTimeout(() => {
+      const hg = Math.floor(Math.random() * 4), ag = Math.floor(Math.random() * 3);
+      const pick = (t) => { const outfield = t.players.slice(1); return outfield[Math.floor(Math.random() * outfield.length)]; };
+      const scorers = [];
+      for (let i = 0; i < hg; i++) scorers.push({ playerId: pick(home).id, team: 'home', minute: 1 + Math.floor(Math.random() * 90) });
+      for (let i = 0; i < ag; i++) scorers.push({ playerId: pick(away).id, team: 'away', minute: 1 + Math.floor(Math.random() * 90) });
+      scorers.sort((a, b) => a.minute - b.minute);
+      const playerRatings = {};
+      for (const p of home.players.concat(away.players)) playerRatings[p.id] = Math.round((5.5 + Math.random() * 3.5) * 10) / 10;
+      const ph = 40 + Math.floor(Math.random() * 20);
+      resolve({ homeGoals: hg, awayGoals: ag, scorers,
+        stats: { possession: [ph, 100 - ph], shots: [hg + 5, ag + 4], shotsOnTarget: [hg + 2, ag + 1], passes: [ph * 8, (100 - ph) * 8] },
+        playerRatings });
+    }, 500));
+  }
+
+  const meta = mountMeta(document.getElementById('meta'), { startMatch: stubStartMatch });
+  window.__meta = meta;
+  window.__api = { getNationalTeams, getSavedUltimateTeam };
+  const q = new URLSearchParams(location.search);
+  if (q.get('view') === 'ut') meta.showUltimateTeam();
+  if (q.get('view') === 'career') meta.showCareer();
+  document.getElementById('nt').onclick = () => console.log(getNationalTeams());
+  document.getElementById('ut').onclick = () => console.log(getSavedUltimateTeam());
+  document.getElementById('reset').onclick = () => {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('pitchside.')) localStorage.removeItem(k);
+    location.reload();
+  };
+</script>
+</body>
+</html>

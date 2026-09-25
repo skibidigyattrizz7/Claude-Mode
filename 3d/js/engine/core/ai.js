@@ -211,7 +211,7 @@ function press(sim, p, owner, primary) {
     goTo(sim, p, tgt, d > 3 ? 'sprint' : 'run', 0.1);
     p.des.x *= diff.press * 0.25 + 0.75; p.des.z *= diff.press * 0.25 + 0.75;
     // tackle decisions
-    if (d < 1.8 && t > p.cool.tackle && t > p.nextThink) {
+    if (d < 2.1 && t > p.cool.tackle && t > p.nextThink) {
       p.nextThink = t + diff.think * (0.6 + sim.rng() * 0.6);
       const behind = sim.fromBehind(p, owner);
       const pT = 0.3 + p.a.def / 250 + diff.level * 0.05;
@@ -246,8 +246,8 @@ function carrier(sim, p, dt) {
   const b = sim.ball;
   if (b.inHands) return;
   const pressure = sim.pressureOn(p);
-  if (!p.drib || t >= p.nextThink || (pressure < 1.6 && t > p.drib.t0 + 0.2)) {
-    p.nextThink = t + diff.think * (0.75 + rng() * 0.5) * (pressure < 2.5 ? 0.6 : 1);
+  if (!p.drib || t >= p.nextThink || (pressure < 1.4 && t > p.drib.t0 + 0.25)) {
+    p.nextThink = t + diff.think * (1.1 + rng() * 0.9) * (pressure < 2.5 ? 0.6 : 1);
     decideCarrier(sim, p, pressure);
     if (sim.ball.owner !== p.idx) return;
   }
@@ -302,7 +302,7 @@ function decideCarrier(sim, p, pressure) {
     if (D < 20) q += 0.12;
     if (D < 12 && ang < 0.9) q += 0.35;
     if (D < 7) q += 0.3;
-    opts.push({ type: 'shoot', s: q * 2.0 + noise() });
+    opts.push({ type: 'shoot', s: q * (D < 17 ? 2.1 : 1.35) + noise() });
   }
   // --- passes
   for (const m of mates) {
@@ -341,9 +341,10 @@ function decideCarrier(sim, p, pressure) {
   }
   // --- dribble
   const space = sim.spaceAhead(p);
-  let ds = 0.34 + (a.dri / 100) * 0.3 + Math.min(space, 10) * 0.03 - (pressure < 2 ? 0.35 : 0);
+  let ds = 0.42 + (a.dri / 100) * 0.35 + Math.min(space, 10) * 0.035 - (pressure < 2 ? 0.3 : 0);
   if (X < 25 && pressure < 4) ds -= 0.3;
-  if (t - (p.gainT || 0) > 3.5) ds -= 0.3;
+  if (held < 0.6 && pressure > 2.5) ds += 0.25;
+  if (held > 3.5) ds -= 0.35;
   opts.push({ type: 'dribble', s: ds + noise() });
   // --- clearance
   if (X < 22 && pressure < 2.2) opts.push({ type: 'clear', s: 0.75 + noise() });
@@ -358,8 +359,8 @@ function decideCarrier(sim, p, pressure) {
     case 'through': sim.aiKick(p, 'through', { target: o.m.idx, power: 0.6 }); break;
     case 'cross': sim.aiKick(p, 'cross', { power: 0.7 }); break;
     case 'clear': {
-      const z = clamp(p.z + (rng() - 0.5) * 30, -30, 30);
-      sim.aiKick(p, 'lob', { point: { x: sim.wx(team, clamp(X + 40, 40, 80)), z }, power: 0.9, elev: 0.62 });
+      const z = clamp(p.z * 1.4 + (rng() - 0.5) * 44, -40, 40);
+      sim.aiKick(p, 'lob', { point: { x: sim.wx(team, clamp(X + 40, 40, 80)), z }, power: 0.9, elev: 0.62, noClamp: true });
       break;
     }
     default: {
