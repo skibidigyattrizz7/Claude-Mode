@@ -1,5 +1,5 @@
 // Career Mode screens.
-import { h, clear, frag, modal, confirmBox, fmtNum, select } from './dom.js';
+import { h, clear, frag, modal, confirmBox, fmtNum, select, add } from './dom.js';
 import { playerCard } from './card.js';
 import { crestSVG, flagSVG } from './art.js';
 import { squadEditor } from './squad.js';
@@ -23,7 +23,7 @@ export function careerHomeView() {
     title: 'Career Mode', kicker: 'Pitchside',
     render(main, app) {
       const slots = C.listSlots();
-      main.append(
+      add(main, 
         h('p', { class: 'pm-lead' }, 'Take charge of a club. Win the league, conquer the cup, develop youth — or survive the drop.'),
         h('div', { class: 'pm-slots' }, slots.map((sl) => h('div', { class: `pm-slotcard ${sl.empty ? 'is-empty' : ''}` },
           h('div', { class: 'pm-kicker' }, `Save slot ${sl.slot}`),
@@ -47,7 +47,7 @@ function newCareerView(slot) {
     render(main, app) {
       const db = getDB();
       if (!st.league) {
-        main.append(h('h3', { class: 'pm-h' }, '1 · Choose a league'),
+        add(main, h('h3', { class: 'pm-h' }, '1 · Choose a league'),
           h('div', { class: 'pm-leaguegrid' }, LEAGUES.map((l) => h('button', { class: 'pm-league', style: { '--lc': l.color }, onclick: () => { st.league = l.id; app.refresh(); } },
             h('div', { class: 'pm-league-flag' }, frag(flagSVG(l.country, 'pm-flag'))),
             h('b', null, l.name), h('small', { class: 'pm-dim' }, `${l.clubs.length} clubs · 2 divisions`), h('small', { class: 'pm-dim' }, `Second tier: ${l.tier2Name}`)))));
@@ -58,7 +58,7 @@ function newCareerView(slot) {
       const ratingOf = (c) => teamRating(bestLineup(db.players.filter((p) => p.club === c.id), '4-3-3', { benchSize: 0 }).slots);
       const clubBtn = (c) => h('button', { class: `pm-clubpick ${st.club === c.id ? 'on' : ''}`, 'aria-pressed': st.club === c.id ? 'true' : 'false', onclick: () => { st.club = c.id; app.refresh(); } },
         frag(crestSVG(c, 'pm-crest')), h('div', null, h('b', null, c.name), h('small', { class: 'pm-dim' }, `${stars(c.rep)} · Rating ${ratingOf(c)}`)));
-      main.append(
+      add(main, 
         h('div', { class: 'pm-btnrow' }, h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => { st.league = null; st.club = null; app.refresh(); } }, '‹ Change league'), h('b', null, lg.name)),
         h('h3', { class: 'pm-h' }, '2 · Choose your club'),
         h('div', { class: 'pm-kicker' }, lg.name),
@@ -68,7 +68,7 @@ function newCareerView(slot) {
       if (st.club) {
         const name = h('input', { class: 'pm-input', value: st.manager, maxlength: '28', 'aria-label': 'Manager name' });
         name.addEventListener('input', () => { st.manager = name.value; });
-        main.append(h('section', { class: 'pm-panel pm-startbar' },
+        add(main, h('section', { class: 'pm-panel pm-startbar' },
           h('label', null, h('span', { class: 'pm-dim' }, '3 · Manager name'), name),
           h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
             app.career = C.newCareer({ clubId: st.club, manager: (st.manager || 'Manager').trim(), slot });
@@ -95,13 +95,13 @@ export function careerHubView() {
       this.title = s.clubs[s.userClub].name;
       this.kicker = `${s.manager} · ${C.seasonLabel(s)}`;
       app.renderTop(this);
-      main.append(nextCard(app, s));
+      add(main, nextCard(app, s));
       const tabs = h('div', { class: 'pm-tabs', role: 'tablist' }, TABS.map(([id, label]) => h('button', {
         class: `pm-tab ${ui.tab === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false',
         onclick: () => { ui.tab = id; app.refresh(); },
       }, label, id === 'overview' && s.offers.length ? h('span', { class: 'pm-dotbadge' }, s.offers.length) : null)));
       const body = h('div', { class: 'pm-tabbody', role: 'tabpanel' });
-      main.append(tabs, body);
+      add(main, tabs, body);
       ({ overview: tabOverview, squad: tabSquad, lineup: tabLineup, table: tabTable, fixtures: tabFixtures, cup: tabCup, stats: tabStats, transfers: tabTransfers, academy: tabAcademy, club: tabClub })[ui.tab](body, app, s, ui);
     },
   };
@@ -188,7 +188,7 @@ function tabOverview(body, app, s, ui) {
           h('button', { class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: !C.transferWindow(s), onclick: () => { const r = C.respondOffer(s, o.id, true); persist(app); app.toast(r.message, 'good'); app.refresh(); } }, 'Accept'),
           h('button', { class: 'pm-btn pm-btn--sm', onclick: () => { const r = C.respondOffer(s, o.id, false); persist(app); app.toast(r.message); app.refresh(); } }, 'Reject')));
     }), C.transferWindow(s) ? null : h('p', { class: 'pm-hint' }, 'Offers can only be accepted while a transfer window is open.')) : null;
-  body.append(h('div', { class: 'pm-two' },
+  add(body, h('div', { class: 'pm-two' },
     h('div', null,
       offers,
       h('section', { class: 'pm-panel' }, h('h3', null, 'Board objectives'),
@@ -254,7 +254,7 @@ function bidModal(app, s, p, preset = null) {
 function tabSquad(body, app, s) {
   const ps = C.userPlayers(s).sort((a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr);
   const inXI = new Set(s.lineup.slots);
-  body.append(
+  add(body, 
     h('div', { class: 'pm-chiprow' },
       h('span', { class: 'pm-stat-chip' }, h('span', null, 'Players'), h('b', null, ps.length)),
       h('span', { class: 'pm-stat-chip' }, h('span', null, 'Wage bill'), h('b', null, `${C.money(C.wageBill(s))}/wk`)),
@@ -286,14 +286,14 @@ function tabLineup(body, app, s) {
     decorate, rowInfo: (p) => `Fit ${Math.round(p.fitness)}% · ${moraleLabel(p.morale)}`,
     toolbar: [h('button', { class: 'pm-btn pm-btn--accent', onclick: () => { C.autoLineup(s, ed.get().formation); persist(app); ed.set(s.lineup); app.toast('Best available XI selected.', 'good'); } }, 'Auto-pick XI')],
   });
-  body.append(ed.el);
+  add(body, ed.el);
 }
 
 function tabTable(body, app, s, ui) {
   const tier = ui.tier || s.clubs[s.userClub].tier;
   const rows = C.leagueTable(s, tier);
   const n = rows.length;
-  body.append(
+  add(body, 
     h('div', { class: 'pm-chips' }, [[1, s.leagueName], [2, s.tier2Name]].map(([t, l]) => h('button', { class: `pm-chip ${tier === t ? 'on' : ''}`, onclick: () => { ui.tier = t; app.refresh(); } }, l))),
     h('div', { class: 'pm-tablewrap' }, h('table', { class: 'pm-table pm-table--league' },
       h('thead', null, h('tr', null, ['#', 'Club', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts', 'Form'].map((c, i) => h('th', { class: `${i === 1 ? 'l' : ''} ${[6, 7].includes(i) ? 'hide-sm' : ''} ${i === 10 ? 'hide-xs' : ''}` }, c)))),
@@ -315,7 +315,7 @@ function tabFixtures(body, app, s, ui) {
     h('span', { class: 'pm-fx-t r' }, s.clubs[f.h].name, crest(s, f.h, 'pm-crest pm-crest--xs')),
     h('b', { class: 'pm-fx-s' }, f.played ? `${f.hg} – ${f.ag}` : 'vs'),
     h('span', { class: 'pm-fx-t' }, crest(s, f.a, 'pm-crest pm-crest--xs'), s.clubs[f.a].name));
-  body.append(h('div', { class: 'pm-two' },
+  add(body, h('div', { class: 'pm-two' },
     h('section', { class: 'pm-panel' },
       h('div', { class: 'pm-mdnav' },
         h('button', { class: 'pm-btn pm-btn--sm', disabled: cur <= 1, 'aria-label': 'Previous matchday', onclick: () => { ui.md = cur - 1; app.refresh(); } }, '‹'),
@@ -333,7 +333,7 @@ function tabFixtures(body, app, s, ui) {
 
 function tabCup(body, app, s) {
   const rounds = s.cup.rounds;
-  body.append(
+  add(body, 
     s.cup.winner ? h('section', { class: 'pm-panel pm-cupwin' }, crest(s, s.cup.winner, 'pm-crest pm-crest--lg'), h('div', null, h('div', { class: 'pm-kicker' }, 'Cup winners'), h('h2', null, s.clubs[s.cup.winner].name))) : null,
     h('div', { class: 'pm-bracket' }, C.CUP_ROUNDS.map((name, i) => h('section', { class: 'pm-panel pm-round' }, h('h3', null, name),
       rounds[i] ? rounds[i].map((f) => h('div', { class: `pm-tie ${f.h === s.userClub || f.a === s.userClub ? 'me' : ''}` },
@@ -346,7 +346,7 @@ function tabStats(body, app, s) {
     ps.length ? h('ol', { class: 'pm-leaders' }, ps.map((p) => h('li', { class: p.club === s.userClub ? 'me' : '', onclick: () => careerPlayerModal(app, s, p) }, h('span', { class: 'pm-clubcell' }, crest(s, p.club, 'pm-crest pm-crest--xs'), p.name), h('small', { class: 'pm-dim' }, s.clubs[p.club]?.short || ''), h('b', null, val(p))))) : h('p', { class: 'pm-dim' }, 'No data yet.'));
   const all = Object.values(s.players).filter((p) => s.clubs[p.club]);
   const rated = (tier) => all.filter((p) => s.clubs[p.club].tier === tier && p.rN >= 3).sort((a, b) => C.avgRating(b) - C.avgRating(a)).slice(0, 10);
-  body.append(h('div', { class: 'pm-grid3' },
+  add(body, h('div', { class: 'pm-grid3' },
     list(`Top scorers · ${s.leagueName}`, C.topScorers(s, 1), (p) => p.goals),
     list(`Top scorers · ${s.tier2Name}`, C.topScorers(s, 2), (p) => p.goals),
     list('Best average rating', rated(s.clubs[s.userClub].tier), (p) => C.avgRating(p).toFixed(2)),
@@ -373,7 +373,7 @@ function tabTransfers(body, app, s, ui) {
   name.addEventListener('input', () => { f.name = name.value; });
   const num = (key, label) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', value: f[key] || '', placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
   const listed = C.userPlayers(s).filter((p) => p.listed);
-  body.append(
+  add(body, 
     h('section', { class: `pm-panel pm-window ${win ? 'open' : ''}` },
       h('div', null, h('div', { class: 'pm-kicker' }, 'Transfer window'), h('h3', null, win ? `${win} window OPEN` : 'Window closed'),
         h('small', { class: 'pm-dim' }, win ? 'Bids and sales are possible until the next matchday.' : `Winter window opens after matchday ${C.WINTER_AFTER_MD}; summer window opens at the start of each season.`)),
@@ -392,7 +392,7 @@ function tabTransfers(body, app, s, ui) {
 }
 
 function tabAcademy(body, app, s) {
-  body.append(
+  add(body, 
     h('section', { class: 'pm-panel pm-window' },
       h('div', null, h('div', { class: 'pm-kicker' }, 'Youth academy'), h('h3', null, `${s.youth.length} prospect${s.youth.length === 1 ? '' : 's'} under observation`), h('small', { class: 'pm-dim' }, `Send scouts to find three new prospects for ${C.money(C.YOUTH_SCOUT_COST)}.`)),
       h('button', { class: 'pm-btn pm-btn--accent', disabled: s.budget < C.YOUTH_SCOUT_COST, onclick: () => { const r = C.scoutYouth(s); persist(app); app.toast(r.message, 'good'); app.refresh(); } }, 'Scout youth')),
@@ -409,7 +409,7 @@ function tabAcademy(body, app, s) {
 function tabClub(body, app, s) {
   const club = s.clubs[s.userClub];
   const setg = s.settings || (s.settings = { halfMinutes: 3, difficulty: 'pro' });
-  body.append(h('div', { class: 'pm-two' },
+  add(body, h('div', { class: 'pm-two' },
     h('section', { class: 'pm-panel' }, h('h3', null, 'Club'),
       h('div', { class: 'pm-clubhead' }, crest(s, s.userClub, 'pm-crest pm-crest--lg'), h('div', null, h('h2', null, club.name), h('small', { class: 'pm-dim' }, `${stars(club.rep)} reputation · ${club.tier === 1 ? s.leagueName : s.tier2Name}`))),
       h('h3', null, 'History'),
@@ -437,7 +437,7 @@ function seasonEndView() {
       const award = (title, a, fmt) => h('div', { class: 'pm-award' }, h('div', { class: 'pm-kicker' }, title),
         a ? [crest(s, a.club, 'pm-crest'), h('b', null, a.name), h('small', { class: 'pm-dim' }, `${s.clubs[a.club]?.name || ''} · ${fmt(a)}`)] : h('p', { class: 'pm-dim' }, '—'));
       const nm = (id) => s.clubs[id]?.name || id;
-      main.append(
+      add(main, 
         h('section', { class: 'pm-seasonhero' },
           crest(s, S.champion, 'pm-crest pm-crest--xl'),
           h('div', null, h('div', { class: 'pm-kicker' }, `${S.label} · ${s.leagueName} champions`), h('h2', null, nm(S.champion)),

@@ -27,6 +27,8 @@ export function h(tag, attrs, ...children) {
   appendAll(el, children);
   return el;
 }
+/** Null-safe append (skips null/false, flattens arrays). */
+export function add(el, ...children) { appendAll(el, children); return el; }
 function appendAll(el, children) {
   for (const c of children) {
     if (c === null || c === undefined || c === false) continue;

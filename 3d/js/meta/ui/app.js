@@ -1,5 +1,5 @@
 // Meta UI shell: view stack, top bar, hub, shared match + result screens.
-import { h, clear, toast, fmtNum } from './dom.js';
+import { h, clear, toast, fmtNum, add } from './dom.js';
 import { load, save } from '../core/storage.js';
 import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
@@ -26,7 +26,7 @@ export class MetaApp {
     ensureCss(this.root);
     this.top = h('header', { class: 'pm-top' });
     this.main = h('main', { class: 'pm-main', tabindex: '-1' });
-    this.root.append(h('div', { class: 'pm-bgfx', 'aria-hidden': 'true' }), this.top, this.main);
+    add(this.root, h('div', { class: 'pm-bgfx', 'aria-hidden': 'true' }), this.top, this.main);
     container.appendChild(this.root);
     this.stack = [];
     this.ut = loadUT();
@@ -82,7 +82,7 @@ export class MetaApp {
   renderTop(v) {
     clear(this.top);
     const canBack = this.stack.length > 1 || this.onExit;
-    this.top.append(
+    add(this.top, 
       canBack ? h('button', { class: 'pm-back', 'aria-label': 'Back', onclick: () => this.pop() }, h('span', { 'aria-hidden': 'true' }, '‹'), h('span', { class: 'pm-back-t' }, 'Back')) : h('div', { class: 'pm-logo-sm' }, 'P'),
       h('div', { class: 'pm-top-title' }, v.kicker ? h('div', { class: 'pm-kicker' }, v.kicker) : null, h('h1', null, v.title || 'Pitchside')),
       h('div', { class: 'pm-top-right' }, v.coins && this.ut ? h('div', { class: 'pm-coins', title: 'Coins' }, h('i', { 'aria-hidden': 'true' }), fmtNum(this.ut.coins)) : null, v.topRight ? v.topRight(this) : null),
@@ -128,7 +128,7 @@ export function hubView() {
   return {
     title: 'Game Modes', kicker: 'Pitchside 3D',
     render(main, app) {
-      main.append(h('div', { class: 'pm-hub' },
+      add(main, h('div', { class: 'pm-hub' },
         h('button', { class: 'pm-tile pm-tile--hero pm-tile--ut', 'data-autofocus': '1', onclick: () => app.push(app.ut ? utHomeView() : ensureUTView(app)) },
           h('div', { class: 'pm-tile-art pm-art-ut', 'aria-hidden': 'true' }, h('span', null, 'PUT')),
           h('div', { class: 'pm-tile-body' }, h('div', { class: 'pm-kicker' }, 'Build your dream squad'), h('h2', null, 'Pitchside Ultimate Team'), h('p', null, 'Open packs, complete SBCs, climb Squad Battles.'))),
@@ -160,7 +160,7 @@ export function resultView({ title = 'Full Time', home, away, result, userSide =
       const gf = userSide === 'home' ? result.homeGoals : result.awayGoals;
       const ga = userSide === 'home' ? result.awayGoals : result.homeGoals;
       const outcome = gf > ga ? 'win' : gf < ga ? 'loss' : 'draw';
-      main.append(
+      add(main, 
         h('section', { class: `pm-score pm-score--${outcome}` },
           h('div', { class: 'pm-score-team' }, h('span', { class: 'pm-kitdot', style: { background: home.kit.primary, borderColor: home.kit.secondary } }), h('b', null, home.name), h('ul', null, scorersFor('home', home))),
           h('div', { class: 'pm-score-num' }, h('span', null, result.homeGoals), h('i', null, '–'), h('span', null, result.awayGoals),

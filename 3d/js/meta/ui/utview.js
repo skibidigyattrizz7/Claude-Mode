@@ -1,5 +1,5 @@
 // Pitchside Ultimate Team screens.
-import { h, clear, frag, modal, confirmBox, fmtNum, select } from './dom.js';
+import { h, clear, frag, modal, confirmBox, fmtNum, select, add } from './dom.js';
 import { playerCard } from './card.js';
 import { flagSVG, crestSVG } from './art.js';
 import { squadEditor } from './squad.js';
@@ -44,7 +44,7 @@ function onboardView() {
       c1.addEventListener('input', () => { st.c1 = c1.value.toUpperCase(); drawPreview(); });
       c2.addEventListener('input', () => { st.c2 = c2.value.toUpperCase(); drawPreview(); });
       drawPreview();
-      main.append(h('section', { class: 'pm-panel pm-ob' },
+      add(main, h('section', { class: 'pm-panel pm-ob' },
         preview,
         h('div', { class: 'pm-form' },
           h('label', null, h('span', null, 'Club name'), name),
@@ -80,7 +80,7 @@ export function utHomeView() {
       const tile = (cls, title, sub, onclick, badge = null, art = null) => h('button', { class: `pm-tile ${cls}`, onclick },
         art, badge ? h('span', { class: 'pm-badge' }, badge) : null,
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
-      main.append(
+      add(main, 
         h('section', { class: 'pm-clubhead' },
           frag(crestSVG(userClubObj(s), 'pm-crest pm-crest--lg')),
           h('div', null, h('div', { class: 'pm-kicker' }, 'Your club'), h('h2', null, s.clubName),
@@ -137,7 +137,7 @@ function squadView() {
         onChange: (v) => { s.squad = v; persist(app); },
         toolbar: [autoBtn],
       });
-      main.append(ed.el);
+      add(main, ed.el);
     },
   };
 }
@@ -170,7 +170,7 @@ function clubView() {
       };
       const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search name…', value: f.q, 'aria-label': 'Search club' });
       search.addEventListener('input', () => { f.q = search.value; draw(); });
-      main.append(
+      add(main, 
         h('div', { class: 'pm-filterbar' },
           search,
           select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),
@@ -255,7 +255,7 @@ function storeView() {
       const s = app.ut;
       const mine = h('section', { class: 'pm-section' });
       if (s.packs.length) {
-        mine.append(h('h3', { class: 'pm-h' }, `My packs (${s.packs.length})`),
+        add(mine, h('h3', { class: 'pm-h' }, `My packs (${s.packs.length})`),
           h('div', { class: 'pm-packrow' }, s.packs.map((pk, i) => {
             const pack = UT.PACK_BY_ID[pk.type];
             return h('div', { class: 'pm-packitem' }, packArt(pack, 'sm'),
@@ -279,7 +279,7 @@ function storeView() {
                   openPackFlow(app, pack.id);
                 },
               }, 'Buy & open')))))));
-      main.append(mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
+      add(main, mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
 }
@@ -292,7 +292,7 @@ function sbcListView() {
       const s = app.ut;
       const groups = [...new Set(UT.SBCS.map((x) => x.group))];
       for (const g of groups) {
-        main.append(h('h3', { class: 'pm-h' }, g), h('div', { class: 'pm-sbcgrid' }, UT.SBCS.filter((x) => x.group === g).map((sbc) => {
+        add(main, h('h3', { class: 'pm-h' }, g), h('div', { class: 'pm-sbcgrid' }, UT.SBCS.filter((x) => x.group === g).map((sbc) => {
           const done = s.sbc[sbc.id] || 0;
           const avail = UT.sbcAvailable(s, sbc);
           return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
@@ -353,7 +353,7 @@ function sbcDetailView(id) {
           app.toast(`SBC complete! Received ${got.join(', ')}`, 'good');
         } catch (e) { app.toast(e.message, 'bad'); }
       }
-      main.append(h('div', { class: 'pm-sbcdetail' },
+      add(main, h('div', { class: 'pm-sbcdetail' },
         h('section', { class: 'pm-panel pm-sbcreq' },
           h('p', null, sbc.desc), h('h3', null, 'Requirements'), checklist,
           h('div', { class: 'pm-sbc-reward' }, h('span', { class: 'pm-dim' }, 'Reward'), h('b', null, rewardText(sbc.reward))),
@@ -370,7 +370,7 @@ function objectivesView() {
     title: 'Objectives', kicker: 'Ultimate Team', coins: true,
     render(main, app) {
       const s = app.ut;
-      main.append(h('div', { class: 'pm-objlist' }, UT.OBJECTIVES.map((o) => {
+      add(main, h('div', { class: 'pm-objlist' }, UT.OBJECTIVES.map((o) => {
         const prog = UT.objectiveProgress(s, o);
         const done = prog >= o.target, claimed = !!s.obj[o.id];
         return h('div', { class: `pm-obj ${claimed ? 'is-claimed' : done ? 'is-ready' : ''}` },
@@ -398,7 +398,7 @@ function battlesView() {
       const opps = UT.battleOpponents(b.week);
       const canClaim = b.played >= UT.WEEK_MATCHES;
       const rw = UT.weeklyReward(rank.index);
-      main.append(
+      add(main, 
         h('section', { class: 'pm-rankcard' },
           h('div', { class: `pm-rankbadge r${Math.floor(rank.index / 3)}` }, rank.name.split(' ')[0][0], h('small', null, rank.name.split(' ')[1] || '★')),
           h('div', { class: 'pm-rankinfo' },
@@ -477,7 +477,7 @@ function marketView() {
       const name = h('input', { class: 'pm-input', type: 'search', placeholder: 'Player name', value: f.name, 'aria-label': 'Player name' });
       name.addEventListener('input', () => { f.name = name.value; });
       const num = (key, label, min, max) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', min: String(min), max: String(max), value: String(f[key] || ''), placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
-      main.append(
+      add(main, 
         h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); f.seed++; results = UT.marketSearch({ ...f, maxOvr: f.maxOvr || 99 }, `${Date.now() >> 16}-${f.seed}`); drawList(); } },
           name,
           select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),

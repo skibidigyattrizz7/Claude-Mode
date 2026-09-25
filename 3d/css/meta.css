@@ -161,12 +161,12 @@
 .pc-shine { position: absolute; inset: -20%; pointer-events: none; background: linear-gradient(115deg, transparent 38%, rgba(255,255,255,.6) 47%, transparent 56%); transform: translateX(-130%); z-index: 3; }
 .pm-card.rare .pc-shine, .pm-card[class*="sp-"] .pc-shine { animation: pc-shine 4.2s ease-in-out infinite; }
 @keyframes pc-shine { 0%, 55% { transform: translateX(-130%); } 85%, 100% { transform: translateX(130%); } }
-.pc-side { position: absolute; left: .75em; top: 1.35em; width: 2.7em; display: flex; flex-direction: column; align-items: center; gap: .28em; z-index: 2; }
-.pc-ovr { font-size: 2.35em; font-weight: 900; line-height: .9; letter-spacing: -.03em; }
+.pc-side { position: absolute; left: .75em; top: 1.15em; width: 2.7em; display: flex; flex-direction: column; align-items: center; gap: .2em; z-index: 2; }
+.pc-ovr { font-size: 2.3em; font-weight: 900; line-height: .85; letter-spacing: -.03em; }
 .pc-pos { font-size: .95em; font-weight: 800; letter-spacing: .04em; }
 .pc-side::after { content: ""; order: 2; width: 1.9em; height: 1px; background: currentColor; opacity: .35; }
-.pc-flag { order: 3; width: 1.9em; height: 1.2em; display: block; border-radius: .1em; box-shadow: 0 0 0 .06em rgba(0,0,0,.25); }
-.pc-crest { order: 4; width: 1.7em; height: 2em; display: block; }
+.pc-flag { order: 3; width: 1.75em; height: 1.1em; display: block; border-radius: .1em; box-shadow: 0 0 0 .06em rgba(0,0,0,.25); }
+.pc-crest { order: 4; width: 1.35em; height: 1.6em; display: block; }
 .pc-avatar { position: absolute; right: .35em; top: 1.05em; width: 6.5em; height: 6.5em; z-index: 1; }
 .pc-name { position: absolute; left: .5em; right: .5em; top: 6.95em; z-index: 2; text-align: center; font-size: 1.08em; font-weight: 900; text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-bottom: .15em; border-bottom: 1px solid currentColor; border-bottom-color: color-mix(in srgb, currentColor 35%, transparent); }
 .pc-stats { position: absolute; left: 1.05em; right: .9em; top: 9.05em; display: grid; grid-template-columns: 1fr 1fr; column-gap: .55em; row-gap: 0; z-index: 2; }
@@ -451,7 +451,7 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-rankbadge.r3 { background: linear-gradient(160deg, #b7a0ff, #5a3cf0); color: #fff; }
 .pm-rankbadge.r4 { background: linear-gradient(160deg, #6ff7e0, #19b58a); color: #032018; }
 .pm-diff { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,.08); color: var(--mut); }
-.pm-oppgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.pm-oppgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .pm-opp { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; border: 1px solid var(--line2); background: var(--panel); cursor: pointer; text-align: left; transition: transform .15s, border-color .15s; }
 .pm-opp:hover:not(:disabled) { border-color: var(--acc); transform: translateY(-2px); }
 .pm-opp > div { flex: 1; display: grid; min-width: 0; }
@@ -611,6 +611,7 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
   .pm-card--xs { font-size: 5.5px; }
   .pm-chempip { min-width: 17px; height: 17px; font-size: 10px; bottom: -8px; }
   .pm-rankcard { grid-template-columns: auto 1fr; }
+  .pm-oppgrid { grid-template-columns: minmax(0, 1fr); }
   .pm-rankside { grid-column: 1 / -1; justify-items: start; grid-auto-flow: column; }
   .pm-rankbadge { width: 66px; height: 74px; font-size: 30px; }
   .pm-score { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding: 14px; gap: 8px; }

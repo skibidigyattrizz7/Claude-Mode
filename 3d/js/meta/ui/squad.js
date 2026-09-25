@@ -1,5 +1,5 @@
 // Squad builder component: formation pitch with drag-and-drop / tap-to-place, bench, chemistry lines, picker.
-import { h, clear, select } from './dom.js';
+import { h, clear, select, add } from './dom.js';
 import { playerCard, emptyCard } from './card.js';
 import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr } from '../core/formations.js';
 import { calcChemistry, teamRating } from '../core/chemistry.js';
@@ -35,7 +35,7 @@ export function squadEditor(opts) {
   const picker = h('div', { class: 'pm-sq-picker', hidden: true });
   const toolbar = h('div', { class: 'pm-sq-toolbar' });
   const mainCol = h('div', { class: 'pm-sq-main' }, info, pitchWrap, st.bench ? h('div', { class: 'pm-sq-benchwrap' }, h('div', { class: 'pm-sq-label' }, 'Substitutes'), benchEl) : null);
-  root.append(toolbar, h('div', { class: 'pm-sq-grid' }, mainCol, picker));
+  add(root, toolbar, h('div', { class: 'pm-sq-grid' }, mainCol, picker));
 
   const player = (id) => (id ? opts.getPlayer(id) : null);
   const emit = () => opts.onChange && opts.onChange({ formation: st.formation, slots: st.slots.slice(), bench: st.bench ? st.bench.slice() : null });
@@ -107,7 +107,7 @@ export function squadEditor(opts) {
     const rating = teamRating(slotsP);
     const chem = calcChemistry(st.formation, slotsP);
     clear(info);
-    info.append(
+    add(info, 
       h('div', { class: 'pm-stat-chip' }, h('span', null, 'Rating'), h('b', null, rating || '–')),
       opts.chemistry !== false ? h('div', { class: 'pm-stat-chip' }, h('span', null, 'Chemistry'), h('b', null, `${chem.scaled}`), h('small', null, ` ${chem.total}/33`)) : null,
       h('div', { class: 'pm-stat-chip' }, h('span', null, 'Players'), h('b', null, `${slotsP.filter(Boolean).length}/11`)),
@@ -159,7 +159,7 @@ export function squadEditor(opts) {
     const search = h('input', { class: 'pm-input pm-sq-search', type: 'search', placeholder: 'Search players…', value: st.q, 'aria-label': 'Search players' });
     search.addEventListener('input', () => { st.q = search.value; renderList(); });
     const list = h('div', { class: 'pm-sq-list', role: 'list' });
-    picker.append(
+    add(picker, 
       h('div', { class: 'pm-sq-pickhead' },
         h('div', null, h('div', { class: 'pm-kicker' }, st.sel.area === 'slot' ? `Slot ${slotPos}` : 'Substitute'), h('b', null, current ? `Replace ${current.name}` : 'Choose a player')),
         h('button', { class: 'pm-x', 'aria-label': 'Close picker', onclick: () => { st.sel = null; render(); } }, '×')),
