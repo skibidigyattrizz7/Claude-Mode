@@ -74,3 +74,46 @@ Persistence: `localStorage` keys prefixed `pitchside.` (wrap every access in try
 
 ## Shared (`3d/js/shared/`)
 - `keybinds.js` — default keybinds + load/save (`pitchside.keybinds`).
+
+---
+# V2 additions (gameplay settings, real players, online UT, market, admin)
+
+## Gameplay settings — `3d/js/shared/gameplay.js`
+`createMatch` accepts `opts.gameplay = { home: GameplaySettings, away: GameplaySettings }` (either may be omitted → defaults). Semantics:
+- **passAssist**: *assisted* = the pass goes perfectly to the teammate closest to your aim direction (widest cone, auto power, leads runner, never misses the target); *semi* = same targeting but narrower cone and power follows the hold time, small error from passing attr; *manual* = exact stick direction and held power, no targeting.
+- **shotAssist**: *assisted* = if aim is broadly toward goal the shot is always on target (snapped inside the frame); *precision* = shot goes exactly where aimed; if that point is on target it gets +speed/+power and much less error; *manual* = exact aim, error from attributes/power/pressure, no snapping.
+- Others as commented in the file.
+
+## Settings extras — `createMatch` also honours `opts.camera` ('broadcast'|'pro') and `opts.volume` (0..1), and `opts.knockout: true` → if level at full time: extra time (2 short halves) then penalty shootout; result then includes `pens: [h, a]`.
+
+## Online services — `3d/js/net/services.js` (owned by the net agent)
+All return Promises and must never throw to the caller when offline — they resolve `{ ok:false, error }` instead.
+```js
+export const online = {
+  available() -> Promise<boolean>,                    // backend reachable + configured
+  profile() -> Promise<{ok, id, name, coins, rating, division}>,   // creates an anonymous profile on first use
+  setName(name),
+  // Player transfer market (real players' listings; separate from the AI market in meta)
+  market: {
+    list(card /* full UT card object */, price) -> {ok, listingId},
+    search({ q, pos, minOvr, maxPrice, rarity, sort, page }) -> {ok, items:[{listingId, card, price, seller, listedAt}]},
+    buy(listingId) -> {ok, card},                     // server moves coins atomically
+    mine() -> {ok, items},                            // my active + sold listings
+    cancel(listingId) -> {ok, card},
+    claimSales() -> {ok, coins},                      // credit coins for sold items
+  },
+  coins: { get(), add(delta, reason) },             // online coin balance (server-held)
+  // Matchmaking — both options
+  matchmaking: {
+    quickSearch({ mode: 'friendly'|'ut', team }) -> Promise<{ok, transport, role:'host'|'guest', opponent}>,
+    cancelSearch(),
+  },
+  hostWithCode(), joinWithCode(code),                // existing PeerJS code rooms
+  reportResult({ mode, won, drawn, goalsFor, goalsAgainst }) -> {ok, coinsAwarded, rating},
+  admin: { verify(code) -> Promise<boolean> },      // server-side check; code never stored in client
+};
+```
+## Meta additions
+`mountMeta(container, { startMatch, startOnlineMatch, online, onExit })`:
+- `startOnlineMatch({ mode:'ut', team }) -> Promise<result>` provided by main.js (runs matchmaking + online match).
+- `online` is the services object above (meta uses `online.market.*`, `online.coins`, `online.admin.verify`).
