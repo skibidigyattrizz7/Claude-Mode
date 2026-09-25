@@ -90,8 +90,14 @@ class MatchScene {
     if (this.kick) { this.kick.render(ctx, w, h); return; }
     const m = this.m;
     let target = { x: m.ball.x + m.ball.vx * 0.3, y: m.ball.y + m.ball.vy * 0.3 };
-    if (m.state === 'setpiece' && m.sp && m.sp.aim && m.sp.human) target = { x: m.ball.x * 0.62 + m.sp.aim.x * 0.38, y: m.ball.y * 0.62 + m.sp.aim.y * 0.38 };
-    const zoom = this.demo ? 0.8 : settings.zoom * (input.touchMode ? 0.85 : 1);
+    let zoom = this.demo ? 0.8 : settings.zoom * (input.touchMode ? 0.85 : 1);
+    if (m.state === 'setpiece' && m.sp && m.sp.aim && m.sp.human) {
+      // frame both the taker and the target; pull the camera back for long deliveries
+      const long = m.sp.type !== 'throw';
+      const f = long ? 0.5 : 0.38;
+      target = { x: m.ball.x * (1 - f) + m.sp.aim.x * f, y: m.ball.y * (1 - f) + m.sp.aim.y * f };
+      if (long) zoom *= 0.72;
+    }
     updateCamera(this.cam, target, dt, w, h, zoom, this.snapCam);
     this.snapCam = false;
     drawHUD.binds = input.binds;

@@ -183,21 +183,25 @@ export function solveKick(from, target, hs, opts = {}) {
   let vz = (target.z - fz + 0.5 * PHYS.G * t0 * t0) / t0;
   if (target.z < 0.25 && !opts.loft) vz = Math.max(0, vz * 0.6);
   let tHit = t0;
-  for (let it = 0; it < 7; it++) {
+  const aerial = target.z >= 0.25 || !!opts.loft;
+  for (let it = 0; it < 12; it++) {
     const b = { x: from.x, y: from.y, z: fz, vx: Math.cos(ang) * hs, vy: Math.sin(ang) * hs, vz, spin, topspin, knuckle: 0, kPhase: 0, rot: 0 };
-    let t = 0, reached = false;
+    let t = 0, reached = false, landed = -1;
     while (t < 6) {
       integrate(b, PHYS.DT); t += PHYS.DT;
       const p = (b.x - from.x) * ux + (b.y - from.y) * uy;
       if (p >= D) { reached = true; break; }
+      // an aerial ball must still be in the air when it gets there (drag shortens the flight)
+      if (aerial && b.z <= 0 && t > 0.05) { landed = p; break; }
       if (Math.hypot(b.vx, b.vy) < 0.3) break;
     }
+    if (landed >= 0) { vz = vz * (1.04 + 0.6 * (D - landed) / D) + 0.2; continue; }
     if (!reached) { hs *= 1.1; continue; }
     tHit = t;
     const lat = (b.x - from.x) * -uy + (b.y - from.y) * ux; // + means right of line
     ang -= Math.atan2(lat, D);
     const ez = b.z - target.z;
-    if (target.z >= 0.25 || opts.loft) vz -= ez / Math.max(0.2, t) * 0.9;
+    if (aerial) vz -= ez / Math.max(0.2, t) * 0.9;
     if (Math.abs(lat) < 0.02 && Math.abs(ez) < 0.03) break;
   }
   return { vx: Math.cos(ang) * hs, vy: Math.sin(ang) * hs, vz: Math.max(0, vz), spin, topspin, t: tHit };

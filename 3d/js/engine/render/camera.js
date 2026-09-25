@@ -56,23 +56,27 @@ export class CameraDirector {
       px = tx - d * 13; py = 6.2; pz = tz * 0.75;
       fov = 50; wLook = 3.5; wPos = 2.6;
     } else if (mode === 'replay') {
+      // low tele camera beside the goal that was scored in (or nearest goal), tracking the ball
       this.replayT += dt;
-      if (this.cut) { this.replayGoal = Math.sign(bx) || 1; this.replaySide = Math.sign(bz) || 1; }
+      if (this.cut) {
+        this.replayGoal = ctx.goalSign || Math.sign(bx) || 1;
+        this.replaySide = (Math.sign(bz) || 1) * (Math.random() < 0.5 ? 1 : -1);
+      }
       const g = this.replayGoal;
-      const a = 0.9 + this.replayT * 0.06;
-      const R = 17;
-      px = g * (HL + 1.5) - g * Math.cos(a) * R * 0.9;
-      pz = this.replaySide * (Math.sin(a) * R + 3);
-      py = 1.7 + this.replayT * 0.12;
-      lx = bx; ly = Math.max(0.6, by * 0.8); lz = bz;
+      px = g * (HL + 7.5 - this.replayT * 0.25);
+      pz = this.replaySide * (10 + this.replayT * 0.6);
+      py = 2.0 + this.replayT * 0.1;
+      lx = bx; ly = Math.max(0.7, by * 0.85 + 0.3); lz = bz;
       const dist = Math.hypot(px - bx, pz - bz);
-      fov = clamp(30 + 400 / (dist + 20) - 8, 22, 42);
-      wLook = 5; wPos = 1.2;
-    } else {
+      fov = clamp((2 * Math.atan(7 / Math.max(dist, 1)) * 180) / Math.PI, 12, 55);
+      wLook = 6; wPos = 1.5;
+    }    } else {
       // broadcast tele camera on the near-side gantry
       const lead = 0.35;
-      const tx = clamp(bx + bvx * lead, -HL + 8, HL - 8);
-      const tz = clamp(bz * 0.45 + bvz * lead * 0.3, -HW * 0.55, HW * 0.55);
+      let fx = bx + bvx * lead, fz = bz * 0.45 + bvz * lead * 0.3;
+      if (view.ph === PHASE.GOAL && ctx.focus) { fx = ctx.focus.x; fz = ctx.focus.z * 0.6; }
+      const tx = clamp(fx, -HL + 8, HL - 8);
+      const tz = clamp(fz, -HW * 0.55, HW * 0.55);
       lx = tx; ly = 0; lz = tz;
       px = tx * 0.86; py = 21; pz = HW + 33;
       const sp = clamp((bs - 6) / 20, 0, 1);

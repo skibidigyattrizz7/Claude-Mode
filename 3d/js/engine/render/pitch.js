@@ -112,11 +112,13 @@ class Net {
       let d = 0;
       for (const m of this.imps) {
         const dt = t - m.t0;
-        const r2 = (px - m.x) ** 2 + (py - m.y) ** 2 + (pz - m.z) ** 2;
+        const ex = px - m.x, ey = py - m.y, ez = pz - m.z;
+        const dn = ex * n[i * 3] + ey * n[i * 3 + 1] + ez * n[i * 3 + 2];
+        const r2 = ex * ex + ey * ey + ez * ez - 0.7 * dn * dn; // mostly tangential distance on the net surface
         const spread = 0.35 + dt * 1.6;
         const env = Math.exp(-dt * 2.6);
         // bulge + travelling ripple
-        d += m.s * env * (0.55 * Math.exp(-r2 / (spread * spread * 0.5)) + 0.18 * Math.sin(Math.sqrt(r2) * 7 - dt * 22) * Math.exp(-r2 / (spread * spread * 2)));
+        d += m.s * env * (0.7 * Math.exp(-r2 / (spread * spread * 0.5)) + 0.18 * Math.sin(Math.sqrt(r2) * 7 - dt * 22) * Math.exp(-r2 / (spread * spread * 2)));
       }
       if (inGoal) {
         const r2 = (px - ball[0]) ** 2 + (py - ball[1]) ** 2 + (pz - ball[2]) ** 2;

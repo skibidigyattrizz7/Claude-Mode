@@ -19,8 +19,9 @@ export function makeCamera() { return { x: CX, y: CY, scale: 20, w: 1, h: 1 }; }
 
 export function updateCamera(cam, target, dt, w, h, zoom, snap = false) {
   cam.w = w; cam.h = h;
-  cam.scale = clamp((Math.sqrt(w * h) / 36) * zoom, 7, 52);
   const k = snap ? 1 : 1 - Math.exp(-dt * 4);
+  const ts = clamp((Math.sqrt(w * h) / 36) * zoom, 7, 52);
+  cam.scale = snap || !cam.scale ? ts : cam.scale + (ts - cam.scale) * (1 - Math.exp(-dt * 3));
   cam.x += (target.x - cam.x) * k;
   cam.y += (target.y - cam.y) * k;
   const hw = w / 2 / cam.scale, hh = h / 2 / cam.scale, mg = 8;
@@ -469,8 +470,16 @@ export function drawScoreboard(ctx, m, x = 14, y = 14) {
 function drawMinimap(ctx, m, cam) {
   const mw = Math.min(170, cam.w * 0.24), mh = mw * PITCH.W / PITCH.L;
   const x = cam.w - mw - 14, y = 14;
+  // fade the minimap when the action (ball / controlled players) is underneath it
+  let hidden = false;
+  const pts = [m.ball, ...m.humans.map((hh) => hh.player).filter(Boolean)];
+  for (const p of pts) {
+    const q = w2s(cam, p.x, p.y);
+    if (q.x > x - 40 && q.x < x + mw + 40 && q.y > y - 40 && q.y < y + mh + 50) hidden = true;
+  }
+  const A = hidden ? 0.22 : 1;
   ctx.save();
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.85 * A;
   ctx.fillStyle = 'rgba(20,70,30,0.85)'; ctx.fillRect(x, y, mw, mh);
   ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, mw - 1, mh - 1);
@@ -482,7 +491,7 @@ function drawMinimap(ctx, m, cam) {
   const hw = cam.w / 2 / cam.scale, hh = cam.h / 2 / cam.scale;
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
   ctx.strokeRect(x + (cam.x - hw) * sx, y + (cam.y - hh) * sy, hw * 2 * sx, hh * 2 * sy);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = A;
   for (const p of m.players) {
     if (p.sentOff) continue;
     const kit = m.kitOf(p);

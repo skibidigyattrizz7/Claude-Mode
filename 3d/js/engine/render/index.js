@@ -3,7 +3,7 @@
 //   -> { render(view, dt), setCamera(mode), setControlled([homeIdx|-1, awayIdx|-1]), resize(), destroy(), domElement }
 // `view` is produced by core/snapshot.js viewFromSim()/lerpView().
 import * as THREE from '../../../vendor/three.module.min.js';
-import { PITCH, ANIM, PHASE } from '../core/constants.js';
+import { PITCH, ANIM, PHASE, GOAL } from '../core/constants.js';
 import { buildPitch, buildGoals, buildFlags } from './pitch.js';
 import { buildStadium } from './stadium.js';
 import { buildBall } from './ball.js';
@@ -171,7 +171,7 @@ export function createRenderer(container, opts = {}) {
   let controlled = null; // [h, a] or null -> use view.c
   let lastFx = 0;
   const excite = [0, 0, 0];
-  let scorer = -1, scorerT = -99;
+  let scorer = -1, scorerT = -99, goalSign = 0;
   let lastView = null;
   let destroyed = false;
 
@@ -233,8 +233,11 @@ export function createRenderer(container, opts = {}) {
         excite[team] = 1; excite[2] = Math.max(excite[2], 0.5);
         scorer = f.pi ?? -1; scorerT = t;
         const b = view.b;
+        goalSign = b[0] > 0 ? 1 : -1;
         const net = goals.nets[b[0] > 0 ? 1 : 0];
-        net.hit(clamp(b[0], -HL - 2, HL + 2), clamp(b[1], 0.2, 2.3), clamp(b[2], -3.5, 3.5), 26, t);
+        // ripple on the back netting behind the ball
+        const hy = clamp(b[1], 0.2, 2.3), sg = b[0] > 0 ? 1 : -1;
+        net.hit(sg * (HL + GOAL.DEPTH - GOAL.DEPTH * 0.45 * (hy / GOAL.H)), hy, clamp(b[2], -3.4, 3.4), 26, t);
       } else if (f.k === 'net') {
         const net = goals.nets[(f.x ?? view.b[0]) > 0 ? 1 : 0];
         net.hit(f.x ?? view.b[0], f.y ?? view.b[1], f.z ?? view.b[2], f.s ?? 15, t);
@@ -296,7 +299,9 @@ export function createRenderer(container, opts = {}) {
       }
       if (view.replay && director.mode !== 'replay') { director.prevMode = director.mode; director.setMode('replay'); }
       else if (!view.replay && director.prevMode && view.ph !== PHASE.REPLAY) { director.setMode(director.prevMode); director.prevMode = null; }
-      director.update(view, dt, { ctrlPos });
+      let focus = null;
+      if (view.ph === PHASE.GOAL && scorer >= 0 && scorer < 22 && t - scorerT > 0.8) focus = { x: p[scorer * STRIDE], z: p[scorer * STRIDE + 1] };
+      director.update(view, dt, { ctrlPos, goalSign, focus });
       overlays.update(view, rigs, t, c);
       if (nightShadows) {
         for (let i = 0; i < 25; i++) {
@@ -307,7 +312,7 @@ export function createRenderer(container, opts = {}) {
         nightShadows.update(figs);
       }
       // markers
-      const showMk = view.ph !== PHASE.REPLAY && view.ph !== PHASE.HALFTIME && view.ph !== PHASE.FULLTIME;
+      const showMk = !view.replay && view.ph !== PHASE.REPLAY && view.ph !== PHASE.GOAL && view.ph !== PHASE.HALFTIME && view.ph !== PHASE.FULLTIME;
       for (let s = 0; s < 2; s++) {
         const idx = c[s];
         if (showMk && idx >= 0 && idx < 22 && rigs[idx].root.visible) {
@@ -383,7 +388,7 @@ export function createRenderer(container, opts = {}) {
     // dev-only hooks (harness / debugging)
     _debug: {
       set noDraw(v) { dbg.noDraw = v; },
-      scene, camera, renderer, rigs, refs, director,
+      scene, camera, renderer, rigs, refs, director, goals,
       setCameraOverride(pos, look, fov) { director.override = pos ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look), fov } : null; },
       info: () => renderer.info,
     },
