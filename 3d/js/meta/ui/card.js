@@ -49,12 +49,15 @@ export function playerCard(p, opts = {}) {
   const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : (p.playstyles || []).slice(0, 4).map(psBadgeHtml).join('');
+  const others = [p.pos, ...(p.alt || [])].filter((x) => x !== posLabel).slice(0, 3);
+  const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(others.join(', '))}">+${esc(others.join(' '))}</div>`;
   const html = `<div class="${cls.join(' ')}" data-pid="${esc(p.id)}">
     <div class="pc-in">
       <div class="pc-shine"></div>
       <div class="pc-side">
         <div class="pc-ovr">${p.ovr}</div>
         <div class="pc-pos">${esc(posLabel)}</div>
+        ${altHtml}
         ${flagSVG(p.nat, 'pc-flag')}
         ${crestSVG(club, 'pc-crest')}
       </div>

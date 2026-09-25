@@ -730,3 +730,6 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
   .pm-root *, .pm-root *::before, .pm-root *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .pm-po .pm-reveal, .pm-po .pm-wo { animation-duration: .3s !important; }
 }
+.pc-alt { order: 2; font-size: .5em; font-weight: 800; letter-spacing: .02em; line-height: 1; opacity: .85; white-space: nowrap; margin-top: -.1em; }
+.pm-playas { display: grid; gap: 6px; padding: 8px 0; }
+.pm-playas .pm-chip:disabled { opacity: .35; cursor: default; }

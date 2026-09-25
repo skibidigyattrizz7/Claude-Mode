@@ -7,6 +7,7 @@ import { calcChemistry, teamRating } from './chemistry.js';
 import { buildTeam, bestLineup, clubKits, gkKitFor, resolveKitClash } from './teams.js';
 import { simulateMatch, penaltyShootout } from './sim.js';
 import { load, save, remove } from './storage.js';
+import { activeTactics } from './tactics.js';
 
 export const SLOTS = [1, 2, 3];
 export const CUP_ROUNDS = ['Round of 16', 'Quarter-finals', 'Semi-finals', 'Final'];
@@ -260,6 +261,7 @@ export function careerTeam(state, clubId) {
   const team = buildTeam({
     id: clubId, name: club.name, short: club.short, kit: kits.home, gkKit: gkKitFor(kits.home, kits.away),
     formation, starters, bench, numbers, scale: scaleFor,
+    tactics: clubId === state.userClub && state.tacticSets ? activeTactics(state) : null,
     chemistry: 70 + Math.round(clamp(calcChemistry(formation, starters).scaled - 50, -20, 30)),
   });
   return { team, away: kits.away };

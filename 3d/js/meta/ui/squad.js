@@ -1,7 +1,7 @@
 // Squad builder component: formation pitch with drag-and-drop / tap-to-place, bench, chemistry lines, picker.
 import { h, clear, select, add } from './dom.js';
 import { playerCard, emptyCard } from './card.js';
-import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr } from '../core/formations.js';
+import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr, playerPositions } from '../core/formations.js';
 import { calcChemistry, teamRating } from '../core/chemistry.js';
 import { POS_GROUP, NATION_BY_CODE, leagueName } from '../core/data.js';
 
@@ -170,6 +170,7 @@ export function squadEditor(opts) {
         h('div', { class: 'pm-chips' }, POS_FILTERS.map((g) => h('button', { class: `pm-chip ${group === g ? 'on' : ''}`, onclick: () => { st.group = g; renderPicker(); } }, g))),
         select([['ovr', 'Sort: Rating'], ['fit', 'Sort: Best fit'], ['name', 'Sort: Name']], st.sort, (v) => { st.sort = v; renderList(); }, { 'aria-label': 'Sort' })),
       current ? h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => { arr(st.sel.area)[st.sel.idx] = null; st.sel = null; render(); emit(); } }, 'Remove from slot') : null,
+      current && st.sel.area === 'slot' ? playAs(current) : null,
       list,
       h('p', { class: 'pm-hint' }, 'Tip: tap a slot, then another slot to swap. Drag cards on desktop.'),
     );
@@ -202,6 +203,25 @@ export function squadEditor(opts) {
       }
     }
     renderList();
+  }
+
+  /** "Play as": move the selected player to a slot matching one of his positions (swapping the occupant). */
+  function playAs(p) {
+    const f = FORMATIONS[st.formation];
+    const from = st.sel.idx;
+    const chips = playerPositions(p).map((pos) => {
+      const target = f.slots.findIndex((sl, i) => sl.pos === pos && i === from) >= 0 ? from : f.slots.findIndex((sl) => sl.pos === pos);
+      const here = f.slots[from].pos === pos;
+      return h('button', {
+        class: `pm-chip ${here ? 'on' : ''}`, disabled: target < 0 || (i => i)(false),
+        title: target < 0 ? `No ${pos} slot in ${st.formation}` : here ? 'Current position' : `Move to the ${pos} slot`,
+        onclick: () => { if (target < 0 || here) return; swap({ area: 'slot', idx: from }, { area: 'slot', idx: target }); st.sel = null; render(); emit(); },
+      }, `${pos} ${effectiveOvr(p, pos)}`);
+    });
+    const cur = f.slots[from].pos;
+    const oop = positionFit(p, cur) === 0;
+    return h('div', { class: 'pm-playas' }, h('span', { class: 'pm-lbl' }, 'Play as'), h('div', { class: 'pm-chips' }, chips),
+      oop ? h('small', { class: 'pm-warnline' }, `Out of position at ${cur}: ${effectiveOvr(p, cur)} OVR, 0 chemistry.`) : null);
   }
 
   function renderToolbar() {

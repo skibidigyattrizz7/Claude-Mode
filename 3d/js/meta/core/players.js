@@ -2,7 +2,7 @@
 import { Rng, clamp, hashStr } from './rng.js';
 import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP } from './data.js';
 import { buildRealPlayers } from './realplayers.js';
-import { genPhysique, ensurePhysique } from './physique.js';
+import { genPhysique, ensurePhysique, ensureAlts } from './physique.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -299,7 +299,7 @@ export function getDB() {
   }
 
   // V2.1 physique + PlayStyles for generated players (private per-player RNG; see physique.js)
-  for (const p of players.concat(specials)) Object.assign(p, genPhysique(p));
+  for (const p of players.concat(specials)) { Object.assign(p, genPhysique(p)); ensureAlts(p); }
 
   // V2 real players (appended last and generated without the shared RNG, so every id above is unchanged).
   // Stars play for fictional clubs (they are part of `players`, so Career Mode includes them);
@@ -374,7 +374,22 @@ export function _resetDB() { _db = null; }
 /** All real players (Icons + Stars). */
 export function realPlayers() { return getDB().real; }
 
-export function getPlayer(id) { return getDB().byId.get(id) || null; }
+const _resolvers = [];
+/** Register a resolver for dynamic card ids (e.g. Team of the Week `tw…`). fn(id) -> player | null. */
+export function addResolver(fn) { if (!_resolvers.includes(fn)) _resolvers.push(fn); }
+export function getPlayer(id) {
+  if (!id) return null;
+  const db = getDB();
+  const p = db.byId.get(id);
+  if (p) return p;
+  for (const fn of _resolvers) {
+    const r = fn(id);
+    if (r) { db.byId.set(r.id, r); return r; }
+  }
+  return null;
+}
+/** Register a trusted locally created card (evolutions, position modifiers). */
+export function registerLocalCard(p) { if (p && p.id) { getDB().byId.set(p.id, p); _foreign.set(p.id, p); } return p; }
 
 /** Generate a fresh youth prospect (career academy / regens). */
 export function genProspect(rng, { id, nat, club, league, age = null, quality = 0 }) {
@@ -384,6 +399,7 @@ export function genProspect(rng, { id, nat, club, league, age = null, quality = 
   const p = genPlayer(rng, { id, nat, pos, target, age: a, club, league });
   p.pot = clamp(Math.round(p.ovr + rng.range(14, 30) + quality * 1.5), p.ovr + 8, 94);
   Object.assign(p, genPhysique(p));
+  ensureAlts(p);
   p.value = marketValue(p);
   p.wage = weeklyWage(p);
   return p;

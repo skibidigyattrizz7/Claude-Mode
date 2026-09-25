@@ -2,6 +2,7 @@
 // Generated players derive these from their id with a private RNG, so the shared DB RNG sequence (and
 // therefore every existing id/stat/save) is untouched. Real players carry hand-authored values.
 import { Rng, clamp } from './rng.js';
+import { ALT_OPTIONS } from './formations.js';
 
 // id -> [name, category, short code, description]
 export const PLAYSTYLES = {
@@ -155,3 +156,20 @@ export function matchPhysique(p) {
   };
 }
 
+
+/** Top up alternate positions to a sensible 0–3 (deterministic per base id; existing alts are kept). */
+export function ensureAlts(p) {
+  if (p.pos === 'GK') { p.alt = []; return p; }
+  const rng = new Rng(`alt-${p.baseId || p.id}`);
+  const want = rng.weighted([[0, 15], [1, 40], [2, 33], [3, 12]]);
+  const opts = (ALT_OPTIONS[p.pos] || []).slice();
+  // footedness: left-footed centre-backs lean to LB, right-footed to RB
+  if (p.pos === 'CB') opts.sort((a, b) => (b === (p.foot === 'L' ? 'LB' : 'RB')) - (a === (p.foot === 'L' ? 'LB' : 'RB')));
+  const alt = (p.alt || []).filter((x) => x !== p.pos && opts.includes(x));
+  for (const o of opts) {
+    if (alt.length >= Math.max(want, alt.length) || alt.length >= 3) break;
+    if (!alt.includes(o) && rng.chance(0.8)) alt.push(o);
+  }
+  p.alt = alt.slice(0, 3);
+  return p;
+}

@@ -37,7 +37,7 @@ export const FORMATION_NAMES = Object.keys(FORMATIONS);
 // Position equivalences (count as "preferred position")
 const EQUIV = { LB: ['LWB'], LWB: ['LB'], RB: ['RWB'], RWB: ['RB'], ST: ['CF'], CF: ['ST'] };
 
-/** 2 = natural position, 1 = listed alternative position, 0 = out of position */
+/** 2 = natural position, 1 = listed alternative position (counts as in-position), 0 = out of position */
 export function positionFit(player, slotPos) {
   if (!player) return 0;
   if (player.pos === slotPos || (EQUIV[player.pos] || []).includes(slotPos)) return 2;
@@ -55,9 +55,17 @@ const NEAR = {
 /** Effective overall of a player when fielded at slotPos (used for AI lineups / best XI). */
 export function effectiveOvr(player, slotPos) {
   const fit = positionFit(player, slotPos);
-  if (fit === 2) return player.ovr;
-  if (fit === 1) return player.ovr - 2;
+  if (fit >= 1) return player.ovr; // natural or alternate position: full rating (FC24+ style)
   if (player.pos === 'GK' || slotPos === 'GK') return player.ovr - 45;
   if ((NEAR[player.pos] || []).includes(slotPos)) return player.ovr - 6;
   return player.ovr - 15;
 }
+
+/** Sensible alternate positions per primary position (most natural first). */
+export const ALT_OPTIONS = {
+  GK: [], CB: ['CDM', 'RB', 'LB'], LB: ['LWB', 'LM', 'CB'], RB: ['RWB', 'RM', 'CB'], LWB: ['LB', 'LM'], RWB: ['RB', 'RM'],
+  CDM: ['CM', 'CB'], CM: ['CDM', 'CAM', 'RM', 'LM'], CAM: ['CM', 'CF', 'LW', 'RW'], LM: ['LW', 'LB', 'CM', 'LWB'], RM: ['RW', 'RB', 'CM', 'RWB'],
+  LW: ['LM', 'ST', 'RW'], RW: ['RM', 'ST', 'LW'], ST: ['CF', 'LW', 'RW'], CF: ['ST', 'CAM'],
+};
+/** All positions a player can play in-position (primary first). */
+export function playerPositions(p) { return [p.pos, ...(p.alt || [])]; }

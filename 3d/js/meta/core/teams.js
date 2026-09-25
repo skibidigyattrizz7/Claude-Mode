@@ -4,7 +4,8 @@ import { calcChemistry, teamRating } from './chemistry.js';
 import { ALL_NATIONS, CLUBS } from './data.js';
 import { getDB, genPlayer } from './players.js';
 import { hashStr, Rng, clamp } from './rng.js';
-import { matchPhysique, genPhysique } from './physique.js';
+import { matchPhysique, genPhysique, ensureAlts } from './physique.js';
+import { sanitizeTactics, aiTactics, autoSetPieceTakers, defaultQuick } from './tactics.js';
 
 // ---------- colour helpers ----------
 export function hexToRgb(h) {
@@ -109,7 +110,7 @@ export function toMatchPlayer(p, pos, number, scale = 1) {
  * opts.numbers: optional preset numbers (by player id)
  * opts.scale(p): optional per-player attribute scale
  */
-export function buildTeam({ id, name, short, kit, gkKit, formation, starters, bench = [], chemistry, numbers = null, scale = null }) {
+export function buildTeam({ id, name, short, kit, gkKit, formation, starters, bench = [], chemistry, numbers = null, scale = null, tactics = null }) {
   const f = FORMATIONS[formation];
   const positions = f.slots.map((s) => s.pos);
   const preset = numbers ? starters.concat(bench).map((p) => (p && numbers[p.id]) || 0) : [];
@@ -120,11 +121,18 @@ export function buildTeam({ id, name, short, kit, gkKit, formation, starters, be
   const players = starters.map((p, i) => toMatchPlayer(p, positions[i], nums[i], scale ? scale(p) : 1));
   const benchOut = bench.slice(0, 7).map((p, i) => toMatchPlayer(p, p.pos, nums[11 + i], scale ? scale(p) : 1));
   const chem = chemistry !== undefined ? chemistry : calcChemistry(formation, starters).scaled;
+  // V2.2 tactics: user tactics when given, otherwise a deterministic AI style; always sanitised
+  const ids = players.concat(benchOut).map((p) => p.id);
+  const tac = sanitizeTactics(tactics || aiTactics(id, formation, teamRating(starters)), ids);
+  const auto = autoSetPieceTakers(players);
+  for (const k of Object.keys(auto)) if (!tac.setPieceTakers[k]) tac.setPieceTakers[k] = auto[k];
+  if (!tac.quick.length) tac.quick = defaultQuick();
   return {
     id: String(id), name, short: String(short).slice(0, 3).toUpperCase(),
     kit: { ...kit }, gkKit: { ...gkKit },
     formation, players, bench: benchOut,
     chemistry: Math.max(0, Math.min(100, Math.round(chem))),
+    tactics: tac,
   };
 }
 
@@ -163,6 +171,21 @@ export function validateTeam(t) {
     for (const a of attrKeys) if (!Number.isFinite(p.attrs[a])) errs.push(`attr ${a} missing on ${p.id}`);
   }
   if (t.chemistry !== undefined && (t.chemistry < 0 || t.chemistry > 100)) errs.push('chemistry range');
+  for (const p of (t.players || []).concat(t.bench || [])) {
+    if (!p) continue;
+    if (p.height !== undefined && !(p.height >= 1.62 && p.height <= 2.02)) errs.push(`height ${p.id}`);
+    if (p.weight !== undefined && !(p.weight >= 58 && p.weight <= 100)) errs.push(`weight ${p.id}`);
+    if (p.playstyles !== undefined && (!Array.isArray(p.playstyles) || p.playstyles.length > 4)) errs.push(`playstyles ${p.id}`);
+  }
+  if (t.tactics !== undefined) {
+    const tc = t.tactics;
+    if (!tc || typeof tc !== 'object') errs.push('tactics');
+    else {
+      for (const k of ['width', 'depth', 'playersInBox']) if (!(tc[k] >= 1 && tc[k] <= 10)) errs.push(`tactics.${k}`);
+      for (const k of ['corners', 'freeKicks']) if (!(tc[k] >= 1 && tc[k] <= 5)) errs.push(`tactics.${k}`);
+      if (tc.quick && tc.quick.length > 4) errs.push('tactics.quick');
+    }
+  }
   return errs;
 }
 
@@ -281,7 +304,7 @@ function extraNationPools() {
       const club = clubs[(hashStr(n.code) + i * 7) % clubs.length];
       const target = clamp(Math.round(64 + n.str * 2.6 + rng.normal(0, 3) - (i === 1 ? 5 : 0)), 58, 82);
       const p = genPlayer(rng, { id: `xn_${n.code}_${i + 1}`, nat: n.code, pos, target, club: club.id, league: club.league });
-      return Object.assign(p, genPhysique(p));
+      return ensureAlts(Object.assign(p, genPhysique(p)));
     });
     _extraPools.set(n.code, pool);
   }
@@ -350,4 +373,24 @@ export function getNationalTeams() {
 export function nationalAwayKit(code) {
   const n = ALL_NATIONS.find((x) => x.code === code);
   return n ? { ...n.away } : null;
+}
+
+/** Re-seat an XI into another formation by best positional fit (keeps the same 11 players). */
+export function reseat(slotPlayers, formation) {
+  const xi = slotPlayers.filter(Boolean).slice();
+  const nf = FORMATIONS[formation];
+  const seats = new Array(11).fill(null);
+  // GK slot first, then others by scarcity
+  const order = [0, ...nf.slots.map((_, i) => i).slice(1)];
+  for (const i of order) {
+    let bi = -1, bs = -Infinity;
+    xi.forEach((p, k) => {
+      if (!p) return;
+      if ((i === 0) !== (p.pos === 'GK') && xi.some((q) => q && ((i === 0) === (q.pos === 'GK')))) return;
+      const sc = effectiveOvr(p, nf.slots[i].pos) + positionFit(p, nf.slots[i].pos) * 3;
+      if (sc > bs) { bs = sc; bi = k; }
+    });
+    if (bi >= 0) { seats[i] = xi[bi]; xi[bi] = null; }
+  }
+  return seats;
 }

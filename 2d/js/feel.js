@@ -11,7 +11,7 @@ import { clamp } from './util.js';
 export function touchHeaviness(o) {
   const dr = clamp(o.dribbling ?? 0.6, 0, 1);
   const skill = 1.25 - dr;                                  // 0.25 (great) .. 1.25 (poor)
-  let h = clamp((o.relSpeed - (8 + 8 * dr)) / 12, 0, 0.6);  // pace of the ball
+  let h = clamp((o.relSpeed - (9 + 8 * dr)) / 12, 0, 0.6);  // pace of the ball
   if (o.sprinting) h += 0.14 * skill;
   h += clamp(o.pressure || 0, 0, 1) * 0.2 * skill;
   if ((o.height || 0) > 0.3) h += 0.1 * skill;

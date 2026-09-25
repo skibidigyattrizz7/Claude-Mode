@@ -1,11 +1,14 @@
 // Pitchside Ultimate Team — pure logic (packs, club, squad, SBCs, objectives, squad battles, market). DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
-import { getDB, getPlayer, utPrice, quickSellValue, registerCard } from './players.js';
+import { getDB, getPlayer, utPrice, quickSellValue, registerCard, registerLocalCard } from './players.js';
 import { FORMATIONS } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
 import { buildTeam, gkKitFor, bestLineup, autoBuildSquad, contrastColor } from './teams.js';
 import { LEAGUES } from './data.js';
 import { load, save } from './storage.js';
+import { ensureTacticSets, activeTactics } from './tactics.js';
+import { totwCards } from './totw.js';
+import { weekNumber } from './calendar.js';
 
 export const UT_KEY = 'ut';
 
@@ -23,6 +26,7 @@ export const CATEGORIES = {
   hero: { label: 'Hero', test: (p) => p.special === 'hero' },
   legend: { label: 'Legend', test: (p) => p.special === 'legend' },
   star: { label: 'Star (real player)', test: (p) => p.special === 'star' },
+  totw: { label: 'Team of the Week', test: () => false },
   icon: { label: 'Icon (real legend)', test: (p) => p.special === 'icon' },
 };
 
@@ -32,6 +36,8 @@ export function categoryPools() {
   const db = getDB();
   _pools = {};
   for (const [k, c] of Object.entries(CATEGORIES)) _pools[k] = db.all.filter(c.test);
+  _pools.totw = totwCards(weekNumber());
+  _pools._week = weekNumber();
   return _pools;
 }
 
@@ -59,6 +65,10 @@ export const PACKS = [
     slots: [{ n: 12, odds: { goldRare: 0.7675, gold83: 0.15, gold86: 0.045, inform: 0.02, hero: 0.004, legend: 0.001, star: 0.012, icon: 0.0005 } }],
   },
   {
+    id: 'totw', name: 'TOTW Pack', price: 25000, look: 'totw', desc: '1 guaranteed Team of the Week card + 6 golds',
+    slots: [{ n: 1, odds: { totw: 1 } }, { n: 6, odds: { gold: 0.62, goldRare: 0.3, gold83: 0.08 } }],
+  },
+  {
     id: 'stars', name: 'Real Stars Pack', price: 60000, look: 'stars', desc: '1 guaranteed Star (real player) + 5 rare golds',
     slots: [{ n: 1, odds: { star: 1 } }, { n: 5, odds: { goldRare: 0.8, gold83: 0.17, gold86: 0.03 } }],
   },
@@ -83,6 +93,7 @@ export function packAtLeastOne(pack, cat) {
 export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   const pack = PACK_BY_ID[packId];
   const pools = categoryPools();
+  if (pools._week !== weekNumber()) { pools.totw = totwCards(weekNumber()); pools._week = weekNumber(); }
   const items = [];
   const seen = new Set();
   for (const slot of pack.slots) {
@@ -99,7 +110,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   return items;
 }
 export function itemScore(p) {
-  return p.ovr + ({ icon: 40, legend: 30, hero: 20, star: 12, inform: 10 }[p.special] || 0) + (p.rare ? 0.5 : 0);
+  return p.ovr + ({ icon: 40, legend: 30, hero: 20, star: 12, inform: 10 }[p.special] || 0) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
 }
 /** 'bronze' | 'silver' | 'gold' | 'walkout' */
 export function packFlare(items) {
@@ -165,6 +176,11 @@ export function migrateUT(state) {
   state.admin = state.admin && typeof state.admin === 'object' ? state.admin : {};
   state.packs = Array.isArray(state.packs) ? state.packs.filter((pk) => pk && PACK_BY_ID[pk.type]) : [];
   state.sbc = state.sbc || {}; state.obj = state.obj || {};
+  state.picks = Array.isArray(state.picks) ? state.picks : [];
+  state.items = state.items && typeof state.items === 'object' ? state.items : {};
+  state.evolved = state.evolved && typeof state.evolved === 'object' ? state.evolved : {};
+  for (const card of Object.values(state.evolved)) registerLocalCard(card);
+  ensureTacticSets(state);
   for (const card of Object.values(state.foreign)) registerCard(card);
   state.club = state.club.filter((id) => getPlayer(id));
   if (!state.squad || !FORMATIONS[state.squad.formation]) state.squad = defaultSquad();
@@ -234,7 +250,7 @@ export function utTeam(state) {
   return buildTeam({
     id: 'UT-' + (hashStr(state.clubName) % 100000), name: state.clubName, short: state.short,
     kit, gkKit: gkKitFor(kit, utAwayKit(state)), formation: state.squad.formation,
-    starters: slots, bench, chemistry: chem.scaled,
+    starters: slots, bench, chemistry: chem.scaled, tactics: activeTactics(state),
   });
 }
 
@@ -263,6 +279,12 @@ export const SBCS = [
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 78 }, { t: 'chem', v: 65 }, { t: 'rare', v: 3 }], reward: { player: 'hr4' } },
   { id: 'legend-trial', name: 'Legendary Trial', group: 'Player SBC', desc: 'The ultimate test. Earn a Legend pack.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 83 }, { t: 'chem', v: 80 }], reward: { pack: 'legend' } },
+  { id: 'pick-83', name: 'Player Pick: 83+', group: 'Player Picks', repeatable: true, desc: 'Choose 1 of 3 gold players rated 83+.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 79 }, { t: 'rare', v: 3 }], reward: { pick: { pool: 'gold83', n: 3, label: '83+ Player Pick' } } },
+  { id: 'pick-star', name: 'Player Pick: Star', group: 'Player Picks', desc: 'Choose 1 of 3 real Star players.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 83 }, { t: 'chem', v: 70 }], reward: { pick: { pool: 'star', n: 3, label: 'Star Player Pick' } } },
+  { id: 'posmod-sbc', name: 'Position Modifier', group: 'Upgrades', repeatable: true, desc: 'Earn a Position Modifier: add a new alternate position to a player.',
+    reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 70 }], reward: { item: 'posmod', n: 1 } },
   { id: 'star-search', name: 'Star Search', group: 'Stars', repeatable: true, desc: 'Trade a strong rare squad for a Real Stars pack.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 78 }, { t: 'rare', v: 4 }], reward: { pack: 'stars' } },
   { id: 'star-salah', name: 'Star Signing: Mohamed Salah', group: 'Stars', desc: 'Bring the Egyptian King to your club.',
@@ -276,6 +298,7 @@ export const SBCS = [
   { id: 'icon-pele', name: 'Icon: Pelé', group: 'Icons', desc: 'The King. The hardest challenge in Pitchside.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 88 }, { t: 'chem', v: 90 }], reward: { player: 'ic_pele' } },
 ];
+export const ITEM_NAMES = { posmod: 'Position Modifier' };
 export const SPECIAL_NAME = { icon: 'Icon', star: 'Star', legend: 'Legend', hero: 'Hero', inform: 'In-Form' };
 export const SBC_BY_ID = Object.fromEntries(SBCS.map((s) => [s.id, s]));
 
@@ -346,8 +369,46 @@ export function submitSbc(state, sbcId, formation, slotIds) {
   return grantReward(state, sbc.reward, `SBC: ${sbc.name}`);
 }
 
+// ---------- player picks ----------
+const PICK_POOLS = {
+  gold83: { label: '83+ Gold', test: (p) => !p.special && p.ovr >= 83 },
+  gold80: { label: '80+ Gold', test: (p) => !p.special && p.ovr >= 80 },
+  star: { label: 'Star', test: (p) => p.special === 'star' },
+  icon: { label: 'Icon', test: (p) => p.special === 'icon' },
+  inform: { label: 'In-Form', test: (p) => p.special === 'inform' && !p.totw },
+};
+/** Draw pick options (avoids owned cards where possible). */
+export function drawPick(state, pool, n = 3, rng = new Rng()) {
+  const all = pool === 'totw' ? totwCards(weekNumber()) : getDB().all.filter((PICK_POOLS[pool] || PICK_POOLS.gold83).test);
+  const fresh = all.filter((p) => !state.club.includes(p.id));
+  const src = fresh.length >= n ? fresh : all;
+  const out = [];
+  for (let i = 0; i < n * 8 && out.length < n; i++) { const p = rng.pick(src); if (p && !out.includes(p.id)) out.push(p.id); }
+  return out;
+}
+export function addPick(state, pick, from = '', rng = new Rng()) {
+  state.picks = state.picks || [];
+  const id = `pk${Date.now().toString(36)}${Math.floor(rng.next() * 1e6).toString(36)}`;
+  state.picks.push({ id, pool: pick.pool, label: pick.label || `${(PICK_POOLS[pick.pool] || {}).label || 'Player'} Pick`, from, options: drawPick(state, pick.pool, pick.n || 3, rng) });
+  return id;
+}
+/** Choose one card of a pick. Duplicates are converted to coins. */
+export function choosePick(state, pickId, pid) {
+  const i = (state.picks || []).findIndex((x) => x.id === pickId);
+  if (i < 0) throw new Error('Pick not found');
+  const pk = state.picks[i];
+  if (!pk.options.includes(pid)) throw new Error('Not an option');
+  state.picks.splice(i, 1);
+  if (state.club.includes(pid)) { const v = quickSellValue(getPlayer(pid)); state.coins += v; return { dup: true, coins: v }; }
+  state.club.push(pid);
+  if (!state.untradeable.includes(pid)) state.untradeable.push(pid);
+  return { dup: false, pid };
+}
+
 export function grantReward(state, reward, from = '') {
   const out = [];
+  if (reward.pick) { addPick(state, reward.pick, from); out.push(reward.pick.label || 'Player Pick'); }
+  if (reward.item) { state.items = state.items || {}; state.items[reward.item] = (state.items[reward.item] || 0) + (reward.n || 1); out.push(`${reward.n || 1}× ${ITEM_NAMES[reward.item] || reward.item}`); }
   if (reward.coins) { state.coins += reward.coins; out.push(`${reward.coins.toLocaleString()} coins`); }
   if (reward.pack) { state.packs.push({ type: reward.pack, from }); out.push(PACK_BY_ID[reward.pack].name); }
   if (reward.player) {
@@ -399,6 +460,9 @@ export const OBJECTIVES = [
   { id: 'sbc5', label: 'Complete 5 SBCs', stat: 'sbcDone', target: 5, reward: { pack: 'premium' } },
   { id: 'win15', label: 'Win 15 matches', stat: 'wins', target: 15, reward: { pack: 'rare' } },
   { id: 'goals50', label: 'Score 50 goals', stat: 'goals', target: 50, reward: { coins: 20000 } },
+  { id: 'win10', label: 'Win 10 matches', stat: 'wins', target: 10, reward: { pick: { pool: 'gold83', n: 3, label: '83+ Player Pick' } } },
+  { id: 'packs10', label: 'Open 10 packs', stat: 'packsOpened', target: 10, reward: { item: 'posmod', n: 1 } },
+  { id: 'sbc10', label: 'Complete 10 SBCs', stat: 'sbcDone', target: 10, reward: { pick: { pool: 'star', n: 3, label: 'Star Player Pick' } } },
 ];
 export function objectiveProgress(state, o) { return Math.min(o.target, state.stats[o.stat] || 0); }
 export function claimObjective(state, id) {

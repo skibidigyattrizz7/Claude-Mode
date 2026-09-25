@@ -45,7 +45,7 @@ export function calcChemistry(formation, slots) {
       base = avg >= 1.5 ? 3 : avg >= 0.9 ? 2 : avg >= 0.4 ? 1 : 0;
     }
     if (p.special === 'legend' || p.special === 'hero' || p.special === 'icon') base = Math.min(3, base + 1);
-    const chem = fit === 2 ? base : fit === 1 ? Math.max(0, base - 1) : 0;
+    const chem = fit >= 1 ? base : 0; // any listed position counts as in-position; out of position = 0
     players.push(chem);
     total += chem;
   }

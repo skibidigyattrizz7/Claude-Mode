@@ -1031,7 +1031,7 @@ export class Match {
         for (const o of this.opps(p.team)) near = Math.min(near, dist(o, p));
         const pressure = clamp(1 - (near - 0.8) / 2.5, 0, 1);
         const hv = touchHeaviness({ relSpeed, dribbling: p.attrs.dribbling, sprinting: p.sprint && Math.hypot(p.vx, p.vy) > jogSpeed(p), pressure, height: b.z });
-        if (!globalThis.__noHeavy && Math.random() < hv * 0.7) { this.heavyTouch(p, hv); return; }
+        if (!globalThis.__noHeavy && Math.random() < hv * 0.55) { this.heavyTouch(p, hv); return; }
       }
       this.setOwner(p); return;
     }

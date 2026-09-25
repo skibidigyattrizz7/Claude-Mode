@@ -10,7 +10,10 @@ export const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CA
 export const RARITIES = ['bronze', 'bronze_rare', 'silver', 'silver_rare', 'gold', 'gold_rare', 'inform', 'hero', 'legend', 'icon', 'common'];
 export const SORTS = ['newest', 'price_asc', 'price_desc', 'ovr_desc'];
 export const MARKET = { minPrice: 150, maxPrice: 15000000, maxCardBytes: 4096, maxPage: 49, taxPct: 5 };
-export const MODES = ['friendly', 'ut'];
+export const MODES = ['friendly', 'ut', 'rivals'];      // matchmaking queues
+export const INVITE_MODES = ['friendly', 'ut'];          // friend challenges
+export const PACK_IDS = ['bronze', 'silver', 'gold', 'premium', 'rare', 'stars', 'legend', 'icon'];
+export const FRIEND_CODE_RE = /^[A-Z0-9]{8}$/;
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const int = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(hi, Math.max(lo, v))) : d);
@@ -121,6 +124,8 @@ export function sanitizeProfile(p) {
     coins: int(p.coins, 0, 1e15, 0), rating: int(p.rating, 0, 5000, 1000), division: int(p.division, 1, 10, 10),
     wins: int(p.wins, 0, 1e9, 0), draws: int(p.draws, 0, 1e9, 0), losses: int(p.losses, 0, 1e9, 0),
     unclaimed: int(p.unclaimed, 0, 1e15, 0),
+    friendCode: typeof p.friendCode === 'string' && FRIEND_CODE_RE.test(p.friendCode) ? p.friendCode : null,
+    rivalsDivision: int(p.rivalsDivision, 0, 10, 10),
   };
 }
 
@@ -145,17 +150,81 @@ export function parseMmResponse(r) {
 
 export function sanitizeReport(r) {
   if (!isObj(r) || r.ok !== true) return { ok: false, error: isObj(r) && typeof r.error === 'string' ? cleanStr(r.error, 40, 'error') : 'bad_response' };
+  const rv = isObj(r.rivals) ? r.rivals : null;
   return {
     ok: true, capped: r.capped === true,
     coinsAwarded: int(r.coinsAwarded, 0, 100000, 0), coins: int(r.coins, 0, 1e15, 0),
     rating: int(r.rating, 0, 5000, 1000), ratingDelta: int(r.ratingDelta, -1000, 1000, 0), division: int(r.division, 1, 10, 10),
+    rivals: rv ? {
+      division: int(rv.division, 0, 10, 10), points: int(rv.points, 0, 10000, 0),
+      threshold: rv.threshold == null ? null : int(rv.threshold, 1, 1000, 10), promoted: rv.promoted === true, weekWins: int(rv.weekWins, 0, 10000, 0),
+    } : null,
   };
+}
+
+/** Rivals division label: 0 = Elite. */
+export const rivalsDivisionName = (d) => (d === 0 ? 'Elite' : `Division ${d}`);
+
+function sanitizeReward(x) {
+  if (!isObj(x)) return null;
+  return { coins: int(x.coins, 0, 1e7, 0), packs: Array.isArray(x.packs) ? x.packs.filter((p) => PACK_IDS.includes(p)).slice(0, 8) : [] };
+}
+export function sanitizeRivalsStatus(r) {
+  if (!isObj(r) || r.ok !== true) return null;
+  const week = (v) => (typeof v === 'string' && /^\d{4}-W\d{2}$/.test(v) ? v : null);
+  return {
+    ok: true, division: int(r.division, 0, 10, 10), divisionName: rivalsDivisionName(int(r.division, 0, 10, 10)),
+    points: int(r.points, 0, 10000, 0), threshold: r.threshold == null ? null : int(r.threshold, 1, 1000, 10),
+    week: week(r.week), weekWins: int(r.weekWins, 0, 10000, 0), weekMatches: int(r.weekMatches, 0, 10000, 0), peak: int(r.peak, 0, 10, 10),
+    claimable: r.claimable === true, claimWeek: week(r.claimWeek), reward: r.claimable === true ? sanitizeReward(r.reward) : null,
+    nextResetAt: isoOrNull(r.nextResetAt),
+  };
+}
+export function sanitizeRivalsClaim(r) {
+  if (!isObj(r) || r.ok !== true) return null;
+  const rw = sanitizeReward(r);
+  return { ok: true, week: typeof r.week === 'string' ? cleanStr(r.week, 10, '') : '', coins: rw.coins, packs: rw.packs, balance: int(r.balance, 0, 1e15, 0) };
+}
+
+// ------------------------------------------------------------------ friends
+export function normalizeFriendCode(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); }
+
+export function sanitizeFriend(f) {
+  if (!isObj(f) || typeof f.id !== 'string' || !UUID_RE.test(f.id)) return null;
+  const status = ['friend', 'incoming', 'outgoing', 'blocked'].includes(f.status) ? f.status : null;
+  if (!status) return null;
+  return {
+    id: f.id, name: cleanStr(f.name, 16, 'Player'), status, online: status === 'friend' && f.online === true,
+    rating: status === 'friend' ? int(f.rating, 0, 5000, 1000) : null,
+    division: status === 'friend' ? int(f.division, 1, 10, 10) : null,
+    rivalsDivision: status === 'friend' ? int(f.rivalsDivision, 0, 10, 10) : null,
+  };
+}
+export function sanitizeIncomingInvite(i) {
+  if (!isObj(i) || typeof i.inviteId !== 'string' || !UUID_RE.test(i.inviteId) || !INVITE_MODES.includes(i.mode)) return null;
+  const f = isObj(i.from) ? i.from : {};
+  if (typeof f.id !== 'string' || !UUID_RE.test(f.id)) return null;
+  return { inviteId: i.inviteId, mode: i.mode, createdAt: isoOrNull(i.createdAt), from: { id: f.id, name: cleanStr(f.name, 16, 'Player'), rating: int(f.rating, 0, 5000, 1000) } };
+}
+export function sanitizeOutgoingInvite(i) {
+  if (!isObj(i) || typeof i.inviteId !== 'string' || !UUID_RE.test(i.inviteId)) return null;
+  const status = ['pending', 'accepted', 'declined', 'cancelled', 'expired'].includes(i.status) ? i.status : null;
+  if (!status) return null;
+  return { inviteId: i.inviteId, status, mode: INVITE_MODES.includes(i.mode) ? i.mode : 'friendly', toId: typeof i.toId === 'string' && UUID_RE.test(i.toId) ? i.toId : null };
+}
+/** respond_invite(accept) -> { ok, mode, peerId, token, from } */
+export function parseInviteAccept(r) {
+  if (!isObj(r) || r.ok !== true) return { ok: false, error: isObj(r) && typeof r.error === 'string' ? cleanStr(r.error, 40, 'error') : 'bad_response' };
+  if (r.accepted !== true) return { ok: true, accepted: false };
+  if (!INVITE_MODES.includes(r.mode) || typeof r.peerId !== 'string' || !PEER_ID_RE.test(r.peerId) || typeof r.token !== 'string' || !TOKEN_RE.test(r.token)) return { ok: false, error: 'bad_response' };
+  const f = isObj(r.from) ? r.from : {};
+  return { ok: true, accepted: true, mode: r.mode, peerId: r.peerId, token: r.token, from: { name: cleanStr(f.name, 16, 'Friend'), rating: int(f.rating, 0, 5000, 1000) } };
 }
 
 /** Validate a result report before it is sent. */
 export function normalizeReport(x = {}) {
   const src = isObj(x) ? x : {};
-  const mode = ['friendly', 'ut', 'offline'].includes(src.mode) ? src.mode : null;
+  const mode = ['friendly', 'ut', 'rivals', 'offline'].includes(src.mode) ? src.mode : null;
   if (!mode) return { ok: false, error: 'bad_mode' };
   const won = src.won === true, drawn = src.drawn === true && !won;
   return {
@@ -185,5 +254,17 @@ export function errorText(code) {
     rate_limited: 'Too many requests — try again in a little while.',
     not_admin: 'Admin code required.',
     not_allowed: 'Not allowed.',
+    bad_code: 'Friend codes are 8 letters and numbers.',
+    self: 'That is your own friend code.',
+    already_friends: 'You are already friends.',
+    already_requested: 'Friend request already sent.',
+    too_many_friends: 'Your friends list is full.',
+    not_friends: 'You can only challenge friends.',
+    declined: 'Your friend declined the challenge.',
+    blocked: 'You blocked this player.',
+    nothing_to_claim: 'No finished Rivals week to claim yet.',
+    already_claimed: 'This week’s Rivals rewards were already claimed.',
+    no_opponent: 'No opponent found.',
+    connect_failed: 'Could not connect to the other player.',
   })[code] || 'Something went wrong. Please try again.';
 }

@@ -69,26 +69,29 @@ export function defensiveRoles(field, carrier, o = {}) {
 }
 
 /**
- * Man-marking assignments (pure). The most dangerous attackers (closest to our goal) are picked
- * up first by the free defender whose zone (home spot) is nearest. With autoMarking off the
+ * Man-marking assignments (pure). Defenders (deepest first) pick up the free attacker nearest
+ * their zone (home spot), preferring the one nearer our goal. With autoMarking off the
  * defenders hold their zones and nobody tracks runners.
  * @returns Map(defender -> attacker)
  */
 export function markTargets(defenders, attackers, homeOf, ownGoal, o = {}) {
   const marks = new Map();
   if (o.autoMarking === false) return marks;
-  const maxD = o.maxD ?? 18;
-  const free = defenders.filter((p) => !(p.human >= 0) && !p.sentOff);
-  const threats = attackers.filter((a) => !a.sentOff).sort((a, b) => (globalThis.__oldMark ? 0 : dist(a, ownGoal) - dist(b, ownGoal)));
-  const homes = new Map(free.map((p) => [p, homeOf(p)]));
-  for (const a of threats) {
-    let best = null, bd = maxD;
-    for (const p of free) {
-      if (marks.has(p)) continue;
-      const dd = dist(homes.get(p), a);
-      if (dd < bd) { bd = dd; best = p; }
+  const maxD = o.maxD ?? 16;
+  // deepest defenders pick first; each takes the free attacker nearest his zone, and
+  // between equally placed attackers the one nearer our goal is the bigger threat
+  const order = defenders.filter((p) => !(p.human >= 0) && !p.sentOff)
+    .sort((a, b) => dist(homeOf(a), ownGoal) - dist(homeOf(b), ownGoal));
+  const taken = new Set();
+  for (const p of order) {
+    const home = homeOf(p);
+    let best = null, bs = maxD;
+    for (const a of attackers) {
+      if (a.sentOff || taken.has(a)) continue;
+      const sc = dist(a, home) + dist(a, ownGoal) * 0.05;
+      if (sc < bs) { bs = sc; best = a; }
     }
-    if (best) marks.set(best, a);
+    if (best) { taken.add(best); marks.set(p, best); }
   }
   return marks;
 }
@@ -186,18 +189,6 @@ export class TeamAI {
     const m = this.m;
     const opps = m.opps(this.team).filter((o) => o.role !== 'GK' && o !== carrier);
     const gc = m.goalCenter(m.ownSide(this.team));
-    if (globalThis.__oldMarkFull) {
-      const taken = new Set();
-      const order = field.filter((p) => p.human < 0).sort((a, b) => FORMATION[a.idx].x - FORMATION[b.idx].x);
-      for (const p of order) {
-        p.ai.mark = null;
-        const home = formationPos(m, p, -1);
-        let best = null, bd = 16;
-        for (const o of opps) { if (taken.has(o)) continue; const d = dist(o, home); if (d < bd) { bd = d; best = o; } }
-        if (best) { taken.add(best); p.ai.mark = best; }
-      }
-      return;
-    }
     const marks = markTargets(field, opps, (p) => formationPos(m, p, -1), gc, { autoMarking: this.gp ? this.gp.autoMarking : true });
     for (const p of field) if (p.human < 0) p.ai.mark = marks.get(p) || null;
   }
