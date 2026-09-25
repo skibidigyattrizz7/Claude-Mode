@@ -111,7 +111,7 @@ export function careerHubView() {
   const ui = { tab: 'overview', tier: null, md: null, search: null, filters: { pos: '', minOvr: 0, maxAge: 99, maxValue: 0, league: '', name: '' } };
   return {
     title: 'Career', kicker: 'Career Mode', cls: 'pm-main--wide',
-    topRight: (app) => (app.career ? h('div', { class: 'pm-budget' }, h('small', null, 'Budget'), h('b', null, C.money(app.career.budget))) : null),
+    topRight: (app) => (app.career && app.career.mode !== 'player' ? h('div', { class: 'pm-budget' }, h('small', null, 'Budget'), h('b', null, C.money(app.career.budget))) : null),
     render(main, app) {
       const s = app.career;
       if (!s) { app.pop(); return; }
@@ -119,12 +119,13 @@ export function careerHubView() {
       this.kicker = `${s.mode === 'player' ? 'Player Career · ' : ''}${s.manager} · ${C.seasonLabel(s)}`;
       app.renderTop(this);
       const tabList = s.mode === 'player' ? PRO_TABS : TABS;
+      if (!ui.init) { ui.init = true; ui.tab = tabList[0][0]; }
       if (!tabList.some((t) => t[0] === ui.tab)) ui.tab = tabList[0][0];
       add(main, nextCard(app, s));
       const tabs = h('div', { class: 'pm-tabs', role: 'tablist' }, tabList.map(([id, label]) => h('button', {
         class: `pm-tab ${ui.tab === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false',
         onclick: () => { ui.tab = id; app.refresh(); },
-      }, label, id === 'overview' && s.offers.length ? h('span', { class: 'pm-dotbadge' }, s.offers.length) : null)));
+      }, label, id === 'overview' && s.offers.length && s.mode !== 'player' ? h('span', { class: 'pm-dotbadge' }, s.offers.length) : null)));
       const body = h('div', { class: 'pm-tabbody', role: 'tabpanel' });
       add(main, tabs, body);
       ({ pro: tabPro, overview: tabOverview, squad: tabSquad, lineup: tabLineup, tactics: tabTactics, training: tabTraining, table: tabTable, fixtures: tabFixtures, cup: tabCup, stats: tabStats, transfers: tabTransfers, academy: tabAcademy, club: tabClub })[ui.tab](body, app, s, ui);
@@ -204,7 +205,7 @@ function tabOverview(body, app, s, ui) {
   const table = C.leagueTable(s, club.tier);
   const pos = table.findIndex((r) => r.club === s.userClub);
   const around = table.slice(Math.max(0, Math.min(pos - 2, table.length - 5)), Math.max(0, Math.min(pos - 2, table.length - 5)) + 5);
-  const offers = s.offers.length ? h('section', { class: 'pm-panel' }, h('h3', null, `Transfer offers (${s.offers.length})`),
+  const offers = s.offers.length && s.mode !== 'player' ? h('section', { class: 'pm-panel' }, h('h3', null, `Transfer offers (${s.offers.length})`),
     s.offers.map((o) => {
       const p = s.players[o.pid];
       if (!p) return null;
@@ -217,7 +218,7 @@ function tabOverview(body, app, s, ui) {
   add(body, h('div', { class: 'pm-two' },
     h('div', null,
       offers,
-      h('section', { class: 'pm-panel' }, h('h3', null, 'Board objectives'),
+      s.mode === 'player' ? null : h('section', { class: 'pm-panel' }, h('h3', null, 'Board objectives'),
         h('ul', { class: 'pm-objs' }, s.objectives.map((o) => h('li', null, o.text))),
         h('div', { class: 'pm-conf' }, h('span', { class: 'pm-dim' }, 'Board confidence'), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${s.boardConfidence}%` } })), h('b', null, `${Math.round(s.boardConfidence)}%`))),
       h('section', { class: 'pm-panel' }, h('h3', null, `${club.tier === 1 ? s.leagueName : s.tier2Name}`),
@@ -527,7 +528,7 @@ function seasonEndView() {
           award('Young player', S.awards.young, (a) => `age ${a.age} · avg ${a.rating}`),
           award('Your best player', S.awards.userBest, (a) => `avg ${a.rating}`)),
         h('div', { class: 'pm-two' },
-          h('section', { class: 'pm-panel' }, h('h3', null, 'Board objectives'),
+          s.mode === 'player' ? null : h('section', { class: 'pm-panel' }, h('h3', null, 'Board objectives'),
             h('ul', { class: 'pm-checklist' }, S.objectives.map((o) => h('li', { class: o.met ? 'ok' : 'no' }, h('i', null, o.met ? '✓' : '✕'), h('span', null, o.text), h('b', null, o.detail)))),
             h('div', { class: 'pm-conf' }, h('span', { class: 'pm-dim' }, 'Board confidence'), h('div', { class: 'pm-progress' }, h('i', { style: { width: `${S.boardConfidence}%` } })), h('b', null, `${Math.round(S.boardConfidence)}%`)),
             S.boardConfidence < 20 ? h('p', { class: 'pm-warn' }, 'The board is losing patience. Improve next season!') : null),

@@ -72,6 +72,7 @@ export class MatchSim {
     this.breakNext = 'half';
     this.switchT = [-9, -9];
     this.switchAuto = [false, false];
+    this.recvStick = [null, null];
     this.recvLock = [null, null];
     this.pendingSwitch = [null, null];
     this.pendingShot = [null, null];
@@ -477,7 +478,13 @@ export class MatchSim {
       if (b.owner < 0 && b.intended === ps0.idx) { this._setCtrl(team, ps0.idx); p = this.players[ps0.idx]; }
     }
     const mv = this._worldMove(inp);
-    const hasMove = mv.l > 0.2;
+    let hasMove = mv.l > 0.2;
+    // receiving a pass: move to meet the ball until the user deliberately steers elsewhere
+    const rs = this.recvStick[team];
+    if (rs && b.owner < 0 && b.intended === p.idx && rs.idx === p.idx) {
+      if (!hasMove || (mv.x * rs.x + mv.z * rs.z) / mv.l > 0.64) hasMove = false;
+      else this.recvStick[team] = null;
+    } else if (rs && (b.owner >= 0 || b.intended !== rs.idx)) this.recvStick[team] = null;
     let aim;
     const al = Math.hypot(inp.aimX || 0, inp.aimY || 0);
     if (al > 0.3) aim = { x: inp.aimX / al, z: -inp.aimY / al };
@@ -1136,6 +1143,9 @@ export class MatchSim {
     const dist = Math.hypot(m.x - b.p.x, m.z - b.p.z);
     const sp = Math.hypot(vel.x, vel.z) || 1;
     const travel = vel.y > 1 ? 0.3 + dist / 17 : Math.min(3, (Number.isFinite(rollTimeTo(sp, dist)) ? rollTimeTo(sp, dist) : dist / sp));
+    // the stick is usually still held in the pass direction: that must not steer the receiver away
+    const mv = this._worldMove(this.inputs[team] || EMPTY_IN);
+    this.recvStick[team] = { idx: m.idx, x: mv.l > 0.2 ? mv.x / mv.l : 0, z: mv.l > 0.2 ? mv.z / mv.l : 0 };
     if (g.switchOnPass === 'instant') this._setCtrl(team, m.idx);
     else if (g.switchOnPass === 'release') this.pendingSwitch[team] = { idx: m.idx, at: t + travel * 0.5 };
     this.recvLock[team] = g.passReceiverLock === 'off' ? null : { idx: m.idx, until: g.passReceiverLock === 'lateRelease' ? t + travel + 0.2 : t + travel * 0.55 };

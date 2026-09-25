@@ -174,8 +174,11 @@ export function newCareer({ clubId, manager = 'Manager', slot = 1, seed = null, 
   autoLineup(state);
   state.objectives = boardObjectives(state);
   state.baseBudget = state.budget;
-  addNews(state, `Welcome to ${uc.name}, boss! The board have set your objectives for ${seasonLabel(state)}.`);
-  addNews(state, `Summer transfer window is open. Budget: ${money(state.budget)}.`);
+  if (state.mode === 'player') addNews(state, `Welcome to ${uc.name}! Train hard, earn your minutes and catch the national team's eye.`);
+  else {
+    addNews(state, `Welcome to ${uc.name}, boss! The board have set your objectives for ${seasonLabel(state)}.`);
+    addNews(state, `Summer transfer window is open. Budget: ${money(state.budget)}.`);
+  }
   generateOffers(state, rng, 2);
   return state;
 }
@@ -737,6 +740,7 @@ function refillClub(state, clubId, rng) {
 }
 
 function generateOffers(state, rng, n) {
+  if (state.mode === 'player') return;
   const mine = userPlayers(state);
   if (!mine.length) return;
   const others = Object.keys(state.clubs).filter((c) => c !== state.userClub);

@@ -1,6 +1,8 @@
 // DOM HUD overlay: scoreboard, clock, event banners, controlled player name + stamina, power bar,
 // radar, set-piece hints, replay tag, fade cuts, pause menu with controls reference, stats panel.
-import { PHASE, SP, PITCH } from '../core/constants.js';
+import { PHASE, SP, PITCH, halfBase, halfLen, GOAL, BALL_R } from '../core/constants.js';
+import { PLAYSTYLES } from '../core/playstyles.js';
+import { MENTALITY } from '../core/tactics.js';
 
 const CSS = `
 .ps3d-root{position:absolute;inset:0;overflow:hidden;background:#0b1020;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;user-select:none;-webkit-user-select:none}
@@ -76,6 +78,30 @@ const CSS = `
 .ps3d-root.compact-touch .ps3d-btns{grid-template-columns:repeat(3,54px);gap:7px}
 .ps3d-root.compact-touch .ps3d-btns button{width:54px;height:54px;font-size:10px}
 .ps3d-root.compact-touch .ps3d-btns button.wide{height:38px}
+.ps3d-next{position:absolute;transform:translate(-50%,-100%);font-size:13px;font-weight:900;color:#fff;opacity:.75;text-shadow:0 1px 3px #000;display:none}
+.ps3d-timed{position:absolute;transform:translate(-50%,-100%);padding:2px 8px;border-radius:9px;font-size:11px;font-weight:900;letter-spacing:1px;display:none;color:#081022}
+.ps3d-ps{margin-top:4px;display:flex;gap:3px;flex-wrap:wrap}
+.ps3d-ps span{font-size:9px;font-weight:800;padding:1px 4px;border-radius:3px;background:rgba(63,169,255,.25);color:#cfe4ff;letter-spacing:.5px}
+.ps3d-ps span.plus{background:rgba(255,212,0,.3);color:#ffe98a}
+.ps3d-spov{position:absolute;inset:0;pointer-events:none}
+.ps3d-contact{position:absolute;right:24px;bottom:150px;width:92px;height:118px;display:none;text-align:center;font-size:10px;font-weight:800;color:#cfd8ea}
+.ps3d-contact .ball{position:relative;width:78px;height:78px;margin:0 auto 4px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8dde6 60%,#9aa3b3);box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.ps3d-contact .dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#ff4d4d;box-shadow:0 0 0 2px #fff}
+.ps3d-ticker{position:absolute;left:50%;bottom:156px;transform:translateX(-50%);max-width:70%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;font-style:italic;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps3d-ticker.show{opacity:1}
+.ps3d-pens{position:absolute;left:18px;top:56px;background:rgba(10,16,34,.82);border-radius:5px;padding:5px 10px;font-size:12px;font-weight:800;display:none}
+.ps3d-pens .row{display:flex;align-items:center;gap:5px;margin:2px 0}
+.ps3d-pens i{display:inline-block;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.2)}
+.ps3d-pens i.ok{background:#46d17a}.ps3d-pens i.no{background:#ff4d4d}
+.ps3d-menu select,.ps3d-menu input[type=range]{background:#26314f;color:#fff;border:0;border-radius:4px;padding:4px;font-size:13px;max-width:100%}
+.ps3d-menu .tm{font-size:13px;width:100%;border-collapse:collapse}
+.ps3d-menu .tm td{padding:3px 6px}
+.ps3d-menu .tm tr.sel{background:#3fa9ff;color:#081022}
+.ps3d-menu .tm tr{cursor:pointer}
+.ps3d-menu .tabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+.ps3d-menu .tabs button{width:auto;display:inline-block;margin:0;padding:6px 10px;font-size:13px}
+.ps3d-menu .tabs button.on{background:#3fa9ff;color:#081022}
+.ps3d-menu label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:5px 0;font-size:13px}
 @media (max-width:700px){.ps3d-banner .big{font-size:40px}.ps3d-sb{transform:scale(.85);transform-origin:left top}.ps3d-hint{bottom:210px;font-size:12px}}
 `;
 
@@ -107,7 +133,7 @@ const el = (tag, cls, parent, html) => {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Hud {
-  constructor(root, { home, away, binds, slots, onResume, onCamera, onQuit, touch = false }) {
+  constructor(root, { home, away, binds, slots, onResume, onCamera, onQuit, onReplay, onTactic, teamInfo, gameplay, touch = false }) {
     addStyle();
     this.root = root;
     this.touch = touch;
@@ -139,10 +165,22 @@ export class Hud {
     this.fadeEl = el('div', 'ps3d-fade', h);
     this.stats = el('div', 'ps3d-stats', h);
     this.loading = el('div', 'ps3d-loading', h, 'LOADING STADIUM…');
+    this.nexts = [el('div', 'ps3d-next', h, '▼'), el('div', 'ps3d-next', h, '▼')];
+    this.timedEl = el('div', 'ps3d-timed', h);
+    this.timedT = 0;
+    this.spov = el('canvas', 'ps3d-spov', h);
+    this.spctx = this.spov.getContext('2d');
+    this.contact = el('div', 'ps3d-contact', h, '<div class="ball"><div class="dot"></div></div>CONTACT');
+    this.tickerEl = el('div', 'ps3d-ticker', h);
+    this.tickerT = 0;
+    this.pensEl = el('div', 'ps3d-pens', h);
+    this.pensKey = '';
     // pause menu
     this.menu = el('div', 'ps3d-menu', root);
     this.menuBox = el('div', 'box', this.menu);
     this.onResume = onResume; this.onCamera = onCamera; this.onQuit = onQuit;
+    this.onReplay = onReplay || (() => {}); this.onTactic = onTactic || (() => null); this.teamInfo = teamInfo || null;
+    this.gameplay = gameplay || [{}, {}];
     this.queue = [];
     this.bannerT = 0;
     this.toastT = 0;
@@ -150,6 +188,19 @@ export class Hud {
     this.lastClock = '';
     this.statsT = 0;
     this.camMode = 'broadcast';
+  }
+
+  // timed finishing indicator: q 0 green / 1 amber / 2 red
+  timed(q, pi) {
+    const col = ['#46d17a', '#f5c542', '#ff4d4d'][q] || '#f5c542';
+    this.timedEl.textContent = ['GREEN', 'AMBER', 'RED'][q] || '';
+    this.timedEl.style.background = col;
+    this.timedPi = pi; this.timedT = 1.1;
+  }
+  ticker(text) {
+    this.tickerEl.textContent = text;
+    this.tickerEl.classList.add('show');
+    this.tickerT = 3.2;
   }
 
   setLoaded() { if (this.loading) { this.loading.remove(); this.loading = null; } }
@@ -196,11 +247,12 @@ export class Hud {
     const lv = ctx.live || view;
     const sc = `${lv.sc[0]} - ${lv.sc[1]}`;
     if (sc !== this.lastScore) { this.scoreEl.textContent = sc; this.lastScore = sc; }
-    const total = (lv.h - 1) * 2700 + lv.cl;
+    const total = halfBase(lv.h) + lv.cl;
     const mm = Math.floor(total / 60), ss = Math.floor(total % 60);
     const clk = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
     if (clk !== this.lastClock) { this.clockEl.textContent = clk; this.lastClock = clk; }
-    if (lv.ad > 0 && lv.cl >= 2700 - 1) { this.addedEl.style.display = 'flex'; this.addedEl.textContent = '+' + lv.ad; }
+    if (lv.pk) { this.addedEl.style.display = 'flex'; this.addedEl.textContent = 'PENS'; }
+    else if (lv.ad > 0 && lv.cl >= halfLen(lv.h) - 1) { this.addedEl.style.display = 'flex'; this.addedEl.textContent = '+' + lv.ad; }
     else this.addedEl.style.display = 'none';
     // banners
     if (this.bannerT > 0) {
@@ -218,6 +270,8 @@ export class Hud {
       this.bannerT = b.dur;
     }
     if (this.toastT > 0) { this.toastT -= dt; if (this.toastT <= 0) this.toastEl.classList.remove('show'); }
+    if (this.tickerT > 0) { this.tickerT -= dt; if (this.tickerT <= 0) this.tickerEl.classList.remove('show'); }
+    this._pens(lv);
     if (this.statsT > 0) { this.statsT -= dt; if (this.statsT <= 0) this.stats.style.display = 'none'; }
     // replay tag
     this.replayEl.style.display = ctx.replay ? 'block' : 'none';
@@ -235,6 +289,14 @@ export class Hud {
       const label = `${pd.number ?? ''}  ${pd.name || ''}`;
       if (nm.dataset.v !== label) { nm.children[0].textContent = slot === 'p2' ? 'PLAYER 2' : 'PLAYER 1'; nm.children[1].textContent = label; nm.dataset.v = label; }
       panel.children[1].firstChild.style.width = Math.round((view.stm ? view.stm[s] : 1) * 100) + '%';
+      // PlayStyle badges of the controlled player
+      const psKey = (pd.playstyles || []).map((e) => (typeof e === 'string' ? e : e && e.id) + (e && e.plus ? '+' : '')).join(',');
+      if (panel.dataset.ps !== psKey) {
+        panel.dataset.ps = psKey;
+        let box = panel.querySelector('.ps3d-ps');
+        if (!box) box = el('div', 'ps3d-ps', panel);
+        box.innerHTML = (pd.playstyles || []).slice(0, 4).map((e) => { const id = typeof e === 'string' ? e : e && e.id; const lab = PLAYSTYLES[id]; return lab ? `<span class="${e && e.plus ? 'plus' : ''}" title="${esc(id)}">${lab}${e && e.plus ? '+' : ''}</span>` : ''; }).join('');
+      }
       const x = view.p[idx * 7], z = view.p[idx * 7 + 1];
       // the renderer draws the name / indicator above the controlled player itself
       tag.style.display = 'none';
@@ -251,21 +313,107 @@ export class Hud {
     const usedSlots = new Set(ctx.local.filter(Boolean));
     if (!usedSlots.has('p1')) { this.panels[0].style.display = 'none'; this.tags[0].style.display = 'none'; this.pows[0].style.display = 'none'; }
     if (!usedSlots.has('p2')) { this.panels[1].style.display = 'none'; this.tags[1].style.display = 'none'; this.pows[1].style.display = 'none'; }
+    // next-player indicator (who the switch key would select)
+    for (let s = 0; s < 2; s++) {
+      const ne = this.nexts[s];
+      const slot = ctx.local[s];
+      const ni = view.ns ? view.ns[s] : -1;
+      const show = live && slot && ni >= 0 && ni !== view.c[s] && ctx.project && view.ph === PHASE.PLAY && (!ctx.gp || ctx.gp[s].nextPlayerIndicator !== false);
+      if (!show) { ne.style.display = 'none'; continue; }
+      const pf = ctx.project(view.p[ni * 7], 2.25, view.p[ni * 7 + 1]);
+      if (!pf || !pf.visible) { ne.style.display = 'none'; continue; }
+      ne.style.display = 'block'; ne.style.left = pf.x + 'px'; ne.style.top = pf.y + 'px';
+      ne.style.color = slot === 'p2' ? '#ff8a8a' : '#8fd0ff';
+    }
+    // timed-finishing pill
+    if (this.timedT > 0 && ctx.project && this.timedPi != null) {
+      this.timedT -= dt;
+      const i = this.timedPi;
+      const pf = ctx.project(view.p[i * 7], 2.6, view.p[i * 7 + 1]);
+      this.timedEl.style.display = pf && pf.visible && this.timedT > 0 ? 'block' : 'none';
+      if (pf) { this.timedEl.style.left = pf.x + 'px'; this.timedEl.style.top = pf.y + 'px'; }
+    } else this.timedEl.style.display = 'none';
+    this._setPieceOverlay(view, ctx, live);
     // set-piece hint
     this._hint(view, ctx);
     this._radar(view, ctx);
   }
 
+  // shootout tally under the scoreboard
+  _pens(v) {
+    const pk = v.pk;
+    const key = pk ? JSON.stringify(pk) : '';
+    if (key === this.pensKey) return;
+    this.pensKey = key;
+    if (!pk) { this.pensEl.style.display = 'none'; return; }
+    const row = (team, name) => {
+      const k = pk[team] || [];
+      const n = Math.max(5, k.length, (pk[1 - team] || []).length);
+      let dots = '';
+      for (let i = 0; i < n; i++) dots += `<i class="${k[i] === 1 ? 'ok' : k[i] === 0 ? 'no' : ''}"></i>`;
+      return `<div class="row"><span style="width:38px">${esc(name)}</span>${dots}<b style="margin-left:6px">${k.reduce((a, b) => a + b, 0)}</b></div>`;
+    };
+    this.pensEl.innerHTML = row(0, this.home.short || 'HOM') + row(1, this.away.short || 'AWY');
+    this.pensEl.style.display = 'block';
+  }
+
+  // penalties / free kicks: shrinking timing ring under the ball + ball contact-point diagram
+  _setPieceOverlay(view, ctx, live) {
+    const cv = this.spov, g = this.spctx;
+    const W = this.root.clientWidth, H = this.root.clientHeight;
+    const sa = view.sa;
+    const mine = sa && live && view.spk >= 0 && ctx.local[view.spk] && view.ph === PHASE.SETPIECE;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    g.clearRect(0, 0, W, H);
+    if (!mine || !ctx.project) { this.contact.style.display = 'none'; return; }
+    const [type, , , kx, ky, ring, cross] = sa;
+    const bx = view.b[0], bz = view.b[2];
+    if (cross || type === SP.FREEKICK || type === SP.PENALTY || type === SP.CORNER) {
+      // timing ring on the ground around the ball: smallest = best moment to strike
+      const r = 0.35 + ring * 1.5;
+      const pts = [];
+      for (let k = 0; k <= 40; k++) {
+        const a = (k / 40) * Math.PI * 2;
+        const pf = ctx.project(bx + Math.cos(a) * r, 0.03, bz + Math.sin(a) * r);
+        if (!pf) return;
+        pts.push(pf);
+      }
+      g.lineWidth = 3;
+      g.strokeStyle = ring < 0.15 ? '#46d17a' : ring < 0.45 ? '#f5c542' : 'rgba(255,255,255,.85)';
+      g.beginPath();
+      pts.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+      g.stroke();
+      const inner = [];
+      for (let k = 0; k <= 30; k++) { const a = (k / 30) * Math.PI * 2; inner.push(ctx.project(bx + Math.cos(a) * 0.35, 0.03, bz + Math.sin(a) * 0.35)); }
+      g.lineWidth = 1.5; g.strokeStyle = 'rgba(70,209,122,.8)';
+      g.beginPath(); inner.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+    }
+    // ball contact point (free kicks with the crosshair)
+    if (cross && type === SP.FREEKICK) {
+      this.contact.style.display = 'block';
+      const dot = this.contact.querySelector('.dot');
+      dot.style.left = 39 + kx * 32 + 'px';
+      dot.style.top = 39 - ky * 32 + 'px';
+      const lab = Math.abs(kx) < 0.22 && Math.abs(ky) < 0.22 ? 'KNUCKLE' : `${kx > 0.22 ? 'CURL L ' : kx < -0.22 ? 'CURL R ' : ''}${ky > 0.22 ? 'DIP' : ky < -0.22 ? 'LIFT' : ''}`;
+      this.contact.lastChild.textContent = lab.trim();
+    } else this.contact.style.display = 'none';
+  }
+
   _hint(view, ctx) {
     let txt = '';
-    if (!ctx.replay && (view.ph === PHASE.SETPIECE || view.ph === PHASE.KICKOFF) && view.spk >= 0 && ctx.local[view.spk] && view.c[view.spk] >= 0) {
+    if (!ctx.replay && view.ph === PHASE.SETPIECE && view.spt === SP.PENALTY && view.spk >= 0 && !ctx.local[view.spk] && ctx.local[1 - view.spk]) {
+      const b = this.binds[ctx.local[1 - view.spk]];
+      txt = `KEEPER — hold a direction as the kick is struck to dive (towards the taker = high) · <b>${esc(keyName(b.up))}${esc(keyName(b.left))}${esc(keyName(b.down))}${esc(keyName(b.right))}</b>`;
+    } else if (!ctx.replay && (view.ph === PHASE.SETPIECE || view.ph === PHASE.KICKOFF) && view.spk >= 0 && ctx.local[view.spk] && view.c[view.spk] >= 0) {
       const b = this.binds[ctx.local[view.spk]];
       const k = (a) => `<b>${esc(keyName(b[a]))}</b>`;
       switch (view.spt) {
-        case SP.PENALTY: txt = `PENALTY — aim with movement · hold ${k('shoot')} for power, release to shoot (too much power sails over)`; break;
-        case SP.FREEKICK: txt = `FREE KICK — aim with movement · curve ${k('switchP')} / ${k('tackle')} · hold ${k('shoot')} shoot, ${k('finesse')} finesse, ${k('lob')} cross, ${k('pass')} pass`; break;
+        case SP.PENALTY: txt = `PENALTY — move the crosshair (movement / right stick / mouse) · hold ${k('shoot')} for power, release when the ring is smallest`; break;
+        case SP.FREEKICK: txt = view.sa && view.sa[6]
+          ? `FREE KICK — crosshair: movement / mouse · contact ${k('switchP')} ${k('tackle')} ${k('skill')} ${k('jockey')} · hold ${k('shoot')} / ${k('finesse')}, release on the small ring · ${k('lob')} cross, ${k('pass')} pass`
+          : `FREE KICK — aim with movement · curve ${k('switchP')} / ${k('tackle')} · ${k('lob')} long, ${k('pass')} pass (tap ${k('pass')} during the whistle = quick)`; break;
         case SP.CORNER: txt = `CORNER — aim with movement · curve ${k('switchP')} / ${k('tackle')} · hold ${k('lob')} to cross, ${k('pass')} short`; break;
-        case SP.THROW: txt = `THROW-IN — aim with movement · ${k('pass')} short, ${k('lob')} long`; break;
+        case SP.THROW: txt = `THROW-IN — aim with movement · ${k('pass')} short, ${k('lob')} long (tap ${k('pass')} during the whistle = quick throw)`; break;
         case SP.GOALKICK: txt = `GOAL KICK — aim with movement · ${k('pass')} short, ${k('lob')} long`; break;
         case SP.KICKOFF: txt = `KICK-OFF — ${k('pass')} to pass`; break;
       }
@@ -318,25 +466,123 @@ export class Hud {
       this.camMode = this.onCamera();
       camBtn.textContent = `Camera: ${this.camMode === 'pro' ? 'Pro (behind player)' : 'Broadcast'}`;
     });
+    if (this.teamInfo && (info.localSides || []).length) btn('Team management', () => this._menuTeam(info, info.localSides[0], 'subs'));
+    btn('Instant replay', () => this.onReplay());
     btn('Controls', () => this._menuControls(info));
     btn('Quit match', () => this.onQuit(), 'quit');
     setTimeout(() => first.focus(), 0);
   }
+  // In-match team management: substitutions, formation / positions, tactics, set-piece takers, mentality
+  _menuTeam(info, side, tab) {
+    const b = this.menuBox;
+    const ti = this.teamInfo(side);
+    if (!ti) return;
+    const team = side === 0 ? this.home : this.away;
+    const send = (cmd) => { const r = this.onTactic(side, cmd); setTimeout(() => this._menuTeam(info, side, tab), 30); return r; };
+    b.innerHTML = `<h2>TEAM · ${esc(team.short || team.name)}</h2>`;
+    const tabs = el('div', 'tabs', b);
+    for (const [k, lab] of [['subs', 'Subs'], ['shape', 'Formation'], ['tac', 'Tactics'], ['sp', 'Set pieces']]) {
+      const t = el('button', tab === k ? 'on' : '', tabs, lab);
+      t.addEventListener('click', () => this._menuTeam(info, side, k));
+    }
+    if ((info.localSides || []).length > 1) {
+      const o = el('button', '', tabs, 'Other side');
+      o.addEventListener('click', () => this._menuTeam(info, info.localSides.find((x) => x !== side), tab));
+    }
+    const body = el('div', '', b);
+    if (tab === 'subs') {
+      body.innerHTML = `<div style="font-size:12px;color:#9fb6de;margin-bottom:4px">Subs used ${ti.subsMade}/${ti.maxSubs}${ti.pending.length ? ` · ${ti.pending.length} waiting for a stoppage` : ''}. Pick a player, then a substitute.</div>`;
+      const tbl = el('table', 'tm', body);
+      this._subOut = this._subOut ?? null;
+      for (const p of ti.players) {
+        if (p.role === 'GK' && false) continue;
+        const tr = el('tr', this._subOut === p.i ? 'sel' : '', tbl, `<td>${esc(p.role || p.pos)}</td><td>${esc(p.name)}</td><td>${p.ovr ?? ''}</td><td>${Math.round((p.stam ?? 1) * 100)}%</td><td>${p.rating != null ? p.rating.toFixed(1) : ''}</td>`);
+        if (p.sentOff) tr.style.opacity = 0.4;
+        else tr.addEventListener('click', () => { this._subOut = p.i; this._menuTeam(info, side, tab); });
+      }
+      el('div', '', body, '<div style="margin:8px 0 4px;font-weight:800">Bench</div>');
+      const tb = el('table', 'tm', body);
+      for (const q of ti.bench) {
+        const tr = el('tr', '', tb, `<td>${esc(q.pos)}</td><td>${esc(q.name)}</td><td>${q.ovr ?? ''}</td>`);
+        if (q.used) tr.style.opacity = 0.35;
+        else tr.addEventListener('click', () => { if (this._subOut == null) return; send({ k: 'sub', i: this._subOut, bi: q.bi }); this._subOut = null; });
+      }
+    } else if (tab === 'shape') {
+      const lab = el('label', '', body, 'Formation ');
+      const sel = el('select', '', lab);
+      for (const f of ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2', '4-1-2-1-2']) { const o = el('option', '', sel, f); o.value = f; if (f === ti.formation) o.selected = true; }
+      sel.addEventListener('change', () => send({ k: 'formation', f: sel.value }));
+      el('div', '', body, '<div style="margin:8px 0 4px;font-size:12px;color:#9fb6de">Swap positions: click two players.</div>');
+      const tbl = el('table', 'tm', body);
+      for (const p of ti.players) {
+        if (p.i === 0) continue;
+        const tr = el('tr', this._swapA === p.i ? 'sel' : '', tbl, `<td>${esc(p.role || '')}</td><td>${esc(p.name)}</td>`);
+        tr.addEventListener('click', () => {
+          if (this._swapA == null) { this._swapA = p.i; this._menuTeam(info, side, tab); }
+          else { const a = this._swapA; this._swapA = null; if (a !== p.i) send({ k: 'swap', i: a, j: p.i }); else this._menuTeam(info, side, tab); }
+        });
+      }
+      const m = ti.tac && ti.tac.mentality != null ? ti.tac.mentality : 0;
+      el('div', '', body, `<div style="margin-top:8px">Mentality: <b>${MENTALITY[m + 2] || 'BALANCED'}</b></div>`);
+      const mr = el('div', 'tabs', body);
+      el('button', '', mr, '◀ More defensive').addEventListener('click', () => send({ k: 'ment', d: -1 }));
+      el('button', '', mr, 'More attacking ▶').addEventListener('click', () => send({ k: 'ment', d: 1 }));
+    } else if (tab === 'tac') {
+      const t = ti.tac || {};
+      const pick = (label, key, opts) => {
+        const l = el('label', '', body, esc(label));
+        const s = el('select', '', l);
+        for (const o of opts) { const e = el('option', '', s, o); e.value = o; if ((t[key] || opts[0]) === o) e.selected = true; }
+        s.addEventListener('change', () => send({ k: 'set', tactics: { [key]: s.value } }));
+      };
+      const slider = (label, key, lo, hi) => {
+        const l = el('label', '', body, `${esc(label)} <b>${t[key] ?? Math.round((lo + hi) / 2)}</b>`);
+        const r = el('input', '', l); r.type = 'range'; r.min = lo; r.max = hi; r.value = t[key] ?? Math.round((lo + hi) / 2);
+        r.addEventListener('change', () => send({ k: 'set', tactics: { [key]: +r.value } }));
+      };
+      pick('Defensive style', 'defensiveStyle', ['balanced', 'pressAfterLoss', 'constantPressure', 'dropBack']);
+      slider('Width', 'width', 1, 10); slider('Depth', 'depth', 1, 10);
+      pick('Build-up', 'buildUp', ['balanced', 'shortPassing', 'longBall', 'counter']);
+      pick('Chance creation', 'chanceCreation', ['balanced', 'possession', 'directPassing', 'forwardRuns']);
+      slider('Players in box', 'playersInBox', 1, 10); slider('Corners', 'corners', 1, 5); slider('Free kicks', 'freeKicks', 1, 5);
+      el('div', '', body, `<div style="font-size:12px;color:#9fb6de;margin-top:6px">Quick tactics: keys 1–4 (presets from your team's tactics), − / = mentality, gamepad LB + d-pad.</div>`);
+    } else {
+      const tk = (ti.tac && ti.tac.setPieceTakers) || {};
+      for (const [key, lab] of [['fk', 'Free kicks'], ['pen', 'Penalties'], ['cornerL', 'Left corners'], ['cornerR', 'Right corners'], ['captain', 'Captain']]) {
+        const l = el('label', '', body, esc(lab));
+        const s = el('select', '', l);
+        el('option', '', s, 'Auto').value = '';
+        for (const p of ti.players) { if (p.i === 0 && key !== 'captain') continue; const o = el('option', '', s, esc(p.name)); o.value = p.id; if (tk[key] === p.id) o.selected = true; }
+        s.addEventListener('change', () => send({ k: 'takers', takers: { [key]: s.value || undefined } }));
+      }
+    }
+    const back = el('button', '', b, 'Back');
+    back.addEventListener('click', () => this._menuMain(info));
+    setTimeout(() => back.focus(), 0);
+  }
+
   _menuControls(info) {
     const b = this.menuBox;
     const rows = (slot) => {
       const k = this.binds[slot];
       const r = (label, key) => `<tr><td>${label}</td><td><kbd>${esc(keyName(k[key]))}</kbd></td></tr>`;
-      return `<table>${r('Move up', 'up')}${r('Move down', 'down')}${r('Move left', 'left')}${r('Move right', 'right')}${r('Sprint', 'sprint')}${r('Ground pass (hold = power)', 'pass')}${r('Through ball', 'through')}${r('Lob / cross', 'lob')}${r('Shoot (hold = power)', 'shoot')}${r('Finesse shot', 'finesse')}${r('Switch player', 'switchP')}${r('Tackle (hold / double tap = slide)', 'tackle')}${r('Skill move (+ direction)', 'skill')}${r('Pause', 'pause')}</table>`;
+      return `<table>${r('Move up', 'up')}${r('Move down', 'down')}${r('Move left', 'left')}${r('Move right', 'right')}${r('Sprint', 'sprint')}${r('Ground pass (hold = power)', 'pass')}${r('Through ball', 'through')}${r('Lob / cross', 'lob')}${r('Shoot (hold = power)', 'shoot')}${r('Finesse shot', 'finesse')}${r('Switch player', 'switchP')}${r('Tackle (hold / double tap = slide)', 'tackle')}${r('Skill move (+ direction)', 'skill')}${r('Jockey / shield (hold)', 'jockey')}${r('Control keeper (hold)', 'keeper')}${r('Pause', 'pause')}</table>
+      <table><tr><td>Chip shot</td><td><kbd>${esc(keyName(k.switchP))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd></td></tr>
+      <tr><td>Low driven (tap) / power shot (hold)</td><td><kbd>${esc(keyName(k.finesse))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd></td></tr>
+      <tr><td>Trivela · flair pass</td><td><kbd>${esc(keyName(k.jockey))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd> · <kbd>${esc(keyName(k.jockey))}</kbd> + <kbd>${esc(keyName(k.pass))}</kbd></td></tr>
+      <tr><td>Controlled sprint</td><td><kbd>${esc(keyName(k.jockey))}</kbd> + <kbd>${esc(keyName(k.sprint))}</kbd></td></tr>
+      <tr><td>Keeper dive (while controlling keeper)</td><td><kbd>${esc(keyName(k.tackle))}</kbd></td></tr></table>`;
     };
     const slots = [...new Set((this.slots || []).filter(Boolean))];
     if (!slots.length) slots.push('p1');
     b.innerHTML = '<h2>CONTROLS</h2>' + slots.map((s) => `<div style="font-weight:800;margin-top:6px">${s === 'p2' ? 'Player 2' : 'Player 1'}</div>${rows(s)}`).join('') +
       `<div style="font-weight:800;margin-top:6px">Gamepad</div><table>
         <tr><td>Pass / Through / Lob / Shoot</td><td><kbd>A</kbd> <kbd>Y</kbd> <kbd>B</kbd> <kbd>X</kbd></td></tr>
-        <tr><td>Finesse · Sprint · Switch · Slide</td><td><kbd>RB</kbd> <kbd>RT</kbd> <kbd>LB</kbd> <kbd>LT</kbd></td></tr>
+        <tr><td>Finesse · Sprint · Switch · Jockey</td><td><kbd>RB</kbd> <kbd>RT</kbd> <kbd>LB</kbd> <kbd>LT</kbd></td></tr>
+        <tr><td>Tackle (hold = slide) · Keeper</td><td><kbd>B</kbd> <kbd>L3</kbd></td></tr>
+        <tr><td>Set-piece crosshair · contact point</td><td>right stick · d-pad</td></tr>
         <tr><td>Skill move · Camera · Pause</td><td><kbd>R3</kbd> <kbd>Back</kbd> <kbd>Start</kbd></td></tr></table>
-      <table><tr><td>Toggle camera</td><td><kbd>C</kbd></td></tr><tr><td>Set pieces</td><td>move = aim, curve = switch/tackle keys, hold kick key for power</td></tr></table>`;
+      <table><tr><td>Toggle camera</td><td><kbd>C</kbd></td></tr><tr><td>Quick tactics · mentality</td><td><kbd>1</kbd>–<kbd>4</kbd> · <kbd>-</kbd> <kbd>=</kbd></td></tr><tr><td>Set pieces</td><td>move = aim, curve = switch/tackle keys, hold kick key for power</td></tr></table>`;
     const back = el('button', '', b, 'Back');
     back.addEventListener('click', () => this._menuMain(info));
     setTimeout(() => back.focus(), 0);

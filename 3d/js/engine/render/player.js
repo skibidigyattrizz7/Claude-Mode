@@ -563,6 +563,22 @@ export class PlayerRig {
         T[P.nkY] = 0;
         break;
       }
+      case ANIM.GKJUMP: {
+        // keeper claiming a high ball: jumping catch (arms overhead) or two-fisted punch
+        const v = clamp(u / 0.6, 0, 1);
+        const j = Math.sin(Math.PI * v);
+        T[P.lift] = 0.45 * j; T[P.gl] = 1;
+        T[P.lkX] = 0.2 + 0.9 * j; T[P.rkX] = 0.1 + 0.4 * j; T[P.lhX] = -0.6 * j; T[P.rhX] = -0.05 * j;
+        if (pp >= 1) {
+          const th = seg(v, 0.2, 0.45);
+          T[P.lsX] = lerp(-1.3, -2.6, th); T[P.rsX] = lerp(-1.3, -2.6, th); T[P.lsZ] = 0.12; T[P.rsZ] = -0.12;
+          T[P.leX] = lerp(-1.5, -0.05, th); T[P.reX] = lerp(-1.5, -0.05, th);
+        } else {
+          T[P.lsX] = -2.9 * j; T[P.rsX] = -2.9 * j; T[P.lsZ] = 0.22; T[P.rsZ] = -0.22; T[P.leX] = -0.3 * j; T[P.reX] = -0.3 * j;
+        }
+        T[P.spX] = -0.15 * j; T[P.nkX] = -0.35 * j;
+        break;
+      }
       case ANIM.DIVE: {
         const side = Math.sign(pp) || 1;
         const hgt = Math.max(0, Math.abs(pp) - 1);
@@ -574,8 +590,9 @@ export class PlayerRig {
         const land = seg(u, F + 0.05, F + 0.3);
         const rise = seg(u, F + 0.75, F + 1.05);
         const high = clamp((hgt - 1.2) / 1.0, 0, 1);
-        const peak = clamp(hgt * 0.8, 0.35, 1.65);
-        const rollMax = lerp(1.45, 1.05, high);
+        const low = clamp((0.6 - hgt) / 0.4, 0, 1); // low scoop / smother: flat along the grass
+        const peak = clamp(hgt * 0.8, 0.28, 1.65) - low * 0.1;
+        const rollMax = lerp(lerp(1.5, 1.05, high), 1.58, low);
         let y = lerp(STAND_Y - 0.2 * load, STAND_Y, 0);
         y = STAND_Y - 0.22 * load * (1 - fl);
         const flightY = lerp(STAND_Y - 0.2, peak, easeOut(fl)) ;
@@ -584,7 +601,9 @@ export class PlayerRig {
         y = lerp(y, 0.62, rise);
         const roll = dr * lerp(lerp(0.12 * load, rollMax, easeOut(fl)), 1.5, land) * (1 - 0.5 * rise);
         T[P.gl] = fl > 0 ? 0 : 1;
-        T[P.bodyY] = y; T[P.roll] = roll; T[P.pitch] = -0.1 * fl + 0.25 * rise;
+        // fingertip tip-over for balls near the bar: lean back, top arm fully extended
+        const tip = clamp((hgt - 2.0) / 0.4, 0, 1);
+        T[P.bodyY] = y; T[P.roll] = roll; T[P.pitch] = -0.1 * fl + 0.25 * rise - 0.35 * tip * fl;
         const reach = easeOut(fl) * (1 - 0.6 * rise);
         // arms stretch "overhead" (toward the dive side after roll)
         T[P.lsZ] = lerp(0.3, 2.85 - (dr > 0 ? 0.25 : 0), reach); T[P.lsX] = lerp(-0.3, -0.25, reach); T[P.leX] = lerp(-0.6, -0.1, reach);

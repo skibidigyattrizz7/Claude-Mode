@@ -118,10 +118,10 @@ export function utHomeView() {
           tile('pm-tile--draft', 'Draft', s.draft ? 'Draft in progress' : 'Pick 1 of 5 · 4-round knockout', () => app.push(M.draftView()), s.draft ? '▶' : null),
           tile('pm-tile--event', 'Tournaments', 'Weekly knockout events', () => app.push(M.eventsView())),
           tile('pm-tile--totw', 'Team of the Week', 'Boosted In-Form cards', () => app.push(M.totwView())),
+          tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView())),
           tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
           tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null),
-          tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView())),
-          tile('pm-tile--custom', 'Customise', 'Badge, name & kits', () => app.push(M.clubEditView())),
+          tile('pm-tile--custom', 'Customise club', 'Badge, name & home/away kits', () => app.push(M.clubEditView())),
         ));
     },
   };

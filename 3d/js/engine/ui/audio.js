@@ -7,10 +7,17 @@ export class MatchAudio {
     this.excite = 0;
     this.roar = 0;
     this.muted = false;
+    this.vol = 1;
     this._gesture = () => this.unlock();
     if (this.ok) {
       for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(ev, this._gesture, { passive: true });
     }
+  }
+
+  // opts.volume 0..1
+  setVolume(v) {
+    this.vol = Math.max(0, Math.min(1, +v || 0));
+    if (this.master) this.master.gain.value = 0.8 * this.vol;
   }
 
   unlock() {
@@ -25,7 +32,7 @@ export class MatchAudio {
     const AC = window.AudioContext || window.webkitAudioContext;
     const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
-    this.master.gain.value = 0.8;
+    this.master.gain.value = 0.8 * this.vol;
     this.master.connect(ctx.destination);
     // noise buffers
     const len = ctx.sampleRate * 4;

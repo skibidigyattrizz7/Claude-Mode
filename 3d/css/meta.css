@@ -865,3 +865,4 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-scoutreg:disabled { opacity: .45; cursor: default; }
 .pm-proratings i { width: 34px; }
 .pm-pro h3 { margin-top: 14px; }
+.pm-tile--custom { grid-column: 1 / -1; min-height: 96px !important; }

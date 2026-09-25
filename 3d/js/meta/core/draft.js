@@ -9,7 +9,7 @@ import { aiOpponent } from './rivals.js';
 
 export const DRAFT_ENTRY = 8000;
 export const DRAFT_ROUNDS = ['Round 1', 'Quarter-final', 'Semi-final', 'Final'];
-const ROUND_DIFF = ['pro', 'world', 'world', 'legendary'];
+const ROUND_DIFF = ['world', 'world', 'legendary', 'legendary'];
 export const DRAFT_REWARDS = [
   { coins: 800, pack: 'bronze' },
   { coins: 2500, pack: 'silver' },

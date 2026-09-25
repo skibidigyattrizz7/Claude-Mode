@@ -79,7 +79,7 @@ export function tacticsEditor(opts) {
       const ins = t.instructions[p.id] || {};
       return h('div', { class: 'pm-tac-ins' },
         h('div', { class: 'pm-tac-insname' }, h('b', null, p.pos), h('span', null, p.name)),
-        h('div', { class: 'pm-tac-inssel' }, T.instructionGroups(p.pos).map((g) => select(T.INSTRUCTIONS[g], ins[g] || 'balanced', (v) => {
+        h('div', { class: 'pm-tac-inssel' }, T.instructionGroups(p.pos).map((g) => select(T.INSTRUCTIONS[g].map(([v, l]) => [v, `${g[0].toUpperCase() + g.slice(1)}: ${l}`]), ins[g] || 'balanced', (v) => {
           const o = { ...(t.instructions[p.id] || {}) };
           if (v === 'balanced') delete o[g]; else o[g] = v;
           if (Object.keys(o).length) t.instructions[p.id] = o; else delete t.instructions[p.id];
