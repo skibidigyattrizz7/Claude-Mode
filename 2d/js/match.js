@@ -471,7 +471,10 @@ export class Match {
         // receiver assist: run onto the ball unless the player clearly steers somewhere else
         const ip = this.ai[p.team].interceptPoint(p);
         const dx = ip.x - p.x, dy = ip.y - p.y, d = Math.hypot(dx, dy);
-        const agrees = mag < 0.15 || d < 0.3 || (mv.x * dx + mv.y * dy) / (mag * d) > (locked ? -0.2 : 0.35);
+        // the stick is still held from the pass itself for a moment: ignore it, and afterwards
+        // only a clear steer away (> ~110 degrees) takes the receiver off the ball's line
+        const since = this.time - this.pass.t;
+        const agrees = since < 0.45 || mag < 0.15 || d < 0.3 || (mv.x * dx + mv.y * dy) / (mag * d) > (locked ? -0.8 : -0.35);
         if (agrees) {
           assisted = true;
           const sp = Math.min(topSpeed(p, d > 5 || sprint), d * 2.5);
@@ -1022,7 +1025,8 @@ export class Match {
       this.emit('header', { p });
       return;
     }
-    const trapLimit = 15 + 6 * p.attrs.dribbling;
+    const intended = this.pass && this.pass.receiver === p;
+    const trapLimit = (intended ? 21 : 16) + 6 * p.attrs.dribbling;
     if (relSpeed < trapLimit) {
       // cutting out a firm pass often only gets a toe to it: the ball deflects away
       if (this.pass && this.pass.team !== p.team && relSpeed > 9 && b.z < 0.6 && Math.random() < 0.3 + (relSpeed - 9) * 0.04 - p.attrs.tackling * 0.15) {

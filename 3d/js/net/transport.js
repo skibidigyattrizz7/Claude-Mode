@@ -231,6 +231,17 @@ export function loadPeerJS() {
   return peerLoad;
 }
 
+// ICE: several public STUN servers + PeerJS's own (best-effort, shared) TURN relays, which PeerJS
+// would otherwise use by default. Without a dedicated TURN server, players behind symmetric NAT /
+// strict firewalls (some mobile carriers, corporate/school networks) can still fail to connect.
+export const ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+];
+export const P2P_FAIL_MSG = 'A direct connection could not be opened — one of your networks blocks peer-to-peer play (common on mobile data, school or office Wi-Fi). Try another network, or retry.';
+
 const PEER_ERRORS = {
   'browser-incompatible': 'This browser does not support WebRTC.',
   network: 'Cannot reach the matchmaking server.',
@@ -240,7 +251,11 @@ const PEER_ERRORS = {
   'ssl-unavailable': 'Secure connection to the server is unavailable.',
   'peer-unavailable': 'Room not found.',
   'unavailable-id': 'That room code is already in use.',
-  webrtc: 'WebRTC connection failed.',
+  'invalid-id': 'Invalid room id.',
+  'invalid-key': 'The connection server rejected this game (invalid key).',
+  disconnected: 'Lost the connection to the matchmaking server.',
+  'negotiation-failed': P2P_FAIL_MSG,
+  webrtc: P2P_FAIL_MSG,
 };
 
 /**
@@ -257,9 +272,12 @@ export class PeerTransport extends BaseTransport {
     this._retry = null;
   }
   _peerOptions() {
-    const o = { debug: 1 };
+    const o = { debug: 1, config: { iceServers: ICE_SERVERS, sdpSemantics: 'unified-plan' } };
     const c = this.cfg;
-    if (c.host) {
+    if (!c.host) {
+      // PeerJS public cloud broker, spelled out so it never depends on page protocol/port
+      o.host = '0.peerjs.com'; o.port = 443; o.path = '/'; o.secure = true;
+    } else {
       o.host = String(c.host);
       if (c.port) o.port = Number(c.port);
       if (c.path) o.path = String(c.path);
@@ -276,7 +294,13 @@ export class PeerTransport extends BaseTransport {
       if (conn === this.ctl) { this.ctl = null; this._setStatus('down'); }
       if (conn === this.rt) this.rt = null;
     });
-    conn.on('error', (e) => console.warn('[net] data connection error', e && e.type));
+    conn.on('error', (e) => {
+      console.warn('[net] data connection error', e && e.type, e && e.message);
+      if (conn.label !== 'rt' && this._connectFail) this._connectFail(PEER_ERRORS[e && e.type] || P2P_FAIL_MSG);
+    });
+    conn.on('iceStateChanged', (state) => {
+      if (state === 'failed' && conn.label !== 'rt' && this._connectFail) this._connectFail(P2P_FAIL_MSG);
+    });
   }
   /** Register a Peer (with `id`, or a random one) with the signalling server. Resolves on 'open'. */
   async _openPeer(id) {
@@ -290,14 +314,24 @@ export class PeerTransport extends BaseTransport {
       peer.on('open', () => { opened = true; clearTimeout(t); resolve(); });
       peer.on('error', (e) => {
         const msg = PEER_ERRORS[e && e.type] || (e && e.message) || 'Connection error';
+        console.warn('[net] peer error:', e && e.type, e && e.message);
         if (!opened) { clearTimeout(t); reject(Object.assign(new Error(msg), { type: e && e.type })); return; }
         if (this._connectFail) { this._connectFail(msg); return; }
         if (e && e.type !== 'peer-unavailable') this._setStatus('error', msg);
       });
+      let reTries = 0;
       peer.on('disconnected', () => {
-        // lost the broker (not the peer): keep data connections, try to re-register
-        if (!this.closed) setTimeout(() => { try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch { /* ignore */ } }, 1500);
+        // lost the broker (not the peer): keep data connections, try to re-register (host code stays reserved ~a minute)
+        if (this.closed || peer.destroyed) return;
+        const retry = () => {
+          if (this.closed || peer.destroyed || !peer.disconnected) return;
+          if (++reTries > 5) { this._setStatus('error', PEER_ERRORS.disconnected); return; }
+          try { peer.reconnect(); } catch { /* ignore */ }
+          setTimeout(retry, 3000 * reTries);
+        };
+        setTimeout(retry, 1500);
       });
+      peer.on('open', () => { reTries = 0; });
       peer.on('connection', (conn) => {
         if (this.closed || this.role !== 'host') { try { conn.close(); } catch { /* ignore */ } return; }
         this._wireConn(conn);
@@ -365,7 +399,7 @@ export class PeerTransport extends BaseTransport {
         this._connectFail = null;
         if (err) reject(new Error(err)); else resolve();
       };
-      const t = setTimeout(() => fin('Timed out connecting to the room.'), 20000);
+      const t = setTimeout(() => fin(`Timed out connecting. ${P2P_FAIL_MSG}`), 20000);
       this._connectFail = (msg) => fin(msg);
       this._connect(() => fin(null));
     });

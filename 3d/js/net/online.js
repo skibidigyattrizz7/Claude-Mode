@@ -58,7 +58,7 @@ export function mountOnline(root, ctx) {
     ? h('div', { class: 'tag tag--warn' }, `Test transport: ${ctx.transportKind === 'bc' ? 'BroadcastChannel (same browser)' : 'Loopback'}`) : null);
 
   // ---------------------------------------------------------------- home
-  function renderHome(err = '') {
+  function renderHome(err = '', retry = null) {
     teardownSession();
     stopSearchClock();
     st.quick = null;
@@ -157,8 +157,8 @@ export function mountOnline(root, ctx) {
       const s2 = st.status;
       if (!s2) return;
       if (!s2.online) {
-        profileBar.replaceChildren(h('span', { class: 'pill pill--off', id: 'net-pill' }, h('i', { class: 'dot' }), 'Offline'),
-          h('span', { class: 'hint' }, 'Coins, rating and matchmaking need the online service. Code rooms still work.'));
+        profileBar.replaceChildren(h('span', { class: 'pill pill--off', id: 'net-pill' }, h('i', { class: 'dot' }), 'Online services offline'),
+          h('span', { class: 'hint', id: 'net-offline-reason' }, `${s2.message || 'The online server is unreachable.'} Quick Search, friends and coins are unavailable — Play with a Code still works.`));
       } else {
         const p = s2.profile;
         profileBar.replaceChildren(h('span', { class: 'pill pill--on', id: 'net-pill' }, h('i', { class: 'dot' }), 'Online'),
@@ -173,7 +173,8 @@ export function mountOnline(root, ctx) {
 
     view(
       transportBadge(),
-      err ? h('div', { class: 'alert', role: 'alert', id: 'net-error' }, err) : null,
+      err ? h('div', { class: 'alert', role: 'alert', id: 'net-error' }, h('span', null, err),
+        retry ? h('button', { class: 'btn btn--sm', type: 'button', id: 'net-retry', onclick: () => retry() }, 'Retry') : null) : null,
       profileBar,
       h('div', { class: 'online-cards' }, quickCard, codeCard),
       friendsPanel,
@@ -200,10 +201,13 @@ export function mountOnline(root, ctx) {
       if (st.homeToken === token && st.phase === 'home') renderTeamSlot();
     })();
     (async () => {
-      const onlineNow = services ? await services.available() : false;
-      const profile = onlineNow ? await services.profile() : null;
+      const sv = services ? await services.status() : { online: false, message: '' };
+      const profile = sv.online ? await services.profile() : null;
       if (st.destroyed) return;
-      st.status = { online: onlineNow && !!(profile && profile.ok), profile: profile && profile.ok ? profile : null };
+      st.status = {
+        online: sv.online && !!(profile && profile.ok), profile: profile && profile.ok ? profile : null,
+        message: sv.online && !(profile && profile.ok) ? 'Your online profile could not be loaded.' : sv.message,
+      };
       if (st.homeToken === token && st.phase === 'home') { renderStatus(); loadFriends(token); }
       if (st.status.online) {
         st.rivals = await services.rivals.status();
@@ -412,6 +416,12 @@ export function mountOnline(root, ctx) {
     s.on('msg', onMsg);
     s.on('bye', onBye);
     s.on('fatal', (why) => { if (st.phase !== 'home') { teardownSession(); showEnded('Connection refused', why); } });
+    // broker / network problems after connecting: never fail silently
+    s.on('status', (state, detail) => {
+      if (state !== 'error' || !detail || st.session !== s) return;
+      if (st.phase === 'hosting') renderHome(`Your room stopped working: ${detail}`, () => doHost());
+      else ctx.toast(detail, 'bad');
+    });
     s.on('newpeer', () => { st.peerTeam = null; st.peerReady = false; st.peerGp = null; });
     return s;
   }
@@ -425,7 +435,7 @@ export function mountOnline(root, ctx) {
     try {
       st.code = await s.host();
     } catch (e) {
-      if (st.session === s) renderHome(`Could not create a room: ${e.message}`);
+      if (st.session === s) renderHome(`Could not create a room: ${e.message}`, () => doHost());
       return;
     }
     if (st.session !== s) return;
@@ -457,7 +467,7 @@ export function mountOnline(root, ctx) {
     try {
       await s.join(code);
     } catch (e) {
-      if (st.session === s) renderHome(`Could not join ${code}: ${e.message}`);
+      if (st.session === s) renderHome(`Could not join room ${code}: ${e.message}`, () => doJoin(code));
       return;
     }
     if (st.session !== s) return;

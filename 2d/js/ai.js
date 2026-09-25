@@ -170,8 +170,11 @@ export class TeamAI {
     const m = this.m, b = m.ball;
     const pt = m.pass.target;
     const dBall = Math.hypot(b.x - p.x, b.y - p.y);
-    if (dBall < 5) { const ip = this.interceptPoint(p); moveTo(p, ip.x, ip.y, 3); }
-    else moveTo(p, pt.x, pt.y, 4);
+    // go to meet the ball (the earliest point of its path he can reach); a through ball is
+    // run onto at the planned spot in the stride
+    const ip = this.interceptPoint(p);
+    if (dBall < 5 || (m.pass.kind !== 'through' && ip.t < 9)) moveTo(p, ip.x, ip.y, 2);
+    else moveTo(p, pt.x, pt.y, 3);
   }
 
   separate(mates) {

@@ -168,8 +168,16 @@ export function createOnline(deps) {
   const invitePollMs = deps.invitePollMs || 2000;
   let challengeJob = null;
 
+  const configured = deps.configured !== false;
   const online = {
     available: () => isAvailable().catch(() => false),
+    /** -> { online, reason: null | 'not_configured' | 'unreachable', message } (for the UI) */
+    async status() {
+      if (!configured) return { online: false, reason: 'not_configured', message: 'Online services are not set up yet (no server key configured).' };
+      const up = await isAvailable().catch(() => false);
+      return up ? { online: true, reason: null, message: '' }
+        : { online: false, reason: 'unreachable', message: 'The online server is unreachable right now (it may be paused for maintenance, or your connection is down).' };
+    },
 
     /** true once this device has an online profile (no network; used to avoid creating profiles just by browsing). */
     hasIdentity() { const v = readIdent(); return !!(v && v.id); },
@@ -448,6 +456,7 @@ function browserOnline() {
     rpc: rpcImpl,
     storage,
     mock,
+    configured: mock || !!(SUPABASE_URL && SUPABASE_KEY),
     identityKey: mock ? 'pitchside.mock.identity' : 'pitchside.online.identity',
     transportKind: ['bc', 'loopback'].includes(net) ? net : mock ? 'bc' : 'peer',
     peerCfg: () => {
@@ -464,6 +473,7 @@ const unavailable = () => {
   const f = async () => ({ ok: false, error: 'offline' });
   return {
     available: async () => false, profile: f, setName: f,
+    status: async () => ({ online: false, reason: 'unreachable', message: 'Online services are unavailable.' }),
     market: { list: f, search: f, buy: f, mine: f, cancel: f, claimSales: f },
     coins: { get: f, add: f }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
     hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, addCoins: f, verified: false, forget() {} }, errorText,
