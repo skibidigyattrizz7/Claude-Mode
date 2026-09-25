@@ -218,16 +218,26 @@ export class BroadcastChannelTransport extends BaseTransport {
 let peerLoad = null;
 /** Lazily load the vendored PeerJS classic script (window.Peer). */
 export function loadPeerJS() {
-  if (window.Peer) return Promise.resolve(window.Peer);
+  const found = () => window.Peer || (window.peerjs && window.peerjs.Peer) || null;
+  if (found()) return Promise.resolve(found());
   if (peerLoad) return peerLoad;
-  peerLoad = new Promise((resolve, reject) => {
+  // Local copy first (neutral file name so school/web filters are less likely to block it), then CDNs.
+  const sources = [
+    new URL('../../vendor/p2p-net.min.js', import.meta.url).href,
+    new URL('../../vendor/peerjs.min.js', import.meta.url).href,
+    'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js',
+  ];
+  const tryLoad = (i) => new Promise((resolve, reject) => {
+    if (i >= sources.length) { reject(new Error('Could not load the online-play library (it may be blocked on this network)')); return; }
     const s = document.createElement('script');
-    s.src = new URL('../../vendor/peerjs.min.js', import.meta.url).href;
+    s.src = sources[i];
     s.async = true;
-    s.onload = () => (window.Peer ? resolve(window.Peer) : reject(new Error('PeerJS did not initialise')));
-    s.onerror = () => { peerLoad = null; reject(new Error('Could not load PeerJS')); };
+    s.onload = () => (found() ? resolve(found()) : (s.remove(), tryLoad(i + 1).then(resolve, reject)));
+    s.onerror = () => { s.remove(); tryLoad(i + 1).then(resolve, reject); };
     document.head.appendChild(s);
   });
+  peerLoad = tryLoad(0).catch((e) => { peerLoad = null; throw e; });
   return peerLoad;
 }
 
