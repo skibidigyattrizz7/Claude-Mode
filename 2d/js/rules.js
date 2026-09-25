@@ -109,6 +109,43 @@ export function judgeTackle(t) {
   return { foul: false, reason: null, card: null };
 }
 
+/**
+ * Geometry of one frame of a tackle sweep. The tackler lunges along `dir`; the foot sweeps the
+ * segment from the body out to `reach`. Whatever lies earlier along the sweep is touched first,
+ * so a front-on tackle with the ball between the players always meets the ball first.
+ * @param p tackler {x,y}; dir angle; reach metres
+ * @param ball {x,y,z} or null when the ball can't be played (airborne / own team's ball)
+ * @param victims array of opponents {x,y}
+ * Returns {ball:boolean, victim:obj|null, first:'ball'|'body'|null}
+ */
+export function tackleSweep(p, dir, reach, ball, victims, slide = false) {
+  const ux = Math.cos(dir), uy = Math.sin(dir);
+  const sweep = (q) => {
+    const dx = q.x - p.x, dy = q.y - p.y;
+    return { along: dx * ux + dy * uy, lat: Math.abs(-dx * uy + dy * ux), d: Math.hypot(dx, dy) };
+  };
+  let ballAlong = Infinity;
+  if (ball) {
+    const s = sweep(ball);
+    if (s.along > -0.25 && s.along < reach + 0.15 && s.lat < (slide ? 0.55 : 0.48)) ballAlong = Math.max(0, s.along);
+  }
+  let victim = null, vAlong = Infinity;
+  const fx = p.x + ux * reach, fy = p.y + uy * reach;
+  for (const v of victims) {
+    const s = sweep(v);
+    const footD = Math.hypot(fx - v.x, fy - v.y);
+    // the man is hit when he stands in the path of the lunge (body-to-body or the foot on his legs)
+    const inPath = s.along > 0.05 && s.along < reach + 0.35 && s.lat < 0.4;
+    if (inPath && (s.d < 0.74 || footD < 0.38)) {
+      const a = s.along - 0.3;   // his legs are ~0.3 m in front of his centre
+      if (a < vAlong) { vAlong = a; victim = v; }
+    }
+  }
+  const hitBall = ballAlong < Infinity;
+  const first = hitBall && ballAlong <= vAlong + 0.05 ? 'ball' : victim ? 'body' : hitBall ? 'ball' : null;
+  return { ball: hitBall, victim, first };
+}
+
 /** Apply a card to a player record; returns 'yellow' | 'red'. Second yellow => red. */
 export function applyCard(player, card) {
   if (card === 'red') { player.sentOff = true; return 'red'; }

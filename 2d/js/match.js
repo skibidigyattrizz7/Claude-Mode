@@ -3,7 +3,7 @@
 import { PITCH, CX, CY, GOAL, PEN_SPOT, CIRCLE_R, BALL_R, DIFFICULTY } from './constants.js';
 import { FORMATION, chooseKits } from './data.js';
 import { makeBall, placeBall, stepBallWorld, simulatePath } from './physics.js';
-import { goalScored, keeperMaySave, outOfPlay, restartFor, judgeTackle, isFromBehind, inPenaltyArea, applyCard } from './rules.js';
+import { goalScored, keeperMaySave, outOfPlay, restartFor, judgeTackle, isFromBehind, inPenaltyArea, applyCard, tackleSweep } from './rules.js';
 import { choosePassTarget, passVelocity, leadTarget, clampToPitch } from './passing.js';
 import { planShot, shotVelocity } from './shooting.js';
 import { makePlayer, stepPlayer, topSpeed, startSkill, isEvading, SKILL_NAMES } from './player.js';
@@ -558,47 +558,46 @@ export class Match {
       if (!active) {
         if (!tk.judged && p.stateT >= (slide ? 0.6 : 0.27)) {
           tk.judged = true;
-          if (!tk.first && tk.near) {
+          // a challenge from clearly behind that misses the ball but reaches the man in possession
+          if (!tk.first && tk.near && tk.nearHadBall) {
             const v = judgeTackle({ type: tk.type, firstContact: null, bodyContact: false, nearVictim: true, fromBehind: isFromBehind(p, tk.near) });
             if (v.foul) { this.callFoul(p, tk.near, v); return; }
           }
         }
         continue;
       }
-      const reach = slide ? 0.85 : 0.75;
-      const foot = { x: p.x + Math.cos(tk.dir) * reach, y: p.y + Math.sin(tk.dir) * reach };
-      // ball first?
-      if (!tk.first && !tk.evaded && b.z < 0.7 && !(this.owner && this.owner.team === p.team)) {
-        if (Math.hypot(foot.x - b.x, foot.y - b.y) < (slide ? 0.62 : 0.56)) {
-          tk.first = 'ball';
-          const victim = this.owner;
-          this.emit('tackleWon', { p, kind: tk.type });
-          if (slide) {
-            this.owner = null; this.pass = null;
-            const a = tk.dir + (Math.random() - 0.5) * 0.8;
-            b.vx = Math.cos(a) * (5 + Math.random() * 3); b.vy = Math.sin(a) * (5 + Math.random() * 3); b.vz = 0.5;
-            this.lastTouch = p; b.kickId++;
-          } else if (victim && victim !== p) {
-            if (Math.random() < 0.6 + 0.35 * (p.attrs.tackling - victim.attrs.dribbling)) this.setOwner(p);
-            else { this.owner = null; b.vx = Math.cos(tk.dir) * 4; b.vy = Math.sin(tk.dir) * 4; this.lastTouch = p; b.kickId++; victim.kickCD = 0.3; }
-          } else this.setOwner(p);
+      const reach = slide ? 1.0 : 0.8;
+      const playable = !tk.first && !tk.evaded && b.z < 0.7 && !(this.owner && this.owner.team === p.team);
+      const victims = this.opps(p.team).filter((v) => v.state !== 'down' && !(tk.evaded && v === tk.victim && isEvading(v)));
+      // remember a near miss on the man in possession (used for the "from behind" rule)
+      const fx = p.x + Math.cos(tk.dir) * reach, fy = p.y + Math.sin(tk.dir) * reach;
+      for (const v of victims) {
+        if (!tk.near && Math.hypot(fx - v.x, fy - v.y) < 0.55) {
+          tk.near = v; tk.nearHadBall = this.owner === v || Math.hypot(b.x - v.x, b.y - v.y) < 1.1;
         }
       }
-      // body contact
-      for (const v of this.opps(p.team)) {
-        if (v.state === 'down') continue;
-        if (tk.evaded && v === tk.victim && isEvading(v)) continue;
-        const dBody = dist(p, v), dFoot = Math.hypot(foot.x - v.x, foot.y - v.y);
-        if (dFoot < 0.95 && !tk.near) tk.near = v;
-        if (dBody < 0.72 || dFoot < 0.42) {
-          if (!tk.first) {
-            tk.first = 'body'; tk.body = true;
-            const verdict = judgeTackle({ type: tk.type, firstContact: 'body', bodyContact: true, fromBehind: isFromBehind(p, v) });
-            if (verdict.foul) { this.callFoul(p, v, verdict); return; }
-          } else if (tk.first === 'ball' && slide && !tk.tripped && v.role !== 'GK') {
-            tk.tripped = true; v.state = 'down'; v.stateT = 0; v.stateDur = 0.5;
-          }
-        }
+      const sw = tackleSweep(p, tk.dir, reach, playable ? b : null, victims, slide);
+      if (!tk.first && sw.first === 'ball') {
+        tk.first = 'ball';
+        const victim = this.owner;
+        this.emit('tackleWon', { p, kind: tk.type });
+        if (slide) {
+          this.owner = null; this.pass = null;
+          const a = tk.dir + (Math.random() - 0.5) * 0.8;
+          b.vx = Math.cos(a) * (5 + Math.random() * 3); b.vy = Math.sin(a) * (5 + Math.random() * 3); b.vz = 0.5;
+          this.lastTouch = p; b.kickId++;
+        } else if (victim && victim !== p) {
+          if (Math.random() < 0.6 + 0.35 * (p.attrs.tackling - victim.attrs.dribbling)) this.setOwner(p);
+          else { this.owner = null; b.vx = Math.cos(tk.dir) * 4; b.vy = Math.sin(tk.dir) * 4; this.lastTouch = p; b.kickId++; victim.kickCD = 0.3; }
+        } else this.setOwner(p);
+      } else if (!tk.first && sw.first === 'body') {
+        tk.first = 'body'; tk.body = true;
+        const v = sw.victim;
+        const verdict = judgeTackle({ type: tk.type, firstContact: 'body', bodyContact: true, fromBehind: isFromBehind(p, v) });
+        if (verdict.foul) { this.callFoul(p, v, verdict); return; }
+      } else if (tk.first === 'ball' && slide && sw.victim && !tk.tripped && sw.victim.role !== 'GK') {
+        // won the ball cleanly, the follow-through takes the man down (no foul)
+        tk.tripped = true; sw.victim.state = 'down'; sw.victim.stateT = 0; sw.victim.stateDur = 0.5;
       }
     }
   }
