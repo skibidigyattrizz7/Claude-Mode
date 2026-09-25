@@ -128,7 +128,7 @@ export function showTeamSelect(mode, cb, back) {
 export function showSettings(back, inGame = false) {
   let note = '';
   const render = () => {
-    const opt = (v, cur) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${v}</option>`;
+    const opt = (v, cur, label = v) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
     const bindRows = (pl) => ACTIONS.filter((a) => !(pl === 'p2' && a === 'pause')).map((a) => `
       <div class="bind"><span>${esc(ACTION_LABELS[a])}</span>
         <button class="key" data-pl="${pl}" data-a="${a}">${esc(keyLabel(input.binds[pl][a]))}</button></div>`).join('');
@@ -136,13 +136,13 @@ export function showSettings(back, inGame = false) {
       <div class="panel wide settings">
         <h2>Settings</h2>
         <div class="grid2">
-          <label>Match length <select id="sLen">${[2, 4, 6, 8, 10].map((v) => opt(v, settings.matchMinutes)).join('')}</select> min</label>
-          <label>Difficulty <select id="sDiff">${['Easy', 'Normal', 'Hard', 'Legend'].map((v) => opt(v, settings.difficulty)).join('')}</select></label>
-          <label>Shooting assist <select id="sAssist">${ASSIST_MODES.map((v) => opt(v, settings.assist)).join('')}</select></label>
-          <label>Camera zoom <input id="sZoom" type="range" min="0.7" max="1.5" step="0.05" value="${settings.zoom}"> <b id="zv">${settings.zoom.toFixed(2)}</b></label>
-          <label class="chk"><input id="sSound" type="checkbox" ${settings.sound ? 'checked' : ''}> Sound</label>
-          <label class="chk"><input id="sAim" type="checkbox" ${settings.aimLine ? 'checked' : ''}> Show aim line</label>
-          <label>Penalty power <select id="sPen">${opt('hold', settings.penaltyPower)}${opt('slider', settings.penaltyPower)}</select></label>
+          <label class="set"><span>Match length</span><select id="sLen">${[2, 4, 6, 8, 10].map((v) => opt(v, settings.matchMinutes, `${v} min`)).join('')}</select></label>
+          <label class="set"><span>Difficulty</span><select id="sDiff">${['Easy', 'Normal', 'Hard', 'Legend'].map((v) => opt(v, settings.difficulty)).join('')}</select></label>
+          <label class="set"><span>Shooting assist</span><select id="sAssist">${ASSIST_MODES.map((v) => opt(v, settings.assist)).join('')}</select></label>
+          <label class="set"><span>Penalty power</span><select id="sPen">${opt('hold', settings.penaltyPower, 'Hold to charge')}${opt('slider', settings.penaltyPower, 'Slider + KICK')}</select></label>
+          <label class="set"><span>Camera zoom <b id="zv">${settings.zoom.toFixed(2)}</b></span><input id="sZoom" type="range" min="0.7" max="1.5" step="0.05" value="${settings.zoom}"></label>
+          <label class="set"><span>Sound</span><input id="sSound" type="checkbox" ${settings.sound ? 'checked' : ''}></label>
+          <label class="set"><span>Show aim line</span><input id="sAim" type="checkbox" ${settings.aimLine ? 'checked' : ''}></label>
         </div>
         <p class="hint">${esc({ Assisted: 'Assisted: shots aimed broadly at goal are always on target.', Precision: 'Precision: shoots exactly where you aim; on-target aim gets less error and +10% pace.', Manual: 'Manual: exact direction, error from attributes, power, sprinting and pressure.' }[settings.assist])}</p>
         <h3>Controls <small>click a key, then press the new key (Esc cancels). Conflicts are swapped.</small></h3>

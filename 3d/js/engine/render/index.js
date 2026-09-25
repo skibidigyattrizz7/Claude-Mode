@@ -221,13 +221,15 @@ export function createRenderer(container, opts = {}) {
     else r.spd *= 0.9;
   }
 
+  let lastReplayFx = 0;
   const processFx = (view) => {
     const fx = view.fx;
     if (!fx) return;
-    let maxId = lastFx;
+    // live ids increase monotonically; replay frames re-emit fx with ids offset by 1e9
     for (const f of fx) {
-      if (f.id <= lastFx) continue;
-      if (f.id > maxId) maxId = f.id;
+      const rep = f.id >= 1e9;
+      if (rep ? f.id <= lastReplayFx : f.id <= lastFx) continue;
+      if (rep) lastReplayFx = f.id; else lastFx = f.id;
       if (f.k === 'goal') {
         const team = f.team ?? 0;
         excite[team] = 1; excite[2] = Math.max(excite[2], 0.5);
@@ -245,9 +247,9 @@ export function createRenderer(container, opts = {}) {
         excite[0] = Math.max(excite[0], 0.35); excite[1] = Math.max(excite[1], 0.35);
       }
     }
-    // a restarted sim resets ids
-    if (fx.length && fx[fx.length - 1].id < lastFx - 50) maxId = fx[fx.length - 1].id;
-    lastFx = maxId;
+    // a restarted simulation (new match in the same renderer) resets ids
+    const last = fx.length ? fx[fx.length - 1].id : 0;
+    if (last && last < 1e9 && last < lastFx - 200) lastFx = last;
   };
 
   const dbg = { noDraw: false };
