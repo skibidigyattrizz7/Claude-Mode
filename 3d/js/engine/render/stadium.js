@@ -152,12 +152,12 @@ export function buildStadium(scene, opts, q, track) {
   const night = opts.stadium === 'night';
   const group = new THREE.Group();
   scene.add(group);
-  const stdMat = (c, o = {}) => track(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0.05, ...o }));
+  const stdMat = (c, o = {}) => { const m = track(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0.05, ...o })); if (night) m.color.multiplyScalar(0.55); return m; };
   const concrete = stdMat(0x8d9096);
   const darkM = stdMat(0x1a1d24);
   const roofTop = stdMat(0xb8bcc2, { metalness: 0.3, roughness: 0.6 });
   const roofUnder = stdMat(0x5c6068, { side: THREE.DoubleSide });
-  const seatsMat = track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
+  const seatsMat = track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, color: night ? 0x777777 : 0xffffff }));
   const steelM = stdMat(0x9aa1ab, { metalness: 0.6, roughness: 0.4 });
   const home = opts.home?.kit?.primary || '#c00';
   const away = opts.away?.kit?.primary || '#00c';
@@ -222,7 +222,7 @@ export function buildStadium(scene, opts, q, track) {
     vertexShader: crowdVS, fragmentShader: crowdFS,
     uniforms: {
       uMap: { value: atlas }, uTime: { value: 0 }, uExcite: { value: new THREE.Vector3(0, 0, 0) }, uCols: { value: COLS },
-      uLight: { value: night ? 0.62 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
+      uLight: { value: night ? 0.5 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
     },
   }));
   const cgeo = track(new THREE.PlaneGeometry(0.62, 1.24));

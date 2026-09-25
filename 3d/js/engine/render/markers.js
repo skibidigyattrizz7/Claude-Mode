@@ -21,9 +21,11 @@ export function buildMarkers(scene, track) {
   });
   const cache = new Map();
   return {
-    update(slot, rig, name, t, camera) {
+    update(slot, rig, name, t, camera, colorIdx = slot) {
       const it = items[slot];
       if (!rig) { it.ring.visible = it.arrow.visible = it.sprite.visible = false; return; }
+      const col = COLORS[colorIdx] || COLORS[slot];
+      if (it.color !== col) { it.color = col; it.ring.material.color.set(col); it.arrow.material.color.set(col); it.key = ''; }
       const x = rig.root.position.x, z = rig.root.position.z;
       it.ring.visible = it.arrow.visible = it.sprite.visible = true;
       it.ring.position.set(x, 0.025, z);
@@ -33,7 +35,7 @@ export function buildMarkers(scene, track) {
       it.arrow.rotation.y = t * 2;
       if (name !== it.key) {
         it.key = name;
-        const k = slot + '|' + name;
+        const k = it.color + '|' + name;
         let tex = cache.get(k);
         if (!tex) { tex = track(labelTexture(name, { accent: it.color })); cache.set(k, tex); }
         it.spMat.map = tex; it.spMat.needsUpdate = true;

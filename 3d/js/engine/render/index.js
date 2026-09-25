@@ -9,6 +9,7 @@ import { buildStadium } from './stadium.js';
 import { buildBall } from './ball.js';
 import { CameraDirector } from './camera.js';
 import { buildMarkers } from './markers.js';
+import { buildOverlays, buildNightShadows } from './extras.js';
 import { PlayerRig, KitMaterials, SharedMaterials, acquireGeometry, releaseGeometry } from './player.js';
 import { radialTexture } from './textures.js';
 
@@ -44,7 +45,7 @@ export function createRenderer(container, opts = {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = night ? 1.05 : 1.0;
+  renderer.toneMappingExposure = night ? 0.95 : 1.0;
   renderer.shadowMap.enabled = q.shadows;
   renderer.shadowMap.type = opts.quality === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   const dom = renderer.domElement;
@@ -101,6 +102,9 @@ export function createRenderer(container, opts = {}) {
   const ball = buildBall(scene, q, track);
   const markers = buildMarkers(scene, track);
   const director = new CameraDirector(camera);
+  const overlays = buildOverlays(scene, track);
+  const nightShadows = night ? buildNightShadows(scene, stadium.towers, 25, track) : null;
+  const figs = Array.from({ length: 25 }, () => ({ x: 0, z: 0, h: 1.8, vis: false }));
 
   // ---------------------------------------------------------------- players
   const geo = acquireGeometry();
@@ -290,14 +294,26 @@ export function createRenderer(container, opts = {}) {
         const d = (view.dir || 1) * (ci === 0 ? 1 : -1);
         ctrlPos = { x: p[idx * STRIDE], z: p[idx * STRIDE + 1], dir: d };
       }
+      if (view.replay && director.mode !== 'replay') { director.prevMode = director.mode; director.setMode('replay'); }
+      else if (!view.replay && director.prevMode && view.ph !== PHASE.REPLAY) { director.setMode(director.prevMode); director.prevMode = null; }
       director.update(view, dt, { ctrlPos });
+      overlays.update(view, rigs, t, c);
+      if (nightShadows) {
+        for (let i = 0; i < 25; i++) {
+          const r = i < 22 ? rigs[i] : refs[i - 22];
+          const f = figs[i];
+          f.vis = r.root.visible; f.x = r.root.position.x; f.z = r.root.position.z; f.h = 1.8 * (r.body.position.y / 0.975) * r.scale;
+        }
+        nightShadows.update(figs);
+      }
       // markers
       const showMk = view.ph !== PHASE.REPLAY && view.ph !== PHASE.HALFTIME && view.ph !== PHASE.FULLTIME;
       for (let s = 0; s < 2; s++) {
         const idx = c[s];
         if (showMk && idx >= 0 && idx < 22 && rigs[idx].root.visible) {
           const pd = rosterData(idx, view.subs);
-          markers.update(s, rigs[idx], `${pd.number ?? ''}  ${pd.name || ''}`.trim(), t, camera);
+          const loc = view.local && view.local[s];
+          markers.update(s, rigs[idx], `${pd.number ?? ''}  ${pd.name || ''}`.trim(), t, camera, loc === 'p1' ? 0 : loc === 'p2' ? 1 : s);
         } else markers.update(s, null);
       }
       // shadow frustum follows the action (texel-snapped)
@@ -350,8 +366,20 @@ export function createRenderer(container, opts = {}) {
     scene.clear();
   }
 
+  const projV = new THREE.Vector3(), fwdV = new THREE.Vector3();
+  function project(x, y, z) {
+    projV.set(x, y, z).project(camera);
+    const w = dom.clientWidth || container.clientWidth, h = dom.clientHeight || container.clientHeight;
+    const vis = projV.z > -1 && projV.z < 1 && Math.abs(projV.x) <= 1.05 && Math.abs(projV.y) <= 1.05;
+    return { x: (projV.x + 1) * 0.5 * w, y: (1 - projV.y) * 0.5 * h, visible: vis };
+  }
+  function getCameraYaw() {
+    camera.getWorldDirection(fwdV);
+    return Math.atan2(fwdV.z, fwdV.x);
+  }
+
   return {
-    render, setCamera, setControlled, resize, destroy, domElement: dom,
+    render, setCamera, setControlled, resize, destroy, project, getCameraYaw, domElement: dom,
     // dev-only hooks (harness / debugging)
     _debug: {
       set noDraw(v) { dbg.noDraw = v; },

@@ -2,6 +2,7 @@
 // and the startMatch() wrapper around the engine's createMatch(). Engine + meta are loaded with
 // dynamic import() so a broken module shows a friendly error instead of a blank page.
 import { DEFAULT_KEYBINDS, loadKeybinds, saveKeybinds, resetKeybinds } from './shared/keybinds.js';
+import { dedupeTeams } from './net/protocol.js';
 
 const Q = new URLSearchParams(location.search);
 const STUB_ENGINE = Q.get('stubEngine') === '1';
@@ -147,17 +148,6 @@ export function shirtSVG(kit, number = '', size = 64) {
 
 function kitDot(kit) {
   return h('span', { class: 'kitdot', style: { background: `linear-gradient(135deg, ${kit.primary} 0 55%, ${kit.secondary} 55% 100%)` } });
-}
-
-/** Clone `b` with distinct ids if it clashes with `a` (same team picked twice). Uses away colours when identical. */
-function dedupe(a, b) {
-  const aIds = new Set(a.players.concat(a.bench || []).map((p) => p.id));
-  const clash = a.id === b.id || b.players.concat(b.bench || []).some((p) => aIds.has(p.id));
-  if (!clash) return b;
-  const fix = (p) => ({ ...p, id: `${p.id}~2` });
-  const nb = { ...b, id: `${b.id}~2`, players: b.players.map(fix), bench: (b.bench || []).map(fix) };
-  if (a.id === b.id) nb.kit = { ...b.kit, primary: b.kit.secondary, secondary: b.kit.primary, number: b.kit.primary };
-  return nb;
 }
 
 // ------------------------------------------------------------------ navigation
@@ -560,7 +550,7 @@ async function teamSelectScreen(mode) {
   kickBtn.focus({ preventScroll: true });
   kickBtn.addEventListener('click', () => {
     const home = homeP.value;
-    const away = dedupe(home, awayP.value);
+    const away = dedupeTeams(home, awayP.value);
     lsSet(LAST_KEY, { home: homeP.value.id, away: awayP.value.id, stadium: cfg.stadium });
     const controllers = local2p ? { home: 'p1', away: 'p2' } : cfg.userSide === 'home' ? { home: 'p1', away: 'ai' } : { home: 'ai', away: 'p1' };
     playFromMenu({

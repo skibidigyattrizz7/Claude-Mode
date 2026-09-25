@@ -1,8 +1,7 @@
 // First-person dead-ball scene: penalties (in-match or shootout), direct free kicks
 // (in-match) and free-kick practice. Renders with View3D and simulates with kickphys.
 import { PITCH, CY, GOAL, BALL_R, PEN_SPOT, BOX, PHYS } from './constants.js';
-import { KeeperModel, buildWall, makeKickState, launch, stepKick, kickError, aiPenaltyChoice, keeperPenaltyGuess, penaltySpeed, freeKickSpeed, predictKick } from './kickphys.js';
-import { simulatePath } from './physics.js';
+import { KeeperModel, buildWall, makeKickState, launch, stepKick, kickError, aiPenaltyChoice, keeperPenaltyGuess, penaltySpeed, freeKickSpeed, predictKick, aiFreeKickDive } from './kickphys.js';
 import { View3D } from './view3d.js';
 import { input, mouseAimActive } from './input.js';
 import { settings } from './settings.js';
@@ -10,7 +9,7 @@ import { sfx } from './audio.js';
 import { store } from './storage.js';
 import { chooseKits } from './data.js';
 import { keyLabel } from './keybinds.js';
-import { clamp, gauss, TAU, norm } from './util.js';
+import { clamp, TAU, norm } from './util.js';
 
 const L = PITCH.L;
 const KEEPER_BY_DIFF = { Easy: 0.45, Normal: 0.65, Hard: 0.8, Legend: 0.95 };
@@ -356,14 +355,7 @@ export class KickScene {
         const g = keeperPenaltyGuess(this.rng, this.keeper.keeping, target, power);
         this.aiDive = { at: 0.04, y: g.y, z: g.z, dur: null };
       } else {
-        const path = simulatePath({ ...this.state.ball, knuckle: 0 }, 2.5, (bb) => bb.x >= this.keeper.x, 1);
-        const P = path[path.length - 1] || { y: CY, z: 1 };
-        const kp = this.keeper.keeping;
-        const mis = (0.12 + 0.35 * (1 - kp)) * (knuckle ? 2.2 : 1);
-        const py = P.y + gauss(this.rng) * mis, pz = P.z + gauss(this.rng) * mis * 0.5;
-        const react = 0.3 - 0.12 * kp + (this.wall.length ? 0.1 : 0) + Math.random() * 0.06;
-        const dur = clamp(0.24 + Math.abs(py - this.keeper.y) * 0.09, 0.26, 0.62) / (0.85 + 0.3 * kp);
-        this.aiDive = { at: react, y: py, z: pz, dur };
+        this.aiDive = aiFreeKickDive(this.state.ball, this.keeper, this.wall.length > 0, this.rng);
       }
     } else this.aiDive = null;
   }
@@ -454,10 +446,10 @@ export class KickScene {
     const back = aiShooterVisible ? 5.2 : 4.6;
     let fwd = 0;
     if (this.phase === 'runup' && this.humanShooter != null) fwd = Math.min(1, this.phaseT / 0.35) * 1.4;
-    const eye = { x: bp.x - dir.x * (back - fwd), y: bp.y - dir.y * (back - fwd), z: aiShooterVisible ? 1.75 : this.isFK ? 1.4 : 1.5 };
+    const eye = { x: bp.x - dir.x * (back - fwd), y: bp.y - dir.y * (back - fwd), z: aiShooterVisible ? 1.75 : this.isFK ? 1.75 : 1.5 };
     const look = { x: L, y: CY + (bp.y - CY) * 0.12, z: this.isFK ? 1.4 : 1.05 };
     // keep the ball on the spot visible near the bottom of the screen
-    v.setup(w, h, eye, look, this.isFK ? 0.42 : 0.55, { cyFrac: 0.42, keep: { x: bp.x, y: bp.y, z: 0 }, maxY: 0.86 });
+    v.setup(w, h, eye, look, this.isFK ? 0.42 : 0.55, { cyFrac: this.isFK ? 0.36 : 0.42, keep: { x: bp.x, y: bp.y, z: 0 }, maxY: 0.86 });
 
     v.drawBackground(ctx, this.time);
     v.drawGround(ctx);

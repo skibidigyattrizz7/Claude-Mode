@@ -28,7 +28,9 @@ const mode = qs.get('mode') || 'synthetic';
 const hud = document.getElementById('hud');
 if (qs.has('nohud')) hud.classList.add('hide');
 
+const _t0 = performance.now();
 const R = createRenderer(document.getElementById('app'), { home: BRAZIL, away: FRANCE, stadium, quality });
+window.__initMs = performance.now() - _t0;
 R.setCamera(cameraMode);
 window.addEventListener('resize', () => R.resize());
 window.__R = R;

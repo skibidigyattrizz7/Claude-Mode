@@ -172,8 +172,9 @@ export function mountOnline(root, ctx) {
     if (!st.myTeam) {
       let last = {};
       try { last = JSON.parse(localStorage.getItem('pitchside.lastKickoff') || '{}') || {}; } catch { /* ignore */ }
-      const i = st.teams.findIndex((t) => t.id === last.home);
-      st.myIdx = (i >= 0 ? i : 0) + 1;
+      // host defaults to their last home team, guest to their last away team, so the sides differ
+      const i = st.teams.findIndex((t) => t.id === (st.role === 'host' ? last.home : last.away));
+      st.myIdx = (i >= 0 ? i : st.role === 'host' ? 0 : Math.min(1, st.teams.length - 1)) + 1;
       st.myTeam = st.teams[st.myIdx - 1];
     }
     announce();

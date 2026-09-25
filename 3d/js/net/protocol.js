@@ -86,13 +86,33 @@ export function sanitizeTeam(t, prefix = 'r') {
   return out;
 }
 
-/** Make `b` safe to play against `a` (distinct team id and player ids). Returns a new object. */
+function rgb(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+  const n = m ? parseInt(m[1], 16) : 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function colorDist(x, y) {
+  const a = rgb(x), b = rgb(y);
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/**
+ * Make `b` safe to play against `a`: distinct team/player ids (same team picked twice) and,
+ * when the shirts clash, the away side switches to its secondary colours. Returns b or a copy.
+ */
 export function dedupeTeams(a, b) {
   const aIds = new Set(a.players.concat(a.bench || []).map((p) => p.id));
   const clash = b.id === a.id || b.players.concat(b.bench || []).some((p) => aIds.has(p.id));
-  if (!clash) return b;
-  const fix = (p) => ({ ...p, id: `${p.id}~2` });
-  return { ...b, id: `${b.id}~2`, players: b.players.map(fix), bench: (b.bench || []).map(fix) };
+  let out = b;
+  if (clash) {
+    const fix = (p) => ({ ...p, id: `${p.id}~2` });
+    out = { ...b, id: `${b.id}~2`, players: b.players.map(fix), bench: (b.bench || []).map(fix) };
+  }
+  const k = out.kit;
+  if (colorDist(a.kit.primary, k.primary) < 90 && colorDist(a.kit.primary, k.secondary) > colorDist(a.kit.primary, k.primary)) {
+    out = { ...out, kit: { ...k, primary: k.secondary, secondary: k.primary, number: k.primary } };
+  }
+  return out;
 }
 
 const INPUT_NUM = { mx: [-1, 1], my: [-1, 1], aimX: [-1, 1], aimY: [-1, 1], shootPower: [0, 1] };

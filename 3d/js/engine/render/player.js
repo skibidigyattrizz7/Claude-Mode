@@ -598,12 +598,15 @@ export class PlayerRig {
         break;
       }
       case ANIM.CELEB: {
+        // sim variants: 0 arms up, 1 airplane, 2 knee slide. Non-scorers join in with arms up / clapping.
         let kind = Math.round(pp) % 3;
-        if (ctx.scorer >= 0 && ctx.idx !== ctx.scorer) kind = 3 + (this.seed % 2);
-        if (kind === 0) {
+        const isScorer = ctx.scorer < 0 || ctx.idx === ctx.scorer;
+        if (!isScorer) kind = 3 + (this.seed % 2);
+        else if (kind === 0 && (this.seed % 2)) kind = 5; // fist-pump variant of "arms up"
+        if (kind === 1) { // airplane
           T[P.lsZ] = 1.45; T[P.rsZ] = -1.45; T[P.lsX] = 0.1; T[P.rsX] = 0.1; T[P.leX] = -0.05; T[P.reX] = -0.05;
           T[P.roll] = 0.28 * Math.sin(u * 1.8); T[P.spX] = 0.05; T[P.nkX] = -0.25;
-        } else if (kind === 1) {
+        } else if (kind === 2) { // knee slide
           const k = sstep(0.35, 0.6, u) * (1 - sstep(2.6, 3.0, u));
           if (k > 0) {
             T[P.gl] = 1 - k; T[P.bodyY] = lerp(T[P.bodyY], 0.6, k);
@@ -616,18 +619,18 @@ export class PlayerRig {
             T[P.lift] = 0;
           }
           if (u > 2.8) { T[P.lsZ] = 1.3; T[P.rsZ] = -1.3; }
-        } else if (kind === 2) {
+        } else if (kind === 5) { // jump + fist pump
           const cyc = (u % 0.9) / 0.9;
           const j = cyc < 0.5 ? Math.sin(Math.PI * cyc * 2) : 0;
-          T[P.lift] += 0.42 * j; T[P.lkX] += 0.5 * j; T[P.rkX] += 0.5 * j;
+          T[P.lift] += 0.42 * j * (s < 2.5 ? 1 : 0.3); T[P.lkX] += 0.5 * j; T[P.rkX] += 0.5 * j;
           T[P.rsX] = -2.9; T[P.rsZ] = -0.2; T[P.reX] = -0.35 - 0.6 * (1 - j);
           T[P.lsX] = -0.2; T[P.lsZ] = 0.35; T[P.leX] = -1.4;
           T[P.nkX] = -0.35;
         } else {
-          // teammates: arms up, little jumps
+          // arms up (0 / 3) with little jumps when slow, or clapping (4)
           const cyc = ((u + (this.seed % 7) * 0.13) % 0.75) / 0.75;
           const j = cyc < 0.45 ? Math.sin(Math.PI * cyc / 0.45) : 0;
-          if (kind === 3) { T[P.lsX] = -2.7; T[P.rsX] = -2.7; T[P.lsZ] = 0.35; T[P.rsZ] = -0.35; T[P.leX] = -0.3; T[P.reX] = -0.3; T[P.lift] += 0.25 * j * (s < 2 ? 1 : 0); }
+          if (kind !== 4) { T[P.lsX] = -2.7; T[P.rsX] = -2.7; T[P.lsZ] = 0.35; T[P.rsZ] = -0.35; T[P.leX] = -0.3; T[P.reX] = -0.3; T[P.lift] += 0.25 * j * (s < 2 ? 1 : 0); }
           else { T[P.lsX] = -1.2; T[P.rsX] = -1.2; T[P.lsZ] = -0.3 + 0.25 * Math.sin(u * 16); T[P.rsZ] = 0.3 - 0.25 * Math.sin(u * 16); T[P.leX] = -0.9; T[P.reX] = -0.9; }
           T[P.nkX] = -0.2;
         }

@@ -205,6 +205,24 @@ export function stepKick(s, dt) {
   }
 }
 
+/**
+ * AI keeper read of a direct free kick. The keeper only picks the flight up once the ball
+ * has cleared the wall, misjudges curl / dip / knuckle a little, and needs time to dive,
+ * so a well struck kick into the corner can beat him.
+ * Returns {at, y, z, dur}: when (s after the kick) and where to dive.
+ */
+export function aiFreeKickDive(ball, keeper, hasWall, rng = Math.random) {
+  const path = simulatePath({ ...ball, knuckle: 0 }, 2.5, (bb) => bb.x >= keeper.x, 1);
+  const P = path[path.length - 1] || { y: CY, z: 1 };
+  const kp = keeper.keeping;
+  const trick = 1 + Math.abs(ball.spin || 0) * 0.35 + (ball.topspin ? 0.3 : 0) + (ball.knuckle ? 1.2 : 0);
+  const mis = (0.22 + 0.5 * (1 - kp)) * trick;
+  const y = P.y + gauss(rng) * mis, z = P.z + gauss(rng) * mis * 0.6;
+  const at = 0.36 + (hasWall ? 0.2 : 0) - 0.14 * kp + rng() * 0.12;
+  const dur = clamp(0.3 + Math.abs(y - keeper.y) * 0.1, 0.32, 0.7) / (0.85 + 0.3 * kp);
+  return { at, y, z, dur };
+}
+
 /** Full AI-vs-AI penalty used to validate conversion rates. */
 export function penaltyOutcomeSim(rng, shooterSkill = 0.75, keeping = 0.7) {
   const c = aiPenaltyChoice(rng);
