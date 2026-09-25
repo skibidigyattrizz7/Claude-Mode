@@ -1,10 +1,26 @@
-// Admin (owner-only) actions — DOM-free. Verification happens server-side via online.admin.verify(code);
-// the UI only unlocks these after that check. No admin code is ever stored in the client.
+// Admin (owner-only) actions — DOM-free. Access: "Admin Given Codes" (online.admin.verify when reachable, else a
+// local PBKDF2 check — see admincode.js; no code is ever stored in the client) or an owner/mod account role.
+// Levels: 'full' (everything), 'mod' (moderation + limited tools), 'temp' (60-minute limited admin).
 import { getPlayer, computeOvr, POS_WEIGHTS, FACE, GKFACE, marketValue, weeklyWage } from './players.js';
 import { SBCS, OBJECTIVES, grantReward, addToClub } from './ut.js';
 import { userPlayers } from './career.js';
+import { COIN_CAP, getAdminLevel } from './admincode.js';
+
+export {
+  getAdminLevel, adminInfo, adminCan, matchAdminLevel, redeemAdminCode, lockRemainingMs, clearAdminSession, setSessionLevel,
+  refreshAccountRole, setAccountRole, accountRole, verifyLocalCode, verifyCodeWith, pbkdf2Hex, safeEqualHex, registerFailure,
+  clearFailures, failedAttempts, ADMIN_CODE_PARAMS, ADMIN_PERMS, COIN_CAP, TEMP_ADMIN_MS, MAX_ATTEMPTS, LOCK_MS,
+} from './admincode.js';
 
 export const INFINITE_COINS = 999999999;
+
+/** Add local UT coins, capped per grant by admin level (temp/mod: 1,000,000). Returns the amount added. */
+export function addLocalCoins(state, amount, level = getAdminLevel()) {
+  const cap = COIN_CAP[level] ?? 0;
+  const v = Math.max(0, Math.min(Math.round(Number(amount) || 0), cap));
+  state.coins = Math.max(0, (state.coins || 0) + v);
+  return v;
+}
 
 /** Grant any DB card (incl. Icons) to the UT club. Admin grants are untradeable (keeps the real market fair). */
 export function grantPlayer(state, pid) {

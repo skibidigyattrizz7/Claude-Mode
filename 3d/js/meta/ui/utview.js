@@ -17,6 +17,9 @@ import * as OBJ from '../core/objectives.js';
 import * as SS from '../core/seasons.js';
 import { ensureEvo } from '../core/evolutions.js';
 import { playstyleList } from './card.js';
+import { adminCodesPanel, adminBadge } from './adminview.js';
+import { promoHubView, promoTileSub } from './promoview.js';
+import { PROMO_BY_ID } from '../core/promos.js';
 
 const persist = (app) => app.saveUT();
 const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary }, badge: s.badge || null });
@@ -96,6 +99,7 @@ export function utHomeView() {
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
       add(main, 
         h('section', { class: 'pm-clubhead' },
+          adminBadge(app),
           frag(crestSVG(userClubObj(s), 'pm-crest pm-crest--lg')),
           h('div', null, h('div', { class: 'pm-kicker' }, 'Your club'), h('h2', null, s.clubName),
             h('div', { class: 'pm-chiprow' },
@@ -117,12 +121,15 @@ export function utHomeView() {
           tile('pm-tile--evo', 'Evolutions', `${evoReady}/3 active`, () => app.push(M.evolutionsView())),
           tile('pm-tile--draft', 'Draft', s.draft ? 'Draft in progress' : 'Pick 1 of 5 · 4-round knockout', () => app.push(M.draftView()), s.draft ? '▶' : null),
           tile('pm-tile--event', 'Tournaments', 'Weekly knockout events', () => app.push(M.eventsView())),
-          tile('pm-tile--totw', 'Team of the Week', 'Boosted In-Form cards', () => app.push(M.totwView())),
+          tile('pm-tile--wide pm-tile--promo', 'Promos', promoTileSub(), () => app.push(promoHubView(PROMO_DEPS)), 'LIVE',
+            h('div', { class: 'pm-tile-art pm-art-promo', 'aria-hidden': 'true' }, h('span', null, '★'))),
+          tile('pm-tile--totw', 'Team of the Week', '3 headliners rated 88+', () => app.push(M.totwView())),
           tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView())),
           tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
           tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null),
           tile('pm-tile--custom', 'Customise club', 'Badge, name & home/away kits', () => app.push(M.clubEditView())),
-        ));
+        ),
+        adminCodesPanel(app, { compact: true }));
     },
   };
 }
@@ -139,6 +146,8 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
     ['Work rates', `${p.wr[0]} / ${p.wr[1]}`], ['Positions', [p.pos, ...(p.alt || [])].join(', ')],
     ['Potential', p.pot],
   ];
+  if (p.moment) facts.push(['Moment', p.moment]);
+  if (p.upg) facts.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);
   if (extra) facts.push(...extra);
   return modal(app.root, {
     title: p.name, wide: true, className: 'pm-pmodal',
@@ -247,7 +256,7 @@ export function sellModal(app, p, redraw) {
 }
 
 // ---------- store & packs ----------
-function oddsModal(app, pack) {
+export function oddsModal(app, pack) {
   const cats = Object.keys(UT.CATEGORIES).filter((c) => pack.slots.some((sl) => sl.odds[c]));
   const pct = (v) => (v >= 0.1 ? `${(v * 100).toFixed(1)}%` : v >= 0.001 ? `${(v * 100).toFixed(2)}%` : `${(v * 100).toFixed(3)}%`);
   modal(app.root, {
@@ -291,8 +300,14 @@ function storeView() {
               h('button', { class: 'pm-btn pm-btn--primary', onclick: () => { s.packs.splice(i, 1); openPackFlow(app, pk.type); } }, 'Open'));
           })));
       }
-      const store = h('section', { class: 'pm-section' }, h('h3', { class: 'pm-h' }, 'Buy packs'),
-        h('div', { class: 'pm-storegrid' }, UT.PACKS.map((pack) => h('div', { class: 'pm-storeitem' },
+      const onSale = UT.storePacks();
+      const promoPacks = onSale.filter((p) => p.promo);
+      const store = h('section', { class: 'pm-section' },
+        promoPacks.length ? h('h3', { class: 'pm-h' }, 'Promo packs', h('span', { class: 'pm-chip on' }, 'Live')) : null,
+        promoPacks.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, promoPacks.map((pack) => storeItem(pack))) : null,
+        h('h3', { class: 'pm-h' }, 'Buy packs'),
+        h('div', { class: 'pm-storegrid' }, onSale.filter((p) => !p.promo).map((pack) => storeItem(pack))));
+      function storeItem(pack) { return h('div', { class: `pm-storeitem ${pack.promo ? `is-promo pm-promo--${pack.promo}` : ''}`, style: pack.promo ? { '--pa': PROMO_BY_ID[pack.promo].colors[0], '--pb': PROMO_BY_ID[pack.promo].colors[1], '--pc': PROMO_BY_ID[pack.promo].colors[2] } : null },
           packArt(pack, 'md'),
           h('div', { class: 'pm-storeinfo' }, h('h4', null, pack.name), h('p', { class: 'pm-dim' }, pack.desc),
             h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(pack.price)),
@@ -306,7 +321,7 @@ function storeView() {
                   s.coins -= pack.price; persist(app); app.renderTop(app.stack[app.stack.length - 1]);
                   openPackFlow(app, pack.id);
                 },
-              }, 'Buy & open')))))));
+              }, 'Buy & open')))); }
       add(main, M.picksRow(app), mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
@@ -318,9 +333,10 @@ function sbcListView() {
     title: 'Squad Building Challenges', kicker: 'Ultimate Team', coins: true,
     render(main, app) {
       const s = app.ut;
-      const groups = [...new Set(UT.SBCS.map((x) => x.group))];
+      const list = UT.SBCS.filter((x) => !x.promo || UT.sbcAvailable(s, x) || s.sbc[x.id]);
+      const groups = [...new Set(list.map((x) => x.group))];
       for (const g of groups) {
-        add(main, h('h3', { class: 'pm-h' }, g), h('div', { class: 'pm-sbcgrid' }, UT.SBCS.filter((x) => x.group === g).map((sbc) => {
+        add(main, h('h3', { class: 'pm-h' }, g), h('div', { class: 'pm-sbcgrid' }, list.filter((x) => x.group === g).map((sbc) => {
           const done = s.sbc[sbc.id] || 0;
           const avail = UT.sbcAvailable(s, sbc);
           return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
@@ -336,7 +352,7 @@ function sbcListView() {
 }
 const rewardText = (r) => M.rewardText(r);
 
-function sbcDetailView(id) {
+export function sbcDetailView(id) {
   const sbc = UT.SBC_BY_ID[id];
   const local = { formation: '4-4-2', slots: new Array(11).fill(null) };
   return {
@@ -447,3 +463,6 @@ async function startBattle(app, opp) {
   }));
 }
 
+
+// dependencies handed to the promo hub (avoids a circular import of this module's internals)
+const PROMO_DEPS = { playerModal, oddsModal, openPackFlow, sbcDetailView, rewardText: (r) => M.rewardText(r), objectivesHubView: (sec) => M.objectivesHubView(sec) };

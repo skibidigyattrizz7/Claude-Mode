@@ -158,6 +158,16 @@ export class MatchAudio {
     this._noise(4.0, 'bandpass', 1500, 0.9, 0.4, 0.2, 900);
   }
 
+  // admin disco: one bar of a clap-along crowd chant ("olé, olé")
+  chant() {
+    if (!this.ctx || this.muted) return;
+    for (const w of [0, 0.3, 0.6, 0.75, 0.9]) this._noise(0.07, 'highpass', 1800, 0.8, 0.35, w);
+    this._noise(0.32, 'bandpass', 520, 3, 0.4, 1.2, 700);
+    this._noise(0.55, 'bandpass', 700, 3, 0.45, 1.55, 480);
+    this._tone(392, 0.3, 'sawtooth', 0.025, 1.2); this._tone(523, 0.5, 'sawtooth', 0.025, 1.55, 440);
+    this.roar = Math.max(this.roar, 0.25);
+  }
+
   cheer(k = 0.5) {
     if (!this.ctx || this.muted) return;
     this.roar = Math.max(this.roar, k);

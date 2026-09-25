@@ -1,5 +1,6 @@
-// Owner-only admin panel. Access requires a server-side check via online.admin.verify(code); the code is
-// never stored or compared in the client. A successful check is remembered for this browser session only.
+// Admin panel + "Admin Given Codes" entry. Access comes from a code (checked by online.admin.verify when the
+// backend is reachable, otherwise locally with PBKDF2 — the code itself is never stored) or from an owner/mod
+// account role. Levels: full (everything), mod (moderation + limited tools), temp (60 minutes, limited tools).
 import { h, clear, add, fmtNum, modal, confirmBox, select } from './dom.js';
 import { playerCard } from './card.js';
 import * as UT from '../core/ut.js';
@@ -10,55 +11,96 @@ import { remove as removeKey } from '../core/storage.js';
 import { safeCall } from './app.js';
 import { openPackFlow } from './utview.js';
 
-const SESSION_KEY = 'pitchside.admin.session';
-const setSession = (on) => { try { if (on) globalThis.sessionStorage.setItem(SESSION_KEY, '1'); else globalThis.sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } };
+const LEVEL_NAME = { full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
+const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 
+/** Meta hub entry (replaces the old tiny footer link): opens the Admin Given Codes screen or the panel. */
 export function adminButton(app) {
-  return h('button', { class: 'pm-adminbtn', title: 'Owner admin', onclick: () => (app.isAdmin() ? app.push(adminView()) : codePrompt(app)) }, h('span', { 'aria-hidden': 'true' }, '⚙'), ' Admin');
+  const lv = A.getAdminLevel();
+  return h('button', { class: 'pm-btn pm-btn--ghost pm-codesbtn', onclick: () => app.push(lv ? adminView() : adminCodesView()) },
+    h('span', { 'aria-hidden': 'true' }, '\u{1F511}\uFE0E'), lv ? ' Admin panel' : ' Admin Given Codes');
 }
 
-/** Resolve the server verdict. Only an explicit `true` (or {valid:true}/{admin:true}) unlocks. */
-export async function verifyAdmin(online, code) {
-  const offline = { ok: false, error: 'Admin needs an online connection' };
-  if (!online || !online.admin || typeof online.admin.verify !== 'function') return offline;
-  if (typeof online.available === 'function' && !(await safeCall(() => online.available(), false))) return offline;
-  const r = await safeCall(() => online.admin.verify(String(code || '')), null);
-  if (r === null || (r && typeof r === 'object' && r.ok === false && r.error && /offline|network|unreach/i.test(String(r.error)))) return offline;
-  const ok = r === true || (r && typeof r === 'object' && (r.valid === true || r.admin === true));
-  return ok ? { ok: true } : { ok: false, error: 'Code not accepted' };
-}
-
-function codePrompt(app) {
-  const input = h('input', { class: 'pm-input', type: 'password', autocomplete: 'off', 'aria-label': 'Admin code', placeholder: 'Admin code' });
-  const msg = h('p', { class: 'pm-dim', 'aria-live': 'polite' }, 'Owner only. The code is checked by the server.');
-  let busy = false;
-  const submit = async (close) => {
-    if (busy) return;
-    busy = true; msg.textContent = 'Checking…'; msg.className = 'pm-dim';
-    const r = await verifyAdmin(app.online, input.value);
-    busy = false;
-    input.value = '';
-    if (!r.ok) { msg.textContent = r.error; msg.className = 'pm-warnline'; return; }
-    setSession(true);
-    close();
-    app.toast('Admin unlocked for this session.', 'good');
-    app.push(adminView());
+/**
+ * "Admin Given Codes" panel: text field + Submit. Wrong code -> "Invalid code"; 5 wrong attempts lock the field for 60 s.
+ * onUnlock(level) defaults to opening the Admin panel.
+ */
+export function adminCodesPanel(app, { onUnlock = null, compact = false } = {}) {
+  const input = h('input', { class: 'pm-input pm-codes-input', type: 'password', autocomplete: 'off', spellcheck: 'false', maxlength: '128', 'aria-label': 'Admin given code', placeholder: 'Enter an admin given code', 'data-codes': 'input' });
+  const btn = h('button', { class: 'pm-btn pm-btn--primary', type: 'submit', 'data-codes': 'submit' }, 'Submit');
+  const msg = h('p', { class: 'pm-dim pm-codes-msg', 'aria-live': 'polite', 'data-codes': 'msg' }, compact ? '' : 'Have a code from the owner? Enter it here.');
+  let busy = false, timer = 0;
+  const lockTick = () => {
+    const ms = A.lockRemainingMs();
+    const locked = ms > 0;
+    input.disabled = locked || busy; btn.disabled = locked || busy;
+    if (locked) { msg.textContent = `Too many attempts. Try again in ${Math.ceil(ms / 1000)} s.`; msg.className = 'pm-warnline pm-codes-msg'; }
+    else if (timer) { clearInterval(timer); timer = 0; msg.textContent = 'You can try again.'; msg.className = 'pm-dim pm-codes-msg'; }
+    return locked;
   };
-  let closeFn = null;
-  const form = h('form', { class: 'pm-form', onsubmit: (e) => { e.preventDefault(); submit(closeFn); } }, h('label', null, h('span', null, 'Code'), input), msg);
-  closeFn = modal(app.root, {
-    title: 'Admin access', body: form,
-    actions: [{ label: 'Cancel' }, { label: 'Unlock', primary: true, onClick: (close) => { submit(close); return false; } }],
-  });
-  setTimeout(() => input.focus(), 30);
+  const startLockTimer = () => { if (!timer && lockTick()) { timer = setInterval(lockTick, 500); app.onCleanup(() => clearInterval(timer)); } };
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy || lockTick()) return;
+    busy = true; input.disabled = true; btn.disabled = true;
+    msg.textContent = 'Checking…'; msg.className = 'pm-dim pm-codes-msg';
+    const r = await A.redeemAdminCode(input.value, app.online);
+    busy = false; input.value = ''; input.disabled = false; btn.disabled = false;
+    if (!r.ok) {
+      msg.textContent = r.error; msg.className = 'pm-warnline pm-codes-msg';
+      if (r.locked) { setTimeout(startLockTimer, 1200); } else input.focus();
+      return;
+    }
+    msg.textContent = `${LEVEL_NAME[r.level]} unlocked.`; msg.className = 'pm-goodline pm-codes-msg';
+    app.toast(r.level === 'temp' ? 'Temporary admin unlocked for 60 minutes.' : 'Admin unlocked for this session.', 'good');
+    if (onUnlock) onUnlock(r.level); else app.push(adminView());
+  };
+  const form = h('form', { class: 'pm-codes-form', onsubmit: submit }, input, btn);
+  startLockTimer();
+  return h('section', { class: `pm-panel pm-codes ${compact ? 'is-compact' : ''}`, 'data-codes': 'panel' },
+    h('div', { class: 'pm-codes-head' }, h('span', { class: 'pm-codes-ico', 'aria-hidden': 'true' }, '\u{1F511}\uFE0E'), h('h3', null, 'Admin Given Codes')),
+    form, msg);
+}
+
+export function adminCodesView() {
+  return {
+    title: 'Admin Given Codes', kicker: 'Pitchside', coins: true,
+    render(main, app) {
+      const lv = A.getAdminLevel();
+      add(main, h('p', { class: 'pm-lead' }, 'Codes are handed out by the owner. A valid code unlocks the Admin panel for this browser session.'),
+        lv ? h('p', { class: 'pm-goodline' }, `${LEVEL_NAME[lv]} is active.`, ' ', h('button', { class: 'pm-btn pm-btn--primary pm-btn--sm', onclick: () => app.replace(adminView()) }, 'Open Admin panel')) : null,
+        adminCodesPanel(app, { onUnlock: () => app.replace(adminView()) }));
+    },
+  };
+}
+
+/** Visible badge in the UT hub while admin is active (countdown for temporary admin, crown for the owner account). */
+export function adminBadge(app) {
+  const info = A.adminInfo();
+  if (!info.level) return null;
+  const owner = info.fromAccount && info.role === 'owner';
+  const label = h('span', { class: 'pm-adminbadge-t' });
+  const draw = () => {
+    const i = A.adminInfo();
+    if (!i.level) { app.toast('Temporary admin expired.', 'warn'); app.refresh(); return false; }
+    label.textContent = owner ? 'OWNER' : i.level === 'mod' ? 'MOD' : i.level === 'temp' ? `Temp admin · ${mmss(i.tempRemainingMs)}` : 'Admin';
+    return true;
+  };
+  draw();
+  if (info.level === 'temp') { const t = setInterval(() => { if (!draw()) clearInterval(t); }, 1000); app.onCleanup(() => clearInterval(t)); }
+  return h('button', { class: `pm-adminbadge lv-${info.level} ${owner ? 'is-owner' : ''}`, 'data-admin-badge': info.level, title: 'Open the Admin panel', onclick: () => app.push(adminView()) },
+    owner ? h('span', { class: 'pm-crown', 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 16" width="18" height="12"><path d="M1 14h22L20 3l-5 5-3-7-3 7-5-5z" fill="currentColor"/></svg>' }) : h('span', { 'aria-hidden': 'true' }, '\u2699\uFE0E'),
+    label);
 }
 
 export function adminView() {
-  const st = { q: '', slot: null, amount: 100000, budget: 250000000 };
+  const st = { q: '', slot: null, amount: 100000, budget: 250000000, tab: 'tools' };
   const view = {
     title: 'Admin', kicker: 'Owner tools', coins: true, cls: 'pm-main--wide',
     render(main, app) {
-      if (!app.isAdmin()) { app.pop(); return; }
+      const level = A.getAdminLevel();
+      if (!level) { app.replace(adminCodesView()); return; }
+      const can = (x) => A.adminCan(x, level);
       const s = app.ut;
       const needUT = s ? null : h('p', { class: 'pm-warnline' }, 'Create an Ultimate Team club first to use the UT tools.');
       const done = (msg) => { if (s) app.saveUT(); app.toast(msg, 'good'); app.refresh(); };
@@ -67,13 +109,21 @@ export function adminView() {
       const amt = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount), 'aria-label': 'Coin amount' });
       amt.addEventListener('input', () => { st.amount = Math.round(Number(amt.value) || 0); });
       const inf = !!(s && s.admin && s.admin.infinite);
-      const coins = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Coins'),
+      const limited = !can('infinite');
+      const coinsLimited = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Coins'),
+        h('p', { class: 'pm-dim' }, s ? `Local balance: ${fmtNum(app.wallet.mode === 'online' ? (app.wallet.local || 0) : s.coins)}. Up to ${fmtNum(A.COIN_CAP[level])} coins per grant.` : ''),
+        h('div', { class: 'pm-btnrow' }, amt,
+          h('button', { class: 'pm-btn pm-btn--primary', disabled: !s || inf, onclick: () => {
+            if (app.wallet.mode === 'online') { const tmp = { coins: app.wallet.local || 0 }; const v = A.addLocalCoins(tmp, st.amount, level); app.wallet.local = tmp.coins; done(`Added ${fmtNum(v)} local coins.`); }
+            else { const v = A.addLocalCoins(s, st.amount, level); done(`Added ${fmtNum(v)} coins.`); }
+          } }, 'Add coins')));
+      const coins = limited ? coinsLimited : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Coins'),
         h('p', { class: 'pm-dim' }, s ? `Shown balance: ${inf ? '∞' : fmtNum(s.coins)} (${app.coinSourceLabel()}).${app.wallet.mode === 'online' ? ` Local balance: ${fmtNum(app.wallet.local || 0)}.` : ''}` : ''),
         h('div', { class: 'pm-btnrow' }, amt,
           h('button', { class: 'pm-btn', disabled: !s || inf, onclick: () => { if (app.wallet.mode === 'online') app.wallet.local = Math.max(0, st.amount); else s.coins = Math.max(0, st.amount); done('Local coins set.'); } }, 'Set local'),
           h('button', { class: 'pm-btn', disabled: !s || inf, onclick: () => { if (app.wallet.mode === 'online') app.wallet.local = Math.max(0, (app.wallet.local || 0) + st.amount); else s.coins = Math.max(0, s.coins + st.amount); done('Local coins added.'); } }, 'Add local'),
           h('button', {
-            class: 'pm-btn pm-btn--primary', disabled: !app.online || !app.online.coins,
+            class: 'pm-btn pm-btn--primary', disabled: !app.online || !app.online.coins || app.wallet.mode !== 'online', title: app.wallet.mode === 'online' ? '' : 'Online services are offline',
             onclick: async () => {
               const r = await safeCall(() => app.online.coins.add(st.amount, 'admin'), { ok: false });
               if (!r || r.ok === false) { app.toast(`Online add failed${r && r.error ? `: ${r.error}` : ''}`, 'bad'); return; }
@@ -148,10 +198,31 @@ export function adminView() {
         h('div', { class: 'pm-btnrow pm-wrap' },
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !s, onclick: async () => { if (!(await confirmBox(app.root, 'Reset UT', 'Delete the Ultimate Team save on this device?', 'Reset', true))) return; removeKey(UT.UT_KEY); app.ut = null; app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 }; app.toast('UT save reset.', 'good'); app.refresh(); } }, 'Reset UT save'),
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !slots.length, onclick: async () => { if (!(await confirmBox(app.root, 'Reset careers', 'Delete every Career Mode save slot?', 'Delete', true))) return; for (const x of C.SLOTS) C.deleteCareer(x); app.career = null; app.toast('Career saves deleted.', 'good'); app.refresh(); } }, 'Delete all careers'),
-          h('button', { class: 'pm-btn', onclick: () => { setSession(false); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin')));
+          h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin')));
 
-      add(main, h('p', { class: 'pm-lead' }, 'Owner tools. Changes apply to this device (and the online balance where stated).'), needUT,
-        h('div', { class: 'pm-admin-grid' }, coins, packs, progress, career, grant, reset));
+      const lock = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, 'Session'),
+        h('p', { class: 'pm-dim' }, `${LEVEL_NAME[level]}${A.adminInfo().fromAccount ? ' (from your account role)' : ''}.`),
+        h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin'));
+      const tools = h('div', { class: 'pm-admin-grid', 'data-admin-tab': 'tools' },
+        can('coins') ? coins : null, can('packs') ? packs : null,
+        can('sbc') ? progress : null, can('career') ? career : null, can('grant') ? grant : null, can('reset') ? reset : lock);
+
+      // ---- EXTENSION POINT: Moderation tab ----
+      // Rendered only for 'full' / 'mod' levels when the online services expose `online.moderation`
+      // (added by the net agent). If it provides mount(el, { level, app }), it renders its own UI in `modPane`.
+      const modOk = can('moderation') && app.online && app.online.moderation && typeof app.online.moderation === 'object';
+      const modPane = h('div', { class: 'pm-admin-mod', 'data-admin-tab': 'moderation', hidden: true });
+      if (modOk) {
+        if (typeof app.online.moderation.mount === 'function') { try { const un = app.online.moderation.mount(modPane, { level, app }); if (typeof un === 'function') app.onCleanup(un); } catch (e) { console.warn('[meta] moderation mount failed', e); } }
+        else modPane.appendChild(h('section', { class: 'pm-panel' }, h('h3', null, 'Moderation'), h('p', { class: 'pm-dim' }, 'Moderation tools will appear here.')));
+      }
+      const tabs = modOk ? h('div', { class: 'pm-tabs', role: 'tablist' }, [['tools', 'Tools'], ['moderation', 'Moderation']].map(([k, label]) => h('button', {
+        class: `pm-tab ${k === st.tab ? 'on' : ''}`, role: 'tab', 'aria-selected': String(k === st.tab), 'data-tab': k,
+        onclick: (e) => { st.tab = k; tools.hidden = k !== 'tools'; modPane.hidden = k !== 'moderation'; for (const b of e.currentTarget.parentNode.children) { const on = b.dataset.tab === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } },
+      }, label))) : null;
+      if (modOk && st.tab === 'moderation') { tools.hidden = true; modPane.hidden = false; }
+      add(main, h('p', { class: 'pm-lead' }, level === 'full' ? 'Owner tools. Changes apply to this device (and the online balance where stated).' : `${LEVEL_NAME[level]}: limited tools. Changes apply to this device only.`), needUT,
+        tabs, tools, modOk ? modPane : null);
     },
   };
   return view;

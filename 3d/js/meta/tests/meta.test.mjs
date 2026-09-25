@@ -284,7 +284,7 @@ test('physique + PlayStyles: heights/weights in range, counts respect OVR bands,
     const [lo, hi] = styleCountRange(p.ovr);
     if (!p.special || p.special === 'lotg') assert.ok(p.playstyles.length >= Math.min(lo, 4) && p.playstyles.length <= hi, `${p.id} ${p.ovr} has ${p.playstyles.length} styles`);
     assert.ok(p.playstyles.length <= 4);
-    assert.ok(p.playstyles.filter((x) => x.plus).length <= Math.max(maxPlus(p.ovr), 0) || p.special === 'inform', `${p.id} plus count`);
+    assert.ok(p.playstyles.filter((x) => x.plus).length <= Math.max(maxPlus(p.ovr), 0) || p.special === 'inform' || !!p.promo, `${p.id} plus count`);
     for (const x of p.playstyles) assert.ok(PLAYSTYLES[x.id], `${p.id} bad style ${x.id}`);
     const gkStyle = p.playstyles.some((x) => PLAYSTYLES[x.id][1] === 'gk');
     if (gkStyle) assert.equal(p.pos, 'GK', `${p.id} outfield GK style`);
@@ -550,6 +550,190 @@ test('career: create-a-club, player career, scouting network, training', () => {
   while (pc.phase === 'season' && g++ < 100) C.advance(pc);
   assert.ok(pro.apps >= 15, `pro apps ${pro.apps}`);
   assert.ok(pro.ovr >= 62);
+});
+
+// ---------------- V3: Admin Given Codes, promos, real regulars ----------------
+const A = await import('../core/admin.js');
+const PR = await import('../core/promos.js');
+const { REAL_NAMES, REG_ROW_COUNT } = await import('../core/realplayers.js');
+const { CLUBS } = await import('../core/data.js');
+const { createHash, pbkdf2Sync } = await import('node:crypto');
+function memStorage() { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), clear: () => m.clear() }; }
+for (const k of ['localStorage', 'sessionStorage']) { try { if (!globalThis[k] || typeof globalThis[k].getItem !== 'function') throw 0; globalThis[k].getItem('x'); } catch { Object.defineProperty(globalThis, k, { value: memStorage(), configurable: true, writable: true }); } }
+
+test('admin codes: PBKDF2 verifier matches a self-made test vector and rejects wrong codes', async () => {
+  // dummy vector (NOT the real code): code/salt made up here, expected hash from node:crypto
+  const salt = createHash('sha256').update('pitchside-test-salt').digest('hex').slice(0, 32);
+  const dummy = { salt, iterations: 1000, hash: pbkdf2Sync('dummy-code-123', Buffer.from(salt, 'hex'), 1000, 32, 'sha256').toString('hex') };
+  assert.equal(await A.pbkdf2Hex('dummy-code-123', salt, 1000), dummy.hash);
+  assert.equal(await A.verifyCodeWith('dummy-code-123', dummy), true);
+  assert.equal(await A.verifyCodeWith('dummy-code-124', dummy), false);
+  assert.equal(await A.verifyLocalCode('dummy-code-123', { temp: dummy }), 'temp');
+  assert.equal(await A.verifyLocalCode('definitely-not-the-code'), null); // real parameters, known-wrong code
+  assert.ok(A.safeEqualHex('ABcd', 'abcd') && !A.safeEqualHex('abcd', 'abce') && !A.safeEqualHex('abc', 'abcd'));
+  // only parameters are stored: 16-byte salts, 32-byte hashes, 600k iterations
+  for (const lv of ['full', 'temp']) { const q = A.ADMIN_CODE_PARAMS[lv]; assert.equal(q.salt.length, 32); assert.equal(q.hash.length, 64); assert.equal(q.iterations, 600000); }
+});
+
+test('admin codes: "Invalid code", lockout after 5 attempts, temp level limits, account roles', async () => {
+  A.clearFailures(); A.clearAdminSession(); A.setAccountRole(null);
+  for (let i = 1; i <= 4; i++) { const r = await A.redeemAdminCode(`wrong-${i}`, null); assert.equal(r.ok, false); assert.equal(r.error, 'Invalid code'); assert.ok(!r.locked); }
+  const fifth = await A.redeemAdminCode('wrong-5', null);
+  assert.equal(fifth.error, 'Invalid code'); assert.ok(fifth.locked > 55000);
+  const blocked = await A.redeemAdminCode('anything', null);
+  assert.ok(blocked.locked > 0 && /Too many attempts/.test(blocked.error));
+  assert.ok(A.lockRemainingMs() > 0 && A.lockRemainingMs() <= 60000);
+  A.clearFailures();
+  // success path with a swapped-in dummy vector (real parameters restored afterwards)
+  const saved = { ...A.ADMIN_CODE_PARAMS.temp };
+  const salt = 'ab'.repeat(16);
+  Object.assign(A.ADMIN_CODE_PARAMS.temp, { salt, iterations: 1000, hash: pbkdf2Sync('temp-dummy', Buffer.from(salt, 'hex'), 1000, 32, 'sha256').toString('hex') });
+  try {
+    const ok = await A.redeemAdminCode('temp-dummy', { available: async () => false, admin: { verify: async () => true } });
+    assert.deepEqual(ok, { ok: true, level: 'temp' });
+  } finally { Object.assign(A.ADMIN_CODE_PARAMS.temp, saved); }
+  assert.equal(A.getAdminLevel(), 'temp');
+  assert.ok(A.adminInfo().tempRemainingMs > 59 * 60000);
+  assert.ok(A.adminCan('packs') && A.adminCan('grant') && !A.adminCan('reset') && !A.adminCan('infinite') && !A.adminCan('onlineCoins') && !A.adminCan('moderation'));
+  const st = { coins: 0 };
+  assert.equal(A.addLocalCoins(st, 5e6), 1e6);
+  assert.equal(A.matchAdminLevel(), null);
+  assert.equal(A.getAdminLevel(Date.now() + 61 * 60000), null, 'temp admin expires after 60 minutes');
+  A.clearAdminSession();
+  // online verify wins when reachable
+  const on = await A.redeemAdminCode('whatever', { available: async () => true, admin: { verify: async () => true } });
+  assert.deepEqual(on, { ok: true, level: 'full' });
+  assert.ok(A.adminCan('reset') && A.adminCan('moderation'));
+  A.clearAdminSession();
+  // account roles
+  A.setAccountRole('owner'); assert.equal(A.getAdminLevel(), 'full'); assert.equal(A.matchAdminLevel(), 'owner');
+  A.setAccountRole('mod'); assert.equal(A.getAdminLevel(), 'mod'); assert.ok(A.adminCan('moderation') && !A.adminCan('infinite'));
+  assert.ok(await A.refreshAccountRole({ account: { current: async () => ({ role: 'owner' }) } }) || A.accountRole() === 'owner');
+  assert.equal(A.accountRole(), 'owner');
+  A.setAccountRole(null); A.clearFailures();
+  assert.equal(A.getAdminLevel(), null);
+});
+
+test('real regulars: ~150 extra players, no duplicate names across lists, regular gold cards at sensible clubs', () => {
+  const db = getDB();
+  assert.ok(REG_ROW_COUNT >= 150, `only ${REG_ROW_COUNT}`);
+  assert.equal(db.regulars.length, REG_ROW_COUNT);
+  const reg = new Set(REAL_NAMES.regulars);
+  assert.equal(reg.size, REAL_NAMES.regulars.length, 'duplicate within regulars');
+  for (const n of REAL_NAMES.icons.concat(REAL_NAMES.stars)) assert.ok(!reg.has(n), `${n} duplicated in regulars`);
+  assert.equal(new Set(REAL_NAMES.stars).size, REAL_NAMES.stars.length);
+  const persons = new Set(db.real.map((p) => p.person));
+  const clubIds = new Set(CLUBS.map((c) => c.id));
+  for (const p of db.regulars) {
+    assert.ok(!persons.has(p.person), `${p.name} person clash`);
+    assert.equal(p.special, null); assert.ok(p.real && p.rare);
+    assert.equal(p.tier, tierOf(p.ovr));
+    assert.ok(p.ovr >= 78 && p.ovr <= 92, `${p.name} ${p.ovr}`);
+    assert.ok(clubIds.has(p.club) && CLUBS.find((c) => c.id === p.club).league === p.league);
+    assert.ok(db.players.includes(p));
+  }
+  for (const n of ['Erling Haaland', 'Jude Bellingham', 'Lamine Yamal', 'Virgil van Dijk', 'Alisson Becker', 'Rodri']) assert.ok(reg.has(n), n);
+  assert.ok(db.regulars.filter((p) => p.pos === 'GK').length >= 12 && db.regulars.filter((p) => ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(p.pos)).length >= 35);
+  const cnt = {}; for (const p of db.players) cnt[p.club] = (cnt[p.club] || 0) + 1;
+  for (const [c, n] of Object.entries(cnt)) assert.ok(n <= 36, `${c} has ${n} players`);
+  // packs + market see them
+  assert.ok(UT.categoryPools().gold86.some((p) => p.id.startsWith('rp_')));
+  assert.ok(UT.marketSearch({ name: 'haaland' }).some((l) => l.pid === 'rp_haaland'));
+});
+
+test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walkouts', () => {
+  const db = getDB();
+  assert.equal(PR.PROMOS.length, 7);
+  for (const pr of PR.PROMOS) {
+    const cards = db.promos.filter((p) => p.special === pr.id);
+    assert.ok(cards.length >= 8, `${pr.id} has ${cards.length}`);
+    for (const p of cards) {
+      const base = getPlayer(p.baseId);
+      assert.ok(p.ovr >= pr.range[0] && p.ovr <= pr.range[1], `${p.id} ${p.ovr} outside ${pr.range}`);
+      assert.ok(p.ovr > base.ovr, `${p.id} not boosted`);
+      assert.equal(p.ovr, computeOvr(p.pos, p));
+      assert.ok(p.playstyles.filter((x) => x.plus).length >= Math.min(p.playstyles.length, (base.playstyles || []).filter((x) => x.plus).length + 1));
+      assert.equal(getPlayer(p.id), p);
+    }
+  }
+  const toty = db.promos.filter((p) => p.special === 'toty');
+  assert.equal(toty.length, 11);
+  assert.ok(toty.every((p) => p.ovr >= 97 && p.ovr <= 99));
+  assert.ok(db.promos.filter((p) => p.special === 'tots').every((p) => p.ovr >= 93 && p.ovr <= 97));
+  assert.ok(db.promos.filter((p) => p.special === 'birthday').every((p) => p.sm >= getPlayer(p.baseId).sm && p.wf === Math.min(5, getPlayer(p.baseId).wf + 1)));
+  assert.ok(db.promos.filter((p) => p.special === 'rttk').every((p) => p.upg && p.upg.level >= 0 && p.upg.level <= 4));
+  assert.ok(db.promos.some((p) => p.special === 'flashback' && p.baseId === 'ic_ronaldinho'));
+  // In-Forms: +3..+8 scaled to the base card
+  const ifs = db.specials.filter((p) => p.special === 'inform');
+  for (const p of ifs) { const d = p.ovr - getPlayer(p.baseId).ovr; assert.ok((d >= 3 && d <= 8) || p.ovr === 99, `${p.id} +${d}`); }
+  assert.ok(Math.max(...ifs.map((p) => p.ovr)) >= 95, 'in-forms reach 95+');
+  // calendar + packs
+  for (let w = 1; w < 60; w++) { const live = PR.livePromos(w); assert.ok(live.length >= 1 && live.length <= 2 && live.every((id) => PR.PROMO_BY_ID[id])); }
+  const seen = new Set(); for (let w = 1; w <= 14; w++) seen.add(PR.promoOfWeek(w));
+  assert.equal(seen.size, 7, 'every campaign appears in the calendar');
+  for (const pr of PR.PROMOS) {
+    const pack = UT.PACK_BY_ID[`promo_${pr.id}`];
+    assert.ok(pack && pack.promo === pr.id);
+    for (const sl of pack.slots) assert.ok(Math.abs(Object.values(sl.odds).reduce((a, b) => a + b, 0) - 1) < 1e-9);
+    const items = UT.openPack(pack.id, new Set(), new Rng(`pp-${pr.id}`));
+    assert.equal(getPlayer(items[0].pid).special, pr.id, 'promo card leads the pack');
+    assert.equal(UT.packFlare(items), 'walkout');
+  }
+  const live = PR.livePromos();
+  assert.ok(UT.storePacks().filter((p) => p.promo).every((p) => live.includes(p.promo)));
+});
+
+test('promos: SBCs and objectives award promo players; saves with promo/TOTW cards migrate', () => {
+  const live = PR.livePromos();
+  const s = UT.createUTState({ clubName: 'Promo FC' }, new Rng(99));
+  const sbc = UT.SBCS.find((x) => x.promo === live[0] && !x.repeatable);
+  assert.ok(sbc && UT.sbcAvailable(s, sbc));
+  const off = UT.SBCS.find((x) => x.promo && !live.includes(x.promo));
+  if (off) assert.equal(UT.sbcAvailable(s, off), false);
+  const got = UT.grantReward(s, sbc.reward, 'test');
+  const pid = UT.promoRewardPid(sbc.reward.promoPlayer);
+  assert.ok(pid && s.club.includes(pid) && getPlayer(pid).special === live[0], got.join());
+  const objs = OBJ.catalog().filter((o) => o.section === 'promo');
+  assert.equal(objs.length, live.length * 3);
+  assert.ok(objs.some((o) => o.reward.promoPlayer));
+  // old + new ids survive a save round-trip
+  const tw = totwCards(3)[0];
+  const legacy = getPlayer('tw3_' + db2legacy(3));
+  const saved = JSON.parse(JSON.stringify({ ...s, club: s.club.concat([tw.id, legacy.id, 'pr_toty_rp_haaland']) }));
+  const m = UT.migrateUT(saved);
+  for (const id of [tw.id, legacy.id, 'pr_toty_rp_haaland', pid]) assert.ok(m.club.includes(id), `${id} lost`);
+});
+function db2legacy(week) { return TOTW.legacyTotwCards(week)[0].baseId; }
+
+test('TOTW: 3 headliners rated 88-94 every week, boosts +3..+8, legacy ids still resolve', () => {
+  for (const w of [1, 2, 5, 17, 40]) {
+    const cards = totwCards(w);
+    assert.equal(cards.length, 15);
+    const heads = cards.filter((p) => p.headliner);
+    assert.equal(heads.length, 3);
+    for (const p of heads) assert.ok(p.ovr >= 88 && p.ovr <= 94, `week ${w} headliner ${p.ovr}`);
+    for (const p of cards) {
+      assert.ok(p.id.startsWith(`tt${w}_`)); assert.equal(p.special, 'inform'); assert.equal(p.totw, w);
+      const d = p.ovr - getPlayer(p.baseId).ovr;
+      assert.ok(d >= 2 && d <= 10, `${p.id} +${d}`);
+      assert.equal(getPlayer(p.id).id, p.id);
+    }
+    assert.ok(Math.min(...cards.map((p) => p.ovr)) >= 77);
+  }
+  const lg = TOTW.legacyTotwCards(5);
+  assert.equal(lg.length, 15);
+  assert.ok(lg.every((p) => p.id.startsWith('tw5_') && getPlayer(p.id) === p && !getPlayer(p.baseId).real));
+});
+
+test('national teams stay valid with real regulars (incl. new nations Georgia and Slovenia)', () => {
+  const nts = getNationalTeams();
+  const byId = Object.fromEntries(nts.map((t) => [t.id, t]));
+  for (const t of nts) assert.deepEqual(validateTeam(t), [], `${t.id}: ${validateTeam(t).join(', ')}`);
+  assert.ok(byId.GEO && byId.SVN);
+  assert.ok(byId.GEO.players.some((p) => p.id === 'rp_kvaratskhelia'));
+  assert.ok(byId.NOR.players.some((p) => p.id === 'rp_haaland'));
+  assert.ok(byId.ENG.players.filter((p) => getPlayer(p.id) && getPlayer(p.id).real).length >= 5);
+  for (const t of nts) { const real = t.players.filter((p) => getPlayer(p.id) && getPlayer(p.id).real); assert.equal(new Set(real.map((p) => getPlayer(p.id).person)).size, real.length, `${t.id} duplicates a person`); }
 });
 
 await runAll();

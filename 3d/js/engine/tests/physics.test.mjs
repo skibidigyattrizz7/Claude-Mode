@@ -9,6 +9,7 @@ import { encodeSnapshot, lerpView } from '../core/snapshot.js';
 import { assignSlots } from '../core/formations.js';
 import { BRAZIL, FRANCE } from './sampleTeams.mjs';
 import { runGameplayTests } from './gameplay.test.mjs';
+import { runAdminTests } from './admin.test.mjs';
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -254,6 +255,7 @@ test('AI penalty conversion is around 75%', () => {
 });
 
 runGameplayTests(test);
+runAdminTests(test);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

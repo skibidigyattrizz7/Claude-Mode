@@ -1,4 +1,4 @@
-// Pitchside 3D — in-browser mock of the Supabase RPCs (supabase/migrations/001_pitchside.sql).
+// Pitchside 3D — in-browser mock of the Supabase RPCs (supabase/migrations/001_pitchside.sql + 002_accounts_moderation.sql).
 // Used with ?mockOnline=1 (state in localStorage, so two tabs of the same browser share one
 // "server") and by the node unit tests (in-memory store). Mirrors the SQL rules closely enough
 // for UI and state-machine testing; it is NOT a security boundary.
@@ -35,6 +35,8 @@ function rivalsReward(peak, wins) {
   if (wins >= 20) packs.push('stars');
   return { coins: base + 300 * Math.min(Math.max(wins || 0, 0), 20), packs };
 }
+import { usernameError, passwordError, isReservedName, usernameKey, isBlockedName } from './accountcore.js';
+
 const POS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
 
 /** Storage adapter backed by a Web Storage object (localStorage). */
@@ -54,13 +56,57 @@ export function memoryStore() {
  * @param {{ now?:()=>number, rand?:()=>number, latencyMs?:number, down?:boolean }} opts
  */
 export function createMockBackend(store, { now = () => Date.now(), rand = Math.random, latencyMs = 0, down = false } = {}) {
-  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: null, adminFails: {} });
+  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: null, adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand) });
   const load = () => {
     const d = store.load();
     if (!d || !d.profiles) return fresh();
     d.friends = d.friends || []; d.invites = d.invites || [];
+    d.sessions = d.sessions || []; d.audit = d.audit || []; d.loginFails = d.loginFails || {}; d.serverKey = d.serverKey || hex(32, rand);
     return d;
   };
+  const SESSION_TTL = 60 * DAY;
+  const isBanned = (p) => !!p.banned && (!p.bannedUntil || p.bannedUntil > now());
+  const banJson = (p) => ({ reason: p.banReason || '', until: p.bannedUntil ? new Date(p.bannedUntil).toISOString() : null });
+  const bannedError = (p) => Object.assign(new Error('banned'), { ban: banJson(p) });
+  const audit = (db, id, action, detail = {}) => { db.audit.push({ profileId: id, action, detail, at: now() }); if (db.audit.length > 2000) db.audit.splice(0, db.audit.length - 2000); };
+  const newSession = (db, id) => {
+    const token = hex(64, rand);
+    db.sessions.push({ profileId: id, tokenHash: fnv(`s:${token}`), createdAt: now(), lastSeen: now() });
+    const mine = db.sessions.filter((x) => x.profileId === id).sort((a, b) => b.lastSeen - a.lastSeen);
+    if (mine.length > 10) { const drop = new Set(mine.slice(10)); db.sessions = db.sessions.filter((x) => !drop.has(x)); }
+    return token;
+  };
+  const accountJson = (p, token) => ({ ok: true, id: p.id, session_token: token, username: p.username, name: p.name, friendCode: p.friendCode, role: p.role || 'player' });
+  const adminOk = (db, code) => {
+    const minute = Math.floor(now() / 60000);
+    if ((db.adminFails[minute] || 0) >= 20) return false;
+    const ok = !!db.adminHash && typeof code === 'string' && code.length > 0 && code.length <= 128 && fnv(`admin:${code}`) === db.adminHash;
+    if (!ok) db.adminFails = { [minute]: (db.adminFails[minute] || 0) + 1 };
+    return ok;
+  };
+  const RANK = { admin: 3, owner: 2, mod: 1 };
+  const rank = (r) => RANK[r] || 0;
+  function modActor(db, p_code, p_id, p_secret) {
+    if (p_id && p_secret) {
+      const a = auth(db, p_id, p_secret);
+      if (a && (a.role === 'owner' || a.role === 'mod')) return a.role;
+    }
+    if (p_code && adminOk(db, p_code)) return 'admin';
+    return null;
+  }
+  const modRow = (p) => ({
+    id: p.id, username: p.username || null, name: p.name, role: p.role || 'player', friendCode: p.friendCode, coins: p.coins, rating: p.rating,
+    rivalsDivision: p.rivalsDivision ?? 10, wins: p.wins, draws: p.draws, losses: p.losses, banned: isBanned(p), banReason: p.banReason || null,
+    bannedUntil: p.bannedUntil ? new Date(p.bannedUntil).toISOString() : null, bannedAt: p.bannedAt ? new Date(p.bannedAt).toISOString() : null,
+    createdAt: new Date(p.createdAt || 0).toISOString(), lastLoginAt: p.lastLoginAt ? new Date(p.lastLoginAt).toISOString() : null, lastSeenAt: p.lastSeen ? new Date(p.lastSeen).toISOString() : null,
+  });
+  const newProfile = (db, secretHash, name) => {
+    const id = uuid(rand);
+    db.profiles[id] = { id, secretHash, name, coins: 5000, rating: 1000, division: 8, wins: 0, draws: 0, losses: 0, lastReward: 0, windowStart: 0, windowCount: 0, friendCode: newCode(db), lastSeen: 0, createdAt: now(), role: 'player', ...rivalsDefaults };
+    return db.profiles[id];
+  };
+  const keyTaken = (db, u) => Object.values(db.profiles).some((p) => p.username && usernameKey(p.username) === usernameKey(u));
+  const safeName = (n, role) => { const v = cleanName(n); return (role !== 'owner' && isReservedName(v)) || isBlockedName(v) ? null : v; };
   const CODE_A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const newCode = (db) => {
     for (;;) {
@@ -80,14 +126,23 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
   }
   const rivalsDefaults = { rivalsDivision: 10, rivalsPoints: 0, rivalsWeek: null, rivalsWeekWins: 0, rivalsWeekMatches: 0, rivalsPeak: 10, rivalsPrevWeek: null, rivalsPrevPeak: null, rivalsPrevWins: null, rivalsClaimedWeek: null };
 
-  function auth(db, id, secret) {
+  /** Device secret or live session; banned profiles throw like the SQL helper (unless raw). */
+  function authRaw(db, id, secret) {
     if (typeof secret !== 'string' || !/^[0-9a-f]{64}$/.test(secret)) return null;
     const p = db.profiles[id];
-    return p && p.secretHash === fnv(secret) ? p : null;
+    if (!p) return null;
+    if (p.secretHash === fnv(secret)) return p;
+    const h = fnv(`s:${secret}`);
+    return db.sessions.some((x) => x.profileId === id && x.tokenHash === h && x.lastSeen > now() - SESSION_TTL) ? p : null;
+  }
+  function auth(db, id, secret) {
+    const p = authRaw(db, id, secret);
+    if (p && isBanned(p)) throw bannedError(p);
+    return p;
   }
   const mmResult = (r) => (r.matchedWith == null
     ? { ok: true, matched: false, queueId: r.id, waitedMs: Math.max(0, now() - r.createdAt) }
-    : { ok: true, matched: true, queueId: r.id, role: r.host ? 'host' : 'guest', opponentPeerId: r.oppPeerId, token: r.token, opponent: { name: r.oppName, rating: r.oppRating } });
+    : { ok: true, matched: true, queueId: r.id, role: r.host ? 'host' : 'guest', opponentPeerId: r.oppPeerId, token: r.token, opponent: { name: r.oppName, rating: r.oppRating, role: r.oppRole || 'player' } });
 
   function pair(db, me) {
     const t = now();
@@ -99,8 +154,9 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     const c = cands[0];
     if (!c) return me;
     const token = hex(32, rand);
-    Object.assign(c, { matchedWith: me.id, matchedAt: t, host: true, token, oppPlayerId: me.playerId, oppPeerId: me.peerId, oppRating: me.rating, oppName: me.name });
-    Object.assign(me, { matchedWith: c.id, matchedAt: t, host: false, token, oppPlayerId: c.playerId, oppPeerId: c.peerId, oppRating: c.rating, oppName: c.name, lastPoll: t });
+    const roleOfId = (id) => (db.profiles[id] || {}).role || 'player';
+    Object.assign(c, { matchedWith: me.id, matchedAt: t, host: true, token, oppPlayerId: me.playerId, oppPeerId: me.peerId, oppRating: me.rating, oppName: me.name, oppRole: roleOfId(me.playerId) });
+    Object.assign(me, { matchedWith: c.id, matchedAt: t, host: false, token, oppPlayerId: c.playerId, oppPeerId: c.peerId, oppRating: c.rating, oppName: c.name, oppRole: roleOfId(c.playerId), lastPoll: t });
     return me;
   }
   function purge(db) {
@@ -120,8 +176,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const h = fnv(p_secret);
       const ex = Object.values(db.profiles).find((p) => p.secretHash === h);
       if (ex) return ex.id;
-      const id = uuid(rand);
-      db.profiles[id] = { id, secretHash: h, name: cleanName(p_name), coins: 5000, rating: 1000, division: 8, wins: 0, draws: 0, losses: 0, lastReward: 0, windowStart: 0, windowCount: 0, friendCode: newCode(db), lastSeen: 0, ...rivalsDefaults };
+      const { id } = newProfile(db, h, safeName(p_name) || 'Player');
       store.save(db);
       return id;
     },
@@ -130,13 +185,15 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
       const unclaimed = db.listings.filter((l) => l.sellerId === p.id && l.status === 'sold' && !l.claimed).reduce((s, l) => s + l.credit, 0);
-      return { ok: true, id: p.id, name: p.name, coins: p.coins, rating: p.rating, division: p.division, wins: p.wins, draws: p.draws, losses: p.losses, unclaimed, friendCode: p.friendCode, rivalsDivision: p.rivalsDivision ?? 10 };
+      return { ok: true, id: p.id, name: p.name, coins: p.coins, rating: p.rating, division: p.division, wins: p.wins, draws: p.draws, losses: p.losses, unclaimed, friendCode: p.friendCode, rivalsDivision: p.rivalsDivision ?? 10, username: p.username || null, role: p.role || 'player' };
     },
     set_name({ p_id, p_secret, p_name }) {
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
-      p.name = cleanName(p_name);
+      const nm = safeName(p_name, p.role);
+      if (!nm) return err('name_not_allowed');
+      p.name = nm;
       store.save(db);
       return { ok: true, name: p.name };
     },
@@ -444,7 +501,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         const o = db.profiles[f.a === p.id ? f.b : f.a];
         const acc = f.status === 'accepted';
         return {
-          id: o.id, name: o.name,
+          id: o.id, name: o.name, role: o.role || 'player',
           status: acc ? 'friend' : f.status === 'blocked' ? 'blocked' : f.requestedBy === p.id ? 'outgoing' : 'incoming',
           online: acc && o.lastSeen > now() - 60000, rating: acc ? o.rating : null, division: acc ? o.division : null, rivalsDivision: acc ? (o.rivalsDivision ?? 10) : null,
         };
@@ -477,7 +534,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       store.save(db);
       const t = now();
       const incoming = db.invites.filter((i) => i.toId === p.id && i.status === 'pending' && i.createdAt > t - 60000 && (findF(db, i.fromId, i.toId) || {}).status === 'accepted')
-        .map((i) => ({ inviteId: i.id, mode: i.mode, createdAt: new Date(i.createdAt).toISOString(), from: { id: i.fromId, name: db.profiles[i.fromId].name, rating: db.profiles[i.fromId].rating } }));
+        .map((i) => ({ inviteId: i.id, mode: i.mode, createdAt: new Date(i.createdAt).toISOString(), from: { id: i.fromId, name: db.profiles[i.fromId].name, rating: db.profiles[i.fromId].rating, role: db.profiles[i.fromId].role || 'player' } }));
       const outgoing = db.invites.filter((i) => i.fromId === p.id && i.createdAt > t - 120000)
         .map((i) => ({ inviteId: i.id, mode: i.mode, toId: i.toId, status: i.status === 'pending' && i.createdAt <= t - 60000 ? 'expired' : i.status }));
       const requests = db.friends.filter((f) => (f.a === p.id || f.b === p.id) && f.status === 'pending' && f.requestedBy !== p.id).length;
@@ -496,7 +553,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       i.status = 'accepted';
       store.save(db);
       const o = db.profiles[i.fromId];
-      return { ok: true, accepted: true, mode: i.mode, peerId: i.peerId, token: i.token, from: { id: o.id, name: o.name, rating: o.rating } };
+      return { ok: true, accepted: true, mode: i.mode, peerId: i.peerId, token: i.token, from: { id: o.id, name: o.name, rating: o.rating, role: o.role || 'player' } };
     },
     cancel_invite({ p_id, p_secret, p_invite }) {
       const db = load();
@@ -509,6 +566,194 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       store.save(db);
       return { ok: true, status: 'cancelled' };
     },
+    // ---------------------------------------------------------------- accounts (002)
+    signup({ p_username, p_password, p_admin_code = null }) {
+      const u = String(p_username ?? '').trim();
+      const e = usernameError(u) || passwordError(p_password, u);
+      if (e) return err(e);
+      const db = load();
+      let role = 'player';
+      if (isReservedName(u)) { if (!adminOk(db, p_admin_code)) { store.save(db); return err('reserved_username'); } role = 'owner'; }
+      if (keyTaken(db, u)) return err('username_taken');
+      const p = newProfile(db, fnv(hex(64, rand)), u);
+      Object.assign(p, { username: u, pwHash: fnv(`pw:${p_password}`), role, lastLoginAt: now() });
+      const token = newSession(db, p.id);
+      audit(db, p.id, 'signup', { username: u, role });
+      store.save(db);
+      return accountJson(p, token);
+    },
+    login({ p_username, p_password }) {
+      const u = String(p_username ?? '').trim();
+      if (u.length < 3 || u.length > 16 || typeof p_password !== 'string' || !p_password) return err('bad_credentials');
+      const db = load();
+      const k = usernameKey(u);
+      const win = Math.floor(now() / 900000);
+      const fk = `${win}:${k}`;
+      if ((db.loginFails[fk] || 0) >= 10) return err('too_many_attempts');
+      const p = Object.values(db.profiles).find((x) => x.username && usernameKey(x.username) === k);
+      if (!p || p.pwHash !== fnv(`pw:${p_password}`)) {
+        db.loginFails = { ...Object.fromEntries(Object.entries(db.loginFails).filter(([key]) => key.startsWith(`${win}:`))), [fk]: (db.loginFails[fk] || 0) + 1 };
+        if (p) audit(db, p.id, 'login_failed');
+        store.save(db);
+        return err('bad_credentials');
+      }
+      if (isBanned(p)) { audit(db, p.id, 'login_banned'); store.save(db); return { ok: false, error: 'banned', ban: banJson(p) }; }
+      p.lastLoginAt = now(); seen(p);
+      const token = newSession(db, p.id);
+      audit(db, p.id, 'login');
+      store.save(db);
+      return accountJson(p, token);
+    },
+    logout({ p_id, p_token, p_all = false }) {
+      if (typeof p_token !== 'string' || !/^[0-9a-f]{64}$/.test(p_token)) return err('auth');
+      const db = load();
+      const h = fnv(`s:${p_token}`);
+      if (!db.sessions.some((x) => x.profileId === p_id && x.tokenHash === h)) return { ok: true, ended: 0 };
+      const before = db.sessions.length;
+      db.sessions = db.sessions.filter((x) => !(x.profileId === p_id && (p_all || x.tokenHash === h)));
+      audit(db, p_id, 'logout', { all: !!p_all });
+      store.save(db);
+      return { ok: true, ended: before - db.sessions.length };
+    },
+    claim_profile({ p_id, p_secret, p_username, p_password, p_admin_code = null }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (p.username) return err('already_has_account');
+      const u = String(p_username ?? '').trim();
+      const e = usernameError(u) || passwordError(p_password, u);
+      if (e) return err(e);
+      let role = p.role || 'player';
+      if (isReservedName(u)) { if (!adminOk(db, p_admin_code)) { store.save(db); return err('reserved_username'); } role = 'owner'; }
+      if (keyTaken(db, u)) return err('username_taken');
+      Object.assign(p, { username: u, name: u, role, pwHash: fnv(`pw:${p_password}`), secretHash: fnv(hex(64, rand)), lastLoginAt: now() });
+      const token = newSession(db, p.id);
+      audit(db, p.id, 'claim', { username: u });
+      store.save(db);
+      return accountJson(p, token);
+    },
+    account_status({ p_id, p_secret }) {
+      const db = load();
+      const p = authRaw(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const h = fnv(`s:${p_secret}`);
+      for (const x of db.sessions) if (x.profileId === p.id && x.tokenHash === h) x.lastSeen = now();
+      seen(p);
+      store.save(db);
+      const b = isBanned(p);
+      return { ok: true, id: p.id, username: p.username || null, name: p.name, role: p.role || 'player', claimed: !!p.username, banned: b, ban: b ? banJson(p) : null, friendCode: p.friendCode };
+    },
+    // ---------------------------------------------------------------- moderation (002)
+    mod_search({ p_code, p_query, p_id = null, p_secret = null }) {
+      const db = load();
+      const actor = modActor(db, p_code, p_id, p_secret);
+      store.save(db);
+      if (!actor) return err('not_admin');
+      const q = String(p_query ?? '').trim();
+      if (!q || q.length > 40) return err('bad_query');
+      const k = usernameKey(q);
+      const items = Object.values(db.profiles).filter((p) => (k && p.username && usernameKey(p.username).startsWith(k)) || p.friendCode === q.toUpperCase().replace(/-/g, '')
+        || p.id === q.toLowerCase() || p.name.toLowerCase().includes(q.toLowerCase()))
+        .sort((a, b) => ((b.username && usernameKey(b.username) === k) - (a.username && usernameKey(a.username) === k)) || (b.lastSeen || 0) - (a.lastSeen || 0))
+        .slice(0, 25).map(modRow);
+      return { ok: true, items };
+    },
+    mod_player({ p_code, p_player, p_id = null, p_secret = null }) {
+      const db = load();
+      const actor = modActor(db, p_code, p_id, p_secret);
+      store.save(db);
+      if (!actor) return err('not_admin');
+      const p = db.profiles[p_player];
+      if (!p) return err('not_found');
+      const auditRows = db.audit.filter((a) => a.profileId === p.id).slice(-60).reverse().map((a) => ({ action: a.action, detail: a.detail, at: new Date(a.at).toISOString() }));
+      const listings = db.listings.filter((l) => l.sellerId === p.id).slice(-40).reverse().map((l) => ({ listingId: l.id, name: l.card.name, ovr: l.card.ovr, price: l.price, status: l.status, listedAt: new Date(l.createdAt).toISOString(), soldAt: null }));
+      return { ok: true, player: modRow(p), audit: auditRows, listings, sessions: db.sessions.filter((x) => x.profileId === p.id).length };
+    },
+    mod_ban({ p_code, p_player, p_reason, p_until = null, p_id = null, p_secret = null }) {
+      const db = load();
+      const actor = modActor(db, p_code, p_id, p_secret);
+      if (!actor) { store.save(db); return err('not_admin'); }
+      const reason = String(p_reason ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim(); // eslint-disable-line no-control-regex
+      if (!reason || reason.length > 200) return err('bad_reason');
+      const until = p_until == null ? null : Date.parse(p_until);
+      if (until !== null && (!Number.isFinite(until) || until <= now() || until > now() + 3650 * DAY)) return err('bad_until');
+      const p = db.profiles[p_player];
+      if (!p) return err('not_found');
+      if (actor !== 'admin' && p.id === p_id) return err('not_allowed');
+      if (rank(p.role) >= rank(actor)) return err('not_allowed');
+      Object.assign(p, { banned: true, banReason: reason, bannedUntil: until, bannedAt: now(), bannedBy: actor });
+      let n = 0;
+      for (const l of db.listings) if (l.sellerId === p.id && l.status === 'active') { l.status = 'cancelled'; n++; }
+      db.queue = db.queue.filter((q) => !(q.playerId === p.id && q.matchedWith == null));
+      for (const i of db.invites) if ((i.fromId === p.id || i.toId === p.id) && i.status === 'pending') i.status = 'cancelled';
+      audit(db, p.id, 'admin_ban', { reason, until: p_until, by: actor, listingsCancelled: n });
+      store.save(db);
+      return { ok: true, player: modRow(p), listingsCancelled: n };
+    },
+    mod_unban({ p_code, p_player, p_id = null, p_secret = null }) {
+      const db = load();
+      const actor = modActor(db, p_code, p_id, p_secret);
+      if (!actor) { store.save(db); return err('not_admin'); }
+      const p = db.profiles[p_player];
+      if (!p) return err('not_found');
+      if (rank(p.role) >= rank(actor)) return err('not_allowed');
+      Object.assign(p, { banned: false, banReason: null, bannedUntil: null, bannedAt: null, bannedBy: null });
+      audit(db, p.id, 'admin_unban', { by: actor });
+      store.save(db);
+      return { ok: true, player: modRow(p) };
+    },
+    mod_adjust_coins({ p_code, p_player, p_delta, p_reason = null, p_id = null, p_secret = null }) {
+      const db = load();
+      const actor = modActor(db, p_code, p_id, p_secret);
+      if (!actor) { store.save(db); return err('not_admin'); }
+      if (actor === 'mod') return err('not_allowed');
+      if (!Number.isInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 1e8) return err('bad_amount');
+      const p = db.profiles[p_player];
+      if (!p) return err('not_found');
+      const before = p.coins;
+      p.coins = Math.max(0, p.coins + p_delta);
+      audit(db, p.id, 'admin_coins', { delta: p_delta, before, balance: p.coins, reason: p_reason || '', by: actor });
+      store.save(db);
+      return { ok: true, coins: p.coins };
+    },
+    mod_set_role({ p_code, p_player, p_role, p_id = null, p_secret = null }) {
+      const db = load();
+      const actor = modActor(db, p_code, p_id, p_secret);
+      if (!actor) { store.save(db); return err('not_admin'); }
+      if (actor === 'mod') return err('not_allowed');
+      if (!['player', 'mod', 'owner'].includes(p_role)) return err('bad_role');
+      const p = db.profiles[p_player];
+      if (!p) return err('not_found');
+      if (!p.username) return err('no_account');
+      if (actor !== 'admin' && (p.id === p_id || p.role === 'owner' || p_role === 'owner')) return err('not_allowed');
+      const from = p.role || 'player';
+      p.role = p_role;
+      audit(db, p.id, 'admin_role', { from, to: p_role, by: actor });
+      store.save(db);
+      return { ok: true, player: modRow(p) };
+    },
+    admin_match_token({ p_id, p_secret, p_bind = null }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (p.role !== 'owner' && p.role !== 'mod') return err('not_allowed');
+      if (p_bind != null && !/^[A-Za-z0-9_-]{1,64}$/.test(p_bind)) return err('bad_bind');
+      const exp = Math.floor(now() / 1000) + 900;
+      const payload = `${p.id}.${p.role}.${exp}`;
+      const sig = (fnv(`${db.serverKey}|${payload}|${p_bind || ''}`) + fnv(`${payload}|${p_bind || ''}|${db.serverKey}`) + fnv(`x${db.serverKey}${payload}${p_bind || ''}`) + fnv(`y${payload}${db.serverKey}`)).slice(0, 64).padEnd(64, '0');
+      return { ok: true, role: p.role, exp, token: `${payload}.${sig}` };
+    },
+    verify_admin_token({ p_token, p_bind = null }) {
+      const m = typeof p_token === 'string' && /^([0-9a-f-]{36})\.(owner|mod)\.(\d{9,11})\.([0-9a-f]{64})$/.exec(p_token);
+      if (!m) return err('invalid');
+      const db = load();
+      const payload = `${m[1]}.${m[2]}.${m[3]}`;
+      const sig = (fnv(`${db.serverKey}|${payload}|${p_bind || ''}`) + fnv(`${payload}|${p_bind || ''}|${db.serverKey}`) + fnv(`x${db.serverKey}${payload}${p_bind || ''}`) + fnv(`y${payload}${db.serverKey}`)).slice(0, 64).padEnd(64, '0');
+      if (sig !== m[4] || Number(m[3]) < now() / 1000) return err('invalid');
+      const p = db.profiles[m[1]];
+      if (!p || p.role !== m[2] || isBanned(p)) return err('invalid');
+      return { ok: true, profile_id: p.id, role: p.role, exp: Number(m[3]) };
+    },
   };
 
   return {
@@ -518,10 +763,15 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (down || this.down) return { ok: false, error: 'offline' };
       const f = fns[fn];
       if (!f) return { ok: false, error: 'unknown_function' };
-      try { return { ok: true, data: f(args || {}) }; } catch (e) { return { ok: false, error: String(e.message || e) }; }
+      try { return { ok: true, data: f(args || {}) }; } catch (e) {
+        if (e && e.ban) return { ok: false, error: 'banned', ban: e.ban };
+        return { ok: false, error: String(e.message || e) };
+      }
     },
     /** Test helper: set the mock admin code (hash kept only in the mock store). */
     setAdminCode(code) { const db = load(); db.adminHash = fnv(`admin:${code}`); store.save(db); },
+    /** Test helper: set a profile's role directly (like the owner running SQL). */
+    setRole(id, role) { const db = load(); if (db.profiles[id]) { db.profiles[id].role = role; store.save(db); } },
     reset() { store.save(fresh()); },
     down,
   };

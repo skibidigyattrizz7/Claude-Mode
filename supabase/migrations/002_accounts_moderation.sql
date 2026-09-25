@@ -416,7 +416,7 @@ declare
 begin
   v := public.pitchside__auth(p_id, p_secret);
   if v.id is null then return public.pitchside__err('auth'); end if;
-  if v.username is not null then return public.pitchside__err('already_claimed'); end if;
+  if v.username is not null then return public.pitchside__err('already_has_account'); end if;
   v_err := coalesce(public.pitchside__username_error(v_user), public.pitchside__password_error(p_password, v_user));
   if v_err is not null then return public.pitchside__err(v_err); end if;
   if not public.pitchside__throttle('claim:' || v.id, interval '1 hour', 10)
@@ -444,7 +444,7 @@ begin
   exception when unique_violation then
     return public.pitchside__err('username_taken');
   end;
-  if v.id is null then return public.pitchside__err('already_claimed'); end if;
+  if v.id is null then return public.pitchside__err('already_has_account'); end if;
   v_token := public.pitchside__new_session(v.id);
   perform public.pitchside__audit(v.id, 'claim', jsonb_build_object('username', v.username, 'role', v_role, 'ip', v_ip));
   return public.pitchside__account_json(v, v_token);
@@ -785,10 +785,10 @@ begin
   if char_length(v_q) not between 1 and 40 then return public.pitchside__err('bad_query'); end if;
   v_like := replace(replace(replace(lower(v_q), '\', '\\'), '%', '\%'), '_', '\_');
   v_key := replace(replace(replace(public.pitchside__username_key(v_q), '\', '\\'), '%', '\%'), '_', '\_');
-  select coalesce(json_agg(public.pitchside__mod_row(p) order by p.rn), '[]'::json)
+  select coalesce(json_agg(public.pitchside__mod_row(p.q) order by p.rn), '[]'::json)
     into v_items
   from (
-    select q.*, row_number() over (order by (public.pitchside__username_key(q.username) = public.pitchside__username_key(v_q)) desc nulls last,
+    select q, row_number() over (order by (public.pitchside__username_key(q.username) = public.pitchside__username_key(v_q)) desc nulls last,
                                             (q.friend_code = upper(v_q)) desc, q.last_seen_at desc nulls last) as rn
       from public.pitchside_profiles q
      where (v_key <> '' and public.pitchside__username_key(q.username) like v_key || '%')
@@ -911,6 +911,79 @@ begin
   update public.pitchside_profiles set role = p_role where id = v.id returning * into v;
   perform public.pitchside__audit(v.id, 'admin_role', jsonb_build_object('from', v_old, 'to', p_role) || public.pitchside__mod_by(v_actor, p_id));
   return json_build_object('ok', true, 'player', public.pitchside__mod_row(v));
+end $$;
+
+-- ------------------------------------------------------------------ staff match tokens (in-match admin effects)
+-- Server-only HMAC key (one row, generated here, never readable by clients).
+create table if not exists public.pitchside_server_secret (
+  id     int primary key default 1,
+  secret bytea not null,
+  constraint pitchside_server_secret_single check (id = 1),
+  constraint pitchside_server_secret_len check (octet_length(secret) >= 32)
+);
+alter table public.pitchside_server_secret enable row level security;
+revoke all on table public.pitchside_server_secret from public;
+do $$
+declare r text;
+begin
+  foreach r in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('revoke all on table public.pitchside_server_secret from %I', r);
+    end if;
+  end loop;
+end $$;
+insert into public.pitchside_server_secret (id, secret) values (1, extensions.gen_random_bytes(32)) on conflict (id) do nothing;
+
+create or replace function public.pitchside__sign(p_payload text)
+returns text language sql stable security definer
+set search_path = public, extensions, pg_temp
+as $$ select encode(extensions.hmac(convert_to(p_payload, 'UTF8'), (select secret from public.pitchside_server_secret where id = 1), 'sha256'), 'hex') $$;
+
+-- Token "<profile uuid>.<role>.<exp unix s>.<hmac hex>" valid 15 min, only for owner/mod accounts.
+-- p_bind (optional) = the host's room code / peer id, so a token cannot be replayed in another match.
+create or replace function public.pitchside_admin_match_token(p_id uuid, p_secret text, p_bind text default null)
+returns json language plpgsql volatile security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare v public.pitchside_profiles; v_exp bigint; v_payload text;
+begin
+  v := public.pitchside__auth(p_id, p_secret);
+  if v.id is null then return public.pitchside__err('auth'); end if;
+  if v.role not in ('owner', 'mod') then return public.pitchside__err('not_allowed'); end if;
+  if p_bind is not null and p_bind !~ '^[A-Za-z0-9_-]{1,64}$' then return public.pitchside__err('bad_bind'); end if;
+  if not public.pitchside__throttle('mtok:' || v.id, interval '1 hour', 120) then return public.pitchside__err('rate_limited'); end if;
+  v_exp := extract(epoch from now() + interval '15 minutes')::bigint;
+  v_payload := v.id::text || '.' || v.role || '.' || v_exp::text;
+  return json_build_object('ok', true, 'role', v.role, 'exp', v_exp,
+    'token', v_payload || '.' || public.pitchside__sign(v_payload || '|' || coalesce(p_bind, '')));
+end $$;
+
+-- -> { ok:true, profile_id, role, exp } only for a genuine, unexpired token whose account is still
+-- owner/mod and not banned; otherwise { ok:false, error:'invalid' }.
+create or replace function public.pitchside_verify_admin_token(p_token text, p_bind text default null)
+returns json language plpgsql volatile security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare v_parts text[]; v_pid uuid; v_exp bigint; v public.pitchside_profiles;
+begin
+  if p_token is null or p_token !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(owner|mod)\.[0-9]{9,11}\.[0-9a-f]{64}$' then
+    return public.pitchside__err('invalid');
+  end if;
+  if p_bind is not null and p_bind !~ '^[A-Za-z0-9_-]{1,64}$' then return public.pitchside__err('invalid'); end if;
+  if not public.pitchside__throttle('mtokv:' || public.pitchside__client_key(), interval '1 hour', 600) then
+    return public.pitchside__err('rate_limited');
+  end if;
+  v_parts := string_to_array(p_token, '.');
+  if public.pitchside__sign(v_parts[1] || '.' || v_parts[2] || '.' || v_parts[3] || '|' || coalesce(p_bind, '')) <> v_parts[4] then
+    return public.pitchside__err('invalid');
+  end if;
+  v_pid := v_parts[1]::uuid; v_exp := v_parts[3]::bigint;
+  if v_exp < extract(epoch from now()) then return public.pitchside__err('invalid'); end if;
+  select * into v from public.pitchside_profiles where id = v_pid;
+  if not found or v.role not in ('owner', 'mod') or v.role <> v_parts[2] or public.pitchside__is_banned(v) then
+    return public.pitchside__err('invalid');
+  end if;
+  return json_build_object('ok', true, 'profile_id', v.id, 'role', v.role, 'exp', v_exp);
 end $$;
 
 -- ------------------------------------------------------------------ function privileges (same rule as 001)

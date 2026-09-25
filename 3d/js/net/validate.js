@@ -14,6 +14,9 @@ export const MODES = ['friendly', 'ut', 'rivals'];      // matchmaking queues
 export const INVITE_MODES = ['friendly', 'ut'];          // friend challenges
 export const PACK_IDS = ['bronze', 'silver', 'gold', 'premium', 'rare', 'stars', 'legend', 'icon'];
 export const FRIEND_CODE_RE = /^[A-Z0-9]{8}$/;
+export const ROLES = ['player', 'mod', 'owner'];
+/** Staff role from server data: 'owner' | 'mod' | null (players and anything unexpected -> null). */
+export const roleOf = (v) => (v === 'owner' || v === 'mod' ? v : null);
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const int = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(hi, Math.max(lo, v))) : d);
@@ -126,6 +129,8 @@ export function sanitizeProfile(p) {
     unclaimed: int(p.unclaimed, 0, 1e15, 0),
     friendCode: typeof p.friendCode === 'string' && FRIEND_CODE_RE.test(p.friendCode) ? p.friendCode : null,
     rivalsDivision: int(p.rivalsDivision, 0, 10, 10),
+    username: typeof p.username === 'string' ? cleanStr(p.username, 16, '') || null : null,
+    role: roleOf(p.role),
   };
 }
 
@@ -144,7 +149,7 @@ export function parseMmResponse(r) {
   const o = isObj(r.opponent) ? r.opponent : {};
   return {
     ok: true, matched: true, queueId: r.queueId, role: r.role, opponentPeerId: r.opponentPeerId, token: r.token,
-    opponent: { name: cleanStr(o.name, 16, 'Opponent'), rating: int(o.rating, 0, 5000, 1000) },
+    opponent: { name: cleanStr(o.name, 16, 'Opponent'), rating: int(o.rating, 0, 5000, 1000), role: roleOf(o.role) },
   };
 }
 
@@ -198,13 +203,14 @@ export function sanitizeFriend(f) {
     rating: status === 'friend' ? int(f.rating, 0, 5000, 1000) : null,
     division: status === 'friend' ? int(f.division, 1, 10, 10) : null,
     rivalsDivision: status === 'friend' ? int(f.rivalsDivision, 0, 10, 10) : null,
+    role: roleOf(f.role),
   };
 }
 export function sanitizeIncomingInvite(i) {
   if (!isObj(i) || typeof i.inviteId !== 'string' || !UUID_RE.test(i.inviteId) || !INVITE_MODES.includes(i.mode)) return null;
   const f = isObj(i.from) ? i.from : {};
   if (typeof f.id !== 'string' || !UUID_RE.test(f.id)) return null;
-  return { inviteId: i.inviteId, mode: i.mode, createdAt: isoOrNull(i.createdAt), from: { id: f.id, name: cleanStr(f.name, 16, 'Player'), rating: int(f.rating, 0, 5000, 1000) } };
+  return { inviteId: i.inviteId, mode: i.mode, createdAt: isoOrNull(i.createdAt), from: { id: f.id, name: cleanStr(f.name, 16, 'Player'), rating: int(f.rating, 0, 5000, 1000), role: roleOf(f.role) } };
 }
 export function sanitizeOutgoingInvite(i) {
   if (!isObj(i) || typeof i.inviteId !== 'string' || !UUID_RE.test(i.inviteId)) return null;
@@ -218,7 +224,7 @@ export function parseInviteAccept(r) {
   if (r.accepted !== true) return { ok: true, accepted: false };
   if (!INVITE_MODES.includes(r.mode) || typeof r.peerId !== 'string' || !PEER_ID_RE.test(r.peerId) || typeof r.token !== 'string' || !TOKEN_RE.test(r.token)) return { ok: false, error: 'bad_response' };
   const f = isObj(r.from) ? r.from : {};
-  return { ok: true, accepted: true, mode: r.mode, peerId: r.peerId, token: r.token, from: { name: cleanStr(f.name, 16, 'Friend'), rating: int(f.rating, 0, 5000, 1000) } };
+  return { ok: true, accepted: true, mode: r.mode, peerId: r.peerId, token: r.token, from: { name: cleanStr(f.name, 16, 'Friend'), rating: int(f.rating, 0, 5000, 1000), role: roleOf(f.role) } };
 }
 
 /** Validate a result report before it is sent. */
@@ -266,5 +272,23 @@ export function errorText(code) {
     already_claimed: 'This week’s Rivals rewards were already claimed.',
     no_opponent: 'No opponent found.',
     connect_failed: 'Could not connect to the other player.',
+    banned: 'Your account is banned from online play.',
+    no_account: 'Create an account or log in to play online.',
+    bad_username: 'Usernames are 3–16 letters, numbers, _ or single spaces.',
+    username_not_allowed: 'That username is not allowed.',
+    username_taken: 'That username is already taken.',
+    reserved_username: 'That username is reserved.',
+    weak_password: 'Passwords need at least 8 characters (and must not be your username).',
+    bad_password: 'Passwords can be at most 72 characters.',
+    password_mismatch: 'The passwords do not match.',
+    bad_credentials: 'Wrong username or password.',
+    too_many_attempts: 'Too many failed attempts — wait 15 minutes and try again.',
+    already_has_account: 'This profile already has an account.',
+    name_not_allowed: 'That name is not allowed.',
+    bad_query: 'Type a username, friend code or player id.',
+    bad_reason: 'Give a reason (1–200 characters).',
+    bad_until: 'The ban end must be in the future (at most 10 years).',
+    bad_role: 'Unknown role.',
+    bad_amount: 'Enter a whole number of coins.',
   })[code] || 'Something went wrong. Please try again.';
 }

@@ -335,10 +335,27 @@ export function buildRealPlayers(helpers) {
   const icons = ICON_ROWS.map((r) => make(r, 'icon'));
   const stars = STAR_ROWS.map((r) => make(r, 'star'));
   // V3 regulars: ordinary gold / rare gold cards of real active players (no special version).
+  // Balanced placement: best players go to the most famous clubs of their league, but no club grows past
+  // REG_CAP players (career squads max out at 32); overflow moves to other leagues' top flights.
+  const count = new Map(Object.entries(helpers.clubCounts || {}));
+  const REG_CAP = 29;
+  const order = REG_ROWS.map((r, i) => [r, i]).sort((a, b) => b[0][9] - a[0][9] || (a[0][0] < b[0][0] ? -1 : 1));
+  const placed = new Map();
+  const top = CLUBS.filter((c) => c.tier === 1);
+  for (const [row] of order) {
+    const lg = row[15];
+    const score = (c) => c.rep * 10 - (count.get(c.id) || 0) * 3 + (c.league === lg ? 100 : c.league === 'CON' ? 50 : 0) + (hashStr(`${row[0]}-${c.id}`) % 7) / 10;
+    const open = top.filter((c) => (count.get(c.id) || 0) < REG_CAP);
+    const list = open.length ? open : top;
+    const club = list.reduce((a, c) => (score(c) > score(a) ? c : a), list[0]);
+    placed.set(row[0], club);
+    count.set(club.id, (count.get(club.id) || 0) + 1);
+  }
   const regulars = REG_ROWS.map((row) => {
     const [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, weight, skin, lg, styles] = row;
     const base = make([slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, { lg }], 'star');
-    const p = { ...base, id: `rp_${slug}`, person: slug };
+    const club = placed.get(slug);
+    const p = { ...base, id: `rp_${slug}`, person: slug, club: club.id, league: club.league };
     delete p.era;
     p.special = null;
     p.rare = true;

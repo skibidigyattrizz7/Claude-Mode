@@ -4,8 +4,9 @@
 // Contract (docs/3D_CONTRACT.md "Online services"): every function returns a Promise and never
 // throws to the caller — offline / unconfigured / unexpected data resolve { ok:false, error }.
 //
-// Identity: a random 32-byte secret generated here and kept in localStorage; the server stores
-// only its sha256 and checks (id, secret) on every call. No Supabase Auth.
+// Identity: an account session (username + password -> random 32-byte session token, migration 002)
+// or, for older installs, an anonymous device secret. Either is sent as p_secret; the server stores
+// only sha256 and checks (id, secret) on every call. No Supabase Auth.
 //
 // ?mockOnline=1 swaps the backend for an in-browser mock (mockbackend.js) and the transport for
 // BroadcastChannel so two tabs can matchmake without network. ?mockOnline=1&mockDown=1 = offline.
@@ -18,8 +19,14 @@ import {
   SECRET_RE, UUID_RE, validateListingInput, normalizeSearch, sanitizeListingItem, sanitizeMyListing, sanitizeList,
   sanitizeProfile, sanitizeReport, normalizeReport, sanitizeCard, errorText,
   sanitizeRivalsStatus, sanitizeRivalsClaim, sanitizeFriend, sanitizeIncomingInvite, sanitizeOutgoingInvite, parseInviteAccept,
-  normalizeFriendCode, FRIEND_CODE_RE, INVITE_MODES, TOKEN_RE,
+  normalizeFriendCode, FRIEND_CODE_RE, INVITE_MODES, TOKEN_RE, cleanJson, roleOf,
 } from './validate.js';
+import { usernameError, passwordError, parseBan, banActive, banText, isReservedName, trimUsername } from './accountcore.js';
+
+export const OFFLINE_SIGNUP_MSG = 'Online services are offline — you can play offline now and your account will be created when online is back.';
+const MATCH_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(owner|mod)\.[0-9]{9,11}\.[0-9a-f]{64}$/;
+const BIND_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const memStore = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
 
 const RPC_TIMEOUT_MS = 8000;
 const INVITE_TTL_MS = 60000;
@@ -75,6 +82,7 @@ export async function supabaseRpc(fn, args) {
     ]);
     if (res.error) {
       const m = String(res.error.message || '');
+      if (m === 'banned' || res.error.hint === 'pitchside_banned') return { ok: false, error: 'banned', ban: parseBan(res.error.details) };
       const code = res.error.code === 'timeout' ? 'timeout' : /rate limited/i.test(m) ? 'rate_limited' : /fetch|network|Failed/i.test(m) ? 'offline' : 'server_error';
       return { ok: false, error: code };
     }
@@ -118,8 +126,57 @@ export function createOnline(deps) {
   };
   const writeIdent = (v) => { try { storage.setItem(KEY, JSON.stringify(v)); } catch { /* ignore */ } };
 
-  /** -> {id, secret} | null. Registers on first use (idempotent per secret). */
+  // ---------------------------------------------------------------- account session (migration 002)
+  // Remembered sessions live in `storage` (localStorage); others in `volatileStorage` (sessionStorage).
+  const ACC_KEY = deps.accountKey || 'pitchside.account';
+  const PENDING_KEY = `${ACC_KEY}.pending`;
+  const volatile = deps.volatileStorage || memStore();
+  const requireAccount = deps.requireAccount === true;
+  const accListeners = new Set();
+  let pendingCreds = null; // offline sign-up kept in memory only (never persisted with the password)
+  const sget = (st, k) => { try { return st.getItem(k); } catch { return null; } };
+  const sset = (st, k, v) => { try { st.setItem(k, v); } catch { /* ignore */ } };
+  const sdel = (st, k) => { try { st.removeItem(k); } catch { /* ignore */ } };
+  function readAcc() {
+    for (const st of [volatile, storage]) {
+      try {
+        const v = JSON.parse(sget(st, ACC_KEY) || 'null');
+        if (v && typeof v === 'object' && typeof v.id === 'string' && UUID_RE.test(v.id) && typeof v.token === 'string' && SECRET_RE.test(v.token)) {
+          return {
+            id: v.id, token: v.token, username: cleanStr(v.username, 16, 'Player'), role: roleOf(v.role), remember: v.remember !== false,
+            ban: v.ban && typeof v.ban === 'object' ? parseBan(v.ban) : null,
+          };
+        }
+      } catch { /* ignore */ }
+    }
+    return null;
+  }
+  function writeAcc(a) {
+    const rec = JSON.stringify({ id: a.id, token: a.token, username: a.username, role: a.role || null, remember: a.remember !== false, ban: a.ban || null });
+    if (a.remember !== false) { sset(storage, ACC_KEY, rec); sdel(volatile, ACC_KEY); } else { sset(volatile, ACC_KEY, rec); sdel(storage, ACC_KEY); }
+  }
+  function clearAcc() { sdel(storage, ACC_KEY); sdel(volatile, ACC_KEY); identP = null; }
+  const readPending = () => { try { const v = JSON.parse(sget(storage, PENDING_KEY) || 'null'); return v && typeof v.username === 'string' ? { username: cleanStr(v.username, 16, ''), at: Number(v.at) || 0 } : null; } catch { return null; } };
+  const emitAcc = () => { const c = online.account.current(); for (const f of [...accListeners]) { try { f(c); } catch (e) { console.error('[online] account listener failed', e); } } };
+  function setBan(ban) {
+    const a = readAcc();
+    if (a) { a.ban = ban ? parseBan(ban) : null; writeAcc(a); emitAcc(); }
+  }
+  function acceptSession(d, remember, fallbackName) {
+    if (!d || d.ok !== true || typeof d.id !== 'string' || !UUID_RE.test(d.id) || typeof d.session_token !== 'string' || !SECRET_RE.test(d.session_token)) return null;
+    const a = { id: d.id, token: d.session_token, username: cleanStr(d.username, 16, fallbackName || 'Player'), role: roleOf(d.role), remember: remember !== false, ban: null };
+    writeAcc(a);
+    identP = null;
+    pendingCreds = null;
+    sdel(storage, PENDING_KEY);
+    return a;
+  }
+
+  /** -> {id, secret, account?} | null. Account session first; else the device identity (registered on first use unless requireAccount). */
   function identity({ reset = false } = {}) {
+    const acc = readAcc();
+    if (acc) return Promise.resolve({ id: acc.id, secret: acc.token, account: true });
+    if (requireAccount) { const d = readIdent(); return Promise.resolve(d && d.id ? d : null); }
     if (identP && !reset) return identP;
     identP = (async () => {
       let v = reset ? null : readIdent();
@@ -134,12 +191,20 @@ export function createOnline(deps) {
     return identP;
   }
 
-  /** Authenticated call. Re-registers once if the server no longer knows this device. */
+  /**
+   * Authenticated call. Banned accounts are refused locally (cached ban) and by the server ('banned').
+   * An expired / revoked session logs the account out; a legacy device identity re-registers once.
+   */
   async function authed(fn, args = {}) {
+    const acc = readAcc();
+    if (acc && banActive(acc.ban)) return { ok: false, error: 'banned', ban: acc.ban };
     let ident = await identity();
-    if (!ident) return { ok: false, error: (await isAvailable()) ? 'auth' : 'offline' };
+    if (!ident) return { ok: false, error: requireAccount ? 'no_account' : (await isAvailable()) ? 'auth' : 'offline' };
     let r = await rpc(fn, { p_id: ident.id, p_secret: ident.secret, ...args });
+    if (!r.ok && r.error === 'banned') { setBan(r.ban); return { ok: false, error: 'banned', ban: r.ban ? parseBan(r.ban) : null }; }
     if (r.ok && r.data && r.data.ok === false && r.data.error === 'auth') {
+      if (ident.account) { clearAcc(); emitAcc(); return { ok: false, error: 'auth' }; }
+      if (requireAccount) return { ok: false, error: 'auth' };
       ident = await identity({ reset: true });
       if (!ident) return { ok: false, error: 'auth' };
       r = await rpc(fn, { p_id: ident.id, p_secret: ident.secret, ...args });
@@ -147,8 +212,8 @@ export function createOnline(deps) {
     if (!r.ok) { avail = { at: -Infinity, value: false, pending: null }; return { ok: false, error: r.error }; }
     return { ok: true, data: r.data };
   }
-  const fail = (error) => ({ ok: false, error, message: errorText(error) });
-  const dataOr = (r) => (r.ok ? (r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' }) : { ok: false, error: r.error });
+  const fail = (error, extra) => ({ ok: false, error, message: error === 'banned' && extra && extra.ban ? banText(extra.ban) : errorText(error), ...(extra || {}) });
+  const dataOr = (r) => (r.ok ? (r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' }) : { ok: false, error: r.error, ...(r.ban ? { ban: r.ban } : {}) });
 
   async function isAvailable() {
     const t = Date.now();
@@ -180,12 +245,12 @@ export function createOnline(deps) {
     },
 
     /** true once this device has an online profile (no network; used to avoid creating profiles just by browsing). */
-    hasIdentity() { const v = readIdent(); return !!(v && v.id); },
+    hasIdentity() { if (readAcc()) return true; const v = readIdent(); return !!(v && v.id); },
 
     async profile() {
       const r = dataOr(await authed('get_profile'));
       const p = sanitizeProfile(r);
-      return p || fail(r.error || 'bad_response');
+      return p || fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
     },
 
     async setName(name) {
@@ -259,6 +324,9 @@ export function createOnline(deps) {
        * `onProgress({ state, elapsedMs, opponent? })` drives the searching UI.
        */
       async quickSearch({ mode, team, onProgress } = {}) {
+        const acc = readAcc();
+        if (acc && banActive(acc.ban)) return { ...fail('banned', { ban: acc.ban }), reason: 'banned' };
+        if (requireAccount && !acc && !online.hasIdentity()) return { ...fail('no_account'), reason: 'no_account' };
         if (!(await isAvailable())) return fail(SUPABASE_KEY || deps.mock ? 'offline' : 'not_configured');
         const r = await matchmaker.search({ mode, onProgress });
         if (!r.ok) {
@@ -431,11 +499,219 @@ export function createOnline(deps) {
       },
       get verified() { return !!adminCode; },
       forget() { adminCode = null; },
+      /** 'admin' (code verified this session) | 'owner' | 'mod' (account role) | null */
+      get level() { return adminCode ? 'admin' : staffRole(); },
+      /**
+       * Short-lived (15 min) signed token proving this account is owner/mod, bound to the host's room
+       * code / peer id (`bind`) so it cannot be replayed in another match. -> { ok, token, role, exp }
+       */
+      async matchToken(bind = null) {
+        if (!staffRole()) return fail('not_allowed');
+        if (bind != null && (typeof bind !== 'string' || !BIND_RE.test(bind))) return fail('bad_bind');
+        const r = dataOr(await authed('admin_match_token', { p_bind: bind }));
+        if (r.ok !== true || typeof r.token !== 'string' || !MATCH_TOKEN_RE.test(r.token)) return fail(r.error || 'bad_response');
+        return { ok: true, token: r.token, role: roleOf(r.role), exp: Number(r.exp) || 0 };
+      },
+      /** Server check of a peer's token. -> { ok, profileId, role, exp } | { ok:false } */
+      async verifyMatchToken(token, bind = null) {
+        if (typeof token !== 'string' || !MATCH_TOKEN_RE.test(token)) return fail('invalid');
+        if (bind != null && (typeof bind !== 'string' || !BIND_RE.test(bind))) return fail('invalid');
+        const r = dataOr(await rpc('verify_admin_token', { p_token: token, p_bind: bind }));
+        if (r.ok !== true || typeof r.profile_id !== 'string' || !UUID_RE.test(r.profile_id) || !roleOf(r.role)) return fail(r.error || 'invalid');
+        return { ok: true, profileId: r.profile_id, role: roleOf(r.role), exp: Number(r.exp) || 0 };
+      },
+    },
+
+    // ---------------------------------------------------------------- accounts (migration 002)
+    account: {
+      /**
+       * Local view, no network: { state:'none'|'account'|'banned'|'offline', id, username, role, remember, ban, pending, hasDevice }
+       * 'offline' = the player chose "play offline" and an account creation is queued.
+       */
+      current() {
+        const a = readAcc();
+        const pending = readPending();
+        const d = readIdent();
+        const hasDevice = !!(d && d.id);
+        if (a) return { state: banActive(a.ban) ? 'banned' : 'account', id: a.id, username: a.username, role: a.role, remember: a.remember, ban: banActive(a.ban) ? a.ban : null, pending: null, hasDevice };
+        return { state: pending ? 'offline' : 'none', id: null, username: null, role: null, remember: true, ban: null, pending, hasDevice };
+      },
+      /** Server check of the saved session (touches it; refreshes ban + role). -> { ok, online, ...current(), expired? } */
+      async status() {
+        const a = readAcc();
+        if (!a) return { ok: true, online: await isAvailable().catch(() => false), ...online.account.current() };
+        const r = await rpc('account_status', { p_id: a.id, p_secret: a.token });
+        if (!r.ok) { if (r.error !== 'banned') avail = { at: -Infinity, value: false, pending: null }; return { ok: false, online: false, error: r.error, ...online.account.current() }; }
+        const d = r.data && typeof r.data === 'object' ? r.data : {};
+        if (d.ok === false && d.error === 'auth') { clearAcc(); emitAcc(); return { ok: true, online: true, expired: true, ...online.account.current() }; }
+        if (d.ok !== true) return { ok: false, online: true, error: 'bad_response', ...online.account.current() };
+        writeAcc({ ...a, username: cleanStr(d.username, 16, a.username), role: roleOf(d.role), ban: d.banned === true ? parseBan(d.ban) : null });
+        avail = { at: Date.now(), value: true, pending: null };
+        emitAcc();
+        return { ok: true, online: true, ...online.account.current() };
+      },
+      /**
+       * Create an account. With an unclaimed device profile on this device it is claimed instead (keeps
+       * coins, rating, friends, listings). Offline -> queued: { ok:false, error:'offline', queued:true }.
+       */
+      async signup({ username, password, confirm, remember = true, adminCode = '', claim = null } = {}) {
+        const u = trimUsername(username);
+        const e = usernameError(u) || passwordError(password, u, confirm);
+        if (e) return fail(e);
+        const code = typeof adminCode === 'string' ? adminCode.slice(0, 128) : '';
+        if (isReservedName(u) && !code) return fail('reserved_username');
+        if (!(await isAvailable())) {
+          pendingCreds = { username: u, password, remember, adminCode: code };
+          sset(storage, PENDING_KEY, JSON.stringify({ username: u, at: Date.now() }));
+          emitAcc();
+          return { ...fail('offline'), queued: true, message: OFFLINE_SIGNUP_MSG };
+        }
+        const d = readIdent();
+        const useClaim = claim === null ? !!(d && d.id) : claim;
+        let r;
+        if (useClaim && d && d.id) {
+          r = dataOr(await rpc('claim_profile', { p_id: d.id, p_secret: d.secret, p_username: u, p_password: password, p_admin_code: code || null }));
+          if (r.ok === false && (r.error === 'auth' || r.error === 'already_has_account') && claim !== true) r = null; // device unknown / already claimed -> new account
+          else if (r.ok === false && r.error === 'banned') return fail('banned', { ban: r.ban ? parseBan(r.ban) : null });
+        } else if (claim === true) return fail('auth');
+        if (!r) r = dataOr(await rpc('signup', { p_username: u, p_password: password, p_admin_code: code || null }));
+        if (r.ok !== true) { if (r.error === 'offline' || r.error === 'timeout') avail = { at: -Infinity, value: false, pending: null }; return fail(r.error || 'bad_response'); }
+        const a = acceptSession(r, remember, u);
+        if (!a) return fail('bad_response');
+        emitAcc();
+        return { ok: true, id: a.id, username: a.username, role: a.role, claimed: !!(useClaim && d && d.id && r.id === d.id) };
+      },
+      /** Attach a username/password to this device's anonymous profile. */
+      claim(opts = {}) { return online.account.signup({ ...opts, claim: true }); },
+      async login({ username, password, remember = true } = {}) {
+        const u = trimUsername(username);
+        if (!u || typeof password !== 'string' || !password) return fail('bad_credentials');
+        const r = dataOr(await rpc('login', { p_username: u, p_password: password }));
+        if (r.ok !== true) {
+          if (r.error === 'banned') return fail('banned', { ban: parseBan(r.ban) });
+          if (r.error === 'offline' || r.error === 'timeout') avail = { at: -Infinity, value: false, pending: null };
+          return fail(r.error || 'bad_response');
+        }
+        const a = acceptSession(r, remember, u);
+        if (!a) return fail('bad_response');
+        emitAcc();
+        return { ok: true, id: a.id, username: a.username, role: a.role };
+      },
+      /** Ends the session on the server when reachable; always forgets it locally. */
+      async logout({ all = false } = {}) {
+        const a = readAcc();
+        clearAcc();
+        adminCode = null;
+        emitAcc();
+        if (a) await rpc('logout', { p_id: a.id, p_token: a.token, p_all: !!all });
+        return { ok: true };
+      },
+      /** "Play offline" on the account screen: remembers the choice (and a queued username, if any). */
+      continueOffline(username = '') {
+        const u = trimUsername(username);
+        sset(storage, PENDING_KEY, JSON.stringify({ username: usernameError(u) ? '' : u, at: Date.now() }));
+        emitAcc();
+      },
+      pending: () => readPending(),
+      /** Retry a queued offline sign-up (password kept in memory for this visit only). */
+      async retryPending() {
+        if (!pendingCreds || readAcc()) return { ok: false, error: 'nothing_pending' };
+        if (!(await isAvailable())) return fail('offline');
+        const c = pendingCreds;
+        return online.account.signup({ username: c.username, password: c.password, confirm: c.password, remember: c.remember, adminCode: c.adminCode });
+      },
+      get hasPendingCreds() { return !!pendingCreds; },
+      onChange(fn) { accListeners.add(fn); return () => accListeners.delete(fn); },
+      isReservedName,
+      validateUsername: (u) => usernameError(u),
+      validatePassword: (p, u, c) => passwordError(p, u, c),
+    },
+
+    // ---------------------------------------------------------------- moderation (owner/mod session or admin code)
+    moderation: {
+      /** 'admin' | 'owner' | 'mod' | null */
+      get role() { return adminCode ? 'admin' : staffRole(); },
+      canModerate() { return !!(adminCode || staffRole()); },
+      async search(query, code) {
+        const q = cleanStr(query, 40, '');
+        if (!q) return fail('bad_query');
+        const r = await modCall('mod_search', { p_query: q }, code);
+        return r.ok ? { ok: true, items: sanitizeList(r.items, sanitizeModPlayer, 25) } : r;
+      },
+      async player(id, code) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        const r = await modCall('mod_player', { p_player: id }, code);
+        if (!r.ok) return r;
+        const player = sanitizeModPlayer(r.player);
+        if (!player) return fail('bad_response');
+        return {
+          ok: true, player, sessions: Number.isInteger(r.sessions) ? r.sessions : 0,
+          audit: sanitizeList(r.audit, (x) => (x && typeof x.action === 'string' ? { action: cleanStr(x.action, 32, '?'), detail: cleanJson(x.detail) || {}, at: isoOr(x.at) } : null), 60),
+          listings: sanitizeList(r.listings, (x) => (x && typeof x.listingId === 'string' && UUID_RE.test(x.listingId) ? {
+            listingId: x.listingId, name: cleanStr(x.name, 32, '?'), ovr: Number(x.ovr) || 0, price: Number(x.price) || 0, status: cleanStr(x.status, 12, '?'), listedAt: isoOr(x.listedAt), soldAt: isoOr(x.soldAt),
+          } : null), 40),
+        };
+      },
+      /** until: null = permanent, else Date | ISO string | epoch ms. Cancels their listings and queue entries. */
+      async ban(id, reason, until = null, code) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        const why = cleanStr(reason, 200, '');
+        if (!why) return fail('bad_reason');
+        let iso = null;
+        if (until != null && until !== '') {
+          const t = until instanceof Date ? until.getTime() : typeof until === 'number' ? until : Date.parse(until);
+          if (!Number.isFinite(t) || t <= Date.now()) return fail('bad_until');
+          iso = new Date(t).toISOString();
+        }
+        const r = await modCall('mod_ban', { p_player: id, p_reason: why, p_until: iso }, code);
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player), listingsCancelled: Number(r.listingsCancelled) || 0 } : r;
+      },
+      async unban(id, code) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        const r = await modCall('mod_unban', { p_player: id }, code);
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : r;
+      },
+      async adjustCoins(id, delta, reason = '', code) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1e8) return fail('bad_amount');
+        const r = await modCall('mod_adjust_coins', { p_player: id, p_delta: delta, p_reason: cleanStr(reason, 120, '') }, code);
+        return r.ok ? { ok: true, coins: Number(r.coins) || 0 } : r;
+      },
+      async setRole(id, role, code) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        if (!['player', 'mod', 'owner'].includes(role)) return fail('bad_role');
+        const r = await modCall('mod_set_role', { p_player: id, p_role: role }, code);
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : r;
+      },
     },
 
     errorText,
   };
+  function staffRole() { const a = readAcc(); return a && !banActive(a.ban) && (a.role === 'owner' || a.role === 'mod') ? a.role : null; }
+  async function modCall(fn, args, code) {
+    const c = typeof code === 'string' && code ? code.slice(0, 128) : adminCode;
+    const a = staffRole() ? readAcc() : null;
+    if (!c && !a) return fail('not_admin');
+    const r = await rpc(fn, { p_code: c || null, ...args, p_id: a ? a.id : null, p_secret: a ? a.token : null });
+    if (!r.ok) { if (r.error === 'banned') setBan(r.ban); return fail(r.error, r.ban ? { ban: parseBan(r.ban) } : undefined); }
+    const d = r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' };
+    return d.ok === true ? d : fail(d.error || 'bad_response');
+  }
   return online;
+}
+
+const isoOr = (v) => (typeof v === 'string' && Number.isFinite(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : null);
+/** Moderation player row from the server -> bounded plain object. */
+export function sanitizeModPlayer(p) {
+  if (!p || typeof p !== 'object' || typeof p.id !== 'string' || !UUID_RE.test(p.id)) return null;
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : 0);
+  return {
+    id: p.id, username: typeof p.username === 'string' ? cleanStr(p.username, 16, '') || null : null, name: cleanStr(p.name, 16, 'Player'),
+    role: roleOf(p.role) || 'player', friendCode: typeof p.friendCode === 'string' && FRIEND_CODE_RE.test(p.friendCode) ? p.friendCode : null,
+    coins: n(p.coins), rating: n(p.rating), rivalsDivision: n(p.rivalsDivision), wins: n(p.wins), draws: n(p.draws), losses: n(p.losses),
+    banned: p.banned === true, banReason: typeof p.banReason === 'string' ? cleanStr(p.banReason, 200, '') : null,
+    bannedUntil: isoOr(p.bannedUntil), bannedAt: isoOr(p.bannedAt), createdAt: isoOr(p.createdAt), lastLoginAt: isoOr(p.lastLoginAt), lastSeenAt: isoOr(p.lastSeenAt),
+  };
 }
 
 // ------------------------------------------------------------------ default instance (browser)
@@ -450,6 +726,8 @@ function browserOnline() {
     rpcImpl = (fn, args) => backend.call(fn, args);
     storage = sessionStorage; // one identity per tab so two tabs can play each other
   }
+  let volatileStorage;
+  try { volatileStorage = mock ? undefined : sessionStorage; } catch { volatileStorage = undefined; }
   const net = Q.get('net');
   const netPrefs = () => { try { return JSON.parse(localStorage.getItem('pitchside.net') || '{}') || {}; } catch { return {}; } };
   return createOnline({
@@ -458,6 +736,9 @@ function browserOnline() {
     mock,
     configured: mock || !!(SUPABASE_URL && SUPABASE_KEY),
     identityKey: mock ? 'pitchside.mock.identity' : 'pitchside.online.identity',
+    accountKey: mock ? 'pitchside.mock.account' : 'pitchside.account',
+    volatileStorage,
+    requireAccount: !mock || Q.get('requireAccount') === '1', // mock keeps anonymous device profiles for dev tests
     transportKind: ['bc', 'loopback', 'peer'].includes(net) ? net : mock ? 'bc' : 'peer',
     peerCfg: () => {
       const p = netPrefs();
@@ -476,8 +757,15 @@ const unavailable = () => {
     status: async () => ({ online: false, reason: 'unreachable', message: 'Online services are unavailable.' }),
     market: { list: f, search: f, buy: f, mine: f, cancel: f, claimSales: f },
     coins: { get: f, add: f }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
-    hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, addCoins: f, verified: false, forget() {} }, errorText,
+    hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, addCoins: f, verified: false, forget() {}, level: null, matchToken: f, verifyMatchToken: f }, errorText,
     hasIdentity: () => false,
+    account: {
+      current: () => ({ state: 'none', id: null, username: null, role: null, remember: true, ban: null, pending: null, hasDevice: false }),
+      status: async () => ({ ok: false, online: false, error: 'offline', state: 'none' }), signup: f, claim: f, login: f,
+      logout: async () => ({ ok: true }), continueOffline() {}, pending: () => null, retryPending: f, hasPendingCreds: false,
+      onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
+    },
+    moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
     rivals: { status: f, claimWeekly: f },
     friends: {
       list: f, code: f, add: f, respond: f, accept: f, decline: f, remove: f, block: f, unblock: f, heartbeat: f, pollInvites: f,

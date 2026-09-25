@@ -31,7 +31,8 @@ export function rewardText(r) {
   if (r.coins) parts.push(`${fmtNum(r.coins)} coins`);
   if (r.pack) parts.push(UT.PACK_BY_ID[r.pack] ? UT.PACK_BY_ID[r.pack].name : r.pack);
   for (const pk of r.packs || []) parts.push(UT.PACK_BY_ID[pk] ? UT.PACK_BY_ID[pk].name : pk);
-  if (r.player) { const p = getPlayer(r.player); if (p) parts.push(`${p.name} (${p.ovr}${p.special ? ` ${UT.SPECIAL_NAME[p.special]}` : ''})`); }
+  const pid = r.player || (r.promoPlayer ? UT.promoRewardPid(r.promoPlayer) : null);
+  if (pid) { const p = getPlayer(pid); if (p) parts.push(`${p.name} (${p.ovr}${p.special ? ` ${UT.SPECIAL_NAME[p.special]}` : ''})`); }
   if (r.pick) parts.push(r.pick.label || 'Player Pick');
   if (r.item) parts.push(`${r.n || 1}× ${UT.ITEM_NAMES[r.item] || r.item}`);
   return parts.join(' + ') || '—';
@@ -127,8 +128,8 @@ async function runUtMatch(app, team, opp, { difficulty = 'pro', knockout = false
 }
 
 // ---------- objectives hub ----------
-export function objectivesHubView() {
-  const ui = { sec: 'daily' };
+export function objectivesHubView(sec = 'daily') {
+  const ui = { sec };
   return {
     title: 'Objectives', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
     render(main, app) {
@@ -138,7 +139,7 @@ export function objectivesHubView() {
       const tabs = h('div', { class: 'pm-tabs', role: 'tablist' }, OBJ.SECTIONS.map(([id, label]) => h('button', {
         class: `pm-tab ${ui.sec === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.sec === id ? 'true' : 'false', onclick: () => { ui.sec = id; app.refresh(); },
       }, label, count(id) ? h('span', { class: 'pm-dotbadge' }, count(id)) : null)));
-      const sub = { daily: `Resets in ${fmtCountdown(86400000 - (Date.now() % 86400000))}`, weekly: `Resets in ${fmtCountdown(msToWeekReset())}`, player: 'Challenges with specific players — plus Legend of the Game chains', season: `Season ${SS.seasonNumber()}`, milestone: 'Lifetime achievements', foundation: 'Learn every part of Ultimate Team' }[ui.sec];
+      const sub = { daily: `Resets in ${fmtCountdown(86400000 - (Date.now() % 86400000))}`, weekly: `Resets in ${fmtCountdown(msToWeekReset())}`, player: 'Challenges with specific players — plus Legend of the Game chains', season: `Season ${SS.seasonNumber()}`, promo: 'Live promo campaigns — rewards include promo players and packs', milestone: 'Lifetime achievements', foundation: 'Learn every part of Ultimate Team' }[ui.sec];
       const items = list.filter((o) => o.section === ui.sec);
       const readyAll = items.filter((o) => o.ready);
       const body = h('div', { class: 'pm-objlist' });
@@ -404,14 +405,19 @@ export function totwView() {
     title: 'Team of the Week', kicker: `Week ${weekNumber()}`, coins: true, cls: 'pm-main--wide',
     render(main, app) {
       const cards = totwCards(weekNumber());
+      const heads = cards.filter((p) => p.headliner);
+      const rest = cards.filter((p) => !p.headliner);
       const pack = UT.PACK_BY_ID.totw;
-      add(main, h('p', { class: 'pm-lead' }, `This week's standout performers — boosted In-Form cards. A new Team of the Week arrives in ${fmtCountdown(msToWeekReset())}.`),
+      add(main, h('p', { class: 'pm-lead' }, `This week's standout performers — In-Form cards boosted +3 to +8, led by ${heads.length} headliners rated 88+. A new Team of the Week arrives in ${fmtCountdown(msToWeekReset())}.`),
         h('div', { class: 'pm-btnrow' }, h('button', { class: 'pm-btn pm-btn--primary', disabled: app.ut.coins < pack.price, onclick: async () => {
           if (!(await confirmBox(app.root, 'TOTW Pack', `Buy ${pack.name} for ${fmtNum(pack.price)} coins? Guaranteed Team of the Week card.`, 'Buy & open'))) return;
           if (app.ut.coins < pack.price) return;
           app.ut.coins -= pack.price; persist(app); openPackFlow(app, 'totw');
         } }, `Buy TOTW Pack · ${fmtNum(pack.price)}`)),
-        h('div', { class: 'pm-cardgrid' }, cards.map((p) => playerCard(p, { size: 'sm', onClick: () => playerModal(app, p) }))));
+        h('h3', { class: 'pm-h' }, 'Headliners'),
+        h('div', { class: 'pm-cardgrid pm-totw-heads' }, heads.map((p) => playerCard(p, { size: 'md', onClick: () => playerModal(app, p) }))),
+        h('h3', { class: 'pm-h' }, 'Team of the Week'),
+        h('div', { class: 'pm-cardgrid' }, rest.map((p) => playerCard(p, { size: 'sm', onClick: () => playerModal(app, p) }))));
     },
   };
 }

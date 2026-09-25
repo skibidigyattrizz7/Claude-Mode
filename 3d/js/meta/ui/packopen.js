@@ -4,10 +4,12 @@ import { playerCard } from './card.js';
 import { flagSVG, crestSVG } from './art.js';
 import { NATION_BY_CODE, clubById } from '../core/data.js';
 import { isWalkout } from '../core/ut.js';
+import { PROMOS, PROMO_BY_ID } from '../core/promos.js';
 
 const FLARE = { bronze: '#a9b1bf', silver: '#e4ecf6', gold: '#ffc933', walkout: '#b44dff' };
 const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', lotg: '#ffd35a', objective: '#6ee7ff' };
 const SPECIAL_BADGE = { inform: 'In-Form', hero: 'Hero', legend: 'Classic', lotg: 'Legend of the Game', objective: 'Pathfinder' };
+for (const pr of PROMOS) { SPECIAL_FLARE[pr.id] = pr.colors[1]; SPECIAL_BADGE[pr.id] = pr.name; }
 
 class Particles {
   constructor(canvas) {
@@ -88,7 +90,8 @@ export function runPackOpening(root, opts) {
   const walk = isWalkout(best);
   const flareKey = walk ? 'walkout' : best.tier;
   const lotg = best.special === 'lotg';
-  const flare = lotg ? '#ffcc33' : FLARE[flareKey];
+  const promo = PROMO_BY_ID[best.special] && best.ovr >= 86 ? PROMO_BY_ID[best.special] : null; // promo walkout (86+)
+  const flare = lotg ? '#ffcc33' : promo ? promo.colors[1] : FLARE[flareKey];
   const accent = best.special ? SPECIAL_FLARE[best.special] : flare;
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const T = reduce ? 0.45 : 1;
@@ -124,6 +127,7 @@ export function runPackOpening(root, opts) {
     openBtn.disabled = true;
     ov.classList.add('is-shaking');
     if (lotg) ov.classList.add('is-lotg');
+    if (promo) { ov.classList.add('is-promo', `promo-${promo.id}`); ov.style.setProperty('--pa', promo.colors[0]); ov.style.setProperty('--pb', promo.colors[1]); ov.style.setProperty('--pc', promo.colors[2]); }
     packEl.classList.add('shake');
     at(1150, () => {
       phase = 'flare';
@@ -132,7 +136,15 @@ export function runPackOpening(root, opts) {
       packEl.classList.add('burst');
       particles.burst(flare, reduce ? 60 : 220, walk ? 13 : 9, null, null, walk ? [flare, accent, '#ffffff'] : null);
     });
-    if (lotg) {
+    if (promo) {
+      // Promo walkout: campaign title card in the promo colours, then the usual reveal stages
+      at(1700, () => showStage('promo'));
+      at(3500, () => showStage('flag'));
+      at(4900, () => showStage('pos'));
+      at(6100, () => showStage('club'));
+      at(7500, () => revealCard());
+      [1900, 2600, 3300, 5200, 6600].forEach((ms, k) => at(ms, () => particles.burst(promo.colors[k % 3], reduce ? 30 : 130, 10, particles.w * (0.2 + Math.random() * 0.6), particles.h * (0.2 + Math.random() * 0.4), promo.colors.concat('#ffffff'))));
+    } else if (lotg) {
       // Legend of the Game: longer walkout with a title card and fireworks
       at(1700, () => showStage('lotg'));
       at(3600, () => showStage('flag'));
@@ -152,7 +164,9 @@ export function runPackOpening(root, opts) {
     phase = kind;
     clear(stage);
     let inner;
-    if (kind === 'lotg') {
+    if (kind === 'promo') {
+      inner = h('div', { class: 'pm-wo pm-wo-promo' }, h('div', { class: 'pm-wo-promotitle' }, promo.short, h('small', null, promo.name.toUpperCase())), h('div', { class: 'pm-wo-label' }, best.moment || promo.desc));
+    } else if (kind === 'lotg') {
       inner = h('div', { class: 'pm-wo pm-wo-lotg' }, h('div', { class: 'pm-wo-lotgtitle' }, 'LEGEND', h('small', null, 'OF THE GAME')), h('div', { class: 'pm-wo-label' }, best.era === 'prime' ? 'Prime' : 'Real-world star'));
     } else if (kind === 'flag') {
       const n = NATION_BY_CODE[best.nat];
@@ -177,7 +191,7 @@ export function runPackOpening(root, opts) {
       h('div', { class: 'pm-po-revealname' }, best.name, best.special ? h('span', { class: `pm-sp-badge sp-${best.special}` }, SPECIAL_BADGE[best.special] || best.special) : null),
       cont));
     particles.burst(accent, reduce ? 50 : 200, 11, null, null, [accent, flare, '#ffffff']);
-    if (walk && !reduce) particles.fountain(accent, lotg ? 5200 : 2600, [accent, flare, '#ffffff']);
+    if (walk && !reduce) particles.fountain(accent, lotg || promo ? 5200 : 2600, promo ? promo.colors.concat('#ffffff') : [accent, flare, '#ffffff']);
     setTimeout(() => cont.focus(), 50);
   }
 

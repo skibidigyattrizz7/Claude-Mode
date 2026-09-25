@@ -46,6 +46,7 @@ export function buildBall(scene, q, track) {
   scene.add(marker);
 
   const q0 = new THREE.Quaternion(), axis = new THREE.Vector3(), prev = new THREE.Vector3();
+  const baseMat = mat;
   let has = false, spin = new THREE.Vector3();
   const side = new THREE.Vector3(), dir = new THREE.Vector3(), cam2 = new THREE.Vector3();
 
@@ -53,11 +54,17 @@ export function buildBall(scene, q, track) {
     mesh,
     update(b, dt, t, camera, opts) {
       const [px, py, pz, vx, vy, vz] = b;
-      const y = Math.max(r, py + (r - BALL_R));
+      // admin fun effects: giant / tiny / beach / bowling ball (visual size + material only)
+      const sc = Number.isFinite(opts.scale) && opts.scale > 0 ? opts.scale : 1;
+      const want = opts.mat || baseMat;
+      if (mesh.material !== want) mesh.material = want;
+      mesh.scale.setScalar(sc);
+      const rs = r * sc;
+      const y = Math.max(rs, py - BALL_R + rs);
       mesh.position.set(px, y, pz);
       // rolling rotation: ω = v × up / r on the ground; keep last spin in the air
       const onGround = py < BALL_R + 0.05;
-      if (onGround) spin.set(-vz / r, 0, vx / r);
+      if (onGround) spin.set(-vz / rs, 0, vx / rs);
       else spin.multiplyScalar(Math.exp(-dt * 0.4));
       const w = spin.length();
       if (w > 1e-4 && dt > 0) {
@@ -67,7 +74,7 @@ export function buildBall(scene, q, track) {
       }
       // blob
       const h = Math.max(0, py - BALL_R);
-      const s = r * 3.2 * (1 + h * 0.35);
+      const s = rs * 3.2 * (1 + h * 0.35);
       blob.scale.set(s, 1, s);
       blob.position.set(px + h * 0.12, 0.012, pz + h * 0.05);
       blobMat.opacity = Math.max(0.12, 0.9 - h * 0.12);
@@ -101,10 +108,10 @@ export function buildBall(scene, q, track) {
       if (opts.owner < 0 && py > 0.6 && Math.hypot(vx, vz) > 1.5) {
         // integrate gravity + quadratic drag (matches core PHYS.drag, ignores spin)
         let x = px, yy = py, z = pz, ux = vx, uy = vy, uz = vz, tl = 0;
-        const h2 = 1 / 60, k = PHYS.drag;
+        const h2 = 1 / 60, k = PHYS.drag, Gm = G * (opts.gm || 1);
         for (let i = 0; i < 300 && yy > BALL_R; i++) {
           const m = Math.sqrt(ux * ux + uy * uy + uz * uz) * k;
-          ux -= m * ux * h2; uz -= m * uz * h2; uy -= (G + m * uy) * h2;
+          ux -= m * ux * h2; uz -= m * uz * h2; uy -= (Gm + m * uy) * h2;
           x += ux * h2; yy += uy * h2; z += uz * h2; tl += h2;
         }
         if (tl > 0.3 && yy <= BALL_R) {

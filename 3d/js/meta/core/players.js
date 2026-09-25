@@ -307,7 +307,9 @@ export function getDB() {
   // V2 real players (appended last and generated without the shared RNG, so every id above is unchanged).
   // Stars play for fictional clubs (they are part of `players`, so Career Mode includes them);
   // Icons belong to the special Icons club.
-  const real = buildRealPlayers({ POS_WEIGHTS, computeOvr, marketValue, weeklyWage, tierOf });
+  const clubCounts = {};
+  for (const p of players) clubCounts[p.club] = (clubCounts[p.club] || 0) + 1;
+  const real = buildRealPlayers({ POS_WEIGHTS, computeOvr, marketValue, weeklyWage, tierOf, clubCounts });
   for (const p of real.stars) players.push(p);
   for (const p of real.icons) specials.push(p);
   // V3 real regulars: ordinary gold / rare gold cards at fictional clubs (packs, market, career, national teams).

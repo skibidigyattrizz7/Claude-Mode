@@ -9,6 +9,7 @@ import { load, save } from './storage.js';
 import { ensureTacticSets, activeTactics } from './tactics.js';
 import { totwCards } from './totw.js';
 import { weekNumber } from './calendar.js';
+import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive } from './promos.js';
 
 export const UT_KEY = 'ut';
 
@@ -28,6 +29,8 @@ export const CATEGORIES = {
   totw: { label: 'Team of the Week', test: () => false },
   lotg: { label: 'Legend of the Game', test: (p) => p.special === 'lotg' },
 };
+// V3 promo categories (one per campaign)
+for (const pr of PROMOS) CATEGORIES[`promo_${pr.id}`] = { label: pr.name, test: (p) => p.special === pr.id };
 
 let _pools = null;
 export function categoryPools() {
@@ -77,7 +80,11 @@ export const PACKS = [
     slots: [{ n: 1, odds: { lotg: 1 } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
   },
 ];
+// V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)
+for (const pr of PROMOS) PACKS.push(promoPack(pr));
 export const PACK_BY_ID = Object.fromEntries(PACKS.map((p) => [p.id, p]));
+/** Packs on sale right now (promo packs only while their campaign is live). */
+export function storePacks(week = weekNumber()) { return PACKS.filter((p) => !p.promo || isPromoLive(p.promo, week)); }
 
 /** Probability that a pack contains at least one item of the category (for the odds table). */
 export function packAtLeastOne(pack, cat) {
@@ -106,7 +113,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   return items;
 }
 export function itemScore(p) {
-  return p.ovr + ({ lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || 0) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
+  return p.ovr + ({ lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || (PROMO_BY_ID[p.special] ? 35 : 0)) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
 }
 /** 'bronze' | 'silver' | 'gold' | 'walkout' */
 export function packFlare(items) {
@@ -314,8 +321,11 @@ export const SBCS = [
   { id: 'lotg-pele', name: 'Legend: Pelé', group: 'Legends of the Game', desc: 'The King. The hardest challenge in Pitchside.',
     reqs: [{ t: 'count', v: 11 }, { t: 'rating', v: 88 }, { t: 'chem', v: 90 }], reward: { player: 'ic_pele' } },
 ];
+// V3 promo SBCs (available while the campaign is live)
+for (const pr of PROMOS) SBCS.push(...promoSbcs(pr));
 export const ITEM_NAMES = { posmod: 'Position Modifier' };
 export const SPECIAL_NAME = { lotg: 'Legend of the Game', legend: 'Classic', hero: 'Hero', inform: 'In-Form', objective: 'Pathfinder' };
+for (const pr of PROMOS) SPECIAL_NAME[pr.id] = pr.name;
 export const SBC_BY_ID = Object.fromEntries(SBCS.map((s) => [s.id, s]));
 
 export function reqLabel(r) {
@@ -368,7 +378,14 @@ export function evaluateSbc(sbc, formation, slots) {
 }
 
 export function sbcAvailable(state, sbc) {
+  if (sbc.promo && !isPromoLive(sbc.promo)) return false;
   return sbc.repeatable || !(state.sbc[sbc.id] > 0);
+}
+/** Promo SBC / objective reward -> card id (the campaign's featured cards). */
+export function promoRewardPid(r) {
+  const list = (getDB().promos || []).filter((p) => p.special === r.promo).sort((a, b) => b.ovr - a.ovr || (a.id < b.id ? -1 : 1));
+  if (!list.length) return null;
+  return r.slot === 'sbc' ? list[Math.min(1, list.length - 1)].id : list[Math.floor(list.length / 2)].id;
 }
 
 /** Consume players and grant reward. Returns reward description or throws. */
@@ -393,6 +410,7 @@ const PICK_POOLS = {
   lotg90: { label: '90+ Legend of the Game', test: (p) => p.special === 'lotg' && p.ovr >= 90 },
   inform: { label: 'In-Form', test: (p) => p.special === 'inform' && !p.totw },
 };
+for (const pr of PROMOS) PICK_POOLS[`promo_${pr.id}`] = { label: pr.name, test: (p) => p.special === pr.id };
 /** Draw pick options (avoids owned cards where possible). */
 export function drawPick(state, pool, n = 3, rng = new Rng()) {
   const all = pool === 'totw' ? totwCards(weekNumber()) : getDB().all.filter((PICK_POOLS[pool] || PICK_POOLS.gold83).test);
@@ -423,6 +441,7 @@ export function choosePick(state, pickId, pid) {
 
 export function grantReward(state, reward, from = '') {
   const out = [];
+  if (reward.promoPlayer) { const pid = promoRewardPid(reward.promoPlayer); reward = { ...reward, promoPlayer: undefined, ...(pid ? { player: pid } : { pack: `promo_${reward.promoPlayer.promo}` }) }; }
   if (reward.pick) { addPick(state, reward.pick, from); out.push(reward.pick.label || 'Player Pick'); }
   if (reward.item) { state.items = state.items || {}; state.items[reward.item] = (state.items[reward.item] || 0) + (reward.n || 1); out.push(`${reward.n || 1}× ${ITEM_NAMES[reward.item] || reward.item}`); }
   if (reward.coins) { state.coins += reward.coins; out.push(`${reward.coins.toLocaleString()} coins`); }

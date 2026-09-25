@@ -45,6 +45,9 @@
 //          kx/ky = ball contact point -1..1; ring = shrinking timing circle radius, 0 = best moment)
 //   pk     penalty shootout kicks [[1,0,..],[..]] (1 = scored) or absent
 //   wx     weather 0 clear / 1 rain / 2 snow
+//   ae     active admin fun effects [[code, target 0 home/1 away/2 both, remaining s, param], ...] or absent
+//          (codes + params: core/admin.js); adm = 1 once any admin effect was used this match
+//          fx k='admin' {e: code, tg, pi?, by?} = an admin effect was just applied (toast / banner / confetti)
 // Local-only fields added by index.js before calling renderer.render(view, dt) (not in snapshots):
 //   aim     [ {x,z} | null, {x,z} | null ]  unit aim direction of each LOCAL human's controlled
 //           player (draw a faint ground arrow), null when not applicable
@@ -73,7 +76,7 @@ export function viewFromSim(sim) {
   for (let i = 0; i < ps.length; i++) {
     const q = ps[i], o = i * PSTRIDE;
     p[o] = q.x; p[o + 1] = q.z; p[o + 2] = q.face; p[o + 3] = q.anim; p[o + 4] = q.animT; p[o + 5] = q.animP; p[o + 6] = q.speed;
-    if (q.sentOff) so |= 1 << i;
+    if (q.sentOff && !q.admWalk) so |= 1 << i;
   }
   const b = sim.ball;
   const tot = sim.stats.poss[0] + sim.stats.poss[1] || 1;
@@ -108,6 +111,8 @@ export function viewFromSim(sim) {
     sa: setPieceAim(sim),
     pk: sim.shootout ? sim.shootout.kicks : null,
     wx: sim.weather || 0,
+    ae: sim.admin && sim.admin.list.length ? sim.admin.encode() : null,
+    adm: sim.admin && sim.admin.touched ? 1 : 0,
   };
 }
 
@@ -139,6 +144,8 @@ export function encodeSnapshot(sim) {
   if (v.sa) v.sa = v.sa.map(r2); else delete v.sa;
   if (!v.pk) delete v.pk;
   if (!v.wx) delete v.wx;
+  if (!v.ae) delete v.ae;
+  if (!v.adm) delete v.adm;
   return v;
 }
 

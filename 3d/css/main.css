@@ -555,3 +555,8 @@ button.picker-card:hover { border-color: var(--acc); transform: translateY(-2px)
 }
 .join-row .btn--xl { width: auto; flex: none; align-self: auto; padding-left: 22px; padding-right: 22px; }
 .join-row .code-input { min-width: 150px; }
+/* Admin Given Codes (Settings) */
+.admincode { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line2); }
+.admincode-row { display: flex; gap: 8px; flex-wrap: nowrap; }
+.admincode-row .input { flex: 1; min-width: 0; }
+.admincode-row .btn { flex: none; }

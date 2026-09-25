@@ -632,7 +632,7 @@ async function metaScreen(which) {
   holder.append(h('div', { class: 'loading' }, h('div', { class: 'spinner' }), 'Loading…'));
   let meta;
   try { meta = await loadMeta(); } catch (e) {
-    holder.replaceChildren(screenShell('meta-err', which === 'ut' ? 'Ultimate Team' : 'Career Mode', 'Pitchside 3D',
+    holder.replaceChildren(screenShell('meta-err', which === 'ut' ? 'Ultimate Team' : which === 'admin' ? 'Admin' : 'Career Mode', 'Pitchside 3D',
       errorTile('Career & Ultimate Team could not be loaded', e, () => { nav.back(); metaScreen(which); })));
     return;
   }
@@ -640,7 +640,9 @@ async function metaScreen(which) {
   holder.replaceChildren();
   try {
     metaMount = meta.mountMeta(holder, { startMatch, startOnlineMatch, online, onExit: () => nav.back() });
-    if (which === 'ut') metaMount.showUltimateTeam(); else metaMount.showCareer();
+    if (which === 'ut') metaMount.showUltimateTeam();
+    else if (which === 'admin' && typeof metaMount.showAdmin === 'function') metaMount.showAdmin();
+    else metaMount.showCareer();
   } catch (e) {
     holder.replaceChildren(screenShell('meta-err', 'Game modes', 'Pitchside 3D', errorTile('Career & Ultimate Team failed to start', e, () => { nav.back(); metaScreen(which); })));
   }
@@ -740,6 +742,39 @@ function startInvitePolling() {
   setTimeout(tick, 1200);
 }
 
+// ------------------------------------------------------------------ Admin Given Codes (Settings)
+// The check itself lives in meta (online.admin.verify when reachable, else a local PBKDF2 check); a valid code
+// opens the Admin panel inside the meta UI.
+function adminCodesField() {
+  const input = h('input', { class: 'input', type: 'password', id: 'set-admincode', autocomplete: 'off', spellcheck: 'false', maxlength: '128', placeholder: 'Enter an admin given code', 'aria-label': 'Admin given code' });
+  const submit = h('button', { class: 'btn btn--primary', type: 'submit', id: 'set-admincode-submit' }, 'Submit');
+  const msg = h('p', { class: 'hint', id: 'set-admincode-msg', 'aria-live': 'polite' }, 'Codes are handed out by the owner.');
+  let timer = 0;
+  const lockTick = (meta) => {
+    const ms = meta.adminLockRemainingMs();
+    input.disabled = submit.disabled = ms > 0;
+    if (ms > 0) msg.textContent = `Too many attempts. Try again in ${Math.ceil(ms / 1000)} s.`;
+    else if (timer) { clearInterval(timer); timer = 0; msg.textContent = 'You can try again.'; }
+    return ms > 0;
+  };
+  const watchLock = (meta) => { if (!timer && lockTick(meta)) timer = setInterval(() => { if (!input.isConnected) { clearInterval(timer); timer = 0; return; } lockTick(meta); }, 500); };
+  loadMeta().then((meta) => { if (typeof meta.adminLockRemainingMs === 'function') watchLock(meta); }).catch(() => {});
+  const form = h('form', { class: 'row admincode-row', onsubmit: async (e) => {
+    e.preventDefault();
+    let meta;
+    try { meta = await loadMeta(); } catch { msg.textContent = 'Could not load the code checker.'; return; }
+    if (typeof meta.redeemAdminCode !== 'function' || lockTick(meta)) return;
+    input.disabled = submit.disabled = true; msg.textContent = 'Checking…';
+    const r = await meta.redeemAdminCode(input.value, online);
+    input.value = ''; input.disabled = submit.disabled = false;
+    if (!r.ok) { msg.textContent = r.error; if (r.locked) setTimeout(() => watchLock(meta), 1200); return; }
+    msg.textContent = r.level === 'temp' ? 'Temporary admin unlocked (60 minutes).' : 'Admin unlocked.';
+    toast(msg.textContent);
+    metaScreen('admin');
+  } }, input, submit);
+  return h('div', { class: 'field admincode', id: 'settings-admincode' }, h('label', { class: 'field-label', for: 'set-admincode' }, 'Admin Given Codes'), form, msg);
+}
+
 // ------------------------------------------------------------------ Settings
 function settingsScreen(tab = 'general') {
   const s = loadSettings();
@@ -755,7 +790,8 @@ function settingsScreen(tab = 'general') {
     segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
     segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
-    h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'));
+    h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
+    adminCodesField());
   const gameplay = h('div', { class: 'gp-wrap', id: 'settings-gameplay' });
   let gpPlayer = 'p1';
   const renderGameplay = () => {

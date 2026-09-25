@@ -5,8 +5,8 @@ import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
 import { loadUT, saveUT } from '../core/ut.js';
-import { INFINITE_COINS } from '../core/admin.js';
-import { adminButton } from './adminview.js';
+import { INFINITE_COINS, getAdminLevel, matchAdminLevel, refreshAccountRole } from '../core/admin.js';
+import { adminButton, adminView } from './adminview.js';
 import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
@@ -63,6 +63,8 @@ export class MetaApp {
     };
     document.addEventListener('keydown', this.onKey);
     this.reset(hubView());
+    // owner / mod accounts get admin automatically (role read from the online account; never throws)
+    if (this.online) refreshAccountRole(this.online).then((changed) => { if (changed && !this.destroyed) this.refresh(); });
   }
 
   saveSettings() { save(SETTINGS_KEY, this.settings); }
@@ -192,7 +194,7 @@ export class MetaApp {
     const busy = h('div', { class: 'pm-busy', role: 'status' }, h('div', { class: 'pm-spinner' }), h('div', null, `${home.name} vs ${away.name}`), h('small', null, 'Match in progress…'));
     this.root.appendChild(busy);
     try {
-      const res = await this.startMatchFn(home, away, opts);
+      const res = await this.startMatchFn(home, away, { ...opts, adminLevel: matchAdminLevel() });
       if (this.destroyed) return null;
       if (!res || res.abandoned) { this.toast('Match abandoned — no result recorded.', 'warn'); return null; }
       return res;
@@ -232,7 +234,9 @@ export class MetaApp {
     return { m, season, done };
   }
 
-  isAdmin() { try { return globalThis.sessionStorage.getItem('pitchside.admin.session') === '1'; } catch { return false; } }
+  isAdmin() { return !!getAdminLevel(); }
+  /** Open the Admin panel (used after a code is accepted from the main-menu Settings page). */
+  showAdmin() { this.reset(hubView()); if (this.ut) { this.push(ensureUTView(this)); } this.push(adminView()); }
   showCareer() { this.reset(hubView()); this.push(careerHomeView()); }
 }
 

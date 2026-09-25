@@ -867,3 +867,92 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-pro h3 { margin-top: 14px; }
 .pm-tile--custom { grid-column: 1 / -1; min-height: 96px !important; }
 @media (max-width: 820px) { .pm-ce-preview { grid-auto-flow: column; align-items: center; } .pm-ce-preview .pm-crest--xl { width: 80px; height: 96px; } .pm-kit svg { width: 64px; height: 75px; } }
+
+/* ================= V3: promos, TOTW headliners, Admin Given Codes ================= */
+/* promo cards: each campaign sets --pa (dark) / --pb (main) / --pc (light) and an animated foil */
+.pm-card.pm-card.is-promo { --bord: linear-gradient(135deg, var(--pc), var(--pb) 30%, var(--pa) 55%, var(--pb) 78%, var(--pc)); --face: linear-gradient(165deg, var(--pb) -30%, var(--pa) 45%, #050608 110%); --ink: var(--pc);
+  filter: drop-shadow(0 0 .45em color-mix(in srgb, var(--pb) 70%, transparent)) drop-shadow(0 .3em .6em rgba(0,0,0,.5)); }
+.pm-card.pm-card.is-promo .pc-in::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .85; mask: none; -webkit-mask: none;
+  background: linear-gradient(115deg, transparent 22%, color-mix(in srgb, var(--pc) 30%, transparent) 32%, color-mix(in srgb, var(--pb) 35%, transparent) 40%, transparent 52%), var(--pfx, none);
+  background-size: 260% 100%, auto; animation: promo-foil 4.6s linear infinite; }
+@keyframes promo-foil { from { background-position: 160% 0, 0 0; } to { background-position: -160% 0, 0 0; } }
+.pm-card.is-promo .pc-ovr { background: linear-gradient(180deg, #fff, var(--pc) 45%, var(--pb)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.pm-card.is-promo .pc-tag { color: var(--pc); letter-spacing: .08em; font-size: .46em; }
+.pm-card.is-promo .pc-name { border-bottom-color: color-mix(in srgb, var(--pb) 60%, transparent); }
+.pm-card.sp-toty { --pa: #06123a; --pb: #2f6bff; --pc: #dfe9ff; --pfx: radial-gradient(60% 40% at 50% 30%, rgba(120,170,255,.35), transparent 70%), repeating-conic-gradient(from 0deg at 50% 35%, rgba(255,255,255,.08) 0deg 5deg, transparent 5deg 15deg); }
+.pm-card.sp-tots { --pa: #032b3a; --pb: #19c3e6; --pc: #d9fbff; --pfx: repeating-linear-gradient(160deg, rgba(25,195,230,.16) 0 .12em, transparent .12em .9em); }
+.pm-card.sp-futurestars { --pa: #1c0636; --pb: #b44dff; --pc: #ffd9fb; --pfx: radial-gradient(circle at 20% 20%, rgba(255,255,255,.5) 0 .08em, transparent .1em), radial-gradient(circle at 70% 60%, rgba(255,217,251,.6) 0 .07em, transparent .09em), radial-gradient(circle at 40% 80%, rgba(255,255,255,.4) 0 .06em, transparent .08em); }
+.pm-card.sp-flashback { --pa: #2a1405; --pb: #e0892b; --pc: #ffe8c7; --pfx: repeating-radial-gradient(circle at 50% 120%, rgba(255,200,120,.14) 0 .3em, transparent .3em .9em); }
+.pm-card.sp-birthday { --pa: #3a0620; --pb: #ff4f9a; --pc: #ffe0ef; --pfx: repeating-linear-gradient(45deg, rgba(255,79,154,.18) 0 .2em, transparent .2em .7em, rgba(255,210,90,.16) .7em .9em, transparent .9em 1.4em); }
+.pm-card.sp-rttk { --pa: #021a12; --pb: #18d17b; --pc: #d7ffe9; --pfx: repeating-linear-gradient(90deg, rgba(24,209,123,.14) 0 .1em, transparent .1em 1.1em), repeating-linear-gradient(0deg, rgba(24,209,123,.1) 0 .1em, transparent .1em 1.1em); }
+.pm-card.sp-moments { --pa: #161616; --pb: #bdbdbd; --pc: #ffffff; --pfx: linear-gradient(180deg, rgba(255,255,255,.15), transparent 40%), repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 .08em, transparent .08em .4em); }
+.pm-card.sp-moments .pc-ovr { background: linear-gradient(180deg, #fff, #d9d9d9 55%, #8c8c8c); -webkit-background-clip: text; background-clip: text; }
+.pc-upg { position: absolute; left: 50%; bottom: 2.05em; transform: translateX(-50%); z-index: 4; display: flex; gap: .25em; }
+.pc-upg i { width: .6em; height: .6em; border-radius: 50%; border: .1em solid var(--pc, #d7ffe9); opacity: .7; }
+.pc-upg i.on { background: var(--pb, #18d17b); opacity: 1; box-shadow: 0 0 .3em var(--pb, #18d17b); }
+.pm-card.is-headliner { filter: drop-shadow(0 0 .55em rgba(255,200,60,.8)) drop-shadow(0 .3em .6em rgba(0,0,0,.5)); }
+.pm-card.is-headliner .pc-in::after { animation: promo-foil 3.6s linear infinite; background-size: 260% 100%; background-image: linear-gradient(115deg, transparent 25%, rgba(255,220,120,.35) 38%, transparent 52%) !important; opacity: .9 !important; }
+.pm-totw-heads { margin-bottom: 8px; }
+@media (prefers-reduced-motion: reduce) { .pm-card.is-promo .pc-in::after, .pm-card.is-headliner .pc-in::after { animation: none; } }
+
+/* promo packs */
+.pm-pack[class*="pm-pack--promo-"] { --pkink: var(--pc); --pk: linear-gradient(160deg, var(--pb) -20%, var(--pa) 45%, #050608 100%); }
+.pm-pack[class*="pm-pack--promo-"] .pk-foil { background: repeating-linear-gradient(120deg, transparent 0 1em, color-mix(in srgb, var(--pb) 40%, transparent) 1em 1.15em) !important; }
+.pm-pack--promo-toty { --pa: #06123a; --pb: #2f6bff; --pc: #dfe9ff; } .pm-pack--promo-tots { --pa: #032b3a; --pb: #19c3e6; --pc: #d9fbff; }
+.pm-pack--promo-futurestars { --pa: #1c0636; --pb: #b44dff; --pc: #ffd9fb; } .pm-pack--promo-flashback { --pa: #2a1405; --pb: #e0892b; --pc: #ffe8c7; }
+.pm-pack--promo-birthday { --pa: #3a0620; --pb: #ff4f9a; --pc: #ffe0ef; } .pm-pack--promo-rttk { --pa: #021a12; --pb: #18d17b; --pc: #d7ffe9; }
+.pm-pack--promo-moments { --pa: #161616; --pb: #bdbdbd; --pc: #ffffff; }
+.pm-storeitem.is-promo { border-color: color-mix(in srgb, var(--pb) 60%, transparent); background: linear-gradient(145deg, color-mix(in srgb, var(--pa) 85%, #0b1223), #0b1223); }
+
+/* promo hub */
+.pm-tile--promo { --tc1: #2a0f55; --tc2: #07122e; }
+.pm-tile--promo .pm-badge { background: linear-gradient(90deg, #b44dff, #2f6bff); }
+.pm-art-promo { position: absolute; inset: 0; background: radial-gradient(60% 80% at 85% 20%, rgba(180,77,255,.45), transparent 60%), radial-gradient(50% 70% at 60% 90%, rgba(47,107,255,.35), transparent 60%); }
+.pm-art-promo span { position: absolute; right: 22px; top: 14px; font-size: 54px; color: rgba(255,255,255,.85); text-shadow: 0 0 18px rgba(180,77,255,.9); }
+.pm-promo { margin-bottom: 22px; padding: 18px; border-radius: 20px; border: 1px solid color-mix(in srgb, var(--pb) 55%, transparent);
+  background: radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--pb) 35%, transparent), transparent 60%), linear-gradient(160deg, var(--pa), #070b16 80%); }
+.pm-promo-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+.pm-promo-head h2 { margin: 2px 0 4px; font: 900 clamp(26px, 5vw, 40px)/1 var(--font-display); letter-spacing: .02em; color: var(--pc); text-transform: uppercase; }
+.pm-promo-head p { margin: 0; color: var(--mut); max-width: 46ch; }
+.pm-promo-best { display: flex; gap: 8px; font-size: 9px; }
+.pm-promo-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin: 14px 0; }
+.pm-promo-side { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 16px; background: rgba(0,0,0,.25); border: 1px solid var(--line); }
+.pm-promo-side h4 { margin: 4px 0 0; font: 800 13px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--mut); }
+.pm-promo-sbc { justify-content: flex-start; text-align: left; }
+.pm-promo-grid { margin-top: 6px; }
+.pm-promo-cal { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.pm-promo-calitem { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--pb) 50%, transparent); background: linear-gradient(160deg, var(--pa), #070b16); }
+.pm-promo-calitem small { color: var(--mut); font-size: 11px; } .pm-promo-calitem b { color: var(--pc); font: 900 16px var(--font-display); letter-spacing: .04em; }
+.pm-promo-calitem.is-now { box-shadow: 0 0 0 2px var(--pb); }
+
+/* promo walkout */
+.pm-po.is-promo.is-flare .pm-po-bg { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--pb) 60%, transparent), color-mix(in srgb, var(--pa) 70%, transparent) 40%, transparent 72%), #03040a !important; }
+.pm-po.is-promo .pm-po-rays { opacity: 1; }
+.pm-wo-promotitle { font: 900 clamp(48px, 14vw, 140px)/.85 var(--font-display); letter-spacing: .04em; text-align: center; background: linear-gradient(180deg, #fff, var(--pc) 40%, var(--pb)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 30px color-mix(in srgb, var(--pb) 80%, transparent)); animation: wo-in .9s cubic-bezier(.2,.9,.3,1.25) both; }
+.pm-wo-promotitle small { display: block; font-size: .24em; letter-spacing: .28em; margin-top: .3em; }
+
+/* Admin Given Codes + admin badge */
+.pm-codes { margin-top: 18px; }
+.pm-codes-head { display: flex; align-items: center; gap: 10px; }
+.pm-codes-head h3 { margin: 0; }
+.pm-codes-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(245,197,66,.14); color: var(--gold); font-size: 18px; }
+.pm-codes-form { display: flex; gap: 8px; margin-top: 12px; }
+.pm-codes-form .pm-input { flex: 1; min-width: 0; }
+.pm-codes-msg { margin: 8px 0 0; min-height: 1.2em; }
+.pm-goodline { color: var(--good); font-size: 13px; }
+.pm-codesbtn { min-height: 40px; }
+.pm-hubfoot { justify-content: center; }
+.pm-adminbadge { order: 3; margin-left: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(245,197,66,.6); background: linear-gradient(180deg, rgba(245,197,66,.22), rgba(245,197,66,.08)); color: var(--gold); font: 900 13px var(--font-display); letter-spacing: .08em; text-transform: uppercase; }
+.pm-adminbadge.lv-temp { border-color: rgba(39,225,193,.6); color: #27e1c1; background: rgba(39,225,193,.1); }
+.pm-adminbadge.lv-mod { border-color: rgba(110,231,255,.6); color: #6ee7ff; background: rgba(110,231,255,.1); }
+.pm-adminbadge.is-owner { border-color: #f5c542; box-shadow: 0 0 14px rgba(245,197,66,.45); }
+.pm-crown { display: inline-grid; color: #f5c542; filter: drop-shadow(0 0 4px rgba(245,197,66,.8)); }
+@media (max-width: 640px) {
+  .pm-promo { padding: 14px; }
+  .pm-promo-row { grid-template-columns: 1fr; }
+  .pm-promo-best { font-size: 7px; }
+  .pm-clubhead { flex-wrap: wrap; }
+  .pm-adminbadge { margin-left: 0; order: 0; width: 100%; justify-content: center; }
+}

@@ -1,5 +1,6 @@
 // Authoritative match simulation (fixed timestep). No DOM, no THREE — runs in node for tests.
-import { PITCH, GOAL, BOX, SIX, PEN_SPOT, CIRCLE_R, BALL_R, ANIM, PHASE, SP, DIFFICULTY, halfLen, halfBase } from './constants.js';
+import { PITCH, GOAL, BOX, SIX, PEN_SPOT, CIRCLE_R, BALL_R, ANIM, PHASE, SP, DIFFICULTY, halfLen, halfBase, DT } from './constants.js';
+import { AdminFx } from './admin.js';
 import { GAMEPLAY_DEFAULTS } from '../../shared/gameplay.js';
 import { humanGround, humanThrough, humanLob, humanShot, passArrive, throughLead } from './assist.js';
 import { parsePlaystyles, ps } from './playstyles.js';
@@ -139,6 +140,7 @@ export class MatchSim {
     this.result = null;
     this.firstKickoff = 0;
     this.phaseT = 0;
+    this.admin = new AdminFx(this);
     this._setupKickoff(0);
   }
 
@@ -262,7 +264,8 @@ export class MatchSim {
   // ------------------------------------------------------------------ main step
   step(dt, inputs) {
     this.t += dt;
-    this.inputs = inputs || [null, null];
+    this.admin.step(dt);
+    this.inputs = this.admin.mapInputs(inputs || [null, null]);
     const ph = this.phase;
     if (ph === PHASE.PLAY || ph === PHASE.STOP || ph === PHASE.SETPIECE) this._clock(dt);
     switch (this.phase) {
@@ -406,7 +409,9 @@ export class MatchSim {
   }
 
   _walkOff(p) {
-    p.des.x = 0; p.des.z = 0; p.x = -1000; p.z = -1000;
+    p.des.x = 0; p.des.z = 0;
+    if (p.admWalk && this.admin.walkOff(p, DT)) return;
+    p.x = -1000; p.z = -1000;
   }
 
   // ------------------------------------------------------------------ human control
@@ -1155,7 +1160,8 @@ export class MatchSim {
     const b = this.ball, t = this.t;
     const wasSetPiece = this.phase === PHASE.SETPIECE || this.phase === PHASE.KICKOFF;
     b.owner = -1; b.inHands = false;
-    b.v = { x: vel.x, y: vel.y, z: vel.z };
+    const km = this.admin.kickMul;
+    b.v = { x: vel.x * km, y: vel.y * km, z: vel.z * km };
     b.w = { x: spin.x, y: spin.y, z: spin.z };
     b.lastTouch = p.idx; b.lastTeam = p.team; b.kicker = p.idx; b.kickT = t;
     b.intended = info.target ?? -1;
@@ -1251,9 +1257,10 @@ export class MatchSim {
         }
       }
       if (!locked) this._accelerate(p, dt, mul);
-      p.x += p.vx * dt; p.z += p.vz * dt;
+      const am = this.admin.spd[p.idx];
+      p.x += p.vx * dt * am; p.z += p.vz * dt * am;
       p.x = clamp(p.x, -HL - 5, HL + 5); p.z = clamp(p.z, -HW - 4.5, HW + 4.5);
-      const sp = Math.hypot(p.vx, p.vz);
+      const sp = Math.hypot(p.vx, p.vz) * am;
       if (!locked || (a && a.type === 'tackle')) {
         let tf = p.face;
         const hold = p.faceHoldT > t;
@@ -1375,6 +1382,7 @@ export class MatchSim {
       stepBall(b, dt, this.physEv);
       this._physFx();
     }
+    this.admin.ballGuard();
     const c = classifyBall(b.p);
     if (c) this._ballOut(c);
   }
@@ -2323,6 +2331,7 @@ export class MatchSim {
         spot = { x: this.ownGoalX(team) + d * SIX.DEPTH, z: zs * 5 };
         this._arrangeShape(opp, spot.x);
         taker = this.gk(team);
+        if (taker.sentOff) taker = this._bestTaker(team, (m) => (m.group === 'DEF' ? 10 : 0) - Math.hypot(m.x - spot.x, m.z - spot.z) * 0.1);
         this._teleport(taker, spot.x - d * 0.6, spot.z);
         for (const m of this.teamList[opp]) {
           if (this.X(team, m.x) < BOX.DEPTH + 1 && Math.abs(m.z) < BOX.HW + 1) this._teleport(m, this.wx(team, BOX.DEPTH + 2 + this.rng() * 4), m.z);
@@ -2645,6 +2654,7 @@ export class MatchSim {
     if (this.shootout && this.shootout.done) res.pens = KO.tally(this.shootout);
     if (this.half > 2) res.extraTime = true;
     if (abandoned) res.abandoned = true;
+    if (this.admin && this.admin.touched) res.admin = true; // admin fun effects were used: don't save rewards
     return res;
   }
 
@@ -2670,7 +2680,7 @@ export class MatchSim {
     for (const p of this.players) {
       const a = p.act;
       let code = ANIM.RUN, at = 0, pp = 0;
-      if (p.sentOff) code = ANIM.SENTOFF;
+      if (p.sentOff) code = p.admWalk ? ANIM.RUN : ANIM.SENTOFF;
       else if (a) {
         at = t - a.t0;
         switch (a.type) {

@@ -12,6 +12,7 @@ import { buildMarkers } from './markers.js';
 import { buildOverlays, buildNightShadows } from './extras.js';
 import { PlayerRig, KitMaterials, SharedMaterials, acquireGeometry, releaseGeometry } from './player.js';
 import { radialTexture } from './textures.js';
+import { AdminRender } from './admin.js';
 
 const STRIDE = 7;
 const HL = PITCH.HL, HW = PITCH.HW;
@@ -103,6 +104,7 @@ export function createRenderer(container, opts = {}) {
   const markers = buildMarkers(scene, track);
   const director = new CameraDirector(camera);
   const overlays = buildOverlays(scene, track);
+  const adm = new AdminRender(scene, { home, away, shadows: q.shadows });
   const nightShadows = night ? buildNightShadows(scene, stadium.towers, 25, track) : null;
   const figs = Array.from({ length: 25 }, () => ({ x: 0, z: 0, h: 1.8, vis: false }));
 
@@ -273,6 +275,9 @@ export function createRenderer(container, opts = {}) {
         net.hit(f.x ?? view.b[0], f.y ?? view.b[1], f.z ?? view.b[2], f.s ?? 15, t);
       } else if (f.k === 'post') {
         excite[0] = Math.max(excite[0], 0.35); excite[1] = Math.max(excite[1], 0.35);
+      } else if (f.k === 'admin' && !rep) {
+        adm.onFx(f, view);
+        excite[2] = Math.max(excite[2], 0.6);
       }
     }
     // a restarted simulation (new match in the same renderer) resets ids
@@ -308,13 +313,14 @@ export function createRenderer(container, opts = {}) {
         ctx.idx = i;
         r.update(p[o], p[o + 1], p[o + 2], anim, p[o + 4], p[o + 5], p[o + 6], ctx);
       }
+      const admLook = adm.update(view, rigs, dt);
       updateRefs(view, dt);
       for (let k = 0; k < 3; k++) {
         const s = refState[k];
         ctx.idx = -1;
         refs[k].update(s.x, s.z, s.face, ANIM.RUN, 0, 0, s.spd, ctx);
       }
-      ball.update(b, dt, t, camera, { owner: view.bo ?? -1, marker: view.ph === PHASE.PLAY, trail: q.trail });
+      ball.update(b, dt, t, camera, { owner: view.bo ?? -1, marker: view.ph === PHASE.PLAY, trail: q.trail, scale: admLook.scale, mat: adm.ballMaterial(admLook.look), gm: admLook.gm });
       for (const net of goals.nets) net.update(t, b);
       // crowd excitement
       for (let k = 0; k < 3; k++) excite[k] = Math.max(0, excite[k] - dt * (view.ph === PHASE.GOAL ? 0.03 : 0.12));
@@ -378,6 +384,7 @@ export function createRenderer(container, opts = {}) {
     if (destroyed) return;
     destroyed = true;
     for (const r of [...rigs, ...refs]) r.dispose();
+    adm.dispose();
     for (const k in kits) kits[k].dispose();
     shared.dispose();
     releaseGeometry();
@@ -419,7 +426,7 @@ export function createRenderer(container, opts = {}) {
     // dev-only hooks (harness / debugging)
     _debug: {
       set noDraw(v) { dbg.noDraw = v; },
-      scene, camera, renderer, rigs, refs, director, goals,
+      scene, camera, renderer, rigs, refs, director, goals, adm,
       setCameraOverride(pos, look, fov) { director.override = pos ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look), fov } : null; },
       info: () => renderer.info,
     },

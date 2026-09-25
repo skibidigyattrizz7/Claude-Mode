@@ -12,6 +12,8 @@ import { createMatchmaker, randomPeerId } from '../matchmaker.js';
 import { createOnline, online as defaultOnline } from '../services.js';
 import { LoopbackTransport } from '../transport.js';
 import { NetSession } from '../session.js';
+import { usernameError, passwordError, nameNorm, isReservedName, usernameKey, parseBan, banActive, banText, BLOCKED_WORDS } from '../accountcore.js';
+import { readFileSync } from 'node:fs';
 
 let passed = 0, failed = 0;
 const queue = [];
@@ -424,6 +426,227 @@ test('startOnlineMatch-style rivals timeout reports reason no_opponent', async (
   const r = await A.matchmaking.quickSearch({ mode: 'rivals' });
   assert.equal(r.ok, false);
   assert.equal(r.reason, 'no_opponent');
+});
+
+// ------------------------------------------------------------------ accounts + moderation (migration 002)
+const mkAcc = (be, o = {}) => createOnline({ rpc: (f, a) => be.call(f, a), storage: o.storage || memStorage(), volatileStorage: o.volatile || memStorage(), transportKind: 'loopback', requireAccount: true, matchmakerConfig: { pollMs: 5, timeoutMs: 80 }, ...o.extra });
+
+test('account rules: usernames, passwords, name filter, SQL parity', () => {
+  assert.equal(usernameError('ab'), 'bad_username');
+  assert.equal(usernameError('a'.repeat(17)), 'bad_username');
+  assert.equal(usernameError('bad-name'), 'bad_username');
+  assert.equal(usernameError('two  spaces'), 'bad_username');
+  assert.equal(usernameError('  Alice Smith  '), null); // trimmed
+  assert.equal(usernameError('Cool_Kid 9'), null);
+  assert.equal(usernameError('sh1t_lord'), 'username_not_allowed');
+  assert.equal(usernameError('The Admin'), 'username_not_allowed');
+  assert.equal(nameNorm('5hawky_F C'), 'shawkyfc');
+  assert.ok(isReservedName('Shawky Fc') && isReservedName('ShawkyFc') && isReservedName('shawky_fc') && isReservedName('5HAWKY FC'));
+  assert.ok(!isReservedName('Shawky'));
+  assert.equal(usernameKey('John Doe'), usernameKey('john_doe'));
+  assert.equal(passwordError('short'), 'weak_password');
+  assert.equal(passwordError('alice123', 'ALICE123'), 'weak_password');
+  assert.equal(passwordError('x'.repeat(73)), 'bad_password');
+  assert.equal(passwordError('longenough', 'bob', 'different'), 'password_mismatch');
+  assert.equal(passwordError('longenough', 'bob', 'longenough'), null);
+  // the SQL word filter uses the same list
+  const sql = readFileSync(new URL('../../../../supabase/migrations/002_accounts_moderation.sql', import.meta.url), 'utf8');
+  const m = /BLOCKLIST-BEGIN\s*\n\s*if v ~ '\(([^)]*)\)'/.exec(sql);
+  assert.ok(m, 'blocklist regex found in SQL');
+  assert.deepEqual(m[1].split('|'), BLOCKED_WORDS);
+  assert.ok(sql.includes("position('shawkyfc' in"), 'reserved name in SQL');
+});
+
+test('ban parsing and text', () => {
+  const b = parseBan('{"reason":"Cheating\\u0000","until":"2099-01-01T00:00:00Z"}');
+  assert.equal(b.reason, 'Cheating');
+  assert.equal(b.until, '2099-01-01T00:00:00.000Z');
+  assert.ok(banActive(b));
+  assert.ok(!banActive(parseBan({ reason: 'x', until: '2000-01-01T00:00:00Z' })));
+  assert.ok(banActive(parseBan({ reason: 'x', until: null })));
+  assert.match(banText(parseBan({ reason: 'Toxic', until: null })), /banned: Toxic \(permanent\)/);
+  assert.equal(parseBan(null).reason, 'No reason given');
+});
+
+test('accounts: signup, duplicate names, remember-me storage, login elsewhere, logout', async () => {
+  const be = createMockBackend(memoryStore());
+  const disk = memStorage(), tab = memStorage();
+  const A = mkAcc(be, { storage: disk, volatile: tab });
+  assert.equal(A.account.current().state, 'none');
+  assert.equal((await A.profile()).error, 'no_account'); // online features need an account
+  assert.equal((await A.account.signup({ username: 'Al', password: 'password1', confirm: 'password1' })).error, 'bad_username');
+  assert.equal((await A.account.signup({ username: 'Alice Smith', password: 'password1', confirm: 'nope' })).error, 'password_mismatch');
+  const r = await A.account.signup({ username: ' Alice Smith ', password: 'password1', confirm: 'password1', remember: true });
+  assert.equal(r.ok, true);
+  assert.equal(r.username, 'Alice Smith');
+  assert.ok(disk.getItem('pitchside.account') && !tab.getItem('pitchside.account'));
+  const p = await A.profile();
+  assert.equal(p.ok, true);
+  assert.equal(p.username, 'Alice Smith');
+  assert.equal(p.coins, 5000);
+  // case / space / underscore variants are the same name
+  const B = mkAcc(be);
+  assert.equal((await B.account.signup({ username: 'ALICE_SMITH', password: 'password2', confirm: 'password2' })).error, 'username_taken');
+  assert.equal((await B.account.signup({ username: 'alicesmith', password: 'password2', confirm: 'password2' })).error, 'username_taken');
+  // log in on another device, not remembered -> session only in the volatile store
+  const disk2 = memStorage(), tab2 = memStorage();
+  const A2 = mkAcc(be, { storage: disk2, volatile: tab2 });
+  assert.equal((await A2.account.login({ username: 'alice smith', password: 'wrong-one' })).error, 'bad_credentials');
+  const l = await A2.account.login({ username: 'alice smith', password: 'password1', remember: false });
+  assert.equal(l.ok, true);
+  assert.equal(l.id, r.id);
+  assert.ok(!disk2.getItem('pitchside.account') && tab2.getItem('pitchside.account'));
+  assert.equal((await A2.profile()).id, r.id);
+  // logout ends that session on the server too
+  const tok = JSON.parse(tab2.getItem('pitchside.account')).token;
+  await A2.account.logout();
+  assert.equal(A2.account.current().state, 'none');
+  assert.equal((await be.call('get_profile', { p_id: r.id, p_secret: tok })).data.error, 'auth');
+  assert.equal((await A.profile()).ok, true); // the other device stays logged in
+});
+
+test('accounts: failed-login throttle, reserved owner name needs the admin code', async () => {
+  const be = createMockBackend(memoryStore());
+  be.setAdminCode('Owner-Code-1');
+  const A = mkAcc(be);
+  await A.account.signup({ username: 'Target', password: 'password1', confirm: 'password1' });
+  const X = mkAcc(be);
+  for (let i = 0; i < 10; i++) assert.equal((await X.account.login({ username: 'target', password: `bad${i}xxxx` })).error, 'bad_credentials');
+  assert.equal((await X.account.login({ username: 'target', password: 'password1' })).error, 'too_many_attempts');
+  const O = mkAcc(be);
+  assert.equal((await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9' })).error, 'reserved_username');
+  assert.equal((await O.account.signup({ username: 'Shawky_FC', password: 'password9', confirm: 'password9', adminCode: 'wrong' })).error, 'reserved_username');
+  const ok = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'Owner-Code-1' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.role, 'owner');
+  assert.equal(O.account.current().role, 'owner');
+  assert.equal((await O.profile()).role, 'owner');
+  assert.equal((await A.setName('ShawkyFC')).error, 'name_not_allowed');
+});
+
+test('accounts: claim an existing anonymous device profile keeps its coins and id', async () => {
+  const be = createMockBackend(memoryStore());
+  const disk = memStorage();
+  const legacy = createOnline({ rpc: (f, a) => be.call(f, a), storage: disk, transportKind: 'loopback' });
+  const p0 = await legacy.profile(); // anonymous device profile (old install)
+  await be.call('admin_add_coins', {}); // no-op
+  const A = mkAcc(be, { storage: disk });
+  assert.equal(A.account.current().hasDevice, true);
+  const r = await A.account.signup({ username: 'Old Timer', password: 'password1', confirm: 'password1' });
+  assert.equal(r.ok, true);
+  assert.equal(r.claimed, true);
+  assert.equal(r.id, p0.id);
+  assert.equal((await A.profile()).coins, p0.coins);
+  const dev = JSON.parse(disk.getItem('pitchside.online.identity'));
+  assert.equal((await be.call('get_profile', { p_id: dev.id, p_secret: dev.secret })).data.error, 'auth'); // device secret retired
+});
+
+test('bans: moderation ban blocks online RPCs with the reason, login shows it, unban restores', async () => {
+  const be = createMockBackend(memoryStore());
+  be.setAdminCode('Owner-Code-1');
+  const P = mkAcc(be);
+  const pr = await P.account.signup({ username: 'Cheater', password: 'password1', confirm: 'password1' });
+  await P.market.list(card(), 1000);
+  const M = mkAcc(be);
+  const mr = await M.account.signup({ username: 'Helper', password: 'password1', confirm: 'password1' });
+  assert.equal((await M.moderation.search('cheat')).error, 'not_admin'); // players cannot moderate
+  be.setRole(mr.id, 'mod');
+  await M.account.status();
+  assert.equal(M.moderation.role, 'mod');
+  const found = await M.moderation.search('cheat');
+  assert.equal(found.items[0].id, pr.id);
+  assert.equal((await M.moderation.adjustCoins(pr.id, 500)).error, 'not_allowed'); // mods cannot change balances
+  const until = Date.now() + 86400000;
+  const b = await M.moderation.ban(pr.id, 'Market abuse', until);
+  assert.equal(b.ok, true);
+  assert.equal(b.listingsCancelled, 1);
+  const res = await P.profile();
+  assert.equal(res.error, 'banned');
+  assert.equal(res.ban.reason, 'Market abuse');
+  assert.match(res.message, /banned: Market abuse \(until/);
+  assert.equal(P.account.current().state, 'banned');
+  assert.equal((await P.market.buy(UUID)).error, 'banned'); // refused locally from the cached ban
+  assert.equal((await P.matchmaking.quickSearch({ mode: 'friendly' })).reason, 'banned');
+  const again = mkAcc(be);
+  const lg = await again.account.login({ username: 'cheater', password: 'password1' });
+  assert.equal(lg.error, 'banned');
+  assert.equal(lg.ban.reason, 'Market abuse');
+  assert.equal(again.account.current().state, 'none'); // no session for banned players
+  const det = await M.moderation.player(pr.id);
+  assert.ok(det.audit.some((a) => a.action === 'admin_ban'));
+  // admin code path (full admin) + unban
+  const Adm = mkAcc(be);
+  assert.equal(await Adm.admin.verify('Owner-Code-1'), true);
+  assert.equal((await Adm.moderation.unban(pr.id)).ok, true);
+  const st = await P.account.status();
+  assert.equal(st.state, 'account');
+  assert.equal((await P.profile()).ok, true);
+  assert.equal((await Adm.moderation.adjustCoins(pr.id, -100, 'refund')).coins, 4900);
+  // mods cannot ban owners; owners promote mods, cannot touch owners
+  const O = mkAcc(be);
+  const or = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'Owner-Code-1' });
+  assert.equal((await M.moderation.ban(or.id, 'nope')).error, 'not_allowed');
+  assert.equal((await M.moderation.setRole(pr.id, 'mod')).error, 'not_allowed');
+  assert.equal((await O.moderation.setRole(pr.id, 'mod')).player.role, 'mod');
+  assert.equal((await O.moderation.setRole(or.id, 'player')).error, 'not_allowed');
+});
+
+test('offline sign-up is queued (no password stored) and completes when online is back', async () => {
+  const be = createMockBackend(memoryStore());
+  const disk = memStorage();
+  const A = mkAcc(be, { storage: disk });
+  be.down = true;
+  const r = await A.account.signup({ username: 'Late Joiner', password: 'password1', confirm: 'password1' });
+  assert.equal(r.ok, false);
+  assert.equal(r.queued, true);
+  assert.match(r.message, /play offline now and your account will be created/);
+  assert.equal(A.account.current().state, 'offline');
+  assert.equal(A.account.pending().username, 'Late Joiner');
+  assert.ok(!disk.getItem('pitchside.account.pending').includes('password1'));
+  assert.equal((await A.account.retryPending()).error, 'offline');
+  be.down = false;
+  await sleep(20);
+  const B = mkAcc(be, { storage: disk }); // next launch: only the username survived
+  assert.equal(B.account.pending().username, 'Late Joiner');
+  assert.equal(B.hasPendingCreds, undefined);
+  const done = await (async () => { for (let i = 0; i < 30; i++) { const x = await A.account.retryPending(); if (x.error !== 'offline') return x; await sleep(10); } return null; })();
+  assert.equal(done.ok, true);
+  assert.equal(A.account.current().state, 'account');
+  assert.equal(A.account.pending(), null);
+});
+
+test('expired session logs the account out instead of creating an anonymous profile', async () => {
+  const be = createMockBackend(memoryStore());
+  const A = mkAcc(be);
+  await A.account.signup({ username: 'Sleepy', password: 'password1', confirm: 'password1' });
+  let events = 0;
+  A.account.onChange(() => { events++; });
+  const acc = A.account.current();
+  await be.call('logout', { p_id: acc.id, p_token: JSON.parse(A._peekAccount ? '{}' : '{}').token || 'x' }); // no-op
+  be.reset();
+  const r = await A.profile();
+  assert.equal(r.error, 'auth');
+  assert.equal(A.account.current().state, 'none');
+  assert.ok(events >= 1);
+  assert.equal((await A.profile()).error, 'no_account');
+});
+
+test('staff match tokens: owner/mod only, bound to the room, verified server-side', async () => {
+  const be = createMockBackend(memoryStore());
+  be.setAdminCode('Owner-Code-1');
+  const O = mkAcc(be);
+  const or = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'Owner-Code-1' });
+  const P = mkAcc(be);
+  await P.account.signup({ username: 'Plain', password: 'password1', confirm: 'password1' });
+  assert.equal((await P.admin.matchToken('ROOM1')).ok, false);
+  assert.equal(O.admin.level, 'owner');
+  const t = await O.admin.matchToken('ROOM1');
+  assert.equal(t.ok, true);
+  const v = await P.admin.verifyMatchToken(t.token, 'ROOM1');
+  assert.deepEqual([v.ok, v.profileId, v.role], [true, or.id, 'owner']);
+  assert.equal((await P.admin.verifyMatchToken(t.token, 'ROOM2')).ok, false);
+  assert.equal((await P.admin.verifyMatchToken(t.token.replace('.owner.', '.mod.'), 'ROOM1')).ok, false);
+  assert.equal((await P.admin.verifyMatchToken('garbage', 'ROOM1')).ok, false);
 });
 
 // ------------------------------------------------------------------ run
