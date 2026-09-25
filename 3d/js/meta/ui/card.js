@@ -3,10 +3,29 @@ import { h, frag, esc } from './dom.js';
 import { flagSVG, crestSVG, avatarSVG } from './art.js';
 import { cardName } from '../core/players.js';
 import { clubById } from '../core/data.js';
+import { PLAYSTYLES } from '../core/physique.js';
 
 const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
 const GK_LABELS = ['DIV', 'HAN', 'KIC', 'REF', 'SPD', 'POS'];
-const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'LEGEND' };
+const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'LEGEND', icon: 'ICON', star: 'STAR' };
+
+/** Small round PlayStyle badge (gold ring = PlayStyle+). */
+export function psBadgeHtml(ps) {
+  const d = PLAYSTYLES[ps.id];
+  if (!d) return '';
+  return `<i class="ps ps-${d[1]}${ps.plus ? ' plus' : ''}" title="${esc(d[0])}${ps.plus ? '+' : ''}">${d[2]}</i>`;
+}
+
+/** Detail list of PlayStyles with names and descriptions. */
+export function playstyleList(p) {
+  const list = (p.playstyles || []).filter((x) => PLAYSTYLES[x.id]);
+  return h('div', { class: 'pm-pslist' },
+    h('div', { class: 'pm-lbl' }, 'PlayStyles'),
+    list.length ? list.map((x) => {
+      const d = PLAYSTYLES[x.id];
+      return h('div', { class: 'pm-psrow' }, frag(psBadgeHtml(x)), h('div', null, h('b', null, d[0] + (x.plus ? '+' : '')), h('small', { class: 'pm-dim' }, d[3])));
+    }) : h('small', { class: 'pm-dim' }, 'None'));
+}
 
 export function cardClasses(p) {
   const c = ['pm-card', `t-${p.tier}`];
@@ -29,6 +48,7 @@ export function playerCard(p, opts = {}) {
   const labels = p.pos === 'GK' ? GK_LABELS : STAT_LABELS;
   const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
+  const ps = size === 'xs' ? '' : (p.playstyles || []).slice(0, 4).map(psBadgeHtml).join('');
   const html = `<div class="${cls.join(' ')}" data-pid="${esc(p.id)}">
     <div class="pc-in">
       <div class="pc-shine"></div>
@@ -39,6 +59,7 @@ export function playerCard(p, opts = {}) {
         ${crestSVG(club, 'pc-crest')}
       </div>
       ${avatarSVG(p, 'pc-avatar')}
+      ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
       <div class="pc-name">${esc(cardName(p))}</div>
       ${statsHtml}
       ${p.special ? `<div class="pc-tag">${SPECIAL_LABEL[p.special]}</div>` : ''}

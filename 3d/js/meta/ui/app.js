@@ -4,7 +4,20 @@ import { load, save } from '../core/storage.js';
 import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
-import { loadUT } from '../core/ut.js';
+import { loadUT, saveUT } from '../core/ut.js';
+import { INFINITE_COINS } from '../core/admin.js';
+import { adminButton } from './adminview.js';
+
+/** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
+export function coinNum(r) {
+  if (typeof r === 'number') return r;
+  if (r && typeof r === 'object') { const v = r.coins ?? r.balance; return typeof v === 'number' ? v : NaN; }
+  return NaN;
+}
+/** Await a promise-returning online call; never throws. */
+export async function safeCall(fn, fallback = null) {
+  try { const r = await fn(); return r === undefined ? fallback : r; } catch { return fallback; }
+}
 
 const SETTINGS_KEY = 'meta.settings';
 
@@ -18,10 +31,14 @@ function ensureCss(root) {
 }
 
 export class MetaApp {
-  constructor(container, { startMatch, onExit = null } = {}) {
+  constructor(container, { startMatch, startOnlineMatch = null, online = null, onExit = null } = {}) {
     this.container = container;
     this.startMatchFn = startMatch;
+    this.startOnlineMatchFn = typeof startOnlineMatch === 'function' ? startOnlineMatch : null;
+    this.online = online && typeof online === 'object' ? online : null;
     this.onExit = onExit;
+    /** UT coin wallet: 'local' (saved with the club) or 'online' (server balance via online.coins). */
+    this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 };
     this.root = h('div', { class: 'pm-root' });
     ensureCss(this.root);
     this.top = h('header', { class: 'pm-top' });
@@ -85,11 +102,76 @@ export class MetaApp {
     add(this.top, 
       canBack ? h('button', { class: 'pm-back', 'aria-label': 'Back', onclick: () => this.pop() }, h('span', { 'aria-hidden': 'true' }, '‹'), h('span', { class: 'pm-back-t' }, 'Back')) : h('div', { class: 'pm-logo-sm' }, 'P'),
       h('div', { class: 'pm-top-title' }, v.kicker ? h('div', { class: 'pm-kicker' }, v.kicker) : null, h('h1', null, v.title || 'Pitchside')),
-      h('div', { class: 'pm-top-right' }, v.coins && this.ut ? h('div', { class: 'pm-coins', title: 'Coins' }, h('i', { 'aria-hidden': 'true' }), fmtNum(this.ut.coins)) : null, v.topRight ? v.topRight(this) : null),
+      h('div', { class: 'pm-top-right' }, v.coins && this.ut ? this.coinChip() : null, v.topRight ? v.topRight(this) : null),
     );
   }
 
   toast(msg, kind) { toast(this.root, msg, kind); }
+
+  // ---- UT coins (local vs online wallet) ----
+  coinChip() {
+    const inf = this.ut.admin && this.ut.admin.infinite;
+    const online = this.wallet.mode === 'online';
+    return h('div', { class: `pm-coins ${online ? 'is-online' : ''}`, title: online ? 'Online coin balance (server)' : 'Local coin balance (this device)' },
+      h('i', { 'aria-hidden': 'true' }), inf ? '∞' : fmtNum(this.ut.coins), h('small', { class: 'pm-coins-src' }, online ? 'Online' : 'Local'));
+  }
+  topRefresh() { const v = this.stack[this.stack.length - 1]; if (v) this.renderTop(v); }
+  coinSourceLabel() { return this.wallet.mode === 'online' ? 'online balance' : 'local balance'; }
+
+  async onlineAvailable() {
+    if (!this.online || typeof this.online.available !== 'function') return false;
+    return !!(await safeCall(() => this.online.available(), false));
+  }
+
+  /** Switch the UT coin display to the online balance when the backend is reachable. */
+  async initWallet(force = false) {
+    const s = this.ut;
+    if (!s || (this.wallet.checked && !force)) return this.wallet.mode;
+    this.wallet.checked = true;
+    if (!this.online || !this.online.coins || !(await this.onlineAvailable())) return this.wallet.mode;
+    const bal = coinNum(await safeCall(() => this.online.coins.get()));
+    if (!Number.isFinite(bal) || this.destroyed || this.ut !== s) return this.wallet.mode;
+    if (this.wallet.mode !== 'online') this.wallet.local = s.coins;
+    this.wallet.mode = 'online';
+    this.wallet.synced = bal;
+    if (!(s.admin && s.admin.infinite)) s.coins = bal;
+    this.topRefresh();
+    return 'online';
+  }
+
+  /** Re-read the server balance (after market buys / claims / online matches). */
+  async refreshOnlineCoins() {
+    if (this.wallet.mode !== 'online' || !this.ut) return;
+    await this.wallet.pending;
+    const bal = coinNum(await safeCall(() => this.online.coins.get()));
+    if (!Number.isFinite(bal) || !this.ut) return;
+    this.wallet.synced = bal;
+    if (!(this.ut.admin && this.ut.admin.infinite)) this.ut.coins = bal;
+    this.topRefresh();
+  }
+
+  /** Persist UT; in online mode coin changes since the last sync are sent to the server. */
+  saveUT() {
+    const s = this.ut;
+    if (!s) return false;
+    const w = this.wallet;
+    if (s.admin && s.admin.infinite) s.coins = INFINITE_COINS;
+    else if (w.mode === 'online') {
+      const delta = Math.round(s.coins - w.synced);
+      if (delta) {
+        w.synced = s.coins;
+        w.inflight++;
+        w.pending = w.pending.then(async () => {
+          const r = await safeCall(() => this.online.coins.add(delta, delta > 0 ? 'ut-earn' : 'ut-spend'), { ok: false });
+          w.inflight--;
+          if (!r || r.ok === false) { this.toast('Online coin sync failed — balance refreshed from server.', 'warn'); const b = coinNum(await safeCall(() => this.online.coins.get())); if (Number.isFinite(b) && this.ut) { w.synced = b; this.ut.coins = b; } }
+          else { const b = coinNum(r); if (Number.isFinite(b) && w.inflight === 0 && this.ut) { w.synced = b; this.ut.coins = b; } }
+          this.topRefresh();
+        });
+      }
+    }
+    return saveUT(w.mode === 'online' ? { ...s, coins: w.local ?? 0 } : s);
+  }
 
   // ---- matches ----
   /** Calls the host startMatch. Returns result, or null when abandoned/failed. */
@@ -121,6 +203,7 @@ export class MetaApp {
   }
 
   showUltimateTeam() { this.reset(hubView()); this.push(ensureUTView(this)); }
+  isAdmin() { try { return globalThis.sessionStorage.getItem('pitchside.admin.session') === '1'; } catch { return false; } }
   showCareer() { this.reset(hubView()); this.push(careerHomeView()); }
 }
 
@@ -135,7 +218,7 @@ export function hubView() {
         h('button', { class: 'pm-tile pm-tile--hero pm-tile--career', onclick: () => app.push(careerHomeView()) },
           h('div', { class: 'pm-tile-art pm-art-career', 'aria-hidden': 'true' }, h('span', null, 'CM')),
           h('div', { class: 'pm-tile-body' }, h('div', { class: 'pm-kicker' }, 'Manage a club'), h('h2', null, 'Career Mode'), h('p', null, 'Seasons, transfers, youth, promotion and glory.'))),
-      ));
+      ), h('div', { class: 'pm-hubfoot' }, adminButton(app)));
     },
   };
 }

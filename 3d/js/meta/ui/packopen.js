@@ -6,7 +6,8 @@ import { NATION_BY_CODE, clubById } from '../core/data.js';
 import { isWalkout } from '../core/ut.js';
 
 const FLARE = { bronze: '#a9b1bf', silver: '#e4ecf6', gold: '#ffc933', walkout: '#b44dff' };
-const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300' };
+const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', icon: '#fff6d8', star: '#ffd54a' };
+const SPECIAL_BADGE = { inform: 'In-Form', hero: 'Hero', legend: 'Legend', icon: 'Icon', star: 'Star' };
 
 class Particles {
   constructor(canvas) {
@@ -86,7 +87,7 @@ export function runPackOpening(root, opts) {
   const best = players[0].p;
   const walk = isWalkout(best);
   const flareKey = walk ? 'walkout' : best.tier;
-  const flare = FLARE[flareKey];
+  const flare = best.special === 'icon' ? '#ffe7a3' : best.special === 'star' ? '#ffcf3d' : FLARE[flareKey];
   const accent = best.special ? SPECIAL_FLARE[best.special] : flare;
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const T = reduce ? 0.45 : 1;
@@ -121,6 +122,7 @@ export function runPackOpening(root, opts) {
     phase = 'shake';
     openBtn.disabled = true;
     ov.classList.add('is-shaking');
+    if (best.special === 'icon') ov.classList.add('is-icon');
     packEl.classList.add('shake');
     at(1150, () => {
       phase = 'flare';
@@ -161,7 +163,7 @@ export function runPackOpening(root, opts) {
     const cont = h('button', { class: 'pm-btn pm-btn--primary pm-po-continue', onclick: () => toGrid() }, 'Continue');
     stage.appendChild(h('div', { class: 'pm-po-center pm-po-revealwrap' },
       h('div', { class: 'pm-po-glow' }), card,
-      h('div', { class: 'pm-po-revealname' }, best.name, best.special ? h('span', { class: `pm-sp-badge sp-${best.special}` }, best.special === 'inform' ? 'In-Form' : best.special) : null),
+      h('div', { class: 'pm-po-revealname' }, best.name, best.special ? h('span', { class: `pm-sp-badge sp-${best.special}` }, SPECIAL_BADGE[best.special] || best.special) : null),
       cont));
     particles.burst(accent, reduce ? 50 : 200, 11, null, null, [accent, flare, '#ffffff']);
     if (walk && !reduce) particles.fountain(accent, 2600, [accent, flare, '#ffffff']);

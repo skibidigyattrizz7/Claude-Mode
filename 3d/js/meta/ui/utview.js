@@ -10,13 +10,17 @@ import { getPlayer, quickSellValue, utPrice } from '../core/players.js';
 import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, clubById, POS_GROUP, POSITIONS } from '../core/data.js';
 import { resolveKitClash, gkKitFor } from '../core/teams.js';
 import { Rng } from '../core/rng.js';
+import { marketView, playerMarketListModal } from './marketview.js';
+import { onlineSeasonsTile } from './onlineview.js';
+import { playstyleList } from './card.js';
 
-const persist = (app) => UT.saveUT(app.ut);
+const persist = (app) => app.saveUT();
 const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary } });
 const DIFF_LABEL = { amateur: 'Amateur', pro: 'Professional', world: 'World Class', legendary: 'Legendary' };
 
 export function ensureUTView(app) {
   if (!app.ut) app.ut = UT.loadUT();
+  if (app.ut) app.initWallet();
   return app.ut ? utHomeView() : onboardView();
 }
 
@@ -58,7 +62,9 @@ function onboardView() {
           h('button', {
             class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
               app.ut = UT.createUTState({ clubName: st.name, short: st.short, primary: st.c1, secondary: st.c2 });
+              app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 };
               persist(app);
+              app.initWallet();
               app.replace(utHomeView());
               app.toast('Club created! Head to the Store to open your welcome packs.', 'good');
             },
@@ -88,7 +94,8 @@ export function utHomeView() {
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Rating'), h('b', null, info.rating || '–')),
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Chem'), h('b', null, info.chem.scaled)),
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Club'), h('b', null, s.club.length)),
-              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`))))),
+              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`))),
+            h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
         h('div', { class: 'pm-tiles' },
           tile('pm-tile--wide pm-tile--squad', 'Squad', `${s.squad.formation} · Rating ${info.rating} · Chemistry ${info.chem.scaled}`, () => app.push(squadView()), info.complete ? null : '!',
             h('div', { class: 'pm-tile-art pm-art-pitch', 'aria-hidden': 'true' })),
@@ -98,7 +105,8 @@ export function utHomeView() {
           tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView())),
           tile('pm-tile--obj', 'Objectives', 'Earn coins & packs', () => app.push(objectivesView()), claimable ? `${claimable}` : null),
           tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView())),
-          tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Buy & sell players', () => app.push(marketView())),
+          tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null),
+          onlineSeasonsTile(app),
         ));
     },
   };
@@ -109,8 +117,9 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
   const n = NATION_BY_CODE[p.nat];
   const c = clubById(p.club);
   const facts = [
+    ['Card', p.special ? `${UT.SPECIAL_NAME[p.special]}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' (rare)' : ''}`],
     ['Nation', n ? n.name : p.nat], ['Club', c ? c.name : p.club], ['League', leagueName(p.league)],
-    ['Age', p.age], ['Height', `${p.height} cm`], ['Foot', p.foot === 'L' ? 'Left' : 'Right'],
+    ['Age', p.age], ['Height', `${(p.height / 100).toFixed(2)} m`], ['Weight', `${p.weight || 75} kg`], ['Preferred foot', p.foot === 'L' ? 'Left' : 'Right'],
     ['Weak foot', '★'.repeat(p.wf) + '☆'.repeat(5 - p.wf)], ['Skill moves', '★'.repeat(p.sm) + '☆'.repeat(5 - p.sm)],
     ['Work rates', `${p.wr[0]} / ${p.wr[1]}`], ['Positions', [p.pos, ...(p.alt || [])].join(', ')],
     ['Potential', p.pot],
@@ -119,7 +128,9 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
   return modal(app.root, {
     title: p.name, wide: true, className: 'pm-pmodal',
     body: h('div', { class: 'pm-pdetail' }, playerCard(p, { size: 'md' }),
-      h('dl', { class: 'pm-facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, String(v))]))),
+      h('div', { class: 'pm-pdetail-info' },
+        h('dl', { class: 'pm-facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])),
+        playstyleList(p))),
     actions: actions.concat([{ label: 'Close' }]),
   });
 }
@@ -156,14 +167,14 @@ function clubView() {
         const q = f.q.trim().toLowerCase();
         let list = UT.clubPlayers(s).filter((p) => (!q || p.name.toLowerCase().includes(q))
           && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group)
-          && (!f.tier || (f.tier === 'special' ? !!p.special : f.tier === 'rare' ? p.rare : p.tier === f.tier && !p.special))
+          && (!f.tier || (f.tier === 'special' ? !!p.special : ['icon', 'star'].includes(f.tier) ? p.special === f.tier : f.tier === 'rare' ? p.rare : p.tier === f.tier && !p.special))
           && (!f.league || p.league === f.league));
         const sorters = { ovr: (a, b) => b.ovr - a.ovr, name: (a, b) => a.name.localeCompare(b.name), pos: (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr, value: (a, b) => utPrice(b) - utPrice(a), nation: (a, b) => a.nat.localeCompare(b.nat) || b.ovr - a.ovr, league: (a, b) => a.league.localeCompare(b.league) || b.ovr - a.ovr };
         list.sort(sorters[f.sort]);
         count.textContent = `${list.length} of ${s.club.length} players`;
         const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
         for (const p of list) {
-          const tag = inSquad.has(p.id) ? h('div', { class: 'pm-cardtag' }, s.squad.slots.includes(p.id) ? 'XI' : 'SUB') : null;
+          const tag = inSquad.has(p.id) ? h('div', { class: 'pm-cardtag' }, s.squad.slots.includes(p.id) ? 'XI' : 'SUB') : (s.untradeable || []).includes(p.id) ? h('div', { class: 'pm-cardtag pm-cardtag--ut', title: 'Untradeable' }, 'UT') : null;
           grid.appendChild(playerCard(p, { size: 'sm', extra: tag, onClick: () => clubPlayerModal(app, p, draw) }));
         }
         if (!list.length) grid.appendChild(h('p', { class: 'pm-empty' }, 'No players match these filters.'));
@@ -174,8 +185,8 @@ function clubView() {
         h('div', { class: 'pm-filterbar' },
           search,
           select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),
-          select([['', 'All tiers'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special']], f.tier, (v) => { f.tier = v; draw(); }, { 'aria-label': 'Tier' }),
-          select([['', 'All leagues'], ...LEAGUES.map((l) => [l.id, l.name]), ['LEG', 'Legends'], ['HER', 'Heroes']], f.league, (v) => { f.league = v; draw(); }, { 'aria-label': 'League' }),
+          select([['', 'All tiers'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special'], ['icon', 'Icons'], ['star', 'Stars']], f.tier, (v) => { f.tier = v; draw(); }, { 'aria-label': 'Tier' }),
+          select([['', 'All leagues'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Icons'], ['LEG', 'Legends'], ['HER', 'Heroes']], f.league, (v) => { f.league = v; draw(); }, { 'aria-label': 'League' }),
           select([['ovr', 'Sort: Rating'], ['name', 'Sort: Name'], ['pos', 'Sort: Position'], ['value', 'Sort: Value'], ['nation', 'Sort: Nation'], ['league', 'Sort: League']], f.sort, (v) => { f.sort = v; draw(); }, { 'aria-label': 'Sort' }),
           count),
         grid);
@@ -187,10 +198,12 @@ function clubView() {
 function clubPlayerModal(app, p, redraw) {
   const s = app.ut;
   const qs = quickSellValue(p);
+  const untradeable = (s.untradeable || []).includes(p.id);
   playerModal(app, p, {
-    extra: [['Market price', `${fmtNum(utPrice(p))} coins`], ['Quick sell', `${fmtNum(qs)} coins`]],
+    extra: [['Market price', `${fmtNum(utPrice(p))} coins`], ['Quick sell', `${fmtNum(qs)} coins`], ['Tradeable', untradeable ? 'No (untradeable)' : 'Yes']],
     actions: [
-      { label: 'List on market', onClick: () => { setTimeout(() => sellModal(app, p, redraw), 0); } },
+      { label: 'List on Player Market', disabled: untradeable, onClick: () => { setTimeout(() => playerMarketListModal(app, p, redraw), 0); } },
+      { label: 'Sell to AI Market', disabled: untradeable, onClick: () => { setTimeout(() => sellModal(app, p, redraw), 0); } },
       { label: `Quick sell +${fmtNum(qs)}`, danger: true, onClick: () => {
         setTimeout(async () => {
           if (await confirmBox(app.root, 'Quick sell', `Quick sell ${p.name} for ${fmtNum(qs)} coins?`, 'Quick sell', true)) {
@@ -202,13 +215,13 @@ function clubPlayerModal(app, p, redraw) {
   });
 }
 
-function sellModal(app, p, redraw) {
+export function sellModal(app, p, redraw) {
   const s = app.ut;
   const fair = utPrice(p);
   const input = h('input', { class: 'pm-input', type: 'number', min: '100', step: '50', value: String(fair), 'aria-label': 'Asking price' });
   modal(app.root, {
-    title: `List ${p.name}`,
-    body: h('div', { class: 'pm-form' }, h('p', null, `Estimated market value: ${fmtNum(fair)} coins. A 5% market tax applies. Higher prices are less likely to sell.`), h('label', null, h('span', null, 'Price'), input)),
+    title: `AI Market — sell ${p.name}`,
+    body: h('div', { class: 'pm-form' }, h('p', { class: 'pm-dim' }, 'The AI Market is simulated (computer traders) and separate from the online Player Market.'), h('p', null, `Estimated value: ${fmtNum(fair)} coins. A 5% tax applies. Higher prices are less likely to find an AI buyer.`), h('label', null, h('span', null, 'Price'), input)),
     actions: [{ label: 'Cancel' }, { label: 'List', primary: true, onClick: () => {
       const price = Math.max(100, Math.round(Number(input.value) || fair));
       const r = UT.sellOnMarket(s, p.id, price);
@@ -310,7 +323,7 @@ function rewardText(r) {
   const parts = [];
   if (r.coins) parts.push(`${fmtNum(r.coins)} coins`);
   if (r.pack) parts.push(UT.PACK_BY_ID[r.pack].name);
-  if (r.player) { const p = getPlayer(r.player); parts.push(`${p.name} (${p.ovr} Hero)`); }
+  if (r.player) { const p = getPlayer(r.player); parts.push(`${p.name} (${p.ovr} ${UT.SPECIAL_NAME[p.special] || ''})`.trim()); }
   return parts.join(' + ');
 }
 
@@ -443,52 +456,5 @@ async function startBattle(app, opp) {
     extra: h('section', { class: 'pm-rewards' }, h('div', null, h('span', { class: 'pm-dim' }, 'Coins'), h('b', null, `+${fmtNum(r.coins)}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Points'), h('b', null, `+${r.points}`)), h('div', null, h('span', { class: 'pm-dim' }, 'Rank'), h('b', null, UT.rankFor(s.battles.points).name))),
     onContinue: (a) => a.pop(),
   }));
-}
-
-// ---------- transfer market ----------
-function marketView() {
-  const f = { name: '', pos: '', tier: '', nat: '', league: '', minOvr: 0, maxOvr: 99, maxPrice: 0, seed: 0 };
-  let results = null;
-  return {
-    title: 'Transfer Market', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
-    render(main, app) {
-      const s = app.ut;
-      const list = h('div', { class: 'pm-mktlist' });
-      const drawList = () => {
-        clear(list);
-        if (!results) { list.appendChild(h('p', { class: 'pm-empty' }, 'Set your filters and search the market.')); return; }
-        if (!results.length) { list.appendChild(h('p', { class: 'pm-empty' }, 'No listings found. Try broader filters.')); return; }
-        for (const l of results) {
-          const p = getPlayer(l.pid);
-          const owned = s.club.includes(l.pid);
-          list.appendChild(h('div', { class: 'pm-mktrow' },
-            playerCard(p, { size: 'xs' }),
-            h('div', { class: 'pm-mkt-info' }, h('b', null, p.name), h('span', { class: 'pm-dim' }, `${p.pos} · ${NATION_BY_CODE[p.nat]?.name} · ${leagueName(p.league)}`), h('small', { class: 'pm-dim' }, `Ends in ${l.mins} min`)),
-            h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(l.price)),
-            h('button', {
-              class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: owned || s.coins < l.price,
-              onclick: async () => {
-                if (!(await confirmBox(app.root, 'Buy Now', `Buy ${p.name} for ${fmtNum(l.price)} coins?`, 'Buy'))) return;
-                try { UT.buyListing(s, l); persist(app); app.toast(`${p.name} joined your club!`, 'good'); results = results.filter((x) => x !== l); app.renderTop(app.stack[app.stack.length - 1]); drawList(); } catch (e) { app.toast(e.message, 'bad'); }
-              },
-            }, owned ? 'Owned' : 'Buy Now')));
-        }
-      };
-      const name = h('input', { class: 'pm-input', type: 'search', placeholder: 'Player name', value: f.name, 'aria-label': 'Player name' });
-      name.addEventListener('input', () => { f.name = name.value; });
-      const num = (key, label, min, max) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', min: String(min), max: String(max), value: String(f[key] || ''), placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
-      add(main, 
-        h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); f.seed++; results = UT.marketSearch({ ...f, maxOvr: f.maxOvr || 99 }, `${Date.now() >> 16}-${f.seed}`); drawList(); } },
-          name,
-          select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),
-          select([['', 'Any quality'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['rare', 'Rare'], ['special', 'Special']], f.tier, (v) => { f.tier = v; }, { 'aria-label': 'Quality' }),
-          select([['', 'Any nation'], ...NATIONS.map((n) => [n.code, n.name])], f.nat, (v) => { f.nat = v; }, { 'aria-label': 'Nation' }),
-          select([['', 'Any league'], ...LEAGUES.map((l) => [l.id, l.name])], f.league, (v) => { f.league = v; }, { 'aria-label': 'League' }),
-          num('minOvr', 'Min OVR', 40, 99), num('maxOvr', 'Max OVR', 40, 99), num('maxPrice', 'Max price', 0, 10000000),
-          h('button', { class: 'pm-btn pm-btn--primary', type: 'submit' }, 'Search')),
-        list);
-      drawList();
-    },
-  };
 }
 

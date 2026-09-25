@@ -1,5 +1,5 @@
 // Procedural art: nation flags, club crests, player avatars and pack art (SVG strings; no images).
-import { NATION_BY_CODE, SKIN, clubById } from '../core/data.js';
+import { NATION_BY_CODE, SKIN, SKIN_TONES, clubById } from '../core/data.js';
 import { contrastColor, luminance } from '../core/teams.js';
 import { esc } from './dom.js';
 
@@ -62,6 +62,9 @@ export function crestSVG(club, cls = 'pm-crest') {
   if (club.id === 'LEG') {
     return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Legends"><path d="${shield}" fill="#F4E8C1" stroke="#B8860B" stroke-width="2.4"/>${star(20, 22, 11, '#B8860B')}</svg>`;
   }
+  if (club.id === 'ICN') {
+    return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Icons"><path d="${shield}" fill="#FFFDF4" stroke="#C9A227" stroke-width="2.4"/><path d="M11 30l3-12 6 7 6-7 3 12z" fill="#C9A227"/><circle cx="14" cy="17" r="1.6" fill="#C9A227"/><circle cx="20" cy="23" r="1.6" fill="#C9A227"/><circle cx="26" cy="17" r="1.6" fill="#C9A227"/><rect x="11" y="31.5" width="18" height="2.6" fill="#C9A227"/></svg>`;
+  }
   if (club.id === 'HER') {
     return `<svg class="${cls}" viewBox="0 0 40 48" role="img" aria-label="Heroes"><path d="${shield}" fill="#3A1C71" stroke="#27E1C1" stroke-width="2.4"/><text x="20" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="#27E1C1" font-family="Arial Black,Arial,sans-serif">H</text></svg>`;
   }
@@ -92,13 +95,13 @@ export function avatarSVG(p, cls = 'pm-avatar') {
   const region = nat ? nat.region : 'en';
   const skins = SKIN[region] || SKIN.en;
   const look = p.look ?? 0;
-  const skin = skins[look % skins.length];
+  const skin = Number.isInteger(p.skin) && SKIN_TONES[p.skin] ? SKIN_TONES[p.skin] : skins[look % skins.length];
   const hairCols = HAIR_COLS[region] || ['#1a1310', '#2a1d15', '#3b2a1e'];
   const hair = hairCols[(look >> 3) % hairCols.length];
   const club = clubById(p.club);
   const shirt = club ? club.colors.primary : '#334';
   const trim = club ? club.colors.secondary : '#99a';
-  const style = (look >> 5) % 7;
+  const style = Number.isInteger(p.hair) ? p.hair % 7 : (look >> 5) % 7;
   let hairPath = '';
   if (style === 0) hairPath = `<path d="M18 22c0-9 6-13 12-13s12 4 12 13c-2-4-6-6-12-6s-10 2-12 6z" fill="${hair}"/>`;
   else if (style === 1) hairPath = `<path d="M18.5 21c1-7 5.5-10.5 11.5-10.5S40.5 14 41.5 21c-3-3-7-4-11.5-4s-8.5 1-11.5 4z" fill="${hair}" opacity=".85"/>`;
