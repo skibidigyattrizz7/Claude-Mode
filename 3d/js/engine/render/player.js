@@ -2,7 +2,7 @@
 // Model space: faces +z, player's left = +x, y up. Units: metres.
 import * as THREE from '../../../vendor/three.module.min.js';
 import { ANIM } from '../core/constants.js';
-import { shirtTexture } from './textures.js';
+import { shirtTexture, luminance as luma } from './textures.js';
 
 // ---------------------------------------------------------------- dimensions
 const THIGH = 0.42, SHIN = 0.42, FOOT_H = 0.075, HIP_DY = -0.06, HIP_DX = 0.092;
@@ -147,37 +147,30 @@ export function releaseGeometry() {
   if (GEO_REFS <= 0 && GEO) {
     for (const k in GEO) { const v = GEO[k]; if (Array.isArray(v)) v.forEach((x) => x.dispose()); else v.dispose(); }
     GEO = null; GEO_REFS = 0;
+    for (const g of MERGED.values()) g.dispose();
+    MERGED.clear();
   }
 }
 
-// ---------------------------------------------------------------- materials
+// ---------------------------------------------------------------- palette / materials
 const SKINS = ['#f1c7a5', '#e0ac85', '#c68863', '#a86b45', '#8a5634', '#6b3f24', '#4e2c19', '#f5d0b5'];
 const HAIRS = ['#1b1210', '#2b1c14', '#4a3222', '#6b4a2e', '#b58a4c', '#d9b77a', '#141414', '#7a2e1a'];
 const BOOTS = ['#111111', '#f2f2f2', '#ff3d6e', '#1ec8ff', '#ffd400', '#7cff4f', '#ff7a00', '#2a2a2a'];
+// part colour slots
+const C = { shirt: 0, shorts: 1, socks: 2, skin: 3, hair: 4, boot: 5, sole: 6, glove: 7, trim: 8 };
+const NC = 9;
 
+// Kit description (hex colours) used to colour a rig
 export class KitMaterials {
-  constructor(kit) {
-    const std = (c, r = 0.78) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: 0 });
-    this.shirt = std(kit.primary);
-    this.shorts = std(kit.shorts || kit.primary);
-    this.socks = std(kit.socks || kit.primary);
-    this.trim = std(kit.secondary || kit.primary);
-    this.glove = std('#e8e8e8', 0.6);
-    this.list = [this.shirt, this.shorts, this.socks, this.trim, this.glove];
-  }
-  dispose() { this.list.forEach((m) => m.dispose()); }
+  constructor(kit) { this.kit = kit; }
+  dispose() {}
 }
 
 export class SharedMaterials {
   constructor() {
-    this.skins = SKINS.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.62, vertexColors: false }));
-    this.heads = SKINS.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, vertexColors: true }));
-    this.hairs = HAIRS.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }));
-    this.boots = BOOTS.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.35, metalness: 0.1 }));
-    this.sole = new THREE.MeshStandardMaterial({ color: '#222', roughness: 0.8 });
-    this.blob = null;
+    this.body = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.68, metalness: 0 });
   }
-  dispose() { [...this.skins, ...this.heads, ...this.hairs, ...this.boots, this.sole].forEach((m) => m.dispose()); }
+  dispose() { this.body.dispose(); }
 }
 
 function hashStr(s) {
@@ -187,6 +180,107 @@ function hashStr(s) {
   return h >>> 0;
 }
 
+// ---------------------------------------------------------------- skeleton template
+// Bone rest layout (model space, rotations zero). Built once per rig; merged geometry is shared per (hair, gk) variant.
+function makeBones() {
+  const B = (name, x, y, z, order) => { const b = new THREE.Bone(); b.name = name; b.position.set(x, y, z); if (order) b.rotation.order = order; return b; };
+  const body = B('body', 0, STAND_Y, 0, 'YXZ');
+  const pelvis = B('pelvis', 0, 0, 0); body.add(pelvis);
+  const spine = B('spine', 0, 0.06, 0); pelvis.add(spine);
+  const neck = B('neck', 0, TORSO_H - 0.01, 0); spine.add(neck);
+  const head = B('head', 0, 0.055, 0); neck.add(head);
+  const arms = [], legs = [];
+  for (const s of [1, -1]) {
+    const sh = B('sh', 0.19 * s, TORSO_H - 0.06, -0.005, 'ZXY'); spine.add(sh);
+    const elbow = B('el', 0, -0.32, 0); sh.add(elbow);
+    arms.push({ sh, elbow });
+  }
+  for (const s of [1, -1]) {
+    const hip = B('hip', HIP_DX * s, HIP_DY, 0, 'ZXY'); pelvis.add(hip);
+    const knee = B('knee', 0, -THIGH, 0); hip.add(knee);
+    const ankle = B('ankle', 0, -SHIN, 0); knee.add(ankle);
+    legs.push({ hip, knee, ankle });
+  }
+  const list = [body, pelvis, spine, neck, head, arms[0].sh, arms[0].elbow, arms[1].sh, arms[1].elbow,
+    legs[0].hip, legs[0].knee, legs[0].ankle, legs[1].hip, legs[1].knee, legs[1].ankle];
+  return { body, pelvis, spine, neck, head, arms, legs, list };
+}
+
+const MERGED = new Map();
+function mergedGeometry(geo, hairStyle, isGK) {
+  const key = hairStyle + '|' + (isGK ? 1 : 0);
+  if (MERGED.has(key)) return MERGED.get(key);
+  const sk = makeBones();
+  sk.body.updateMatrixWorld(true);
+  const bi = (b) => sk.list.indexOf(b);
+  const parts = []; // {g, bone, slot, m (extra local matrix), torso}
+  const add = (g, bone, slot, m, torso = false) => parts.push({ g, bone, slot, m, torso });
+  const S = (x, y, z) => new THREE.Matrix4().makeScale(x, y, z);
+  const T = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
+  add(geo.torso, sk.spine, C.shirt, S(1, 1, 0.64), true);
+  add(geo.pelvis, sk.pelvis, C.shorts, S(1, 1, 0.72));
+  add(geo.neck, sk.neck, C.skin, null);
+  add(geo.head, sk.head, C.skin, null);
+  if (hairStyle < geo.hair.length) add(geo.hair[hairStyle], sk.head, C.hair, null);
+  for (const a of sk.arms) {
+    add(geo.shoulderCap, a.sh, C.shirt, T(0, -0.01, 0));
+    add(geo.sleeve, a.sh, C.shirt, null);
+    add(geo.upperArm, a.sh, C.skin, null);
+    add(geo.foreArm, a.elbow, C.skin, null);
+    if (isGK) add(geo.gkSleeve, a.elbow, C.shirt, null);
+    add(isGK ? geo.glove : geo.hand, a.elbow, isGK ? C.glove : C.skin, null);
+  }
+  for (const l of sk.legs) {
+    add(geo.thighShort, l.hip, C.shorts, null);
+    add(geo.thigh, l.hip, C.skin, null);
+    add(geo.knee, l.knee, C.skin, null);
+    add(geo.shinSkin, l.knee, C.skin, null);
+    add(geo.sock, l.knee, C.socks, null);
+    add(geo.boot, l.ankle, C.boot, null);
+    add(geo.sole, l.ankle, C.sole, null);
+  }
+  // torso first (group 0), rest after (group 1)
+  parts.sort((a, b) => (b.torso ? 1 : 0) - (a.torso ? 1 : 0));
+  let n = 0;
+  const gs = parts.map((p) => { const g = p.g.index ? p.g.toNonIndexed() : p.g.clone(); n += g.attributes.position.count; return g; });
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2), vc = new Float32Array(n * 3);
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4), slot = new Uint8Array(n);
+  let o = 0, torsoCount = 0;
+  const m = new THREE.Matrix4(), nm = new THREE.Matrix3();
+  parts.forEach((p, k) => {
+    const g = gs[k];
+    m.copy(p.bone.matrixWorld);
+    if (p.m) m.multiply(p.m);
+    g.applyMatrix4(m);
+    const cnt = g.attributes.position.count;
+    pos.set(g.attributes.position.array, o * 3);
+    nor.set(g.attributes.normal.array, o * 3);
+    if (g.attributes.uv) uv.set(g.attributes.uv.array, o * 2);
+    const col = g.attributes.color;
+    const b = bi(p.bone);
+    for (let i = 0; i < cnt; i++) {
+      const v = o + i;
+      si[v * 4] = b; sw[v * 4] = 1;
+      slot[v] = p.slot;
+      vc[v * 3] = col ? col.getX(i) : 1; vc[v * 3 + 1] = col ? col.getY(i) : 1; vc[v * 3 + 2] = col ? col.getZ(i) : 1;
+    }
+    if (p.torso) torsoCount += cnt;
+    o += cnt;
+    g.dispose();
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  out.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  out.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+  out.addGroup(0, torsoCount, 0);
+  out.addGroup(torsoCount, n - torsoCount, 1);
+  out.userData = { slot, vc };
+  MERGED.set(key, out);
+  return out;
+}
+
 // ---------------------------------------------------------------- Player
 export class PlayerRig {
   constructor(geo, shared, kitMats, opts = {}) {
@@ -194,52 +288,9 @@ export class PlayerRig {
     this.isGK = !!opts.isGK;
     this.shadows = opts.shadows !== false;
     this.root = new THREE.Group();
-    this.body = new THREE.Group(); this.body.rotation.order = 'YXZ';
-    this.root.add(this.body);
-    const sh = (m) => { m.castShadow = this.shadows; return m; };
-    const mesh = (g, m, parent, cast = true) => { const x = new THREE.Mesh(g, m); if (cast) sh(x); parent.add(x); return x; };
     this.torsoMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.75 });
-    // pelvis
-    this.pelvis = new THREE.Group(); this.body.add(this.pelvis);
-    this.mPelvis = mesh(geo.pelvis, kitMats.shorts, this.pelvis);
-    this.mPelvis.scale.set(1, 1, 0.72);
-    // spine
-    this.spine = new THREE.Group(); this.spine.position.y = 0.06; this.pelvis.add(this.spine);
-    this.mTorso = mesh(geo.torso, this.torsoMat, this.spine);
-    this.mTorso.scale.set(1, 1, 0.64);
-    this.neck = new THREE.Group(); this.neck.position.set(0, TORSO_H - 0.01, 0); this.spine.add(this.neck);
-    this.mNeck = mesh(geo.neck, shared.skins[0], this.neck, false);
-    this.head = new THREE.Group(); this.head.position.y = 0.055; this.neck.add(this.head);
-    this.mHead = mesh(geo.head, shared.heads[0], this.head);
-    this.mHair = mesh(geo.hair[0], shared.hairs[0], this.head, false);
-    // arms
-    this.arms = [];
-    for (const s of [1, -1]) {
-      const sh0 = new THREE.Group(); sh0.position.set(0.19 * s, TORSO_H - 0.06, -0.005); sh0.rotation.order = 'ZXY'; this.spine.add(sh0);
-      const cap = mesh(geo.shoulderCap, kitMats.shirt, sh0, false); cap.position.y = -0.01;
-      const sleeve = mesh(geo.sleeve, kitMats.shirt, sh0);
-      const upper = mesh(geo.upperArm, shared.skins[0], sh0, false);
-      const elbow = new THREE.Group(); elbow.position.y = -0.32; sh0.add(elbow);
-      const fore = mesh(geo.foreArm, shared.skins[0], elbow, false);
-      const gks = this.isGK ? mesh(geo.gkSleeve, kitMats.shirt, elbow, false) : null;
-      const hand = mesh(this.isGK ? geo.glove : geo.hand, this.isGK ? kitMats.glove : shared.skins[0], elbow, false);
-      this.arms.push({ sh: sh0, elbow, upper, fore, hand, gks, sleeve, cap });
-    }
-    // legs
-    this.legs = [];
-    for (const s of [1, -1]) {
-      const hip = new THREE.Group(); hip.position.set(HIP_DX * s, HIP_DY, 0); hip.rotation.order = 'ZXY'; this.pelvis.add(hip);
-      mesh(geo.thighShort, kitMats.shorts, hip);
-      const thigh = mesh(geo.thigh, shared.skins[0], hip, false);
-      const knee = new THREE.Group(); knee.position.y = -THIGH; hip.add(knee);
-      const kneeCap = mesh(geo.knee, shared.skins[0], knee, false);
-      const skin = mesh(geo.shinSkin, shared.skins[0], knee, false);
-      const sock = mesh(geo.sock, kitMats.socks, knee);
-      const ankle = new THREE.Group(); ankle.position.y = -SHIN; knee.add(ankle);
-      const boot = mesh(geo.boot, shared.boots[0], ankle);
-      const sole = mesh(geo.sole, shared.sole, ankle, false);
-      this.legs.push({ hip, knee, ankle, thigh, kneeCap, skin, sock, boot, sole });
-    }
+    this.hairStyle = 0;
+    this._buildMesh(0);
     // state
     this.pose = new Float32Array(NP);
     this.target = new Float32Array(NP);
@@ -253,10 +304,48 @@ export class PlayerRig {
     this.seed = 0;
     this.leftFoot = false;
     this.scale = 1;
-    this.visible = true;
-    this.celebAlt = 0;
     this.headYaw = 0;
+    this.palette = [];
     this._setStand();
+  }
+
+  _buildMesh(hairStyle) {
+    if (this.mesh) {
+      this.root.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.skeleton.dispose();
+    }
+    this.hairStyle = hairStyle;
+    const base = mergedGeometry(this.geo, hairStyle, this.isGK);
+    const g = base.clone();
+    g.userData = base.userData;
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(base.attributes.position.count * 3), 3));
+    const sk = makeBones();
+    const mesh = new THREE.SkinnedMesh(g, [this.torsoMat, this.shared.body]);
+    mesh.add(sk.body);
+    mesh.updateMatrixWorld(true);
+    const skeleton = new THREE.Skeleton(sk.list);
+    mesh.bind(skeleton, new THREE.Matrix4());
+    mesh.castShadow = this.shadows;
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 2.4);
+    this.root.add(mesh);
+    this.mesh = mesh;
+    this.body = sk.body; this.pelvis = sk.pelvis; this.spine = sk.spine; this.neck = sk.neck; this.head = sk.head;
+    this.arms = sk.arms; this.legs = sk.legs;
+    if (this.palette && this.palette.length) this._paint();
+    if (this.pose) this._apply();
+  }
+
+  _paint() {
+    const g = this.mesh.geometry;
+    const { slot, vc } = g.userData;
+    const col = g.attributes.color.array;
+    const pal = this.palette;
+    for (let v = 0; v < slot.length; v++) {
+      const c = pal[slot[v]];
+      col[v * 3] = c.r * vc[v * 3]; col[v * 3 + 1] = c.g * vc[v * 3 + 1]; col[v * 3 + 2] = c.b * vc[v * 3 + 2];
+    }
+    g.attributes.color.needsUpdate = true;
   }
 
   _setStand() {
@@ -269,7 +358,6 @@ export class PlayerRig {
     const id = pd ? (pd.id ?? pd.name ?? idxSeed) : idxSeed;
     const h = hashStr(id);
     this.seed = h;
-    const sh = this.shared;
     const skin = h % SKINS.length;
     const hairI = (h >>> 5) % HAIRS.length;
     const hairStyle = (h >>> 9) % 6; // 5 = bald
@@ -277,13 +365,14 @@ export class PlayerRig {
     this.leftFoot = ((h >>> 17) % 5) === 0;
     this.scale = 0.95 + ((h >>> 19) % 100) / 100 * 0.09;
     this.root.scale.setScalar(this.scale);
-    const skinM = sh.skins[skin];
-    this.mNeck.material = skinM;
-    this.mHead.material = sh.heads[skin];
-    if (hairStyle >= 5) this.mHair.visible = false;
-    else { this.mHair.visible = true; this.mHair.geometry = this.geo.hair[hairStyle]; this.mHair.material = sh.hairs[hairI]; }
-    for (const a of this.arms) { a.upper.material = skinM; a.fore.material = skinM; if (!this.isGK) a.hand.material = skinM; }
-    for (const l of this.legs) { l.thigh.material = skinM; l.kneeCap.material = skinM; l.skin.material = skinM; l.boot.material = sh.boots[bootI]; }
+    const pal = new Array(NC);
+    const col = (hex) => new THREE.Color(hex);
+    pal[C.shirt] = col(kit.primary); pal[C.shorts] = col(kit.shorts || kit.primary); pal[C.socks] = col(kit.socks || kit.primary);
+    pal[C.skin] = col(SKINS[skin]); pal[C.hair] = col(HAIRS[hairI]); pal[C.boot] = col(BOOTS[bootI]); pal[C.sole] = col('#1e1e1e');
+    pal[C.glove] = col(luma(kit.primary) > 0.6 ? '#2a2a2a' : '#eeeeee'); pal[C.trim] = col(kit.secondary || kit.primary);
+    this.palette = pal;
+    if (hairStyle !== this.hairStyle) this._buildMesh(hairStyle);
+    else this._paint();
     // shirt
     const key = `${kit.primary}|${kit.secondary}|${kit.number}|${pd ? pd.number : ''}|${pd ? pd.name : ''}`;
     if (key !== this._shirtKey) {
@@ -294,20 +383,15 @@ export class PlayerRig {
     }
   }
 
-  setKit(kitMats) {
-    this.kit = kitMats;
-    this.mPelvis.material = kitMats.shorts;
-    for (const a of this.arms) { a.cap.material = kitMats.shirt; a.sleeve.material = kitMats.shirt; if (a.gks) a.gks.material = kitMats.shirt; if (this.isGK) a.hand.material = kitMats.glove; }
-    for (const l of this.legs) { l.sock.material = kitMats.socks; l.hip.children[0].material = kitMats.shorts; }
-  }
-
-  setShadows(on) {
-    this.root.traverse((o) => { if (o.isMesh && o.castShadow !== undefined && o.userData.noShadow !== true) o.castShadow = on && o._castOk !== false; });
-  }
-
   dispose() {
     if (this.torsoMat.map) this.torsoMat.map.dispose();
     this.torsoMat.dispose();
+    if (this.mesh) { this.mesh.geometry.dispose(); this.mesh.skeleton.dispose(); }
+  }
+
+  static disposeShared() {
+    for (const g of MERGED.values()) g.dispose();
+    MERGED.clear();
   }
 
   // ------------------------------------------------------------ per-frame update

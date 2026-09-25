@@ -74,11 +74,11 @@ export class CameraDirector {
       const tx = clamp(bx + bvx * lead, -HL + 8, HL - 8);
       const tz = clamp(bz * 0.45 + bvz * lead * 0.3, -HW * 0.55, HW * 0.55);
       lx = tx; ly = 0; lz = tz;
-      px = tx * 0.86; py = 23; pz = HW + 36;
+      px = tx * 0.86; py = 21; pz = HW + 33;
       const sp = clamp((bs - 6) / 20, 0, 1);
       const nearGoal = clamp((Math.abs(bx) - 30) / 18, 0, 1);
-      fov = 24 + 7 * sp + 3 * nearGoal - (view.ph === PHASE.SETPIECE ? 1 : 0);
-      if (view.ph === PHASE.GOAL) fov = 22;
+      fov = 21 + 7 * sp + 3 * nearGoal - (view.ph === PHASE.SETPIECE ? 1 : 0);
+      if (view.ph === PHASE.GOAL) fov = 19;
       wLook = 2.6; wPos = 1.6;
     }
     if (!this.init || this.cut) {

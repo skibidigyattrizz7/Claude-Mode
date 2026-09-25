@@ -30,7 +30,7 @@ const CSS = `
 .ps3d-stam>div{height:100%;background:linear-gradient(90deg,#f5c542,#46d17a);width:100%}
 .ps3d-tag{position:absolute;transform:translate(-50%,-100%);font-size:12px;font-weight:800;padding:2px 7px;border-radius:3px;background:rgba(10,16,34,.7);white-space:nowrap;display:none}
 .ps3d-tag.p1{border-bottom:2px solid #3fa9ff}.ps3d-tag.p2{border-bottom:2px solid #ff4d4d}
-.ps3d-pow{position:absolute;transform:translate(-50%,0);width:84px;height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.7);border-radius:5px;overflow:hidden;display:none}
+.ps3d-pow{position:absolute;z-index:3;transform:translate(-50%,0);width:84px;height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.7);border-radius:5px;overflow:hidden;display:none}
 .ps3d-pow>div{height:100%;width:0;background:linear-gradient(90deg,#46d17a 0%,#f5c542 70%,#ff4d4d 90%);background-size:84px 100%}
 .ps3d-pow>i{position:absolute;left:85%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.8)}
 .ps3d-radar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);border-radius:6px;background:rgba(18,60,30,.55);box-shadow:0 2px 10px rgba(0,0,0,.4)}
@@ -243,7 +243,7 @@ export class Hud {
         const pf = ctx.project ? ctx.project(x, -0.1, z) : null;
         pow.style.display = 'block';
         if (pf && pf.visible) { pow.style.left = pf.x + 'px'; pow.style.top = pf.y + 12 + 'px'; }
-        else { pow.style.left = '50%'; pow.style.top = 'calc(100% - 190px)'; }
+        else { pow.style.left = '50%'; pow.style.top = this.compact ? 'calc(100% - 150px)' : 'calc(100% - 232px)'; }
         pow.firstChild.style.width = Math.round(pw * 100) + '%';
       } else pow.style.display = 'none';
     }
