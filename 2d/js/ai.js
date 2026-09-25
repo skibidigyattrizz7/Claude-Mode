@@ -5,7 +5,7 @@ import { FORMATION } from './data.js';
 import { clamp, dist, norm, angleBetween, DEG, gauss } from './util.js';
 import { laneRisk, leadTarget } from './passing.js';
 import { topSpeed, jogSpeed } from './player.js';
-import { isFromBehind, inPenaltyArea } from './rules.js';
+import { isFromBehind, inPenaltyArea, tackleSweep } from './rules.js';
 import { simulatePath } from './physics.js';
 
 /** Base formation position for p given the ball and possession phase. */
@@ -178,11 +178,18 @@ export class TeamAI {
     const b = m.ball;
     const dBall = Math.hypot(b.x - p.x, b.y - p.y);
     const toBall = Math.atan2(b.y - p.y, b.x - p.x);
+    if (c.state === 'hold') return;            // never challenge a keeper holding the ball
     const behind = isFromBehind(p, c);
     const careful = Math.random() < prof.careful;
-    if (dBall < 1.35 && (!behind || !careful)) {
+    // would the lunge meet the ball before the man? (careless AI sometimes goes in anyway)
+    const clean = (reach, lunge) => {
+      const from = { x: p.x + Math.cos(toBall) * lunge, y: p.y + Math.sin(toBall) * lunge };
+      return tackleSweep(from, toBall, reach, b, [c], false).first === 'ball';
+    };
+    const reckless = !careful && Math.random() < 0.35;
+    if (dBall < 1.35 && ((!behind && clean(0.8, 0.3)) || reckless)) {
       if (Math.random() < 0.35 + 0.5 * p.attrs.tackling * prof.press) { p.facing = toBall; m.startTackle(p, 'stand', toBall); }
-    } else if (dBall < 3.2 && dBall > 1.6 && Math.random() < 0.12 * prof.press && (!behind || !careful) && p.stamina > 0.2) {
+    } else if (dBall < 3.2 && dBall > 1.6 && Math.random() < 0.12 * prof.press && ((!behind && clean(1.0, 1.4)) || reckless) && p.stamina > 0.2) {
       p.facing = toBall; m.startTackle(p, 'slide', toBall);
     }
   }

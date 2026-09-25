@@ -135,7 +135,7 @@ export function tackleSweep(p, dir, reach, ball, victims, slide = false) {
     const s = sweep(v);
     const footD = Math.hypot(fx - v.x, fy - v.y);
     // the man is hit when he stands in the path of the lunge (body-to-body or the foot on his legs)
-    const inPath = s.along > 0.05 && s.along < reach + 0.35 && s.lat < 0.4;
+    const inPath = s.along > 0.05 && s.along < reach + 0.35 && s.lat < 0.3;   // shoulder-to-shoulder is fair
     if (inPath && (s.d < 0.74 || footD < 0.38)) {
       const a = s.along - 0.3;   // his legs are ~0.3 m in front of his centre
       if (a < vAlong) { vAlong = a; victim = v; }
