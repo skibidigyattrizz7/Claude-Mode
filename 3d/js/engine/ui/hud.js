@@ -87,7 +87,7 @@ const CSS = `
 .ps3d-contact{position:absolute;right:24px;bottom:150px;width:92px;height:118px;display:none;text-align:center;font-size:10px;font-weight:800;color:#cfd8ea}
 .ps3d-contact .ball{position:relative;width:78px;height:78px;margin:0 auto 4px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8dde6 60%,#9aa3b3);box-shadow:0 2px 10px rgba(0,0,0,.5)}
 .ps3d-contact .dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#ff4d4d;box-shadow:0 0 0 2px #fff}
-.ps3d-ticker{position:absolute;left:50%;bottom:156px;transform:translateX(-50%);max-width:70%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;font-style:italic;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps3d-ticker{position:absolute;left:50%;top:108px;transform:translateX(-50%);max-width:70%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;font-style:italic;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ps3d-ticker.show{opacity:1}
 .ps3d-pens{position:absolute;left:18px;top:56px;background:rgba(10,16,34,.82);border-radius:5px;padding:5px 10px;font-size:12px;font-weight:800;display:none}
 .ps3d-pens .row{display:flex;align-items:center;gap:5px;margin:2px 0}
@@ -387,6 +387,21 @@ export class Hud {
       for (let k = 0; k <= 30; k++) { const a = (k / 30) * Math.PI * 2; inner.push(ctx.project(bx + Math.cos(a) * 0.35, 0.03, bz + Math.sin(a) * 0.35)); }
       g.lineWidth = 1.5; g.strokeStyle = 'rgba(70,209,122,.8)';
       g.beginPath(); inner.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+    }
+    // crosshair on the goal mouth (drawn over everything so the keeper never hides it)
+    if (cross) {
+      const gx = (view.spk === 0 ? view.dir : -view.dir) * PITCH.HL;
+      const c = ctx.project(gx, sa[2], sa[1]);
+      if (c && c.visible) {
+        const R = 13;
+        g.lineWidth = 2.5; g.strokeStyle = '#ffe14d'; g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 4;
+        g.beginPath(); g.arc(c.x, c.y, R, 0, Math.PI * 2); g.stroke();
+        g.beginPath();
+        g.moveTo(c.x - R - 6, c.y); g.lineTo(c.x - 4, c.y); g.moveTo(c.x + 4, c.y); g.lineTo(c.x + R + 6, c.y);
+        g.moveTo(c.x, c.y - R - 6); g.lineTo(c.x, c.y - 4); g.moveTo(c.x, c.y + 4); g.lineTo(c.x, c.y + R + 6);
+        g.stroke();
+        g.shadowBlur = 0;
+      }
     }
     // ball contact point (free kicks with the crosshair)
     if (cross && type === SP.FREEKICK) {

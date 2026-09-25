@@ -866,3 +866,4 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-proratings i { width: 34px; }
 .pm-pro h3 { margin-top: 14px; }
 .pm-tile--custom { grid-column: 1 / -1; min-height: 96px !important; }
+@media (max-width: 820px) { .pm-ce-preview { grid-auto-flow: column; align-items: center; } .pm-ce-preview .pm-crest--xl { width: 80px; height: 96px; } .pm-kit svg { width: 64px; height: 75px; } }
