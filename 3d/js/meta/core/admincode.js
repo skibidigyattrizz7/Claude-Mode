@@ -5,10 +5,11 @@
 // 'owner' / 'mod' (online accounts) grants 'full' / 'mod' automatically. Wrong codes lock the field for
 // 60 s after 5 attempts (localStorage).
 
-export const ADMIN_CODE_PARAMS = {
-  full: { salt: 'cd856bbe3c942763c4a331b0ede5e17c', iterations: 600000, hash: 'fc34467189b291198c5aeef3837e2d87292e3a4fd7838ba889d38c32b81c4c55' },
-  temp: { salt: 'eccf54d6330ab472f5dfd2903504deb6', iterations: 600000, hash: 'b5245fee52cc48f15b52624b91750fb2bb7bdcc6087411305fad4f1c25dd2723' },
-};
+// Code constants live in one place (shared with net + Settings): 'super' | 'full' | 'temp'.
+// The SUPER code unlocks everything 'full' does (+ admin cards / 999 OVR). For compatibility with the UI's
+// `level === 'full'` checks, getAdminLevel() reports a super session as 'full'; adminInfo().super / isSuperAdmin() tell them apart.
+import { ADMIN_CODE_PARAMS as SHARED_PARAMS, verifyAdminCode as sharedVerifyAdminCode } from '../../shared/adminauth.js';
+export const ADMIN_CODE_PARAMS = SHARED_PARAMS;
 export const TEMP_ADMIN_MS = 60 * 60 * 1000;
 export const MAX_ATTEMPTS = 5;
 export const LOCK_MS = 60 * 1000;
@@ -20,7 +21,7 @@ export const ADMIN_PERMS = {
   mod: ['coins', 'packs', 'grant', 'moderation'],
   temp: ['coins', 'packs', 'grant'],
 };
-const RANK = { full: 3, mod: 2, temp: 1 };
+const RANK = { super: 4, full: 3, mod: 2, temp: 1 };
 const SESSION_KEY = 'pitchside.admin.session';
 const LOCK_KEY = 'pitchside.admin.lock';
 
@@ -93,14 +94,14 @@ function sessionLevel(now = Date.now()) {
   if (raw === '1') return { level: 'full' }; // pre-V3 sessions
   try {
     const o = JSON.parse(raw);
-    if (o && o.level === 'full') return { level: 'full' };
+    if (o && (o.level === 'full' || o.level === 'super')) return { level: o.level };
     if (o && o.level === 'temp' && Number(o.until) > now) return { level: 'temp', until: Number(o.until) };
   } catch { /* ignore */ }
   write(ss(), SESSION_KEY, null); // expired or corrupt
   return null;
 }
 export function setSessionLevel(level, now = Date.now()) {
-  if (level === 'full') write(ss(), SESSION_KEY, JSON.stringify({ level: 'full' }));
+  if (level === 'full' || level === 'super') write(ss(), SESSION_KEY, JSON.stringify({ level }));
   else if (level === 'temp') write(ss(), SESSION_KEY, JSON.stringify({ level: 'temp', until: now + TEMP_ADMIN_MS }));
   else write(ss(), SESSION_KEY, null);
 }
@@ -135,13 +136,16 @@ function pickRole(r) {
 export function getAdminLevel(now = Date.now()) {
   const s = sessionLevel(now);
   const cands = [s && s.level, _role === 'owner' ? 'full' : _role === 'mod' ? 'mod' : null].filter(Boolean);
-  return cands.sort((a, b) => RANK[b] - RANK[a])[0] || null;
+  const top = cands.sort((a, b) => RANK[b] - RANK[a])[0] || null;
+  return top === 'super' ? 'full' : top;
 }
+/** True when this session was unlocked with the SUPER code. */
+export function isSuperAdmin(now = Date.now()) { const s = sessionLevel(now); return !!s && s.level === 'super'; }
 /** Details for the UI badge. */
 export function adminInfo(now = Date.now()) {
   const s = sessionLevel(now);
   const level = getAdminLevel(now);
-  return { level, role: _role, fromAccount: !!level && (!s || RANK[s.level] < RANK[level]), tempRemainingMs: level === 'temp' && s ? Math.max(0, s.until - now) : 0 };
+  return { level, super: isSuperAdmin(now), role: _role, fromAccount: !!level && (!s || RANK[s.level] < RANK[level]), tempRemainingMs: level === 'temp' && s ? Math.max(0, s.until - now) : 0 };
 }
 export function adminCan(action, level = getAdminLevel()) { return !!level && (ADMIN_PERMS[level] || []).includes(action); }
 /** The level handed to the match engine (in-match admin menu): 'owner' | 'mod' | null. */
