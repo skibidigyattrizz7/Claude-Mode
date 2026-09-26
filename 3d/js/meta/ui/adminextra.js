@@ -353,11 +353,15 @@ function resetEveryonePanel(app) {
       onclick: async () => {
         if (!(await confirmBox(app.root, 'Reset everyone', 'This resets every connected player’s admin session and coin balance. Continue?', 'Reset everyone', true))) return;
         status.textContent = 'Resetting…';
-        const cur = await safeCall(() => app.online.config.get(), { ok: false });
-        const features = { ...(cur && cur.config && cur.config.features) || {}, resetEpoch: Math.floor(Date.now() / 1000) };
         const owner = app.online.owner;
-        let r = owner && typeof owner.setConfig === 'function' ? await safeCall(() => owner.setConfig('features', features), { ok: false }) : { ok: false, error: 'not_connected' };
-        if (owner && typeof owner.resetAllEconomy === 'function') await safeCall(() => owner.resetAllEconomy(), { ok: false });
+        let r;
+        if (owner && typeof owner.resetEveryone === 'function') r = await safeCall(() => owner.resetEveryone(), { ok: false });
+        else {
+          // Older backend without the reset RPC: bump the epoch through config only.
+          const cur = await safeCall(() => app.online.config.get(), { ok: false });
+          const features = { ...(cur && cur.config && cur.config.features) || {}, resetEpoch: Math.floor(Date.now() / 1000) };
+          r = owner && typeof owner.setConfig === 'function' ? await safeCall(() => owner.setConfig('features', features), { ok: false }) : { ok: false, error: 'not_connected' };
+        }
         if (r && r.ok !== false) { status.textContent = 'Done — every device resets on its next check-in.'; app.toast('Global reset broadcast.', 'good'); app.checkResetEpoch(); }
         else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
       },
