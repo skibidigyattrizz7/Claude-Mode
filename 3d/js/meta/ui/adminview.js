@@ -1,11 +1,12 @@
-// Admin panel + "Admin Given Codes" entry. Access comes from a code (checked by online.admin.verify when the
-// backend is reachable, otherwise locally with PBKDF2 — the code itself is never stored) or from an owner/mod
-// account role. Levels: full (everything), mod (moderation + limited tools), temp (60 minutes, limited tools).
+// Admin panel + "Admin Given Codes" entry. Levels come from the shared verifier `3d/js/shared/adminauth.js`
+// (server-verified code, else local PBKDF2 — the code itself is never stored — or an owner/mod account role):
+// 'super' (everything + admin cards to 999 OVR) > 'full' (owner tools) > 'mod' (moderation) > 'temp' (60 min, limited).
 import { h, clear, add, fmtNum, modal, confirmBox, select } from './dom.js';
 import { playerCard } from './card.js';
 import * as UT from '../core/ut.js';
 import * as C from '../core/career.js';
 import * as A from '../core/admin.js';
+import * as AA from '../shared/adminauth.js';
 import { getDB } from '../core/players.js';
 import { remove as removeKey } from '../core/storage.js';
 import { safeCall } from './app.js';
@@ -13,12 +14,22 @@ import { openPackFlow } from './utview.js';
 import { icon } from './icons.js';
 import * as X from './adminextra.js';
 
-const LEVEL_NAME = { full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
+const LEVEL_NAME = { super: 'Super Admin', full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
+const RANK = AA.ADMIN_RANK;
+/** What a level may use in this panel (finer-grained than adminauth's own caps, but consistent with them). */
+function can(x, level) {
+  const r = RANK[level] || 0;
+  if (x === 'moderation') return r >= 2;
+  if (x === 'owner') return r >= 3; // full / super: sbc, career cheats, reset, infinite coins, broadcast, giveaways, config
+  if (x === 'super') return level === 'super'; // card creator / admin cards / OVR > 99
+  return r >= 1; // coins, packs, grant — every level, capped for mod/temp
+}
 const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 
 /** Meta hub entry (replaces the old tiny footer link): opens the Admin Given Codes screen or the panel. */
 export function adminButton(app) {
-  const lv = A.getAdminLevel();
+  AA.bindOnline(app.online);
+  const lv = AA.getAdminLevel();
   return h('button', { class: 'pm-btn pm-btn--ghost pm-codesbtn', onclick: () => app.push(lv ? adminView() : adminCodesView()) },
     icon('key'), lv ? ' Admin panel' : ' Admin Given Codes');
 }
@@ -33,7 +44,7 @@ export function adminCodesPanel(app, { onUnlock = null, compact = false } = {}) 
   const msg = h('p', { class: 'pm-dim pm-codes-msg', 'aria-live': 'polite', 'data-codes': 'msg' }, compact ? '' : 'Have a code from the owner? Enter it here.');
   let busy = false, timer = 0;
   const lockTick = () => {
-    const ms = A.lockRemainingMs();
+    const ms = AA.lockRemainingMs();
     const locked = ms > 0;
     input.disabled = locked || busy; btn.disabled = locked || busy;
     if (locked) { msg.textContent = `Too many attempts. Try again in ${Math.ceil(ms / 1000)} s.`; msg.className = 'pm-warnline pm-codes-msg'; }
@@ -46,7 +57,8 @@ export function adminCodesPanel(app, { onUnlock = null, compact = false } = {}) 
     if (busy || lockTick()) return;
     busy = true; input.disabled = true; btn.disabled = true;
     msg.textContent = 'Checking…'; msg.className = 'pm-dim pm-codes-msg';
-    const r = await A.redeemAdminCode(input.value, app.online);
+    AA.bindOnline(app.online);
+    const r = await AA.verifyAdminCode(input.value, app.online);
     busy = false; input.value = ''; input.disabled = false; btn.disabled = false;
     if (!r.ok) {
       msg.textContent = r.error; msg.className = 'pm-warnline pm-codes-msg';
@@ -68,7 +80,8 @@ export function adminCodesView() {
   return {
     title: 'Admin Given Codes', kicker: 'Pitchside', coins: true,
     render(main, app) {
-      const lv = A.getAdminLevel();
+      AA.bindOnline(app.online);
+      const lv = AA.getAdminLevel();
       add(main, h('p', { class: 'pm-lead' }, 'Codes are handed out by the owner. A valid code unlocks the Admin panel for this browser session.'),
         lv ? h('p', { class: 'pm-goodline' }, `${LEVEL_NAME[lv]} is active.`, ' ', h('button', { class: 'pm-btn pm-btn--primary pm-btn--sm', onclick: () => app.replace(adminView()) }, 'Open Admin panel')) : null,
         adminCodesPanel(app, { onUnlock: () => app.replace(adminView()) }));
