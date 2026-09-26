@@ -890,6 +890,45 @@ test('unavailable stub exposes every 003 namespace', async () => {
   assert.equal(defaultOnline.config.value('x', 3), 3);
 });
 
+
+test('super code 12345678910: local PBKDF2 -> super; meta redeem keeps super (reported as full to the UI) + isSuperAdmin', async () => {
+  globalThis.sessionStorage = memStorage(); globalThis.localStorage = memStorage();
+  const AA = await import('../../shared/adminauth.js');
+  assert.equal(await AA.verifyAdminCodeLocal('12345678910'), 'super');
+  const M = await import('../../meta/core/admincode.js');
+  const r = await M.redeemAdminCode('12345678910', null);
+  assert.deepEqual([r.ok, r.level], [true, 'super']);
+  assert.equal(M.getAdminLevel(), 'full');
+  assert.equal(M.isSuperAdmin(), true);
+  assert.equal(M.adminInfo().super, true);
+  assert.equal(AA.getAdminLevel(), 'super');
+  // with the server: super level + admin token for owner powers
+  const be = createMockBackend(memoryStore());
+  be.setAdminCodes({ super: '12345678910' });
+  const X = mk3(be);
+  const r2 = await M.redeemAdminCode('12345678910', X);
+  assert.deepEqual([r2.ok, r2.level, r2.server], [true, 'super', true]);
+  assert.equal(X.admin.codeLevel, 'super');
+  assert.equal(X.admin.canOwner(), true);
+  delete globalThis.sessionStorage; delete globalThis.localStorage;
+});
+
+test('market: seller paid instantly, sold listing leaves My listings + local records, balances pushed to listeners, dedupe', async () => {
+  const PM = await import('../../meta/core/pmarket.js');
+  const { A, B } = await world3();
+  const seen = [];
+  A.coins.onChange((v) => seen.push(v));
+  const l = await A.market.list(card({ id: 'mk1' }), 2000);
+  const stA = { club: [], listed: [{ listingId: l.listingId, pid: 'mk1', price: 2000, status: 'active' }] };
+  await B.market.buy(l.listingId);
+  await A.presence.tick();
+  assert.equal(seen.at(-1), 6900);
+  const mine = await PM.fetchMine(stA, A);
+  assert.deepEqual([mine.items.length, mine.sold.length, stA.listed.length], [0, 1, 0]);
+  const dupe = { market: { search: async () => ({ ok: true, items: [{ listingId: 'x', card: card(), price: 5 }, { listingId: 'x', card: card(), price: 5 }] }) } };
+  assert.equal((await PM.searchMarket(dupe)).items.length, 1);
+});
+
 // ------------------------------------------------------------------ run
 for (const [name, fn] of queue) {
   try { await fn(); passed++; console.log(`  ok  ${name}`); }

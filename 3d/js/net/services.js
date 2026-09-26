@@ -301,6 +301,7 @@ export function createOnline(deps) {
         if (r.ok !== true) return fail(r.error || 'bad_response');
         const card = sanitizeCard(r.card);
         if (!card) return fail('bad_response');
+        emitCoins(nonNeg(r.coins));
         return { ok: true, card, price: Number(r.price) || 0, coins: Number(r.coins) || 0 };
       },
       async mine() {
@@ -328,7 +329,7 @@ export function createOnline(deps) {
     coins: {
       async get() {
         const r = dataOr(await authed('coins_get'));
-        if (r.ok === true) return { ok: true, coins: nonNeg(r.coins), infinite: r.infinite === true };
+        if (r.ok === true) { emitCoins(nonNeg(r.coins)); return { ok: true, coins: nonNeg(r.coins), infinite: r.infinite === true }; }
         if (r.error === 'server_error') { const p = await online.profile(); return p.ok ? { ok: true, coins: p.coins, infinite: false } : p; } // pre-003 server
         return fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
       },
@@ -342,6 +343,8 @@ export function createOnline(deps) {
         if (!Number.isInteger(amount) || amount <= 0 || amount > 1e8) return fail('bad_amount');
         return coinOp(amount, reason);
       },
+      /** fn(balance) whenever a server balance is seen (buy, coin ops, gifts, rewards, presence). -> unsubscribe */
+      onChange(fn) { coinListeners.add(fn); return () => coinListeners.delete(fn); },
       /** Compat: negative = spend, positive = earn (capped). Admin top-ups: online.owner.giveCoins. */
       async add(delta, reason = '') {
         if (typeof delta !== 'number' || !Number.isInteger(delta) || delta === 0) return fail('bad_amount');
@@ -903,6 +906,7 @@ export function createOnline(deps) {
         const g = sanitizeGift(r);
         if (!g) return fail('bad_response');
         if (pres.last) { pres.last = { ...pres.last, gifts: Math.max(0, pres.last.gifts - 1) }; emitPresence(); }
+        emitCoins(nonNeg(r.balance));
         return { ok: true, ...g, balance: nonNeg(r.balance) };
       },
     },
@@ -977,6 +981,13 @@ export function createOnline(deps) {
   };
 
   // ---------------------------------------------------------------- helpers (003)
+  const coinListeners = new Set();
+  let lastCoins = null;
+  function emitCoins(v) {
+    if (!Number.isFinite(v) || v === lastCoins) return;
+    lastCoins = v;
+    for (const f of [...coinListeners]) { try { f(v); } catch (e) { console.error('[online] coins listener failed', e); } }
+  }
   function opKey() { return randomSecret().slice(0, 24); }
   const RETRY_ERRORS = ['offline', 'timeout'];
   async function coinOp(delta, reason) {
@@ -990,6 +1001,7 @@ export function createOnline(deps) {
     if (r.ok !== true) return fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
     const out = { ok: true, coins: nonNeg(r.coins), applied: Number.isFinite(r.applied) ? r.applied : 0, infinite: r.infinite === true };
     if (pres.last) { pres.last = { ...pres.last, coins: out.coins }; }
+    emitCoins(out.coins);
     return out;
   }
   /** Owner RPC: admin token (or legacy code) + the caller's identity. `retry` = idempotent call, retried on network errors. */
@@ -1036,6 +1048,7 @@ export function createOnline(deps) {
         d = { online: c.ok ? c.data : null, broadcasts: b.ok && b.data ? b.data.items : [] };
       }
       const u = sanitizePresence(d);
+      if (u.coins != null) emitCoins(u.coins);
       const prev = pres.last;
       pres.last = u;
       if (acc && u.role && u.role !== acc.role) { const cur = readAcc(); if (cur) { writeAcc({ ...cur, role: u.role }); emitAcc(); } }
@@ -1119,7 +1132,7 @@ const unavailable = () => {
     available: async () => false, profile: f, setName: f,
     status: async () => ({ online: false, reason: 'unreachable', message: 'Online services are unavailable.' }),
     market: { list: f, search: f, buy: f, mine: f, cancel: f, claimSales: f },
-    coins: { get: f, add: f, spend: f, earn: f }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
+    coins: { get: f, add: f, spend: f, earn: f, onChange: () => () => {} }, matchmaking: { quickSearch: f, cancelSearch: f, state: 'idle' },
     hostWithCode: f, joinWithCode: f, reportResult: f, admin: { verify: async () => false, verifyLevel: f, addCoins: f, verified: false, codeLevel: null, canOwner: () => false, forget() {}, level: null, matchToken: f, verifyMatchToken: f }, errorText,
     hasIdentity: () => false,
     account: {
