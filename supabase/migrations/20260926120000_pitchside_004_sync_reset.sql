@@ -80,7 +80,7 @@ begin
       n := n + 1;
       if e.key !~ '^[A-Za-z0-9_.-]{1,40}$' then return 'bad_value'; end if;
       if jsonb_typeof(e.value) = 'number' then
-        if (e.value)::numeric not between -1000000000000 and 1000000000000 then return 'bad_value'; end if;
+        if (e.value)::numeric not between -1000000000000000 and 1000000000000000 then return 'bad_value'; end if;
       elsif jsonb_typeof(e.value) <> 'boolean' then return 'bad_value';
       end if;
     end loop;

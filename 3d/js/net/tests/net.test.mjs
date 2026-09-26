@@ -929,6 +929,74 @@ test('market: seller paid instantly, sold listing leaves My listings + local rec
   assert.equal((await PM.searchMarket(dupe)).items.length, 1);
 });
 
+
+test('reset everyone (004): only profiles older than the reset, once each; newcomers never reset', async () => {
+  let t = 1_800_000_000_000;
+  const be = createMockBackend(memoryStore(), { now: () => t });
+  be.setAdminCodes({ full: 'full-code-1' });
+  const A = mk3(be), O = mk3(be);
+  await A.account.signup({ username: 'Old Timer', password: 'password1', confirm: 'password1' });
+  await A.coins.earn(50000, 'quicksell');
+  await O.admin.verifyLevel('full-code-1');
+  assert.equal((await A.presence.tick()).resetDue, null);
+  t += 5000;
+  const r = await O.owner.resetEveryone();
+  assert.equal(r.ok, true);
+  assert.equal((await A.coins.get()).coins, 5000);
+  const u = await A.presence.tick();
+  assert.equal(u.resetDue, r.epoch);
+  assert.equal((await A.account.ackReset(r.epoch)).ok, true);
+  assert.equal((await A.presence.tick()).resetDue, null); // at most once
+  t += 60000;
+  const N = mk3(be);
+  await N.account.signup({ username: 'New Comer', password: 'password2', confirm: 'password2' });
+  const n = await N.presence.tick();
+  assert.deepEqual([n.resetDue, n.resetEpoch], [null, r.epoch]); // joining after the reset: never reset
+  assert.equal((await N.owner.resetEveryone()).error, 'not_admin');
+  assert.equal(O.config.value('features.resetEpoch'), r.epoch); // numeric features survive client sanitising
+});
+
+test('admin players list (004) + config.set compat for the owner toggles reach every client', async () => {
+  const { be, A, B, O } = await world3();
+  await B.squads.publish({ name: 'Bobby FC', players: [] });
+  const all = await O.owner.listPlayers();
+  assert.equal(all.total, 3);
+  const q = await O.owner.listPlayers({ query: 'bobby' });
+  assert.deepEqual([q.total, q.items[0].clubName, q.items[0].username], [1, 'Bobby FC', 'Bob Jones']);
+  assert.equal((await A.owner.listPlayers()).error, 'not_admin');
+  assert.equal((await O.config.set({ promosOn: false, packsInShop: true, priceMult: 1.5 })).ok, true);
+  const seen = await B.config.get(true); // another client
+  assert.deepEqual([seen.config.features.promosEnabled, seen.config.features.packPriceMult], [false, 1.5]);
+  const X = mk3(be); await X.presence.tick(); // guest without profile still gets broadcasts via polling
+  assert.equal((await X.config.get(true)).config.features.packsEnabled, true);
+});
+
+test('cloud save: sign up uploads the local club, login elsewhere downloads it, later edits sync, conflict -> newest', async () => {
+  const { createCloudSync } = await import('../cloudsave.js');
+  const be = createMockBackend(memoryStore());
+  const d1 = memStorage(), d2 = memStorage();
+  d1.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2'], coins: 900 }));
+  const A1 = mk3(be, { storage: d1 }), A2 = mk3(be, { storage: d2 });
+  let replaced2 = 0;
+  const c1 = createCloudSync(A1, { storage: d1 }), c2 = createCloudSync(A2, { storage: d2, onReplaced: () => replaced2++ });
+  assert.equal((await c1.syncNow()).error, 'no_account'); // guests: nothing uploaded
+  await A1.account.signup({ username: 'Cloud Guy', password: 'password1', confirm: 'password1' });
+  assert.equal((await c1.syncNow()).action, 'uploaded');
+  d2.setItem('pitchside.ut', JSON.stringify({ club: ['other'] }));
+  await A2.account.login({ username: 'cloud guy', password: 'password1' });
+  assert.equal((await c2.syncNow()).action, 'downloaded');
+  assert.deepEqual(JSON.parse(d2.getItem('pitchside.ut')).club, ['p1', 'p2']);
+  assert.deepEqual(JSON.parse(d2.getItem('pitchside.ut.backup')).club, ['other']);
+  assert.equal(replaced2, 1);
+  assert.equal((await c2.syncNow()).action, 'unchanged');
+  d2.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2', 'p3'] }));
+  assert.equal((await c2.syncNow()).action, 'uploaded');
+  d1.setItem('pitchside.ut', JSON.stringify({ club: ['p1'] })); // device 1 edited an older copy
+  const r = await c1.syncNow();
+  assert.deepEqual([r.action, r.conflict], ['downloaded', true]);
+  assert.deepEqual(JSON.parse(d1.getItem('pitchside.ut')).club, ['p1', 'p2', 'p3']);
+});
+
 // ------------------------------------------------------------------ run
 for (const [name, fn] of queue) {
   try { await fn(); passed++; console.log(`  ok  ${name}`); }

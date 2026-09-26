@@ -107,10 +107,10 @@ test('chemistry styles: FC26 (whole-XI counts, no adjacency) vs classic (links),
   assert.deepEqual(calcChemistryStyled('4-4-2', slots, 'classic'), classic);
   assert.deepEqual(calcChemistryStyled('4-4-2', slots, 'fc26'), fc26);
   assert.deepEqual(calcChemistryStyled('4-4-2', slots, 'bogus'), classic);
-  // a squad split across many clubs/leagues/nations should score low under FC26 too
-  const scattered = db.all.filter((p) => !p.special).slice(0, 200);
-  const spread = bestLineup(scattered, '4-3-3').slots;
-  assert.ok(calcChemistryFc26('4-3-3', spread).total < 25, 'a scattered XI should not max out FC26 chemistry');
+  // a squad where every player is entirely unrelated (unique club/league/nation) should score 0 under FC26
+  const base = slots[0];
+  const unrelated = slots.map((p, i) => ({ ...p, id: `zz${i}`, nat: `n${i}`, league: `l${i}`, club: `c${i}`, special: null, linkAll: false }));
+  assert.equal(calcChemistryFc26('4-4-2', unrelated).total, 0, 'fully unrelated XI should have 0 FC26 chemistry');
 });
 
 test('formations: 11 slots, GK first, links in range', () => {
@@ -184,7 +184,7 @@ test('UT squad produces a valid Team with chemistry', () => {
 });
 
 test('UT squad chemistry style setting reaches squadInfo and the match Team (utTeam)', () => {
-  const s = UT.createUTState({ clubName: 'Style FC', primary: '#00A', secondary: '#0A0' }, new Rng(11));
+  const s = UT.createUTState({ clubName: 'Style FC', primary: '#0033AA', secondary: '#00AA00' }, new Rng(11));
   const classicInfo = UT.squadInfo(s);
   assert.equal(classicInfo.chem.links.length > 0, true);
   s.squad.chemStyle = 'fc26';
@@ -307,7 +307,7 @@ test('real players: every requested player present once per version, LOTG rarity
     assert.equal(p.ovr, p.intended, `${p.name} ovr ${p.ovr} != ${p.intended}`);
     if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 98, `${p.name} prime ovr`);
     assert.ok(p.wf >= 1 && p.wf <= 5 && p.sm >= 1 && p.sm <= 5 && ['L', 'R'].includes(p.foot));
-    assert.ok((p.alt || []).length <= 3 && !(p.alt || []).includes(p.pos));
+    assert.ok((p.alt || []).length <= 4 && !(p.alt || []).includes(p.pos));
     const face = p.pos === 'GK' ? p.gk : p.stats;
     for (const v of Object.values(face)) assert.ok(v >= 1 && v <= 99);
     if (p.pos === 'GK') assert.ok(p.gk.div >= 80 && p.gk.ref >= 80, `${p.name} GK stats`);

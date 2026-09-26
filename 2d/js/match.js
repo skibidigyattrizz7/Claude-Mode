@@ -15,6 +15,7 @@ import { touchHeaviness, heavyTouchSpeed, shoulderWinChance, timedFinishGrade, s
 import { solveKick } from './physics.js';
 
 const HUMAN_PROF = { react: 0.3, acc: 0.85, speed: 1, keeper: 1, press: 0.9, careful: 0.9 };
+const RECEIVER_NUDGE = 0.22;   // how much the human's own stick blends into the AI-driven receiver run
 export const STATE_CODES = ['run', 'tackle', 'slide', 'down', 'dive', 'hold', 'skill', 'celebrate'];
 
 const mkStats = () => ({ poss: 0, shots: 0, onTarget: 0, passAtt: 0, passCmp: 0, interceptions: 0, fouls: 0, corners: 0, yellows: 0, reds: 0 });
@@ -468,19 +469,23 @@ export class Match {
       // movement (with receiver assist when the player isn't steering)
       let assisted = false;
       if (this.pass && this.pass.receiver === p && !this.owner) {
-        // receiver assist: run onto the ball unless the player clearly steers somewhere else
-        // get onto the ball's line a touch early (no parallel chasing of a pass)
+        // FIFA-style reception assist: the AI drives the receiver onto the ball's predicted
+        // path (running onto through balls, arriving on time) until he touches it, the pass
+        // is intercepted/loose, or it times out (see the pass.eta check in update()). The
+        // human only nudges him a little; switching to another player cancels this outright
+        // (this code only runs while p is the controlled player).
+        assisted = true;
         const ip = this.ai[p.team].interceptPoint(p, 0.15, 0.12);
         const dx = ip.x - p.x, dy = ip.y - p.y, d = Math.hypot(dx, dy);
-        // the stick is still held from the pass itself for a moment: ignore it, and afterwards
-        // only a clear steer away (> ~110 degrees) takes the receiver off the ball's line
+        const sp = Math.min(topSpeed(p, d > 3 || sprint), d * 6);
+        const aiX = d > 0.2 ? (dx / d) * sp : 0, aiY = d > 0.2 ? (dy / d) * sp : 0;
+        // the stick is still held from the pass itself for a moment: ignore it right after the
+        // pass, then blend in a slight nudge (~20-25%) from whatever the player is holding
         const since = this.time - this.pass.t;
-        const agrees = since < 0.45 || mag < 0.15 || d < 0.3 || (mv.x * dx + mv.y * dy) / (mag * d) > (locked ? -0.8 : -0.35);
-        if (agrees) {
-          assisted = true;
-          const sp = Math.min(topSpeed(p, d > 3 || sprint), d * 6);
-          p.want.x = d > 0.2 ? (dx / d) * sp : 0; p.want.y = d > 0.2 ? (dy / d) * sp : 0; p.sprint = d > 5 || (sprint && d > 1);
-        }
+        const nudge = since < 0.45 || mag < 0.15 ? 0 : RECEIVER_NUDGE;
+        p.want.x = aiX * (1 - nudge) + mv.x * sp * nudge;
+        p.want.y = aiY * (1 - nudge) + mv.y * sp * nudge;
+        p.sprint = d > 5 || (sprint && d > 1);
       }
       if (!assisted && jockeyHeld && defending && p.state === 'run') {
         // jockey: face the carrier, side-step; with no input stay goal-side of him (sticky)

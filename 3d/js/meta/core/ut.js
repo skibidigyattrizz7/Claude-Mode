@@ -322,11 +322,19 @@ export function claimPackItem(state, pid) {
   return { where: 'club' };
 }
 
+/** One consistent balance model: every coin change (rewards, sales, purchases, admin grants) goes through
+ * this — never negative, never NaN, always an integer. Returns the new balance. */
+export function addCoins(state, delta) {
+  const d = Number.isFinite(delta) ? Math.round(delta) : 0;
+  state.coins = Math.max(0, Math.round(Number(state.coins) || 0) + d);
+  return state.coins;
+}
+
 export function quickSell(state, pid) {
   const p = getPlayer(pid);
   const v = quickSellValue(p);
   removeFromClub(state, pid);
-  state.coins += v;
+  addCoins(state, v);
   return v;
 }
 
@@ -531,7 +539,7 @@ export function choosePick(state, pickId, pid) {
   const pk = state.picks[i];
   if (!pk.options.includes(pid)) throw new Error('Not an option');
   state.picks.splice(i, 1);
-  if (state.club.includes(pid)) { const v = quickSellValue(getPlayer(pid)); state.coins += v; return { dup: true, coins: v }; }
+  if (state.club.includes(pid)) { const v = quickSellValue(getPlayer(pid)); addCoins(state, v); return { dup: true, coins: v }; }
   state.club.push(pid);
   if (!state.untradeable.includes(pid)) state.untradeable.push(pid);
   return { dup: false, pid };
@@ -542,7 +550,7 @@ export function grantReward(state, reward, from = '') {
   if (reward.promoPlayer) { const pid = promoRewardPid(reward.promoPlayer); reward = { ...reward, promoPlayer: undefined, ...(pid ? { player: pid } : { pack: `promo_${reward.promoPlayer.promo}` }) }; }
   if (reward.pick) { addPick(state, reward.pick, from); out.push(reward.pick.label || 'Player Pick'); }
   if (reward.item) { state.items = state.items || {}; state.items[reward.item] = (state.items[reward.item] || 0) + (reward.n || 1); out.push(`${reward.n || 1}× ${ITEM_NAMES[reward.item] || reward.item}`); }
-  if (reward.coins) { const c = configuredCoins(reward.coins); state.coins += c; out.push(`${c.toLocaleString()} coins`); }
+  if (reward.coins) { const c = configuredCoins(reward.coins); addCoins(state, c); out.push(`${c.toLocaleString()} coins`); }
   if (reward.pack) { state.packs.push({ type: reward.pack, from }); out.push(PACK_BY_ID[reward.pack].name); }
   if (reward.player) {
     const p = getPlayer(reward.player);
@@ -671,7 +679,7 @@ export function applyBattleResult(state, opp, result, userSide = 'home') {
   const coins = configuredCoins(Math.round((300 + (outcome === 'W' ? 500 : outcome === 'D' ? 200 : 0) + gf * 40) * mult / 10) * 10);
   const base = DIFF_PTS[opp.difficulty] || 30;
   const points = Math.max(5, Math.round(base * (outcome === 'W' ? 1 : outcome === 'D' ? 0.4 : 0.15) + Math.max(0, gf - ga) * 5 + gf * 2));
-  state.coins += coins;
+  addCoins(state, coins);
   state.stats.matches++;
   state.stats.goals += gf;
   if (outcome === 'W') state.stats.wins++; else if (outcome === 'D') state.stats.draws++; else state.stats.losses++;
@@ -718,7 +726,7 @@ export function marketSearch({ pos = '', minOvr = 0, maxOvr = 99, tier = '', nat
 export function buyListing(state, listing) {
   if (state.club.includes(listing.pid)) throw new Error('You already own this player');
   if (state.coins < listing.price) throw new Error('Not enough coins');
-  state.coins -= listing.price;
+  addCoins(state, -listing.price);
   state.club.push(listing.pid);
 }
 
@@ -730,6 +738,6 @@ export function sellOnMarket(state, pid, price, rng = new Rng()) {
   if (!rng.chance(chance)) return { sold: false };
   const received = Math.floor(price * 0.95);
   removeFromClub(state, pid);
-  state.coins += received;
+  addCoins(state, received);
   return { sold: true, received };
 }

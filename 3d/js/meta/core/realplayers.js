@@ -14,7 +14,7 @@ import { REG_ROWS } from './realregulars.js';
 const ICON_ROWS = [
   ['pele', 'Pelé', 'Pelé', 'BRA', 'CF', ['ST', 'CAM'], 'R', 4, 5, 98, [95, 96, 93, 96, 60, 78], 29, 173, 5],
   ['maradona', 'Diego Maradona', 'Maradona', 'ARG', 'CAM', ['CF', 'ST'], 'L', 3, 5, 97, [91, 93, 94, 97, 40, 76], 26, 165, 2],
-  ['messi_icon', 'Lionel Messi', 'Messi', 'ARG', 'RW', ['CF', 'CAM'], 'L', 4, 4, 97, [93, 94, 92, 97, 38, 68], 25, 170, 1],
+  ['messi_icon', 'Lionel Messi', 'Messi', 'ARG', 'RW', ['RM', 'CAM', 'CF', 'ST'], 'L', 4, 4, 97, [93, 94, 92, 97, 38, 68], 25, 170, 1],
   ['ronaldo_icon', 'Cristiano Ronaldo', 'C. Ronaldo', 'POR', 'ST', ['LW', 'CF'], 'R', 4, 5, 96, [95, 96, 82, 92, 35, 84], 29, 187, 2],
   ['nazario', 'Ronaldo Nazário', 'Ronaldo', 'BRA', 'ST', ['CF'], 'R', 4, 5, 96, [97, 96, 81, 96, 45, 84], 21, 183, 3, { hs: 2 }],
   ['cruyff', 'Johan Cruyff', 'Cruyff', 'NED', 'CF', ['CAM', 'LW', 'ST'], 'R', 4, 5, 96, [92, 90, 92, 95, 42, 72], 27, 178, 0],
@@ -103,7 +103,7 @@ const ICON_ROWS = [
 
 // ---------- Stars (active; current-ish ratings) ----------
 const STAR_ROWS = [
-  ['messi', 'Lionel Messi', 'Messi', 'ARG', 'RW', ['CF', 'CAM'], 'L', 4, 4, 86, [72, 86, 89, 89, 33, 64], 39, 170, 1, { lg: 'CON' }],
+  ['messi', 'Lionel Messi', 'Messi', 'ARG', 'RW', ['RM', 'CAM', 'CF', 'ST'], 'L', 4, 4, 86, [72, 86, 89, 89, 33, 64], 39, 170, 1, { lg: 'CON' }],
   ['ronaldo', 'Cristiano Ronaldo', 'C. Ronaldo', 'POR', 'ST', ['LW'], 'R', 4, 5, 85, [78, 90, 76, 80, 34, 77], 41, 187, 2, { lg: 'CON' }],
   ['neymar', 'Neymar Jr.', 'Neymar Jr', 'BRA', 'LW', ['CAM'], 'R', 5, 5, 82, [80, 82, 84, 88, 35, 60], 34, 175, 3, { lg: 'CON' }],
   ['mbappe', 'Kylian Mbappé', 'Mbappé', 'FRA', 'ST', ['LW'], 'R', 4, 5, 91, [97, 90, 81, 92, 37, 77], 27, 178, 4, { lg: 'SOL', hs: 2 }],

@@ -22,7 +22,7 @@ export function sanitizeConfigValue(key, v) {
   if (key === 'promos') {
     for (const [k, x] of ent) { if (!KEY_RE.test(k) || typeof x !== 'boolean') return null; out[k] = x; }
   } else if (key === 'features') {
-    for (const [k, x] of ent) { if (!KEY_RE.test(k) || !(typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e12))) return null; out[k] = x; }
+    for (const [k, x] of ent) { if (!KEY_RE.test(k) || !(typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e15))) return null; out[k] = x; }
   } else if (key === 'packs') {
     for (const [k, x] of ent) {
       if (!KEY_RE.test(k) || !isObj(x)) return null;

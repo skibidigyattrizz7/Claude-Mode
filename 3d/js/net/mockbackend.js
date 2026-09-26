@@ -211,7 +211,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     const ent = Object.entries(v);
     if (ent.length > 200) return 'too_large';
     if (key === 'promos') return ent.every(([k, x]) => KEY_RE.test(k) && typeof x === 'boolean') ? null : 'bad_value';
-    if (key === 'features') return ent.every(([k, x]) => KEY_RE.test(k) && (typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e12))) ? null : 'bad_value';
+    if (key === 'features') return ent.every(([k, x]) => KEY_RE.test(k) && (typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e15))) ? null : 'bad_value';
     if (key === 'packs') {
       return ent.every(([k, x]) => KEY_RE.test(k) && isObj(x) && Object.entries(x).every(([f, y]) => (f === 'enabled' && typeof y === 'boolean')
         || (f === 'price' && Number.isInteger(y) && y >= 0 && y <= 10000000))) ? null : 'bad_value';

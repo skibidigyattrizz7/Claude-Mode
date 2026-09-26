@@ -1163,6 +1163,18 @@ function browserOnline() {
   const mock = Q.get('mockOnline') === '1';
   let rpcImpl = supabaseRpc;
   let storage = localStorage;
+  // ?mockServer=http://127.0.0.1:PORT (dev/tests only, loopback hosts only): one shared mock backend over HTTP
+  const ms = Q.get('mockServer');
+  let mockServer = null;
+  try { const u = ms ? new URL(ms) : null; if (u && ['127.0.0.1', 'localhost'].includes(u.hostname) && /^https?:$/.test(u.protocol)) mockServer = u.origin; } catch { /* ignore */ }
+  if (mockServer) {
+    rpcImpl = async (fn, args) => {
+      try {
+        const r = await fetch(`${mockServer}/rpc/${fn}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(args || {}) });
+        return await r.json();
+      } catch { return { ok: false, error: 'offline' }; }
+    };
+  }
   if (mock) {
     const backend = createMockBackend(webStore(localStorage), { latencyMs: 60, down: Q.get('mockDown') === '1' });
     window.__mockOnline = backend;
@@ -1177,9 +1189,9 @@ function browserOnline() {
     rpc: rpcImpl,
     storage,
     mock,
-    configured: mock || !!(SUPABASE_URL && SUPABASE_KEY),
-    identityKey: mock ? 'pitchside.mock.identity' : 'pitchside.online.identity',
-    accountKey: mock ? 'pitchside.mock.account' : 'pitchside.account',
+    configured: mock || !!mockServer || !!(SUPABASE_URL && SUPABASE_KEY),
+    identityKey: mock || mockServer ? 'pitchside.mock.identity' : 'pitchside.online.identity',
+    accountKey: mock || mockServer ? 'pitchside.mock.account' : 'pitchside.account',
     volatileStorage,
     requireAccount: Q.get('requireAccount') === '1', // TEMP: accounts migration (002) not live yet — device profiles until then // mock keeps anonymous device profiles for dev tests
     transportKind: ['bc', 'loopback', 'peer'].includes(net) ? net : mock ? 'bc' : 'peer',
@@ -1194,6 +1206,7 @@ function browserOnline() {
     },
     matchmakerConfig: mock && Q.get('mmTimeout') ? { timeoutMs: Number(Q.get('mmTimeout')) * 1000 } : undefined,
     invitePollMs: mock ? 700 : 2000,
+    presenceMs: (mock || mockServer) && Number(Q.get('presenceMs')) >= 500 ? Number(Q.get('presenceMs')) : undefined,
   });
 }
 
