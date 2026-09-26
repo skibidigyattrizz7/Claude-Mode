@@ -16,7 +16,7 @@ export function deleteCustomCard(id) { writeAll(listCustomCards().filter((c) => 
 
 /** Build+save a full card object from Card Creator form input. Returns the saved player-shaped card.
  * `superLevel`: true unlocks stats/OVR above 99 (up to 999), matching adminCaps().maxOvr for the super level. */
-export function createCustomCard({ name, pos = 'ST', nat = 'ENG', club = 'FUT', tier = 'gold', stats, photo = null, special = null, superLevel = false }) {
+export function createCustomCard({ name, pos = 'ST', alt = [], nat = 'ENG', club = 'FUT', tier = 'gold', stats, photo = null, special = null, superLevel = false, playstyles = [] }) {
   const isGk = pos === 'GK';
   const keys = isGk ? ['div', 'han', 'kic', 'ref', 'spd', 'pos'] : ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
   const cap = superLevel ? 999 : 99;
@@ -26,8 +26,9 @@ export function createCustomCard({ name, pos = 'ST', nat = 'ENG', club = 'FUT', 
     id: `admin_${Date.now()}_${uid++}`,
     name: String(name || 'Custom Player').slice(0, 26),
     last: String(name || 'Custom Player').split(' ').slice(-1)[0].slice(0, 20),
-    pos, alt: [], nat, club, tier, rare: tier !== 'bronze' && tier !== 'silver' && tier !== 'gold',
+    pos, alt: (Array.isArray(alt) ? alt : []).filter((x) => x && x !== pos).slice(0, 3), nat, club, tier, rare: tier !== 'bronze' && tier !== 'silver' && tier !== 'gold',
     special: special || null, customAdmin: true, photo, tradable: true,
+    playstyles: Array.isArray(playstyles) ? playstyles.slice(0, 40) : [],
     createdAt: Date.now(),
   };
   if (isGk) p.gk = statObj; else p.stats = statObj;

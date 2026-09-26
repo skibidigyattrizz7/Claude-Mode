@@ -11,6 +11,8 @@ import { NATIONS } from '../core/data.js';
 import { sendLocalGift } from './giftsview.js';
 import { getConfig, syncConfig } from './config.js';
 import { PROMOS } from '../core/promos.js';
+import { PLAYSTYLES } from '../core/physique.js';
+import { psBadgeHtml } from './card.js';
 
 const TIERS = ['bronze', 'silver', 'gold', 'icon'];
 // Every card "design": base specials + every live/upcoming promo campaign (not capped to a handful).
@@ -39,17 +41,42 @@ function cropToCard(file) {
 export function cardCreatorPanel(app, { level }) {
   const isSuper = level === 'super';
   const cap = isSuper ? 999 : 99;
-  const st = { name: '', pos: 'ST', nat: 'ENG', tier: 'gold', special: '', photo: null, stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
+  const st = { name: '', pos: 'ST', alt: [], nat: 'ENG', tier: 'gold', special: '', photo: null, playstyles: [], stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
   if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to Owner Access.'));
   const preview = h('div', { class: 'pm-cc-preview' });
   const drawPreview = () => {
     clear(preview);
     const isGk = st.pos === 'GK';
-    const p = { id: 'preview', name: st.name || 'New Player', last: (st.name || 'New Player').split(' ').slice(-1)[0], pos: st.pos, nat: st.nat, club: 'FUT', tier: st.tier, special: st.special || null, customAdmin: true, photo: st.photo };
+    const p = { id: 'preview', name: st.name || 'New Player', last: (st.name || 'New Player').split(' ').slice(-1)[0], pos: st.pos, alt: st.alt.slice(), nat: st.nat, club: 'FUT', tier: st.tier, special: st.special || null, customAdmin: true, photo: st.photo, playstyles: st.playstyles };
     if (isGk) p.gk = { div: st.stats.pac, han: st.stats.sho, kic: st.stats.pas, ref: st.stats.dri, spd: st.stats.def, pos: st.stats.phy };
     else p.stats = st.stats;
     p.ovr = Math.max(1, Math.min(999, Math.round(Object.values(st.stats).reduce((a, b) => a + b, 0) / 6)));
     preview.appendChild(playerCard(p, { size: 'md' }));
+  };
+  const altRow = h('div', { class: 'pm-cc-alt' });
+  const drawAlt = () => {
+    clear(altRow);
+    add(altRow, h('span', { class: 'pm-dim' }, 'Alt positions'), h('div', { class: 'pm-chips' }, POSITIONS_ALL.filter((p) => p !== st.pos).map((p) => h('button', {
+      class: `pm-chip ${st.alt.includes(p) ? 'on' : ''}`,
+      onclick: () => { st.alt = st.alt.includes(p) ? st.alt.filter((x) => x !== p) : [...st.alt, p].slice(0, 3); drawAlt(); drawPreview(); },
+    }, p))));
+  };
+  const psRow = h('div', { class: 'pm-cc-ps' });
+  const drawPs = () => {
+    clear(psRow);
+    add(psRow, h('span', { class: 'pm-dim' }, 'PlayStyles (tap to add, tap again for +)'),
+      h('div', { class: 'pm-chips pm-wrap' }, Object.entries(PLAYSTYLES).map(([id, d]) => {
+        const cur = st.playstyles.find((x) => x.id === id);
+        return h('button', {
+          class: `pm-chip ${cur ? 'on' : ''} ${cur && cur.plus ? 'is-plus' : ''}`, title: d[3],
+          onclick: () => {
+            if (!cur) st.playstyles = [...st.playstyles, { id, plus: false }];
+            else if (!cur.plus) st.playstyles = st.playstyles.map((x) => (x.id === id ? { ...x, plus: true } : x));
+            else st.playstyles = st.playstyles.filter((x) => x.id !== id);
+            drawPs(); drawPreview();
+          },
+        }, `${d[2]}${cur && cur.plus ? '+' : ''}`);
+      })));
   };
   const statRow = (key, label) => {
     const row = h('label', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: String(cap), value: st.stats[key] }), h('b', null, String(st.stats[key])));
@@ -161,7 +188,7 @@ export function moderationPanel(app, { level }) {
   const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search a username, friend code, or leave blank for all players…', 'aria-label': 'Search players' });
   search.addEventListener('input', () => { st.q = search.value; draw(); });
   draw();
-  return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), icon('search', 'pm-inline-search-ico'), search, results);
+  return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), h('p', { class: 'pm-dim' }, 'Search by username, friend code or name — or leave it blank for the all-players list.'), icon('search', 'pm-inline-search-ico'), search, results, moreWrap);
 }
 
 // ---------------------------------------------------------------- Broadcast + giveaways
