@@ -55,6 +55,6 @@ Receiver free-roam; weak passes; AI defending/marking + interceptions for user t
 ## Work order (max 2 agents at once; OWNER PRIORITY: promos + UI first)
 1. B — promos/players/rules (vault, unreleased promos hidden, more promos) [running]
 2. C — ALL UI redo, FC quality (UT, squad, tactics visible, admin panel, menus, 2D, landing) [running]
-3. A — accounts/economy (market, coins, refresh, transfer list, super code) [paused at checkpoint; resume next]
+3. A — NEXT: wire login/sign-up/sign-out + change username (accountui.js, social.js) so UT club syncs across devices; then remaining economy items [paused]
 4. G — 3D engine (receiver, AI defending, proxy/Chromebook loading, faster stadium)
 5. F — 2D gameplay + 2D online

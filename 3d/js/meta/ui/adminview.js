@@ -127,7 +127,7 @@ export function adminView() {
       const amt = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount), 'aria-label': 'Coin amount' });
       amt.addEventListener('input', () => { st.amount = Math.round(Number(amt.value) || 0); });
       const inf = !!(s && s.admin && s.admin.infinite);
-      const limited = !can('infinite');
+      const limited = !can('owner', level);
       const coinsLimited = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
         h('p', { class: 'pm-dim' }, s ? `Local balance: ${fmtNum(app.wallet.mode === 'online' ? (app.wallet.local || 0) : s.coins)}. Up to ${fmtNum(A.COIN_CAP[level])} coins per grant.` : ''),
         h('div', { class: 'pm-btnrow' }, amt,
@@ -247,12 +247,12 @@ export function adminView() {
         h('p', { class: 'pm-dim' }, `${LEVEL_NAME[level]}${A.adminInfo().fromAccount ? ' (from your account role)' : ''}.`),
         h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin'));
       const tools = h('div', { class: 'pm-admin-grid', 'data-admin-tab': 'tools' },
-        can('coins') ? coins : null, can('packs') ? packs : null,
-        can('sbc') ? progress : null, can('career') ? career : null, can('grant') ? grant : null, can('grant') ? tradable : null, can('reset') ? reset : lock);
+        can('coins', level) ? coins : null, can('packs', level) ? packs : null,
+        can('owner', level) ? progress : null, can('owner', level) ? career : null, can('grant', level) ? grant : null, can('grant', level) ? tradable : null, can('owner', level) ? reset : lock);
 
       // ---- extra tabs: moderation (mod/full), and owner-only Cards / Broadcast / Config ----
       const extraTabs = [];
-      if (can('moderation')) extraTabs.push(['moderation', 'Moderation', () => X.moderationPanel(app, { level })]);
+      if (can('moderation', level)) extraTabs.push(['moderation', 'Moderation', () => X.moderationPanel(app, { level })]);
       if (level === 'full') {
         extraTabs.push(['cards', 'Card Creator', () => X.cardCreatorPanel(app, { level })]);
         extraTabs.push(['broadcast', 'Broadcast & Giveaways', () => h('div', null, X.broadcastPanel(app), X.giveawayPanel(app))]);
