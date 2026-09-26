@@ -3,7 +3,15 @@
 import { MetaApp } from './ui/app.js';
 import { getNationalTeams as buildNationalTeams } from './core/teams.js';
 import { loadUT, utTeam } from './core/ut.js';
-export { redeemAdminCode, getAdminLevel, lockRemainingMs as adminLockRemainingMs, adminInfo } from './core/admin.js';
+// Admin Given Codes: the shared verifier (3d/js/shared/adminauth.js) is the one source of truth — it knows
+// the 'super' (Owner Access) level; the old core/admincode.js table only had full/temp. main.js's Settings
+// page (and every other admin-code entry point) must go through THESE re-exports, not core/admin.js's.
+import { verifyAdminCode, getAdminLevel as getAdminLevelAA, lockRemainingMs, bindOnline as bindAdminOnline, adminCaps } from '../shared/adminauth.js';
+export { bindAdminOnline };
+export const redeemAdminCode = verifyAdminCode;
+export const getAdminLevel = getAdminLevelAA;
+export const adminLockRemainingMs = lockRemainingMs;
+export function adminInfo() { const level = getAdminLevelAA(); return { level, ...adminCaps(level) }; }
 
 /**
  * Mount the meta UI inside `container`.
