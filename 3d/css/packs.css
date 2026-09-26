@@ -10,6 +10,18 @@
 }
 .pm-po-3d.show { opacity: 1; }
 
+.pm-po.is-3d:not(.is-grid) .pm-po-stage { z-index: 3; }
+.pm-po.is-3d:not(.is-grid) .pm-po-rays,
+.pm-po.is-3d:not(.is-grid) .pm-po-glow { display: none; }
+.pm-po.is-3d:not(.is-grid) .pm-po-center { transform: translateX(-90px); }
+.pm-po.is-3d .pm-po-revealname { text-shadow: 0 2px 8px #000; }
+.pm-po.is-3d .pm-po-continue { min-height: 44px; }
+.pm-po.is-3d .pm-wo-label { background: #12171de0; padding: 8px 16px; border-radius: 4px; }
+@media (max-width: 600px) {
+  .pm-po.is-3d:not(.is-grid) .pm-po-center { transform: translateX(-38px) scale(.8); }
+  .pm-po.is-3d .pm-po-revealwrap { gap: 10px; }
+}
+
 /* Reveal flip: the actual card markup is card.js's unchanged output; this just spins it in like a
    card turning face-up, echoing the "face-down -> reveal" beat from the tunnel cinematic. */
 .pm-reveal.flip-in { animation: pk-flip .62s cubic-bezier(.22, .8, .22, 1) both; transform-style: preserve-3d; }

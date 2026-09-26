@@ -234,9 +234,13 @@ export function runPackOpening(root, opts) {
           ov.classList.add('is-walkout3d');
           await scene.walkoutSequence(best, walkoutKit(best, opts.userKit));
         }
-      } finally {
+        if (!stopped && scene) scene.hold();
+      } catch (error) {
+        console.warn('Pack cinematic unavailable; continuing with card reveal.', error);
         if (scene) { scene.dispose(); scene = null; }
         canvas3d.classList.remove('show');
+        ov.classList.remove('is-3d');
+      } finally {
         ov.classList.remove('is-walkout3d');
       }
     } else {
@@ -292,6 +296,7 @@ export function runPackOpening(root, opts) {
   function revealCard() {
     if (stopped) return;
     phase = 'reveal';
+    ov.classList.add('is-card-reveal');
     clear(stage);
     const card = playerCard(best, { size: 'lg', className: 'pm-reveal flip-in' });
     const cont = h('button', { class: 'pm-btn pm-btn--primary pm-po-continue', onclick: () => toGrid() }, 'Continue');
