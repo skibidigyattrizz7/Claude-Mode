@@ -270,6 +270,67 @@ export function removeFromClub(state, pid) {
 export function addToClub(state, pid) {
   if (!state.club.includes(pid)) state.club.push(pid);
 }
+
+// ---------- V4: SBC storage vault (owner request Sep 26) ----------
+export const VAULT_CAP = 200;
+export function vaultPlayers(state) { return (state.vault || []).map(getPlayer).filter(Boolean); }
+/** Move a card straight into the vault (does not touch the club/squad — for cards that never joined the
+ * club because they were an untradeable duplicate). Oldest entries drop first once VAULT_CAP is reached. */
+export function sendToVault(state, pid) {
+  if (!getPlayer(pid)) return false;
+  state.vault = state.vault || [];
+  state.vault.push(pid);
+  if (state.vault.length > VAULT_CAP) state.vault.splice(0, state.vault.length - VAULT_CAP);
+  return true;
+}
+/** Take one copy of a vault card back into the club (e.g. to use it outside an SBC). */
+export function takeFromVault(state, pid) {
+  const i = (state.vault || []).indexOf(pid);
+  if (i < 0) return false;
+  state.vault.splice(i, 1);
+  addToClub(state, pid);
+  return true;
+}
+/** Remove exactly one occurrence of `pid` from wherever it was spent (club or vault). Used by SBC/reward
+ * consumption so a vault duplicate can be spent without touching the club copy of the same id. */
+function spendOwnedCard(state, pid) {
+  const vi = (state.vault || []).indexOf(pid);
+  if (vi >= 0) { state.vault.splice(vi, 1); return; }
+  removeFromClub(state, pid);
+}
+/** True when the id is spendable right now: owned in the club, or sitting in the vault. */
+export function isOwnedAnywhere(state, pid) { return state.club.includes(pid) || (state.vault || []).includes(pid); }
+/** Claim a pack-opened (or reward-granted) card: an untradeable duplicate of a card the player already
+ * owns for the same base player goes to the vault instead of the club (owner request: "SBC storage vault"). */
+export function claimPackItem(state, pid) {
+  const p = getPlayer(pid);
+  if (!p) return { where: null };
+  const already = clubPlayers(state).some((c) => c.id === pid || (c.id !== pid && personOf(c) === personOf(p) && (state.untradeable || []).includes(c.id)));
+  if (already || state.club.includes(pid)) { sendToVault(state, pid); return { where: 'vault' }; }
+  addToClub(state, pid);
+  return { where: 'club' };
+}
+
+// ---------- V4: transfer list (cards pulled out of the club, not yet listed for sale) ----------
+/** Move a tradeable club card to the transfer list pile (out of the club/squad, kept locally until listed
+ * or returned). The online market lists it later via pmarket.js, which also accepts transfer-list ids. */
+export function sendToTransferList(state, pid) {
+  if (!state.club.includes(pid) || (state.untradeable || []).includes(pid)) return false;
+  removeFromClub(state, pid);
+  state.transferList = state.transferList || [];
+  if (!state.transferList.includes(pid)) state.transferList.push(pid);
+  return true;
+}
+/** Pull a card back out of the transfer list into the club (cancel the intent to sell). */
+export function returnFromTransferList(state, pid) {
+  const i = (state.transferList || []).indexOf(pid);
+  if (i < 0) return false;
+  state.transferList.splice(i, 1);
+  addToClub(state, pid);
+  return true;
+}
+export function transferListPlayers(state) { return (state.transferList || []).map(getPlayer).filter(Boolean); }
+
 export function quickSell(state, pid) {
   const p = getPlayer(pid);
   const v = quickSellValue(p);
