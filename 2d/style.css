@@ -1,10 +1,10 @@
-/* Touchline — UI styles */
-:root {
-  --bg: #0b1220; --panel: rgba(10, 18, 36, 0.94); --line: rgba(255, 255, 255, 0.12);
-  --txt: #e8eefc; --dim: #9fb0d8; --acc: #16a34a; --acc2: #35e0ff; --warn: #ffd166;
-  --font-display: "Oswald", "Bahnschrift", "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
-  --dur-fast: 150ms; --dur-base: 190ms; --ease-out: cubic-bezier(.2, .8, .2, 1);
-}
+/* Touchline — UI styles. Reads the shared design tokens (../3d/css/tokens.css, loaded first in index.html)
+   so both games share one palette/type/motion system; every fallback below keeps this file working even
+   if tokens.css fails to load. */
+/* tokens.css (loaded first in index.html) already defines --bg, --line, --txt, --acc, --warn, --gold,
+   --font-display, --dur-fast, --dur-base, --ease-out, --radius-lg, --radius-sm and --panel — this file
+   only adds the two names it used under different identifiers. */
+:root { --dim: var(--mut); --acc2: var(--acc3); }
 @media (prefers-reduced-motion: reduce) { :root { --dur-fast: 1ms; --dur-base: 1ms; } }
 * { box-sizing: border-box; }
 html, body {
@@ -21,8 +21,8 @@ html, body {
 }
 
 button {
-  font: inherit; color: var(--txt); background: #1b2a4a; border: 1px solid var(--line); border-radius: 8px;
-  padding: 10px 16px; cursor: pointer; touch-action: manipulation;
+  font: inherit; color: var(--txt); background: #1b2a4a; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  min-height: 44px; padding: 10px 16px; cursor: pointer; touch-action: manipulation;
   transition: background var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out), border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
 button:hover { background: #26395f; border-color: rgba(255,255,255,.22); transform: translateY(-1px); }
@@ -39,15 +39,37 @@ select { background: #14213d; color: var(--txt); border: 1px solid var(--line); 
   touch-action: pan-y; -webkit-overflow-scrolling: touch; user-select: none;
 }
 #ui.overlay { background: rgba(3,7,18,0.65); }
-#ui.menu-screen { background: linear-gradient(90deg, rgba(5,10,25,0.92) 0%, rgba(5,10,25,0.55) 55%, rgba(5,10,25,0.15) 100%); justify-content: flex-start; }
-.menu { margin: auto 0 auto max(24px, 6vw); display: flex; flex-direction: column; gap: 18px; max-width: 420px; width: 100%; }
+#ui.menu-screen {
+  background:
+    radial-gradient(60vmax 60vmax at 88% -10%, rgba(25,166,102,.16), transparent 60%),
+    linear-gradient(90deg, rgba(5,10,25,.94) 0%, rgba(5,10,25,.68) 55%, rgba(5,10,25,.2) 100%);
+  justify-content: flex-start;
+}
+.menu { margin: auto 0 auto max(24px, 6vw); display: flex; flex-direction: column; gap: 20px; max-width: 460px; width: 100%; }
 .logo { display: flex; flex-direction: column; line-height: 0.95; }
-.logo .l1 { font: 900 clamp(40px, 7vw, 72px)/.95 var(--font-display); font-style: italic; letter-spacing: 1px; color: #fff; text-shadow: 0 4px 0 #16a34a, 0 8px 24px rgba(0,0,0,.6); }
+.logo .l1 { font: 900 clamp(40px, 7vw, 72px)/.95 var(--font-display); font-style: italic; letter-spacing: 1px; color: #fff; text-shadow: 0 4px 0 var(--acc), 0 8px 24px rgba(0,0,0,.6); }
 .logo .l2 { font: 700 clamp(13px, 1.8vw, 18px) var(--font-display); letter-spacing: 6px; color: var(--acc2); margin-top: 10px; }
 .menu-buttons { display: flex; flex-direction: column; gap: 8px; }
-.menu-buttons button { text-align: left; font-size: 17px; font-weight: 600; padding: 12px 18px; background: rgba(20,35,65,0.85); border-left: 4px solid transparent; }
+.menu-buttons button { text-align: left; font-size: 17px; font-weight: 600; min-height: 44px; padding: 12px 18px; background: rgba(20,35,65,0.85); border-left: 4px solid transparent; touch-action: manipulation; }
 .menu-buttons button:hover, .menu-buttons button:focus-visible { border-left-color: var(--acc2); background: rgba(35,55,95,0.95); transform: translateX(3px); }
 .menu-buttons button.primary { background: var(--acc); border-left-color: #bbf7d0; }
+
+/* main-menu tile list: icon + title + subtitle, FC-style */
+.mm-list { gap: 7px; max-height: 62vh; overflow-y: auto; padding-right: 2px; scrollbar-width: thin; }
+.mm-list button {
+  display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 9px 16px; border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, rgba(20,35,65,.85), rgba(16,28,52,.7)); border: 1px solid rgba(255,255,255,.06); border-left: 3px solid transparent;
+  animation: mb-in .4s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 35ms);
+}
+@keyframes mb-in { from { opacity: 0; transform: translateX(-10px); } }
+.mm-list button .mi { flex: none; width: 24px; height: 24px; color: var(--acc2); filter: drop-shadow(0 0 6px rgba(53,224,255,.5)); transition: transform var(--dur-base) var(--ease-out); }
+.mm-list button.primary .mi { color: #eafff2; filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
+.mm-list button:hover .mi, .mm-list button:focus-visible .mi { transform: scale(1.12) rotate(-4deg); }
+.mb-t { display: flex; flex-direction: column; min-width: 0; }
+.mb-t b { font: 800 15.5px var(--font-display); letter-spacing: .01em; text-transform: uppercase; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-list button.primary .mb-t b { color: #04150c; }
+.mb-t small { font-size: 11.5px; color: var(--dim); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-list button.primary .mb-t small { color: rgba(4,21,12,.72); }
 .foot { color: var(--dim); font-size: 12px; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; width: min(720px, 100%); box-shadow: 0 20px 60px rgba(0,0,0,0.5); margin: auto 0; }

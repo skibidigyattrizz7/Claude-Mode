@@ -50,22 +50,40 @@ export function kitIcon(kit, num = 10, size = 56) {
 
 const stars = (r) => '★'.repeat(Math.max(1, Math.round((r - 60) / 6))).padEnd(5, '☆');
 
+// ---------- menu icons (inline SVG, one consistent line-icon family — no emoji) ----------
+const MENU_ICON = {
+  quick: '<circle cx="12" cy="12" r="9"/><path d="M9.6 8.2 16 12l-6.4 3.8z" fill="currentColor" stroke="none"/>',
+  worldcup: '<path d="M6 3v4M18 3v4M4 8h16"/><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8.5 12.3 12 14.5l3.5-2.2v3l-3.5 2-3.5-2z"/>',
+  shootout: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/>',
+  fkpractice: '<path d="M12 3v13"/><path d="M6.5 9.5 12 4l5.5 5.5"/><rect x="4.5" y="16.5" width="15" height="4.5" rx="1.4"/>',
+  cornerpractice: '<path d="M5 21V4"/><path d="M5 4h13l-3.2 3.6L18 11H5"/>',
+  versus: '<path d="M7 3v7a5 5 0 0 0 10 0V3"/><path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/><path d="M12 15v3M9 21h6M9 18h6"/>',
+  online: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 4 6 4 9s-1.5 6.4-4 9c-2.5-2.6-4-6-4-9s1.5-6.4 4-9Z"/>',
+  tutorial: '<circle cx="8" cy="15.5" r="4"/><path d="M11 12.5 19 4.5M16 7.5l2.2 2.2M13.4 10.1l2 2"/>',
+  howto: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 5.5v15"/>',
+  settings: '<circle cx="12" cy="12" r="3.1"/><path d="M12 3.6v2.5M12 17.9v2.5M20.4 12h-2.5M6.1 12H3.6M17.5 6.5l-1.8 1.8M8.3 15.7l-1.8 1.8M17.5 17.5l-1.8-1.8M8.3 8.3 6.5 6.5"/>',
+};
+const micon = (name) => `<svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MENU_ICON[name] || MENU_ICON.settings}</svg>`;
+
 // ---------- main menu ----------
 export function showMenu(h) {
+  const items = [
+    ['quick', 'Quick Match', '7-a-side friendly, pick both sides', 'primary'],
+    ['worldcup', 'World Cup', `${TEAMS.length}-nation group + knockout`],
+    ['versus', 'Local 2 Players', 'Same keyboard or gamepads'],
+    ['online', 'Online', 'Play a friend over the internet'],
+    ['shootout', 'Penalty Shootout', 'Best of five, sudden death'],
+    ['fkpractice', 'Free-Kick Practice', 'Bend it like the pros'],
+    ['cornerpractice', 'Corner Practice', 'Whip in crosses, work the far post'],
+    ['tutorial', 'Tutorial', 'Learn the controls in 2 minutes'],
+    ['howto', 'How to Play', 'Full control reference'],
+    ['settings', 'Settings', 'Controls, gameplay, sound'],
+  ];
   const r = show(`
     <div class="menu">
       <div class="logo"><span class="l1">TOUCHLINE</span><span class="l2">INTERNATIONAL SOCCER</span></div>
-      <div class="menu-buttons">
-        <button data-go="quick" class="primary">Quick Match</button>
-        <button data-go="worldcup">World Cup</button>
-        <button data-go="shootout">Penalty Shootout</button>
-        <button data-go="fkpractice">Free-Kick Practice</button>
-        <button data-go="cornerpractice">Corner Practice</button>
-        <button data-go="versus">Local 2 Players</button>
-        <button data-go="online">Online</button>
-        <button data-go="tutorial">Tutorial</button>
-        <button data-go="howto">How to Play</button>
-        <button data-go="settings">Settings</button>
+      <div class="menu-buttons mm-list">
+        ${items.map(([go, label, sub, cls], i) => `<button data-go="${go}" class="${cls || ''}" style="--i:${i}">${micon(go)}<span class="mb-t"><b>${esc(label)}</b><small>${esc(sub)}</small></span></button>`).join('')}
       </div>
       <div class="foot">7-a-side · ${TEAMS.length} nations · Shot assist: ${esc(settings.gameplay.p1.shot)} · Passing: ${esc(settings.gameplay.p1.passGround)} · ${esc(settings.difficulty)}</div>
     </div>`, 'menu-screen');
