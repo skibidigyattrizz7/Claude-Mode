@@ -266,9 +266,9 @@ export function adminView() {
       const extraTabs = [];
       if (can('moderation', level)) extraTabs.push(['moderation', 'Moderation', () => X.moderationPanel(app, { level })]);
       if (can('owner', level)) {
-        extraTabs.push(['cards', 'Card Creator', () => X.cardCreatorPanel(app, { level })]);
+        extraTabs.push(['cards', level === 'super' ? 'Card Creator ★' : 'Card Creator', () => X.cardCreatorPanel(app, { level })]);
         extraTabs.push(['broadcast', 'Broadcast & Giveaways', () => h('div', null, X.broadcastPanel(app), X.giveawayPanel(app))]);
-        extraTabs.push(['config', 'Global Config', () => X.configPanel(app)]);
+        extraTabs.push(['config', 'Global Config', () => X.configPanel(app, { level })]);
       }
       if (!extraTabs.some(([k]) => k === st.tab)) st.tab = 'tools';
       const panes = { tools };

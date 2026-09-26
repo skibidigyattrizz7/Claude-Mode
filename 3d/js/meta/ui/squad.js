@@ -9,7 +9,8 @@ import { h, clear, select, add, modal } from './dom.js';
 import { playerCard, emptyCard } from './card.js';
 import { flagSVG } from './art.js';
 import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr, playerPositions } from '../core/formations.js';
-import { calcChemistry, teamRating } from '../core/chemistry.js';
+import { calcChemistryStyled, CHEM_STYLES } from '../core/chemistry.js';
+import { teamRating } from '../core/chemistry.js';
 import { POS_GROUP, NATION_BY_CODE, NATIONS, LEAGUES, leagueName } from '../core/data.js';
 import { icon } from './icons.js';
 
@@ -40,6 +41,7 @@ export function squadEditor(opts) {
     sel: null, // {area:'slot'|'bench', idx}
     q: '', group: 'AUTO', sort: 'ovr',
     chemOn: true,
+    chemStyle: opts.chemStyle ? (opts.chemStyle.value || 'classic') : 'classic',
   };
   const root = h('div', { class: 'pm-sq' });
   const info = h('div', { class: 'pm-sq-info' });
@@ -138,7 +140,7 @@ export function squadEditor(opts) {
 
   /** Recompute chemistry + patch the affected/whole-team visuals; far cheaper than a full render(). */
   function afterMove(touched) {
-    const chem = calcChemistry(st.formation, st.slots.map(player));
+    const chem = calcChemistryStyled(st.formation, st.slots.map(player), st.chemStyle);
     for (const t of touched) patchSlotCard(t.area, t.idx);
     patchChemistry(chem);
     patchInfo(chem);
@@ -344,6 +346,15 @@ export function squadEditor(opts) {
       toolbar.appendChild(h('button', { class: `pm-btn pm-btn--ghost pm-btn--sm pm-chemtoggle ${st.chemOn ? 'is-on' : ''}`, onclick: () => { st.chemOn = !st.chemOn; renderToolbar(); afterMove([]); } },
         icon('swap'), st.chemOn ? ' Chemistry: On' : ' Chemistry: Off'));
     }
+    if (opts.chemStyle && opts.chemistry !== false) {
+      toolbar.appendChild(h('label', { class: 'pm-inline', title: 'Classic: formation-link chemistry. FC26: club/league/nation counts across the whole XI, no adjacency.' },
+        h('span', { class: 'pm-dim' }, 'Chemistry style'),
+        select([['classic', 'Classic (links)'], ['fc26', 'FC26 (whole XI)']], st.chemStyle, (v) => {
+          st.chemStyle = v;
+          if (opts.chemStyle.onChange) opts.chemStyle.onChange(v);
+          afterMove([]);
+        }, { 'aria-label': 'Chemistry style' })));
+    }
     for (const b of opts.toolbar || []) toolbar.appendChild(b);
   }
 
@@ -352,7 +363,7 @@ export function squadEditor(opts) {
     renderPitch();
     renderBench();
     renderManager();
-    const chem = calcChemistry(st.formation, st.slots.map(player));
+    const chem = calcChemistryStyled(st.formation, st.slots.map(player), st.chemStyle);
     patchChemistry(chem);
     patchInfo(chem);
     renderPicker();

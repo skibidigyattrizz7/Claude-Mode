@@ -2,7 +2,7 @@
 import { Rng, clamp, hashStr } from './rng.js';
 import { getDB, getPlayer, utPrice, quickSellValue, registerCard, registerLocalCard, personOf } from './players.js';
 import { FORMATIONS } from './formations.js';
-import { calcChemistry, teamRating } from './chemistry.js';
+import { calcChemistry, calcChemistryStyled, teamRating } from './chemistry.js';
 import { buildTeam, gkKitFor, bestLineup, autoBuildSquad, contrastColor } from './teams.js';
 import { LEAGUES } from './data.js';
 import { load, save } from './storage.js';
@@ -267,7 +267,8 @@ export function setSquad(state, { formation, slots, bench } = {}) {
 export function squadSlots(state) { dedupeSquad(state); return state.squad.slots.map((id) => (id ? getPlayer(id) : null)); }
 export function squadInfo(state) {
   const slots = squadSlots(state);
-  const chem = calcChemistry(state.squad.formation, slots);
+  // Owner-selectable chemistry style (squad screen setting): 'classic' (links) or 'fc26' (whole-XI counts).
+  const chem = calcChemistryStyled(state.squad.formation, slots, state.squad.chemStyle);
   return { slots, chem, rating: teamRating(slots), complete: slots.every(Boolean) };
 }
 

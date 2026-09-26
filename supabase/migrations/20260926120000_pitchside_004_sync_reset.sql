@@ -20,7 +20,7 @@ begin
     select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.proname = any (array[
        'pitchside_admin_reset_everyone', 'pitchside_ack_reset', 'pitchside_admin_players', 'pitchside_save_get',
-       'pitchside_save_put', 'pitchside__reset_epoch'])
+       'pitchside_save_put', 'pitchside__reset_epoch', 'pitchside__reset_at'])
   loop
     execute format('drop function if exists %s cascade', f.sig);
   end loop;
@@ -130,24 +130,33 @@ as $$
                      from public.pitchside_config where key = 'features'), 0)
 $$;
 
+-- Exact moment of the last reset (features.resetAtMs; falls back to the epoch seconds).
+create or replace function public.pitchside__reset_at()
+returns timestamptz language sql stable security definer
+set search_path = public, extensions, pg_temp
+as $$
+  select coalesce((select case when jsonb_typeof(value -> 'resetAtMs') = 'number' then to_timestamp((value ->> 'resetAtMs')::numeric / 1000.0) end
+                     from public.pitchside_config where key = 'features'), to_timestamp(public.pitchside__reset_epoch()))
+$$;
+
 -- Owner "Reset everyone": new epoch; every profile that existed before it drops to 5 000 coins and loses
 -- infinite coins (server side, at once). Profiles created later are untouched. -> { ok, epoch, affected }
 create or replace function public.pitchside_admin_reset_everyone(p_code text, p_id uuid default null, p_secret text default null)
 returns json language plpgsql volatile security definer
 set search_path = public, extensions, pg_temp
 as $$
-declare v_actor text; v_epoch bigint := floor(extract(epoch from now()))::bigint; v_n int; v_feat jsonb;
+declare v_actor text; v_epoch bigint := ceil(extract(epoch from now()))::bigint; v_n int; v_feat jsonb;
 begin
   v_actor := public.pitchside__actor(p_code, p_id, p_secret);
   if not public.pitchside__owner_power(v_actor) then return public.pitchside__err(case when v_actor = 'mod' then 'not_allowed' else 'not_admin' end); end if;
   if not public.pitchside__throttle('reset_all', interval '1 hour', 10) then return public.pitchside__err('rate_limited'); end if;
   v_epoch := greatest(v_epoch, public.pitchside__reset_epoch() + 1);
   select value into v_feat from public.pitchside_config where key = 'features';
-  v_feat := coalesce(v_feat, '{}'::jsonb) || jsonb_build_object('resetEpoch', v_epoch);
+  v_feat := coalesce(v_feat, '{}'::jsonb) || jsonb_build_object('resetEpoch', v_epoch, 'resetAtMs', floor(extract(epoch from now()) * 1000)::bigint);
   insert into public.pitchside_config (key, value, updated_at, updated_by) values ('features', v_feat, now(), v_actor)
   on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by;
   update public.pitchside_profiles set coins = 5000, infinite_coins = false, earn_hour_coins = 0, earn_day_coins = 0
-   where created_at < to_timestamp(v_epoch);
+   where created_at <= now();
   get diagnostics v_n = row_count;
   perform public.pitchside__audit(p_id, 'admin_reset_all', jsonb_build_object('epoch', v_epoch, 'affected', v_n) || public.pitchside__mod_by(v_actor, p_id));
   return json_build_object('ok', true, 'epoch', v_epoch, 'affected', v_n);
@@ -189,7 +198,7 @@ begin
   return json_build_object('ok', true, 'online', public.pitchside_online_count(), 'coins', v.coins, 'infinite', v.infinite_coins,
     'broadcasts', public.pitchside__broadcasts_json(), 'gifts', v_gifts, 'unread', v_unread, 'invites', v_inv, 'requests', v_req,
     'resets', json_build_object('coins', v.reset_coins_epoch, 'progress', v.reset_progress_epoch, 'club', v.reset_club_epoch),
-    'resetDue', case when v_epoch > v.reset_ack_epoch and v.created_at < to_timestamp(v_epoch) then v_epoch end,
+    'resetDue', case when v_epoch > v.reset_ack_epoch and v.created_at < public.pitchside__reset_at() then v_epoch end,
     'resetEpoch', v_epoch, 'createdAt', v.created_at,
     'configVersion', public.pitchside__config_version(), 'role', v.role);
 end $$;

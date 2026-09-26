@@ -58,7 +58,7 @@ export function memoryStore() {
 export function createMockBackend(store, { now = () => Date.now(), rand = Math.random, latencyMs = 0, down = false } = {}) {
   // Dev-only default codes so ?mockOnline=1 has a working admin without any setup (docs/ONLINE_API.md: "mock
   // admin codes are mock-full / mock-super"). Real deployments set their own via setAdminCode(s) (server-side).
-  const extraDefaults = () => ({ adminHashSuper: fnv('admin:mock-super'), config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {} });
+  const extraDefaults = () => ({ saves: {}, adminHashSuper: fnv('admin:mock-super'), config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {} });
   const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: fnv('admin:mock-full'), adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand), ...extraDefaults() });
   const load = () => {
     const d = store.load();
@@ -210,7 +210,8 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     if (JSON.stringify(v).length > 8192) return 'too_large';
     const ent = Object.entries(v);
     if (ent.length > 200) return 'too_large';
-    if (key === 'promos' || key === 'features') return ent.every(([k, x]) => KEY_RE.test(k) && typeof x === 'boolean') ? null : 'bad_value';
+    if (key === 'promos') return ent.every(([k, x]) => KEY_RE.test(k) && typeof x === 'boolean') ? null : 'bad_value';
+    if (key === 'features') return ent.every(([k, x]) => KEY_RE.test(k) && (typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e12))) ? null : 'bad_value';
     if (key === 'packs') {
       return ent.every(([k, x]) => KEY_RE.test(k) && isObj(x) && Object.entries(x).every(([f, y]) => (f === 'enabled' && typeof y === 'boolean')
         || (f === 'price' && Number.isInteger(y) && y >= 0 && y <= 10000000))) ? null : 'bad_value';
@@ -244,6 +245,9 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     const { untradable, ...rest } = c; // eslint-disable-line no-unused-vars
     return { ...rest, tradable: true };
   }
+  const features = (db) => (db.config.features && db.config.features.value) || {};
+  const resetEpoch = (db) => (Number.isFinite(features(db).resetEpoch) ? Math.trunc(features(db).resetEpoch) : 0);
+  const resetAt = (db) => (Number.isFinite(features(db).resetAtMs) ? features(db).resetAtMs : resetEpoch(db) * 1000);
   const passOk = (p, pw) => typeof pw === 'string' && pw.length <= 72 && p.pwHash === fnv(`pw:${pw}`);
 
   const fns = {
@@ -993,6 +997,8 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         invites: db.invites.filter((i) => i.toId === p.id && i.status === 'pending' && i.createdAt > now() - 60000).length,
         requests: db.friends.filter((f) => (f.a === p.id || f.b === p.id) && f.status === 'pending' && f.requestedBy !== p.id).length,
         resets: epochs(p), configVersion: cfgVersion(db), role: p.role || 'player',
+        resetEpoch: resetEpoch(db), resetDue: resetEpoch(db) > (p.resetAck || 0) && (p.createdAt || 0) < resetAt(db) ? resetEpoch(db) : null,
+        createdAt: new Date(p.createdAt || 0).toISOString(),
       };
     },
     // ---------------------------------------------------------------- 003: gifts
@@ -1168,6 +1174,70 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       let pack = null;
       if (rand() < chance) { const x = rand(); pack = x < 0.55 ? 'gold' : x < 0.85 ? 'premium' : x < 0.97 ? 'rare' : 'stars'; }
       return { ...r, coinsAwarded: base + extra, coins: p.coins, pack, multiplier: mult };
+    },
+
+    // ---------------------------------------------------------------- 004: reset everyone, admin players, cloud save
+    admin_reset_everyone({ p_code, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (!hit(db, 'reset_all', 3600000, 10)) { store.save(db); return err('rate_limited'); }
+      const t = now();
+      const epoch = Math.max(Math.ceil(t / 1000), resetEpoch(db) + 1);
+      db.configAt = Math.max(t, (db.configAt || 0) + 1);
+      db.config.features = { value: { ...features(db), resetEpoch: epoch, resetAtMs: t }, at: db.configAt, by: a };
+      let n = 0;
+      for (const p of Object.values(db.profiles)) if ((p.createdAt || 0) <= t) { Object.assign(p, { coins: 5000, infinite: false, earnHourCoins: 0, earnDayCoins: 0 }); n++; }
+      store.save(db);
+      return { ok: true, epoch, affected: n };
+    },
+    ack_reset({ p_id, p_secret, p_epoch }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!Number.isInteger(p_epoch) || p_epoch < 0 || p_epoch > resetEpoch(db)) return err('bad_value');
+      p.resetAck = Math.max(p.resetAck || 0, p_epoch);
+      store.save(db);
+      return { ok: true, ack: p.resetAck };
+    },
+    admin_players({ p_code, p_query = null, p_limit = 50, p_offset = 0, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!a) { store.save(db); return err('not_admin'); }
+      const q = String(p_query ?? '').trim().toLowerCase();
+      if (q.length > 40) return err('bad_query');
+      const k = usernameKey(q);
+      const club = (p) => (db.squads[p.id] && typeof db.squads[p.id].squad.name === 'string' ? db.squads[p.id].squad.name.slice(0, 32) : null);
+      const rows = Object.values(db.profiles).filter((p) => !q || p.name.toLowerCase().includes(q) || (p.username && k && usernameKey(p.username).includes(k))
+        || p.friendCode === q.toUpperCase().replace(/-/g, '') || p.id === q || (club(p) || '').toLowerCase().includes(q))
+        .sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
+      const lim = Math.min(Math.max(p_limit | 0, 1), 200), off = Math.max(p_offset | 0, 0);
+      return {
+        ok: true, total: rows.length,
+        items: rows.slice(off, off + lim).map((p) => ({ id: p.id, username: p.username || null, name: p.name, clubName: club(p), coins: p.coins, role: p.role || 'player', banned: isBanned(p),
+          friendCode: p.friendCode, createdAt: new Date(p.createdAt || 0).toISOString(), lastSeenAt: p.lastSeen ? new Date(p.lastSeen).toISOString() : null, online: (p.lastSeen || 0) > now() - 60000 })),
+      };
+    },
+    save_get({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const sv = db.saves[p.id];
+      return sv ? { ok: true, exists: true, rev: sv.rev, updatedAt: new Date(sv.at).toISOString(), data: JSON.parse(JSON.stringify(sv.data)) } : { ok: true, exists: false, rev: 0 };
+    },
+    save_put({ p_id, p_secret, p_data, p_rev }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!p.username) return err('no_account');
+      if (!isObj(p_data)) return err('bad_value');
+      if (JSON.stringify(p_data).length > 1572864) return err('too_large');
+      if (!hit(db, `save:${p.id}`, 3600000, 240)) { store.save(db); return err('rate_limited'); }
+      const cur = db.saves[p.id];
+      if ((cur ? cur.rev : 0) !== p_rev) return { ok: false, error: 'conflict', rev: cur ? cur.rev : 0 };
+      db.saves[p.id] = { data: JSON.parse(JSON.stringify(p_data)), rev: (cur ? cur.rev : 0) + 1, at: now() };
+      store.save(db);
+      return { ok: true, rev: db.saves[p.id].rev };
     },
   };
 

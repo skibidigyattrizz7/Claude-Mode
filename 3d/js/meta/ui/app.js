@@ -75,6 +75,9 @@ export class MetaApp {
     if (this.online && this.online.config && typeof this.online.config.onChange === 'function') {
       try { const un = this.online.config.onChange(() => this.checkResetEpoch()); if (typeof un === 'function') this.configUnsub = un; } catch { /* ignore */ }
     }
+    if (this.online && this.online.presence && typeof this.online.presence.onUpdate === 'function') {
+      try { const un = this.online.presence.onUpdate((u) => { if (u && u.resetDue) this.checkResetEpoch(); }); if (typeof un === 'function') this.onCleanup(un); } catch { /* ignore */ }
+    }
     this.checkResetEpoch();
   }
 
@@ -86,13 +89,31 @@ export class MetaApp {
   async checkResetEpoch() {
     if (!this.online || !this.online.config) return;
     try {
-      let epoch = 0;
-      if (typeof this.online.config.value === 'function' && this.online.config.value('features.resetEpoch', 0)) epoch = Number(this.online.config.value('features.resetEpoch', 0)) || 0;
-      else { const r = await this.online.config.get(); if (r && r.ok !== false && r.config) epoch = Number(r.config.features && r.config.features.resetEpoch) || 0; }
-      if (!epoch) return;
-      const seen = load('resetEpochSeen', 0);
-      if (epoch <= seen) return;
-      save('resetEpochSeen', epoch);
+      // Profiles with a server identity: the server decides (presence.resetDue — only profiles that existed before
+      // the reset, at most once per reset, acknowledged below). Devices without a profile: first sight of an epoch
+      // is recorded without resetting (never reset newcomers); only a later, newer epoch applies.
+      let due = null;
+      const last = this.online.presence && this.online.presence.last;
+      const hasProfile = typeof this.online.hasIdentity === 'function' && this.online.hasIdentity();
+      if (hasProfile && last && 'resetDue' in last) due = last.resetDue || null;
+      else if (!hasProfile) {
+        let epoch = 0;
+        if (typeof this.online.config.value === 'function') epoch = Number(this.online.config.value('features.resetEpoch', 0)) || 0;
+        if (!epoch) return;
+        const seen = load('resetEpochSeen', null);
+        if (seen === null || !(Number(seen) >= 0)) { save('resetEpochSeen', epoch); return; }
+        if (epoch > Number(seen)) due = epoch;
+      }
+      if (!due) return;
+      const ack = () => { if (hasProfile && this.online.account && typeof this.online.account.ackReset === 'function') safeCall(() => this.online.account.ackReset(due)); };
+      if (hasProfile) {
+        const cur = this.online.account && typeof this.online.account.current === 'function' ? this.online.account.current() : null;
+        const k = `resetApplied.${(cur && cur.id) || 'device'}`;
+        if (Number(load(k, 0)) >= due) { ack(); return; } // already applied here; just (re)acknowledge
+        save(k, due);
+      }
+      save('resetEpochSeen', Math.max(due, Number(load('resetEpochSeen', 0)) || 0));
+      ack();
       clearAdminSession();
       try { this.online.admin && typeof this.online.admin.forget === 'function' && this.online.admin.forget(); } catch { /* ignore */ }
       if (this.ut) {

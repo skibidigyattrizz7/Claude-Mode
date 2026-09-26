@@ -708,6 +708,13 @@ export function createOnline(deps) {
         const r = dataOr(await authed('change_password', { p_password: password, p_new: newPassword }));
         return r.ok === true ? { ok: true } : fail(r.error || 'bad_response');
       },
+      /** Tell the server this profile applied (or skipped) "reset everyone" epoch `epoch`. */
+      async ackReset(epoch) {
+        if (!Number.isInteger(epoch) || epoch <= 0) return fail('bad_value');
+        const r = dataOr(await authed('ack_reset', { p_epoch: epoch }));
+        if (r.ok === true && pres.last && pres.last.resetDue && pres.last.resetDue <= epoch) { pres.last = { ...pres.last, resetDue: null }; }
+        return r.ok === true ? { ok: true } : fail(r.error || 'bad_response');
+      },
       /** "Continue as guest": the device profile keeps working; the account gate is not shown again. */
       guest() { sset(storage, GUEST_KEY, '1'); emitAcc(); },
       isGuest() { return !readAcc() && sget(storage, GUEST_KEY) === '1'; },
@@ -835,6 +842,40 @@ export function createOnline(deps) {
         return r.ok ? { ok: true, infinite: r.infinite === true, coins: nonNeg(r.coins) } : r;
       },
       players(query) { return online.moderation.search(query); },
+      /** Paged list of every player (query optional: name / username / club / friend code). -> { ok, total, items } */
+      async listPlayers({ query = '', limit = 50, offset = 0 } = {}) {
+        const r = await ownerCall('admin_players', { p_query: cleanStr(query, 40, '') || null, p_limit: Math.min(200, Math.max(1, limit | 0)), p_offset: Math.max(0, offset | 0) }, false, true);
+        return r.ok ? { ok: true, total: Number.isInteger(r.total) ? r.total : 0, items: sanitizeList(r.items, sanitizeAdminPlayer, 200) } : r;
+      },
+      /** "Reset everyone": new server epoch; every existing profile -> 5 000 coins, infinite off (new accounts untouched). */
+      async resetEveryone() {
+        const r = await ownerCall('admin_reset_everyone', {});
+        if (r.ok) { await online.config.get(true); presenceTick(true); }
+        return r.ok ? { ok: true, epoch: Number(r.epoch) || 0, affected: Number(r.affected) || 0 } : r;
+      },
+      resetAllEconomy() { return online.owner.resetEveryone(); },
+    },
+
+    // ---------------------------------------------------------------- cloud save of the UT club (accounts only)
+    cloud: {
+      /** -> { ok, exists, rev, updatedAt, data } */
+      async get() {
+        if (!readAcc()) return fail('no_account');
+        const r = dataOr(await authed('save_get'));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        return { ok: true, exists: r.exists === true, rev: Number.isInteger(r.rev) ? r.rev : 0, updatedAt: isoOr(r.updatedAt), data: r.data && typeof r.data === 'object' && !Array.isArray(r.data) ? r.data : null };
+      },
+      /** Optimistic write (rev = the revision you last saw). -> { ok, rev } | { ok:false, error:'conflict', rev } */
+      async put(data, rev) {
+        if (!readAcc()) return fail('no_account');
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('bad_value');
+        let json;
+        try { json = JSON.stringify(data); } catch { return fail('bad_value'); }
+        if (json.length > 1572864) return fail('too_large');
+        const r = dataOr(await authed('save_put', { p_data: data, p_rev: Number.isInteger(rev) ? rev : 0 }));
+        if (r.ok === true) return { ok: true, rev: Number(r.rev) || 0 };
+        return { ...fail(r.error || 'bad_response'), rev: Number.isInteger(r.rev) ? r.rev : undefined };
+      },
     },
 
     // ---------------------------------------------------------------- global config (public read)
@@ -863,6 +904,16 @@ export function createOnline(deps) {
         return v === undefined ? fallback : v;
       },
       get current() { return cfg.config; },
+      get version() { return cfg.version; },
+      /** Compat for the admin toggles UI: { promosOn, packsInShop, priceMult } -> features (merged). */
+      async set(local = {}) {
+        const cur = (await online.config.get(true)).config || cfg.config;
+        const f = { ...(cur.features || {}) };
+        if (typeof local.promosOn === 'boolean') f.promosEnabled = local.promosOn;
+        if (typeof local.packsInShop === 'boolean') f.packsEnabled = local.packsInShop;
+        if (typeof local.priceMult === 'number' && Number.isFinite(local.priceMult) && local.priceMult > 0 && local.priceMult <= 100) f.packPriceMult = local.priceMult;
+        return online.owner.setConfig('features', f);
+      },
       onChange(fn) { cfgListeners.add(fn); return () => cfgListeners.delete(fn); },
     },
 
@@ -1015,12 +1066,12 @@ export function createOnline(deps) {
     return out;
   }
   /** Owner RPC: admin token (or legacy code) + the caller's identity. `retry` = idempotent call, retried on network errors. */
-  async function ownerCall(fn, args, retry = false) {
+  async function ownerCall(fn, args, retry = false, allowMod = false) {
     const a = readAcc();
     const d = a ? null : readIdent();
     const ident = a ? { id: a.id, secret: a.token } : d && d.id ? d : null;
     const c = adminSecret();
-    if (!c && staffRole() !== 'owner') return fail(staffRole() === 'mod' ? 'not_allowed' : 'not_admin');
+    if (!c && staffRole() !== 'owner' && !(allowMod && staffRole() === 'mod')) return fail(staffRole() === 'mod' ? 'not_allowed' : 'not_admin');
     const payload = { p_code: c || null, ...args, p_id: ident ? ident.id : null, p_secret: ident ? ident.secret : null };
     let r;
     for (let i = 0; i < (retry ? 3 : 1); i++) {
@@ -1086,6 +1137,12 @@ export function createOnline(deps) {
   return online;
 }
 
+function sanitizeAdminPlayer(p) {
+  const base = sanitizePublicPlayer(p);
+  if (!base) return null;
+  return { ...base, clubName: typeof p.clubName === 'string' ? cleanStr(p.clubName, 32, '') || null : null, coins: nonNeg(p.coins), role: roleOf(p.role) || 'player',
+    banned: p.banned === true, createdAt: isoOr(p.createdAt), lastSeenAt: isoOr(p.lastSeenAt) };
+}
 const isoOr = (v) => (typeof v === 'string' && Number.isFinite(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : null);
 /** Moderation player row from the server -> bounded plain object. */
 export function sanitizeModPlayer(p) {
@@ -1152,12 +1209,13 @@ const unavailable = () => {
     account: {
       current: () => ({ state: 'none', id: null, username: null, role: null, remember: true, ban: null, pending: null, hasDevice: false }),
       status: async () => ({ ok: false, online: false, error: 'offline', state: 'none' }), signup: f, claim: f, login: f,
-      logout: async () => ({ ok: true }), continueOffline() {}, changeUsername: f, changePassword: f, guest() {}, isGuest: () => false, pending: () => null, retryPending: f, hasPendingCreds: false,
+      logout: async () => ({ ok: true }), continueOffline() {}, changeUsername: f, changePassword: f, guest() {}, isGuest: () => false, ackReset: f, pending: () => null, retryPending: f, hasPendingCreds: false,
       onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
-    owner: { giveCoins: f, gift: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f },
-    config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, onChange: () => () => {} },
+    owner: { giveCoins: f, gift: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
+    cloud: { get: f, put: f },
+    config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },
     rewards: { match: f },

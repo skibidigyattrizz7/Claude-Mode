@@ -172,6 +172,7 @@ function squadView() {
         onChange: (v) => { s.squad = v; OBJ.setFlag(s, 'squadEdited'); persist(app); },
         toolbar: [autoBtn], chemToggle: true,
         manager: { value: s.squad.manager || null, onChange: (m) => { s.squad.manager = m; persist(app); } },
+        chemStyle: { value: s.squad.chemStyle || 'classic', onChange: (v) => { s.squad.chemStyle = v; persist(app); } },
       });
       add(main, ed.el);
     },

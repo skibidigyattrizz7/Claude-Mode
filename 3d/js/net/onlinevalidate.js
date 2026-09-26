@@ -12,15 +12,17 @@ export const PACK_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const JPEG_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 export const MAX_IMAGE_CHARS = 204860; // 150 KB of JPEG as base64 + prefix
 export const CONFIG_KEYS = ['promos', 'packs', 'rewards', 'market', 'features'];
-export const CONFIG_TTL_MS = 3 * 60 * 1000;
+export const CONFIG_TTL_MS = 60 * 1000;
 
 /** One config value (same rules as pitchside__config_error). -> clean object | null */
 export function sanitizeConfigValue(key, v) {
   if (!isObj(v)) return null;
   const ent = Object.entries(v).slice(0, 200);
   const out = {};
-  if (key === 'promos' || key === 'features') {
+  if (key === 'promos') {
     for (const [k, x] of ent) { if (!KEY_RE.test(k) || typeof x !== 'boolean') return null; out[k] = x; }
+  } else if (key === 'features') {
+    for (const [k, x] of ent) { if (!KEY_RE.test(k) || !(typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 1e12))) return null; out[k] = x; }
   } else if (key === 'packs') {
     for (const [k, x] of ent) {
       if (!KEY_RE.test(k) || !isObj(x)) return null;
@@ -72,6 +74,9 @@ export function sanitizePresence(d) {
     resets: sanitizeEpochs(d.resets),
     configVersion: Number.isFinite(d.configVersion) ? d.configVersion : null,
     role: ['player', 'mod', 'owner'].includes(d.role) ? d.role : null,
+    resetEpoch: Number.isInteger(d.resetEpoch) && d.resetEpoch > 0 ? d.resetEpoch : 0,
+    resetDue: Number.isInteger(d.resetDue) && d.resetDue > 0 ? d.resetDue : null,
+    createdAt: iso(d.createdAt),
   };
 }
 /** A gift card: bounded JSON, tradable forced (the server forces it too). OVR up to 999 (admin cards). */

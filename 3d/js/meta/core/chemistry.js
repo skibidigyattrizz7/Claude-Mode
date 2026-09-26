@@ -53,6 +53,51 @@ export function calcChemistry(formation, slots) {
   return { players, links, total, scaled: Math.round((total / 33) * 100), fits };
 }
 
+// ---------------------------------------------------------------------------------------------------
+// FC26-style chemistry (owner request, Sep 26): no formation adjacency/links — each player's chemistry
+// is the best of three whole-XI counts (how many of his 10 teammates share his club / league / nation),
+// tiered the same way the classic link system tiers a link (thresholds below), still 0-3 per player and
+// 0-33/scaled-100 total, still zeroed by being out of position, and legends/LOTG still apply.
+// ---------------------------------------------------------------------------------------------------
+const FC26_CLUB_T = [2, 4, 7];
+const FC26_LEAGUE_T = [3, 5, 8];
+const FC26_NATION_T = [2, 4, 7];
+const tierFor = (count, thresholds) => Math.min(3, thresholds.filter((t) => count >= t).length);
+
+export function calcChemistryFc26(formation, slots) {
+  const f = FORMATIONS[formation];
+  const present = slots.map((p, i) => (p ? { p, i } : null)).filter(Boolean);
+  const players = [], fits = [];
+  let total = 0;
+  for (let i = 0; i < 11; i++) {
+    const p = slots[i];
+    if (!p) { players.push(0); fits.push(0); continue; }
+    const fit = positionFit(p, f.slots[i].pos);
+    fits.push(fit);
+    let clubC = 0, leagueC = 0, natC = 0;
+    for (const { p: o, i: j } of present) {
+      if (j === i) continue;
+      if (p.nat === o.nat) natC++;
+      if (linksAll(p) || linksAll(o) || p.league === o.league) leagueC++;
+      if (p.club === o.club && !SPECIAL_CLUB_IDS.has(p.club)) clubC++;
+    }
+    let base = Math.max(tierFor(clubC, FC26_CLUB_T), tierFor(leagueC, FC26_LEAGUE_T), tierFor(natC, FC26_NATION_T));
+    if (p.special === 'legend' || p.special === 'hero') base = Math.min(3, base + 1);
+    if (p.special === 'lotg' || p.linkAll) base = 3;
+    const chem = fit >= 1 ? base : 0;
+    players.push(chem);
+    total += chem;
+  }
+  return { players, links: [], total, scaled: Math.round((total / 33) * 100), fits, style: 'fc26' };
+}
+
+export const CHEM_STYLES = ['classic', 'fc26'];
+/** Pick the chemistry calculation by style ('classic' link-based, or 'fc26' whole-XI counts). Unknown/missing
+ * style falls back to 'classic' so every existing caller keeps its current behaviour. */
+export function calcChemistryStyled(formation, slots, style = 'classic') {
+  return style === 'fc26' ? calcChemistryFc26(formation, slots) : calcChemistry(formation, slots);
+}
+
 /** FIFA-style team rating: average plus over-average bonus. Missing players count as 0. */
 export function teamRating(players) {
   const list = players.filter(Boolean);

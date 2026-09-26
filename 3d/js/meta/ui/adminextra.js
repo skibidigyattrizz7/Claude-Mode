@@ -109,23 +109,25 @@ export function cardCreatorPanel(app, { level }) {
     }
   };
   saveBtn.addEventListener('click', () => {
-    const card = createCustomCard({ name: st.name, pos: st.pos, nat: st.nat, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper });
+    const card = createCustomCard({ name: st.name, pos: st.pos, alt: st.alt, nat: st.nat, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper, playstyles: st.playstyles });
     app.toast(`${card.name} (${card.ovr} OVR) saved to the Admin Cards gallery.`, 'good');
-    nameInp.value = ''; st.name = ''; st.photo = null; saveBtn.disabled = true; drawPreview(); drawGallery();
+    nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; drawPs(); drawAlt(); drawPreview(); drawGallery();
   });
-  drawPreview(); drawGallery();
+  drawPreview(); drawGallery(); drawAlt(); drawPs();
   return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
     h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Owner Access')),
-    h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat. Grants are untradeable by default (toggle tradable below); without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.`),
+    h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat, any promo design, unlimited PlayStyles and alt positions. Grants are untradeable by default (toggle tradable when gifting); without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.`),
     h('div', { class: 'pm-cc-grid' },
       h('div', { class: 'pm-cc-form' },
         nameInp,
         h('div', { class: 'pm-btnrow' },
-          select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; drawPreview(); }, { 'aria-label': 'Position' }),
+          select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; st.alt = st.alt.filter((x) => x !== v); drawAlt(); drawPreview(); }, { 'aria-label': 'Position' }),
           select(NATIONS.slice(0, 60).map((n) => [n.code, n.name]), st.nat, (v) => { st.nat = v; drawPreview(); }, { 'aria-label': 'Nation' }),
           select(TIERS, st.tier, (v) => { st.tier = v; drawPreview(); }, { 'aria-label': 'Tier' })),
+        altRow,
         h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Design'), select(DESIGN_OPTIONS, st.special, (v) => { st.special = v; drawPreview(); }, { 'aria-label': 'Card design / promo' })),
         h('div', { class: 'pm-cc-stats' }, (st.pos === 'GK' ? [['pac', 'DIV'], ['sho', 'HAN'], ['pas', 'KIC'], ['dri', 'REF'], ['def', 'SPD'], ['phy', 'POS']] : [['pac', 'PAC'], ['sho', 'SHO'], ['pas', 'PAS'], ['dri', 'DRI'], ['def', 'DEF'], ['phy', 'PHY']]).map(([k, l]) => statRow(k, l))),
+        psRow,
         h('label', { class: 'pm-cc-uploadrow' }, icon('upload'), ' Upload photo', upload), uploadMsg,
         saveBtn),
       h('div', { class: 'pm-cc-previewwrap' }, h('div', { class: 'pm-sq-label' }, 'Preview'), preview)),
@@ -322,7 +324,7 @@ export function openSendCardModal(app, { toUsername = '' } = {}) {
 }
 
 // ---------------------------------------------------------------- Global config toggles
-export function configPanel(app) {
+export function configPanel(app, { level } = {}) {
   const cfg = getConfig();
   const row = (key, label) => h('label', { class: 'pm-toggle' }, h('input', { type: 'checkbox', checked: cfg[key], onchange: async (e) => { await syncConfig(app.online, { [key]: e.target.checked }); app.toast(`${label} ${e.target.checked ? 'on' : 'off'}.`, 'good'); app.refresh(); } }), h('span', null, label));
   const mult = h('input', { type: 'range', min: '0.25', max: '2', step: '0.05', value: String(cfg.priceMult) });
@@ -335,7 +337,7 @@ export function configPanel(app) {
     row('packsInShop', 'Packs available in the shop'),
     h('label', { class: 'pm-cc-stat' }, h('span', null, 'Shop price multiplier'), mult, multOut),
     h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device — the online config service is not connected yet.')),
-    resetEveryonePanel(app));
+    level === 'super' ? resetEveryonePanel(app) : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('reset'), ' Reset everyone'), h('p', { class: 'pm-dim' }, 'Owner Access only.')));
 }
 
 /** Owner-only "reset everyone": bumps the server `features.resetEpoch` so every device wipes its local

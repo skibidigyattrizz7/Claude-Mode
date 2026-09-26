@@ -6,6 +6,11 @@ import { GAMEPLAY_DEFAULTS, loadGameplay, saveGameplay } from './shared/gameplay
 import { dedupeTeams } from './net/protocol.js';
 import { gameplayGroups, sanitizeGameplay } from './net/gameplaymeta.js';
 import { online } from './net/services.js';
+import { bindOnline } from './shared/adminauth.js';
+import { maybeShowAccountGate, accountSettingsPane, mountBroadcastBanner, onlineCountBadge, openAccountGate } from './net/accountui.js';
+import { createCloudSync } from './net/cloudsave.js';
+import { setConfigProvider } from './meta/core/config.js';
+import { setConfig as setOwnerToggles } from './meta/ui/config.js';
 
 const Q = new URLSearchParams(location.search);
 const STUB_ENGINE = Q.get('stubEngine') === '1';
@@ -819,16 +824,17 @@ function settingsScreen(tab = 'general') {
   };
   renderGameplay();
   const tabs = h('div', { class: 'tabs settings-tabs', role: 'tablist', 'aria-label': 'Settings sections' });
-  const panes = { general, gameplay };
+  const account = accountSettingsPane(online, { toast });
+  const panes = { general, gameplay, account };
   const select = (t) => {
     for (const [k, pane] of Object.entries(panes)) pane.hidden = k !== t;
     for (const b of tabs.children) { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
     lsSet('pitchside.settingsTab', t);
   };
-  tabs.append(...[['general', 'General'], ['gameplay', 'Gameplay']].map(([t, label]) => h('button', {
+  tabs.append(...[['general', 'General'], ['gameplay', 'Gameplay'], ['account', 'Account']].map(([t, label]) => h('button', {
     type: 'button', role: 'tab', class: 'tab', 'data-tab': t, id: `tab-${t}`, onclick: () => select(t),
   }, label)));
-  const el = screenShell('settings', 'Settings', 'Match defaults · gameplay assists', h('div', { class: 'settings-shell' }, tabs, general, gameplay));
+  const el = screenShell('settings', 'Settings', 'Match defaults · gameplay assists', h('div', { class: 'settings-shell' }, tabs, general, gameplay, account));
   select(panes[tab] ? tab : 'general');
   nav.push({ el, name: 'settings' });
 }
@@ -1051,6 +1057,15 @@ function mainMenu() {
     if (best) best.focus();
   });
   const pill = el.querySelector('#online-pill');
+  // online counter + account chip (sign up / log in / Settings → Account)
+  const accChip = h('button', { class: 'acc-chip', type: 'button', id: 'account-chip', onclick: () => {
+    const c = online.account.current();
+    if (c.state === 'account' || c.state === 'banned') settingsScreen('account'); else openAccountGate(online, { toast, canDismiss: true });
+  } });
+  const drawChip = () => { const c = online.account.current(); accChip.textContent = c.state === 'account' || c.state === 'banned' ? `👤 ${c.username}` : 'Log in / Sign up'; accChip.dataset.state = c.state; };
+  drawChip();
+  online.account.onChange(drawChip);
+  pill.after(onlineCountBadge(online), accChip);
   const onlineTile = el.querySelector('[data-tile="online"]');
   if (onlineTile) onlineTile.append(h('span', { class: 'tile-badge', hidden: true, 'aria-label': 'Pending invites and friend requests' }));
   const refreshPill = async () => {
@@ -1076,6 +1091,52 @@ document.addEventListener('keydown', (e) => {
   nav.back();
 });
 
+// ------------------------------------------------------------------ online services: presence, config, banner, cloud save, account gate
+function startOnlineServices() {
+  try {
+    bindOnline(online);
+    // Global config (server) -> meta: core provider + the owner-toggle cache the UT screens read.
+    const serverToCore = (c) => {
+      const f = (c && c.features) || {};
+      const packs = (c && c.packs) || {};
+      return {
+        promosEnabled: f.promosEnabled !== false, packsEnabled: f.packsEnabled !== false,
+        disabledPacks: Object.keys(packs).filter((k) => packs[k] && packs[k].enabled === false),
+        packPriceMult: typeof f.packPriceMult === 'number' && f.packPriceMult > 0 ? f.packPriceMult : 1,
+        rewardMult: c && c.rewards && typeof c.rewards.multiplier === 'number' ? c.rewards.multiplier : 1,
+        marketTaxPct: c && c.market && typeof c.market.tax === 'number' ? Math.round(c.market.tax * 1000) / 10 : 5,
+      };
+    };
+    setConfigProvider(() => serverToCore(online.config.current));
+    const applyToggles = (c) => {
+      if (!c || !c.features) return;
+      const k = serverToCore(c);
+      try { setOwnerToggles({ promosOn: k.promosEnabled, packsInShop: k.packsEnabled, priceMult: k.packPriceMult }); } catch { /* ignore */ }
+    };
+    applyToggles(online.config.current);
+    online.config.onChange(applyToggles);
+    online.presence.start(); // heartbeat + config (every 60 s) + broadcasts + gifts for EVERY client
+    mountBroadcastBanner(online);
+    let gifts = null;
+    online.presence.onUpdate((u) => {
+      if (!u) return;
+      if (gifts !== null && u.gifts > gifts) toast(`🎁 You received a gift — open Ultimate Team → Gifts (${u.gifts}).`, 'good');
+      gifts = u.gifts;
+    });
+    const cloud = createCloudSync(online, {
+      onReplaced: () => {
+        toast('Your Ultimate Team club was loaded from your account.', 'good');
+        if (metaMount && nav.top && nav.top.name === 'meta') { nav.back(); metaScreen('ut'); }
+      },
+    });
+    cloud.start();
+    window.__pitchsideCloud = cloud;
+    // Accounts are optional but prominent: first visit shows Create account / Log in / Continue as guest.
+    const webdriver = typeof navigator !== 'undefined' && navigator.webdriver;
+    if (!Q.get('screen') && Q.get('gate') !== '0' && (!webdriver || Q.get('gate') === '1')) maybeShowAccountGate(online, { toast });
+  } catch (e) { console.error('[pitchside] online services failed to start', e); }
+}
+
 // ------------------------------------------------------------------ boot
 mainMenu();
 document.documentElement.classList.add('ready');
@@ -1088,6 +1149,7 @@ else if (start === 'online') onlineScreen();
 else if (start === 'career') metaScreen('career');
 else if (start === 'ut') metaScreen('ut');
 startInvitePolling();
+startOnlineServices();
 // warm the engine module in the background so Kick-Off starts fast (errors surface later, on use)
 setTimeout(() => { loadEngine().catch(() => {}); }, 400);
 

@@ -150,7 +150,8 @@ export function mountOnline(root, ctx) {
     }
 
     const friendsPanel = h('section', { class: 'panel friends', id: 'friends-panel' },
-      h('div', { class: 'friends-top' }, h('div', null, h('div', { class: 'kicker' }, 'Option 3'), h('h2', null, 'Friends')), h('div', { class: 'friends-code', id: 'friends-code' })),
+      h('div', { class: 'friends-top' }, h('div', null, h('div', { class: 'kicker' }, 'Option 3'), h('h2', null, 'Friends')), h('div', { class: 'friends-code', id: 'friends-code' }),
+        h('button', { class: 'btn btn--ghost btn--sm', type: 'button', id: 'open-social', onclick: () => { import('./social.js').then((m) => m.openSocial(ctx.online)).catch((e) => console.error('[online] social UI failed', e)); } }, 'Messages & squads')),
       h('div', { class: 'friends-body', id: 'friends-body' }, h('p', { class: 'hint' }, 'Checking online services…')));
     const profileBar = h('div', { class: 'net-profile', id: 'net-profile', role: 'status' }, h('span', { class: 'pill pill--wait' }, h('i', { class: 'dot' }), 'Checking online services…'));
     function renderStatus() {

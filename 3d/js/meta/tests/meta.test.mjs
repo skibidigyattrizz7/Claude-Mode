@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { getDB, _resetDB, computeOvr, tierOf } from '../core/players.js';
 import { Rng } from '../core/rng.js';
-import { calcChemistry, linkStrength, teamRating } from '../core/chemistry.js';
+import { calcChemistry, calcChemistryFc26, calcChemistryStyled, CHEM_STYLES, linkStrength, teamRating } from '../core/chemistry.js';
 import { FORMATIONS, FORMATION_NAMES } from '../core/formations.js';
 import { validateTeam, bestLineup, buildTeam, gkKitFor } from '../core/teams.js';
 import { simulateMatch } from '../core/sim.js';
@@ -86,6 +86,33 @@ test('chemistry: link strengths, per-player 0..3, team 0..33 scaled to 0..100', 
   assert.equal(calcChemistry('4-3-3', new Array(11).fill(null)).total, 0);
 });
 
+test('chemistry styles: FC26 (whole-XI counts, no adjacency) vs classic (links), selectable and both 0..33', () => {
+  const db = getDB();
+  assert.deepEqual(CHEM_STYLES, ['classic', 'fc26']);
+  const club = db.players.filter((p) => p.club === db.players[0].club);
+  const { slots } = bestLineup(club, '4-4-2');
+  const classic = calcChemistry('4-4-2', slots);
+  const fc26 = calcChemistryFc26('4-4-2', slots);
+  assert.equal(fc26.players.length, 11);
+  assert.ok(fc26.players.every((c) => c >= 0 && c <= 3));
+  assert.ok(fc26.total >= 0 && fc26.total <= 33);
+  assert.equal(fc26.scaled, Math.round((fc26.total / 33) * 100));
+  assert.deepEqual(fc26.links, []); // no adjacency in FC26 style
+  assert.ok(fc26.total >= 20, `same-club XI should gel under FC26 too, got ${fc26.total}`);
+  // out of position still zeroes chemistry in both styles
+  const oop = slots.slice(); oop[0] = slots[10];
+  assert.equal(calcChemistryFc26('4-4-2', oop).players[0], 0);
+  // calcChemistryStyled dispatches correctly and defaults to classic (back-compat for every existing caller)
+  assert.deepEqual(calcChemistryStyled('4-4-2', slots), classic);
+  assert.deepEqual(calcChemistryStyled('4-4-2', slots, 'classic'), classic);
+  assert.deepEqual(calcChemistryStyled('4-4-2', slots, 'fc26'), fc26);
+  assert.deepEqual(calcChemistryStyled('4-4-2', slots, 'bogus'), classic);
+  // a squad split across many clubs/leagues/nations should score low under FC26 too
+  const scattered = db.all.filter((p) => !p.special).slice(0, 200);
+  const spread = bestLineup(scattered, '4-3-3').slots;
+  assert.ok(calcChemistryFc26('4-3-3', spread).total < 25, 'a scattered XI should not max out FC26 chemistry');
+});
+
 test('formations: 11 slots, GK first, links in range', () => {
   for (const f of FORMATION_NAMES) {
     const F = FORMATIONS[f];
@@ -154,6 +181,21 @@ test('UT squad produces a valid Team with chemistry', () => {
   const r = UT.applyBattleResult(s, opp[0], { homeGoals: 2, awayGoals: 0, scorers: [], stats: {}, playerRatings: {} });
   assert.equal(r.outcome, 'W');
   assert.ok(r.coins > 0 && s.stats.wins === 1);
+});
+
+test('UT squad chemistry style setting reaches squadInfo and the match Team (utTeam)', () => {
+  const s = UT.createUTState({ clubName: 'Style FC', primary: '#00A', secondary: '#0A0' }, new Rng(11));
+  const classicInfo = UT.squadInfo(s);
+  assert.equal(classicInfo.chem.links.length > 0, true);
+  s.squad.chemStyle = 'fc26';
+  const fc26Info = UT.squadInfo(s);
+  assert.equal(fc26Info.chem.style, 'fc26');
+  assert.deepEqual(fc26Info.chem.links, []);
+  const t = UT.utTeam(s);
+  assert.deepEqual(validateTeam(t), []);
+  assert.equal(t.chemistry, Math.max(0, Math.min(100, Math.round(fc26Info.chem.scaled))));
+  s.squad.chemStyle = 'not-a-real-style';
+  assert.deepEqual(UT.squadInfo(s).chem, classicInfo.chem); // unknown style falls back to classic
 });
 
 test('simulated score distribution is realistic', () => {
