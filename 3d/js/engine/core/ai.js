@@ -31,58 +31,32 @@ export function teamThink(sim, team) {
   const xs = opps.map((o) => sim.X(team, o.x)).sort((a, c) => c - a);
   info.offLine = Math.max(xs[1] ?? HL, HL, info.ballX);
   info.chaser = -1; info.chaser2 = -1; info.chaseT = Infinity;
-  const ctrlIdx = human ? sim.ctrl[team] : -1;
   if (!owner) {
-    // an opposition pass has to be READ before anyone commits to cutting it out (no psychic
-    // interceptions): each outfielder gets a reaction delay from difficulty, defending and the
-    // Anticipate / Intercept PlayStyles, with the odd misread. Until then he holds his position.
-    const pp = sim.pendingPass;
-    const oppPass = !!pp && pp.team !== team && b.kicker >= 0 && sim.players[b.kicker].team !== team && b.kickT === pp.t;
-    if (oppPass && info.readKick !== b.kickT) {
-      info.readKick = b.kickT;
-      for (const m of mates) m.readAt = b.kickT + readDelay(sim, m);
-    }
-    // human teams: the controlled player is the user's call; the AI picks its own best chaser
-    // (a teammate still goes for a loose ball / cuts out a pass rather than leaving it to the user),
-    // except for our own pass, which the reception assist handles.
-    const ownPass = b.intended >= 0 && sim.players[b.intended].team === team;
-    const skipCtrl = human && !ownPass;
-    let best = Infinity, second = Infinity, ctrlT = Infinity;
+    let best = Infinity, second = Infinity;
     for (const m of mates) {
       m.ic = sim.intercept(m);
       if (m.isGK && !sim.gkMayChase(m)) continue;
-      if (oppPass && !m.isGK && sim.t < (m.readAt || 0)) continue;
-      if (skipCtrl && m.idx === ctrlIdx) { ctrlT = m.ic.t; continue; }
       if (m.ic.t < best) { second = best; info.chaser2 = info.chaser; best = m.ic.t; info.chaser = m.idx; }
       else if (m.ic.t < second) { second = m.ic.t; info.chaser2 = m.idx; }
     }
-    // the user is clearly first to it: one AI teammate only follows up if he is close behind
-    if (skipCtrl && ctrlT + 0.7 < best && !oppPass) { info.chaser2 = -1; if (ctrlT + 1.4 < best) info.chaser = -1; }
-    info.chaseT = Math.min(best, ctrlT);
+    info.chaseT = best;
   }
-  // pressers (tactics: defensive style; human teams: aiDefending assisted / tactical) plus ONE
-  // cover player who sits goal-side behind whoever engages the carrier (presser + cover).
-  info.press1 = -1; info.press2 = -1; info.contain = false; info.cover = -1; info.coverPt = null;
+  // pressers (tactics: defensive style; human teams: aiDefending assisted / tactical)
+  info.press1 = -1; info.press2 = -1; info.contain = false;
   if (owner && owner.team !== team && !b.inHands) {
     const px = owner.x + owner.vx * 0.35, pz = owner.z + owner.vz * 0.35;
-    const ranked = mates.filter((m) => !m.isGK && m.idx !== ctrlIdx && !m.sentOff)
+    const ctrl = human ? sim.ctrl[team] : -1;
+    const ranked = mates.filter((m) => !m.isGK && m.idx !== ctrl)
       .map((m) => ({ m, d: Math.hypot(m.x - px, m.z - pz) / m.vmax, dist: Math.hypot(m.x - px, m.z - pz) }))
       .sort((a, c) => a.d - c.d);
     const oX = sim.X(team, owner.x);
     const ownThird = oX < 40;
-    let engaged = null; // who is (or will be) on the ball: the presser or the user
     if (human) {
       info.contain = true;
-      // is the user already engaging the carrier? then no AI double-press: cover him instead
-      const c = sim.players[ctrlIdx];
-      const cd = c && !c.isGK ? Math.hypot(c.x - px, c.z - pz) : 99;
-      const userOn = cd < 7 || (ranked[0] && cd / c.vmax < ranked[0].d + 0.25);
-      if (userOn) engaged = c;
       if (gp.aiDefending === 'assisted') {
-        if (!userOn && ranked[0]) info.press1 = ranked[0].m.idx;
-        const r2 = userOn ? ranked[0] : ranked[1];
-        if (r2 && ownThird && r2.dist < 3) info.press2 = r2.m.idx;
-      } else if (ranked[0] && ranked[0].dist < 3 && !(userOn && cd < 2.5)) info.press1 = ranked[0].m.idx;
+        if (ranked[0]) info.press1 = ranked[0].m.idx;
+        if (ranked[1] && ownThird && ranked[1].dist < 3) info.press2 = ranked[1].m.idx;
+      } else if (ranked[0] && ranked[0].dist < 3) info.press1 = ranked[0].m.idx;
     } else {
       const style = tac.defensiveStyle;
       const afterLoss = style === 'pressAfterLoss' && sim.t - (info.lostT || -9) < 5;
@@ -90,23 +64,6 @@ export function teamThink(sim, team) {
       if (ranked[0] && !(drop && oX > 60 && ranked[0].dist > 6)) info.press1 = ranked[0].m.idx;
       const pr2 = style === 'constantPressure' || afterLoss ? 6 : drop ? 0 : 3.5;
       if (ranked[1] && (sim.diffFor(team).press >= 0.75 || ownThird || style === 'constantPressure' || afterLoss) && ranked[1].d < pr2) info.press2 = ranked[1].m.idx;
-    }
-    if (info.press1 >= 0) engaged = sim.players[info.press1];
-    // cover: in our half, the best-placed free teammate takes the space behind the engaged player
-    if (engaged && oX < 68 && info.press2 < 0) {
-      const own = sim.ownGoalX(team);
-      const gx = own - owner.x, gz = -owner.z * 0.6, gl = Math.hypot(gx, gz) || 1;
-      const back = ownThird ? 5 : 7;
-      const pt = { x: owner.x + (gx / gl) * back, z: owner.z + (gz / gl) * back };
-      let bc = null, bs = 1e9;
-      for (const r of ranked) {
-        const m = r.m;
-        if (m.idx === info.press1 || m === engaged) continue;
-        // prefer players already goal-side of the ball (they don't have to recover)
-        const s = Math.hypot(m.x - pt.x, m.z - pt.z) + (sim.X(team, m.x) > oX ? 8 : 0);
-        if (s < bs) { bs = s; bc = m; }
-      }
-      if (bc && bs < 18) { info.cover = bc.idx; info.coverPt = pt; }
     }
   }
   for (const m of mates) if (!m.isGK) m.home = formationTarget(sim, m, info);
