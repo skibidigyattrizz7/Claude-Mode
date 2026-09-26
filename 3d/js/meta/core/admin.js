@@ -2,7 +2,7 @@
 // local PBKDF2 check — see admincode.js; no code is ever stored in the client) or an owner/mod account role.
 // Levels: 'full' (everything), 'mod' (moderation + limited tools), 'temp' (60-minute limited admin).
 import { getPlayer, computeOvr, POS_WEIGHTS, FACE, GKFACE, marketValue, weeklyWage } from './players.js';
-import { SBCS, OBJECTIVES, grantReward, addToClub } from './ut.js';
+import { SBCS, OBJECTIVES, grantReward, addToClub, addCoins } from './ut.js';
 import { userPlayers } from './career.js';
 import { COIN_CAP, getAdminLevel } from './admincode.js';
 
@@ -18,7 +18,7 @@ export const INFINITE_COINS = 999999999;
 export function addLocalCoins(state, amount, level = getAdminLevel()) {
   const cap = COIN_CAP[level] ?? 0;
   const v = Math.max(0, Math.min(Math.round(Number(amount) || 0), cap));
-  state.coins = Math.max(0, (state.coins || 0) + v);
+  addCoins(state, v);
   return v;
 }
 

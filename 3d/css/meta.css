@@ -27,7 +27,7 @@
 /* ---------- top bar ---------- */
 .pm-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 10px 18px;
   background: linear-gradient(180deg, rgba(6,9,17,.96), rgba(6,9,17,.82)); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-.pm-back { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px 0 10px; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel); cursor: pointer; }
+.pm-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px 0 10px; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel); cursor: pointer; }
 .pm-back span:first-child { font-size: 22px; line-height: 1; margin-top: -2px; }
 .pm-back:hover { border-color: var(--acc); }
 .pm-logo-sm { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font: 900 20px var(--font-display); color: var(--acc-ink); background: linear-gradient(135deg, var(--acc), var(--acc3)); }
@@ -54,7 +54,7 @@
 .pm-section { margin-bottom: 8px; }
 
 /* ---------- buttons & inputs ---------- */
-.pm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line2); background: var(--panel2); color: var(--txt); font-weight: 700; cursor: pointer; transition: transform .12s, background .15s, border-color .15s, box-shadow .15s; text-align: center; }
+.pm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line2); background: var(--panel2); color: var(--txt); font-weight: 700; cursor: pointer; transition: transform .12s, background .15s, border-color .15s, box-shadow .15s; text-align: center; }
 .pm-btn:hover:not(:disabled) { border-color: #4a5f8c; background: #1c2946; }
 .pm-btn:active:not(:disabled) { transform: translateY(1px) scale(.98); }
 .pm-btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -69,7 +69,7 @@
 .pm-btnrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pm-actions-row { display: flex; justify-content: center; gap: 12px; margin: 22px 0 8px; }
 .pm-x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line2); background: var(--panel2); font-size: 20px; line-height: 1; cursor: pointer; flex: none; }
-.pm-input, .pm-select { min-height: 40px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line2); background: #0a1122; color: var(--txt); font: inherit; min-width: 0; }
+.pm-input, .pm-select { min-height: 44px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line2); background: #0a1122; color: var(--txt); font: inherit; min-width: 0; }
 .pm-input:focus, .pm-select:focus { border-color: var(--acc); outline: none; box-shadow: 0 0 0 3px rgba(25,245,164,.2); }
 .pm-input--short { width: 90px; text-transform: uppercase; }
 .pm-input--num { width: 110px; }
@@ -79,7 +79,7 @@
 .pm-form label > span, .pm-lbl { font-size: 12px; font-weight: 700; color: var(--mut); text-transform: uppercase; letter-spacing: .1em; }
 .pm-inline { display: inline-flex; align-items: center; gap: 8px; }
 .pm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.pm-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; font-size: 12px; font-weight: 700; letter-spacing: .05em; cursor: pointer; white-space: nowrap; }
+.pm-chip { display: inline-flex; align-items: center; min-height: 32px; touch-action: manipulation; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; font-size: 12px; font-weight: 700; letter-spacing: .05em; cursor: pointer; white-space: nowrap; }
 .pm-chip.on { background: rgba(25,245,164,.14); border-color: var(--acc); color: var(--acc); }
 .pm-chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .pm-stat-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--line); }
@@ -568,7 +568,7 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-next-actions { width: 100%; justify-content: center; }
 .pm-tabs { display: flex; gap: 4px; overflow-x: auto; padding: 4px; margin-bottom: 14px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid var(--line); scrollbar-width: none; }
 .pm-tabs::-webkit-scrollbar { display: none; }
-.pm-tab { flex: none; min-height: 40px; padding: 6px 14px; border: 0; border-radius: 10px; background: transparent; color: var(--mut); font: 800 14px var(--font-display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.pm-tab { flex: none; min-height: 44px; padding: 6px 14px; border: 0; border-radius: 10px; background: transparent; color: var(--mut); font: 800 14px var(--font-display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
 .pm-tab.on { background: var(--acc); color: var(--acc-ink); }
 .pm-tab:hover:not(.on) { color: var(--txt); background: rgba(255,255,255,.05); }
 .pm-offer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -941,7 +941,7 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-codes-form .pm-input { flex: 1; min-width: 0; }
 .pm-codes-msg { margin: 8px 0 0; min-height: 1.2em; }
 .pm-goodline { color: var(--good); font-size: 13px; }
-.pm-codesbtn { min-height: 40px; }
+.pm-codesbtn { min-height: 44px; }
 .pm-hubfoot { justify-content: center; }
 .pm-adminbadge { order: 3; margin-left: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
   border: 1px solid rgba(245,197,66,.6); background: linear-gradient(180deg, rgba(245,197,66,.22), rgba(245,197,66,.08)); color: var(--gold); font: 900 13px var(--font-display); letter-spacing: .08em; text-transform: uppercase; transition: transform .16s, box-shadow .16s; }

@@ -339,7 +339,7 @@ test('physique + PlayStyles: heights/weights in range, counts respect OVR bands,
 test('alternate positions: 0-3 sensible alts, in-position chemistry and full rating', () => {
   const db = getDB();
   let withAlt = 0;
-  for (const p of db.players) { assert.ok(p.alt.length <= 3); if (p.pos === 'GK') assert.equal(p.alt.length, 0); if (p.alt.length) withAlt++; }
+  for (const p of db.players) { assert.ok(p.alt.length <= 4, `${p.id} has ${p.alt.length} alts`); if (p.pos === 'GK') assert.equal(p.alt.length, 0); if (p.alt.length) withAlt++; }
   assert.ok(withAlt / db.players.length > 0.6, 'most players have alternates');
   const cm = db.players.find((p) => p.pos === 'CM' && p.alt.includes('CDM'));
   assert.equal(positionFit(cm, 'CDM'), 1);
@@ -924,6 +924,22 @@ test('global config: safe local defaults, injectable provider, gates packs/promo
   CFG.setConfigProvider(() => ({ marketTaxPct: 10 }));
   assert.equal(PM.afterTax(1000), 900);
   CFG.setConfigProvider(null); // restore defaults for any later test
+});
+
+test('sensible alt positions (e.g. Messi RW + RM/CAM/CF/ST); coins never go negative or NaN', () => {
+  for (const id of ['ic_messi', 'rs_messi']) {
+    const m = getPlayer(id);
+    assert.equal(m.pos, 'RW');
+    for (const pos of ['RM', 'CAM', 'CF', 'ST']) assert.ok(m.alt.includes(pos), `${id} missing alt ${pos}`);
+    assert.ok(!m.alt.includes('RW'));
+  }
+  const s = UT.createUTState({ clubName: 'Coin FC' }, new Rng(41));
+  UT.addCoins(s, -1e12);
+  assert.equal(s.coins, 0);
+  UT.addCoins(s, NaN);
+  assert.equal(s.coins, 0);
+  UT.addCoins(s, 1500.6);
+  assert.equal(s.coins, 1501);
 });
 
 await runAll();
