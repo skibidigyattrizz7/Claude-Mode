@@ -724,19 +724,28 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       return { ok: true, id: p.id, username: p.username || null, name: p.name, role: p.role || 'player', claimed: !!p.username, banned: b, ban: b ? banJson(p) : null, friendCode: p.friendCode };
     },
     // ---------------------------------------------------------------- moderation (002)
-    mod_search({ p_code, p_query, p_id = null, p_secret = null }) {
+    // p_query='' -> "all players" (paginated, newest first). A real pitchside_mod_list RPC should replace this
+    // path server-side; the mock covers it here so the Admin panel's "All players" list works end-to-end.
+    mod_search({ p_code, p_query, p_page = 0, p_id = null, p_secret = null }) {
       const db = load();
       const actor = modActor(db, p_code, p_id, p_secret);
       store.save(db);
       if (!actor) return err('not_admin');
       const q = String(p_query ?? '').trim();
-      if (!q || q.length > 40) return err('bad_query');
-      const k = usernameKey(q);
-      const items = Object.values(db.profiles).filter((p) => (k && p.username && usernameKey(p.username).startsWith(k)) || p.friendCode === q.toUpperCase().replace(/-/g, '')
-        || p.id === q.toLowerCase() || p.name.toLowerCase().includes(q.toLowerCase()))
-        .sort((a, b) => ((b.username && usernameKey(b.username) === k) - (a.username && usernameKey(a.username) === k)) || (b.lastSeen || 0) - (a.lastSeen || 0))
-        .slice(0, 25).map(modRow);
-      return { ok: true, items };
+      if (q.length > 40) return err('bad_query');
+      const page = Math.max(0, Math.trunc(Number(p_page) || 0));
+      let list;
+      if (!q) {
+        list = Object.values(db.profiles).filter((p) => p.username).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      } else {
+        const k = usernameKey(q);
+        list = Object.values(db.profiles).filter((p) => (k && p.username && usernameKey(p.username).startsWith(k)) || p.friendCode === q.toUpperCase().replace(/-/g, '')
+          || p.id === q.toLowerCase() || p.name.toLowerCase().includes(q.toLowerCase()))
+          .sort((a, b) => ((b.username && usernameKey(b.username) === k) - (a.username && usernameKey(a.username) === k)) || (b.lastSeen || 0) - (a.lastSeen || 0));
+      }
+      const page_size = 25;
+      const items = list.slice(page * page_size, page * page_size + page_size).map(modRow);
+      return { ok: true, items, more: list.length > (page + 1) * page_size };
     },
     mod_player({ p_code, p_player, p_id = null, p_secret = null }) {
       const db = load();

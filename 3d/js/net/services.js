@@ -722,11 +722,11 @@ export function createOnline(deps) {
       /** 'admin' | 'owner' | 'mod' | null */
       get role() { return adminSecret() ? 'admin' : staffRole(); },
       canModerate() { return !!(adminSecret() || staffRole()); },
-      async search(query, code) {
+      /** query='' -> "all players" (newest first); the server/mock caps the page — see mod_search. */
+      async search(query, code, page = 0) {
         const q = cleanStr(query, 40, '');
-        if (!q) return fail('bad_query');
-        const r = await modCall('mod_search', { p_query: q }, code);
-        return r.ok ? { ok: true, items: sanitizeList(r.items, sanitizeModPlayer, 25) } : r;
+        const r = await modCall('mod_search', { p_query: q, p_page: Math.max(0, Math.trunc(Number(page) || 0)) }, code);
+        return r.ok ? { ok: true, items: sanitizeList(r.items, sanitizeModPlayer, 50), more: !!r.more } : r;
       },
       async player(id, code) {
         if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');

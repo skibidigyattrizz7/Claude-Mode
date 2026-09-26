@@ -644,7 +644,7 @@ test('real regulars: ~150 extra players, no duplicate names across lists, regula
 
 test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walkouts', () => {
   const db = getDB();
-  assert.equal(PR.PROMOS.length, 7);
+  assert.ok(PR.PROMOS.length >= 10, `only ${PR.PROMOS.length} promos`);
   for (const pr of PR.PROMOS) {
     const cards = db.promos.filter((p) => p.special === pr.id);
     assert.ok(cards.length >= 8, `${pr.id} has ${cards.length}`);
@@ -670,8 +670,8 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
   assert.ok(Math.max(...ifs.map((p) => p.ovr)) >= 95, 'in-forms reach 95+');
   // calendar + packs
   for (let w = 1; w < 60; w++) { const live = PR.livePromos(w); assert.ok(live.length >= 1 && live.length <= 2 && live.every((id) => PR.PROMO_BY_ID[id])); }
-  const seen = new Set(); for (let w = 1; w <= 14; w++) seen.add(PR.promoOfWeek(w));
-  assert.equal(seen.size, 7, 'every campaign appears in the calendar');
+  const seen = new Set(); for (let w = 1; w <= PR.PROMOS.length * 2; w++) seen.add(PR.promoOfWeek(w));
+  assert.equal(seen.size, PR.PROMOS.length, 'every campaign appears in the calendar');
   for (const pr of PR.PROMOS) {
     const pack = UT.PACK_BY_ID[`promo_${pr.id}`];
     assert.ok(pack && pack.promo === pr.id);
