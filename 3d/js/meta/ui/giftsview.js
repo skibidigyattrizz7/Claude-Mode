@@ -9,6 +9,7 @@ import { safeCall } from './app.js';
 import * as UT from '../core/ut.js';
 import { getPlayer } from '../core/players.js';
 import { openPackFlow } from './utview.js';
+import { importCustomCard } from './customcards.js';
 
 const LOCAL_KEY = 'meta.gifts.local';
 let uid = 0;

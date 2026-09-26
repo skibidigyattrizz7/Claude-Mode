@@ -1,7 +1,7 @@
 // Admin panel extensions: card creator + Admin Cards gallery (super/owner only), moderation, global
 // broadcast, giveaways and global config toggles. Every call into `app.online.*` is feature-detected —
 // docs/ONLINE_API.md may not exist yet, so nothing here assumes a shape that isn't checked first.
-import { h, clear, add, fmtNum, confirmBox, select } from './dom.js';
+import { h, clear, add, fmtNum, confirmBox, select, modal } from './dom.js';
 import { icon } from './icons.js';
 import { playerCard } from './card.js';
 import { safeCall } from './app.js';

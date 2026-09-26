@@ -83,8 +83,16 @@ export const PACKS = [
 // V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)
 for (const pr of PROMOS) PACKS.push(promoPack(pr));
 export const PACK_BY_ID = Object.fromEntries(PACKS.map((p) => [p.id, p]));
-/** Packs on sale right now (promo packs only while their campaign is live). */
-export function storePacks(week = weekNumber()) { return PACKS.filter((p) => !p.promo || isPromoLive(p.promo, week)); }
+/** Packs on sale right now: promo packs only while their (released) campaign is live, everything gated by
+ * the owner's global config (packs enabled, per-pack disable list, promos on/off — see config.js). */
+export function storePacks(week = weekNumber(), cfg = getConfig()) {
+  if (!cfg.packsEnabled) return [];
+  const disabled = new Set(cfg.disabledPacks || []);
+  return PACKS.filter((p) => !disabled.has(p.id) && (!p.promo || (cfg.promosEnabled && isPromoLive(p.promo, week))));
+}
+/** A pack's price after the owner's global multiplier (see config.js). UIs should charge/display this,
+ * not `pack.price`, so a config change takes effect without a redeploy. */
+export function packPriceFor(pack, cfg = getConfig()) { return configuredPackPrice(pack.price, cfg); }
 
 /** Probability that a pack contains at least one item of the category (for the odds table). */
 export function packAtLeastOne(pack, cat) {
