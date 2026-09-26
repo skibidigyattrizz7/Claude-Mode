@@ -71,7 +71,8 @@
 .acc-count-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim, #748096); }
 .acc-count[data-state="on"] .acc-count-dot { background: var(--ok, #22c55e); box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
 .acc-count-n { font-weight: 800; color: var(--txt, #fff); font-variant-numeric: tabular-nums; }
-.acc-chip { margin-left: 8px; min-height: 34px; padding: 0 14px; border-radius: var(--radius-pill, 999px); border: 1px solid var(--acc, #22c55e); background: transparent; color: var(--txt, #fff); font-weight: 700; cursor: pointer; transition: background var(--dur-fast, .12s); }
+.acc-chip { display: inline-flex; align-items: center; gap: 7px; margin-left: 8px; min-height: 44px; padding: 0 14px; border-radius: var(--radius-pill, 999px); border: 1px solid var(--acc, #22c55e); background: transparent; color: var(--txt, #fff); font-weight: 700; cursor: pointer; transition: background var(--dur-fast, .12s); }
+.acc-chip .ico { width: 16px; height: 16px; flex: none; }
 .acc-chip:hover { background: rgba(34,197,94,.14); }
 .acc-chip[data-state="account"] { border-color: var(--line2, rgba(255,255,255,.2)); }
 

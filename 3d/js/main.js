@@ -1004,6 +1004,7 @@ const ICONS = {
   practice: 'M20 20v60M20 20h50l-10 12 10 12H20M60 70a8 8 0 1 0 .01 0Z',
   settings: 'M50 34a16 16 0 1 0 .01 0ZM46 8h8l2 10 8 4 9-6 6 6-6 9 4 8 10 2v8l-10 2-4 8 6 9-6 6-9-6-8 4-2 10h-8l-2-10-8-4-9 6-6-6 6-9-4-8-10-2v-8l10-2 4-8-6-9 6-6 9 6 8-4Z',
   controls: 'M10 30h80v44H10ZM20 42h8M34 42h8M48 42h8M62 42h8M76 42h4M24 54h52M30 64h40',
+  user: 'M50 50a18 18 0 1 0 .01 0ZM16 88c2-24 15-36 34-36s32 12 34 36',
 };
 function icon(name) {
   return h('svg', { viewBox: '0 0 100 100', class: 'ico', 'aria-hidden': 'true' },
@@ -1062,7 +1063,12 @@ function mainMenu() {
     const c = online.account.current();
     if (c.state === 'account' || c.state === 'banned') settingsScreen('account'); else openAccountGate(online, { toast, canDismiss: true });
   } });
-  const drawChip = () => { const c = online.account.current(); accChip.textContent = c.state === 'account' || c.state === 'banned' ? `👤 ${c.username}` : 'Log in / Sign up'; accChip.dataset.state = c.state; };
+  const drawChip = () => {
+    const c = online.account.current();
+    const signedIn = c.state === 'account' || c.state === 'banned';
+    accChip.replaceChildren(icon('user'), h('span', null, signedIn ? c.username : 'Log in / Sign up'));
+    accChip.dataset.state = c.state;
+  };
   drawChip();
   online.account.onChange(drawChip);
   pill.after(onlineCountBadge(online), accChip);

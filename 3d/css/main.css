@@ -187,8 +187,11 @@ body.in-match #app, body.in-match .bg { display: none; }
   .menu-head { flex-wrap: wrap; gap: 8px 12px; margin-bottom: 14px; }
   .menu-home { order: -1; flex-basis: 100%; padding: 0; font-size: 12px; }
   .menu-season { display: none; }
+  .brand { flex-basis: 100%; order: 0; }
   .brand-mark { width: 44px; height: 44px; font-size: 26px; }
+  .brand-name { overflow-wrap: anywhere; }
   .brand-tag { font-size: 12px; }
+  .online-pill, .acc-count, #account-chip { order: 1; }
   .tiles { gap: 10px; }
   .tile { padding: 14px; min-height: 118px; border-radius: 16px; }
   .tile > .ico { width: 30px; height: 30px; }
