@@ -12,7 +12,8 @@ import { makePlayer, stepPlayer } from '../js/player.js';
 import { planShot, shotVelocity, isOnTarget } from '../js/shooting.js';
 import { defaultBinds, setBind, saveBinds, loadBinds, STORAGE_KEY, keyLabel } from '../js/keybinds.js';
 import { makeRng, norm } from '../js/util.js';
-import { chooseKits, TEAMS, teamByCode, kitsClash, kitTone } from '../js/data.js';
+import { chooseKits, TEAMS, teamByCode, kitsClash, kitTone, CLASH_THRESHOLD } from '../js/data.js';
+import { colorDist } from '../js/util.js';
 import { Match } from '../js/match.js';
 import { newTournament, recordUserResult, nextUserFixture, standings } from '../js/tournament.js';
 import { penaltyOutcomeSim, KeeperModel, buildWall, makeKickState, launch, stepKick, kickError, freeKickSpeed, aiFreeKickDive } from '../js/kickphys.js';
@@ -279,6 +280,36 @@ test('kit clash detection always finds enough colour contrast across every fixtu
       if (anyClear) assert(!kitsClash(k.kits[0], k.kits[1]), `${home.code} vs ${away.code} (${k.kitTag}) still clashes`);
       assert(!kitsClash(k.gk[0], k.kits[0]) && !kitsClash(k.gk[0], k.kits[1]), `${home.code} home keeper kit blends in`);
     }
+  }
+});
+test('colour distance is perceptual: symmetric, zero for identical colours, big for black/white', () => {
+  assert(colorDist('#ffffff', '#ffffff') === 0);
+  assert(colorDist('#123456', '#abcdef') === colorDist('#abcdef', '#123456'));
+  assert(colorDist('#ff0000', '#fe0101') < CLASH_THRESHOLD, 'near-identical reds should read as clashing');
+  assert(colorDist('#000000', '#ffffff') > CLASH_THRESHOLD, 'black vs white should not clash');
+});
+test('kitsClash uses the perceptual distance, not an exact string match', () => {
+  assert(kitsClash({ shirt: '#c8102e', sec: '#fff', pattern: 'plain' }, { shirt: '#c9112f', sec: '#fff', pattern: 'plain' }), 'two near-identical reds must clash even though the hex strings differ');
+  assert(!kitsClash({ shirt: '#111111', sec: '#fff', pattern: 'plain' }, { shirt: '#ffffff', sec: '#111', pattern: 'plain' }));
+});
+test('chooseKits generates a brand-new contrasting kit when home/away/third all clash', () => {
+  // two synthetic nations whose home/away/third are all near-identical shades of red: every away option clashes
+  const redKit = (shirt) => ({ shirt, sec: '#111111', shorts: shirt, socks: shirt, num: '#FFFFFF', pattern: 'plain' });
+  const home = { code: 'ZZA', name: 'Ayland', rating: 70, home: redKit('#C8102E'), away: redKit('#C9112F'), third: redKit('#CA1230') };
+  const away = { code: 'ZZB', name: 'Beeland', rating: 70, home: redKit('#CB1331'), away: redKit('#CC1432'), third: redKit('#CD1533') };
+  assert([away.home, away.away, away.third].every((kit) => kitsClash(home.home, kit)), 'fixture setup should have every away option clashing');
+  const k = chooseKits(home, away);
+  assert(k.kitTag === 'generated', `expected a generated fallback kit, got ${k.kitTag}`);
+  assert(!kitsClash(k.kits[0], k.kits[1]), 'the generated kit must actually contrast with home');
+  assert(!kitsClash(k.gk[0], k.kits[0]) && !kitsClash(k.gk[0], k.kits[1]), 'home GK kit must differ from both outfield kits');
+  assert(!kitsClash(k.gk[1], k.kits[0]) && !kitsClash(k.gk[1], k.kits[1]), 'away GK kit must differ from both outfield kits');
+  assert(!kitsClash(k.gk[0], k.gk[1]), 'the two GK kits must also differ from each other');
+});
+test('new shirt patterns (halves, pinstripes, fade, chevron) are recognised and read as distinct tones', () => {
+  const base = { shirt: '#FF0000', sec: '#0000FF' };
+  const plain = kitTone({ ...base, pattern: 'plain' });
+  for (const p of ['halves', 'pinstripes', 'fade', 'chevron']) {
+    assert(kitTone({ ...base, pattern: p }) !== plain, `pattern ${p} should blend toward the secondary colour`);
   }
 });
 test('tournament progresses to a champion', () => {
