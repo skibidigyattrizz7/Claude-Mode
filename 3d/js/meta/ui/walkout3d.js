@@ -79,7 +79,9 @@ class PackAudio {
 /** Runs a list of {dur, tick(u), onStart?, onEnd?} segments; skip() fast-forwards to the end. */
 function timeline(segments, render) {
   let alive = true, skipping = false, raf = 0;
+  let finish;
   const promise = new Promise((resolve) => {
+    finish = resolve;
     let i = 0;
     const runSeg = () => {
       if (!alive) { resolve(); return; }
@@ -87,15 +89,18 @@ function timeline(segments, render) {
       const s = segments[i];
       if (s.onStart) s.onStart();
       const t0 = performance.now();
+      let last = t0;
       const dur = Math.max(1, s.dur);
       const frame = () => {
         if (!alive) { resolve(); return; }
-        const u = skipping ? 1 : clamp01((performance.now() - t0) / dur);
-        s.tick(u);
+        const now = performance.now();
+        const u = skipping ? 1 : clamp01((now - t0) / dur);
+        s.tick(u, Math.min(0.05, Math.max(0, (now - last) / 1000)));
+        last = now;
         if (render) render();
         if (u >= 1) {
           if (s.onEnd) s.onEnd();
-          i++; skipping = false;
+          i++;
           runSeg();
         } else raf = requestAnimationFrame(frame);
       };
@@ -106,7 +111,7 @@ function timeline(segments, render) {
   return {
     promise,
     skip() { skipping = true; },
-    stop() { alive = false; cancelAnimationFrame(raf); },
+    stop() { alive = false; cancelAnimationFrame(raf); finish(); },
   };
 }
 
@@ -128,11 +133,16 @@ export class TunnelScene {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer = renderer;
 
     const wallColor = new THREE.Color(this.theme.wall || '#0b1120');
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(wallColor.getHex(), 6, 30);
+    scene.background = new THREE.Color('#111923');
+    scene.fog = new THREE.Fog('#111923', 18, 65);
     this.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 60);
@@ -141,21 +151,64 @@ export class TunnelScene {
 
     const hemi = new THREE.HemisphereLight(0xbfd4ff, wallColor.getHex(), 0.55);
     scene.add(hemi); this.hemi = hemi;
-    const key = new THREE.DirectionalLight(0xffffff, 0.9);
-    key.position.set(1.5, 4, 4);
+    const key = new THREE.DirectionalLight(0xffefdc, 2.6);
+    key.position.set(-3, 7, 5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.left = -7; key.shadow.camera.right = 7;
+    key.shadow.camera.top = 7; key.shadow.camera.bottom = -7;
+    key.shadow.normalBias = 0.025;
     scene.add(key); this.key = key;
     const glow = new THREE.PointLight(new THREE.Color(this.accent), 1.2, 10, 2);
     glow.position.set(0, 1.6, -1);
     scene.add(glow); this.glow = glow;
+    const rim = new THREE.DirectionalLight(0xc6dcff, 1.8);
+    rim.position.set(4, 4, -5); scene.add(rim);
 
     this._buildTunnel(wallColor);
     this._buildPack();
     this._buildParticles();
+    this._buildStadium();
 
     this.t = 0;
     this.resize();
     this._onResize = () => this.resize();
     window.addEventListener('resize', this._onResize);
+  }
+
+  _buildStadium() {
+    const stadium = new THREE.Group();
+    const grass = new THREE.MeshStandardMaterial({ color: '#316d45', roughness: 1 });
+    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), grass);
+    pitch.rotation.x = -Math.PI / 2; pitch.position.y = -0.045; pitch.receiveShadow = true;
+    stadium.add(pitch);
+    const platform = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 5, 0.1, 80), new THREE.MeshStandardMaterial({ color: '#20262a', roughness: 0.42, metalness: 0.45 }));
+    platform.position.y = -0.02; platform.receiveShadow = true; stadium.add(platform);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(4.82, 0.025, 8, 96), new THREE.MeshBasicMaterial({ color: this.accent }));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.04; stadium.add(rim);
+    const seat = new THREE.MeshStandardMaterial({ color: '#37414a', roughness: 0.9 });
+    const lamp = new THREE.MeshBasicMaterial({ color: '#fff1d5' });
+    for (let tier = 0; tier < 9; tier++) {
+      const stand = new THREE.Mesh(new THREE.BoxGeometry(54, 0.48, 1.15), seat);
+      stand.position.set(0, 0.5 + tier * 0.56, -13 - tier * 0.95); stadium.add(stand);
+    }
+    for (let i = 0; i < 22; i++) {
+      const light = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.18, 0.15), lamp);
+      light.position.set(-21 + i * 2, 7.2, -19); stadium.add(light);
+    }
+    this.boards = [];
+    for (const side of [-1, 1]) {
+      const board = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(1.65, 3.5, 0.14), new THREE.MeshStandardMaterial({ color: '#bba777', metalness: 0.7, roughness: 0.3 }));
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.52, 3.36), new THREE.MeshStandardMaterial({ color: this.theme.wall || '#253650', emissive: this.accent, emissiveIntensity: 0.12, roughness: 0.6 }));
+      screen.position.z = 0.081;
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.52, 0.08), lamp);
+      stripe.position.set(0, -1.25, 0.09);
+      board.add(frame, screen, stripe); board.position.set(side * 3.2, 1.8, -1.8);
+      board.rotation.y = -side * 0.16;
+      this.boards.push(board); stadium.add(board);
+    }
+    this.scene.add(stadium); stadium.visible = false; this.stadium = stadium;
   }
 
   resize() {
@@ -286,9 +339,9 @@ export class TunnelScene {
         onStart: () => { this.audio.sting({ wave: 'sine', freq: [180] }); },
         tick: (u) => {
           const k = Math.sin(u * Math.PI);
-          group.rotation.z = (Math.random() - 0.5) * 0.14 * k;
-          group.rotation.x = (Math.random() - 0.5) * 0.08 * k;
-          group.position.x = (Math.random() - 0.5) * 0.05 * k;
+          group.rotation.z = Math.sin(u * 30) * 0.025 * k;
+          group.rotation.x = Math.sin(u * 18) * 0.018 * k;
+          group.position.x = Math.sin(u * 24) * 0.012 * k;
           this.hemi.intensity = lerp(0.55, 0.3, k);
           this.glow.intensity = lerp(1.2, 2.2, k);
         },
@@ -322,52 +375,36 @@ export class TunnelScene {
     if (!this.rig) {
       const geo = acquireGeometry(); this._geoHeld = true;
       this.shared = new SharedMaterials();
-      this.rig = new PlayerRig(geo, this.shared, null, { shadows: false });
+      this.rig = new PlayerRig(geo, this.shared, null, { shadows: true });
       this.rig.setIdentity(playerLike, kit, playerLike && (playerLike.id || playerLike.name) || 'walkout');
       this.scene.add(this.rig.root);
     }
     const rig = this.rig;
-    const face = -Math.PI / 2; // heading toward -z (toward the camera)
+    this.tunnel.visible = false;
+    this.pack.group.visible = false;
+    this.stadium.visible = true;
+    this.hemi.intensity = 1.1;
+    const face = Math.PI / 2; // Camera is at +z; walk toward it.
     let tSec = 0;
     const ctxFor = (dt, x, z) => ({ dt, t: (tSec += dt), ballX: x, ballY: 0, ballZ: z - 5, scorer: -1, idx: 0 });
     let last = performance.now();
     const render = () => { const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; this._render(dt); };
-    const holdBehindBack = () => {
-      const [aL, aR] = rig.arms;
-      aL.sh.rotation.set(-0.22, 0.55, 1.55); aL.elbow.rotation.x = -1.7;
-      aR.sh.rotation.set(-0.22, -0.55, -1.55); aR.elbow.rotation.x = -1.7;
-    };
     const segs = [
-      { // dim the tunnel + first strides out of the tunnel mouth
-        dur: 1500,
-        onStart: () => { this.audio.roar(2200, 0.55); this.hemi.intensity = 0.3; },
-        tick: (u) => {
-          const z = lerp(15, 6.5, easeInOut(u));
-          rig.update(0, z, face, ANIM.RUN, 0, 0, 2.4, ctxFor(1 / 60, 0, z));
-          this.camera.lookAt(0, 1.2, z - 3);
+      {
+        dur: 2400,
+        onStart: () => { this.audio.roar(1800, 0.3); },
+        tick: (u, dt) => {
+          const e = easeInOut(u), x = lerp(0.5, 1.55, e), z = lerp(-3.4, 0.6, e);
+          const speed = Math.sin(Math.PI * u) * 2.1;
+          rig.update(x, z, face, ANIM.RUN, 0, 0, speed, ctxFor(dt, x, z));
+          this.camera.position.set(lerp(-0.45, 0, e), lerp(1.7, 1.45, e), Math.max(6.4, 3.6 / this.camera.aspect) + (1 - e) * 1.2);
+          this.camera.lookAt(0, 1.15, 0);
+          this.boards.forEach((b, i) => { b.position.x = (i ? 1 : -1) * lerp(1.2, 3.2, e); });
         },
       },
-      { // skill move 1: step-over
-        dur: 700,
-        onStart: () => { this.rig._skillT = 0; },
-        tick: (u, dtHint) => {
-          this.rig._skillT += 1 / 60;
-          rig.update(0, 6.5, face, ANIM.SKILL, this.rig._skillT, 0, 0, ctxFor(1 / 60, 0, 6.5));
-        },
-      },
-      { dur: 700, tick: () => { const z = lerp(6.5, 3.6, 0.5); rig.update(0, z, face, ANIM.RUN, 0, 0, 1.6, ctxFor(1 / 60, 0, z)); } },
-      { // skill move 2: keepy-up (heading pose as a juggling stand-in — no dedicated engine anim)
+      {
         dur: 650,
-        onStart: () => { this.rig._skillT = 0; },
-        tick: () => { this.rig._skillT += 1 / 60; rig.update(0, 3.6, face, ANIM.HEAD, this.rig._skillT, 0.4, 0, ctxFor(1 / 60, 0, 3.6)); },
-      },
-      { // final approach, camera holds
-        dur: 700,
-        tick: (u) => { const z = lerp(3.6, 1.7, easeOut(u)); rig.update(0, z, face, ANIM.RUN, 0, 0, 1.1, ctxFor(1 / 60, 0, z)); },
-      },
-      { // settle: hands behind back (FC26-style pose) — direct bone override, no matching anim exists
-        dur: 550,
-        tick: (u) => { rig.update(0, 1.7, face, ANIM.RUN, 0, 0, 0, ctxFor(1 / 60, 0, 1.7)); holdBehindBack(); },
+        tick: (u, dt) => { rig.update(1.55, 0.6, face, ANIM.RUN, 0, 0, 0, ctxFor(dt, 1.55, 0.6)); },
       },
     ];
     this.active = timeline(segs, render);
@@ -377,7 +414,20 @@ export class TunnelScene {
   /** Fast-forward whichever sequence is currently running. */
   skipAll() { if (this.active) this.active.skip(); }
 
+  hold() {
+    let last = performance.now();
+    const frame = () => {
+      if (this.disposed) return;
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (this.rig) this.rig.update(1.55, 0.6, Math.PI / 2, ANIM.RUN, 0, 0, 0, { dt, t: now / 1000, ballX: 1.55, ballY: 0, ballZ: 5, scorer: -1, idx: 0 });
+      this._render(dt); this.idleFrame = requestAnimationFrame(frame);
+    };
+    frame();
+  }
+
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true; cancelAnimationFrame(this.idleFrame);
     if (this.active) { this.active.stop(); this.active = null; }
     window.removeEventListener('resize', this._onResize);
     if (this.rig) { this.scene.remove(this.rig.root); this.rig.dispose(); this.rig = null; }
