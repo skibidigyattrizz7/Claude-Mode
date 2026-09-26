@@ -6,6 +6,7 @@ import { FORMATIONS, FORMATION_NAMES, positionFit } from './formations.js';
 import { calcChemistry, teamRating } from './chemistry.js';
 import { buildTeam, gkKitFor, bestLineup } from './teams.js';
 import { aiOpponent } from './rivals.js';
+import { isCardReleased } from './promos.js';
 
 export const DRAFT_ENTRY = 8000;
 export const DRAFT_ROUNDS = ['Round 1', 'Quarter-final', 'Semi-final', 'Final'];
@@ -33,7 +34,7 @@ export function chooseFormation(d, formation) {
   d.formation = formation;
   const rng = new Rng(`draft-${d.seed}-cap`);
   const slotPos = new Set(FORMATIONS[formation].slots.map((s) => s.pos));
-  const pool = getDB().all.filter((p) => p.ovr >= 85 && p.special !== 'objective' && [p.pos, ...(p.alt || [])].some((x) => slotPos.has(x)) && p.pos !== 'GK');
+  const pool = getDB().all.filter((p) => p.ovr >= 85 && p.special !== 'objective' && isCardReleased(p) && [p.pos, ...(p.alt || [])].some((x) => slotPos.has(x)) && p.pos !== 'GK');
   const out = [];
   const persons = new Set();
   for (let i = 0; i < 200 && out.length < 5 && pool.length; i++) {
@@ -63,7 +64,7 @@ export function slotOptions(d, i) {
   const pos = FORMATIONS[d.formation].slots[i].pos;
   const rng = new Rng(`draft-${d.seed}-slot-${i}`);
   const used = usedPersons(d);
-  const all = getDB().all.filter((p) => p.special !== 'objective' && positionFit(p, pos) >= 1 && (pos === 'GK') === (p.pos === 'GK'));
+  const all = getDB().all.filter((p) => p.special !== 'objective' && isCardReleased(p) && positionFit(p, pos) >= 1 && (pos === 'GK') === (p.pos === 'GK'));
   const bands = [[86, 99, 1], [82, 85, 2], [76, 81, 2]];
   const out = [];
   const persons = new Set();

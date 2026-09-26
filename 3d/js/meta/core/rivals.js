@@ -7,6 +7,7 @@ import { getDB } from './players.js';
 import { bestLineup, buildTeam, gkKitFor, contrastColor } from './teams.js';
 import { FORMATIONS } from './formations.js';
 import { teamRating } from './chemistry.js';
+import { isCardReleased } from './promos.js';
 
 export const ELITE = 0;
 export const DIVISIONS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, ELITE];
@@ -116,7 +117,7 @@ export function aiOpponent(seed, difficulty, { maxTier = null, noSpecial = false
   const db = getDB();
   const target = (TARGET[difficulty] || 74) + rng.int(-2, 2);
   const pool = db.all.filter((p) => Math.abs(p.ovr - target) <= 4 && (!noSpecial || !p.special) && (!p.special || difficulty === 'legendary')
-    && (!maxTier || (maxTier === 'silver' ? p.ovr < 75 && !p.special : true)));
+    && (!maxTier || (maxTier === 'silver' ? p.ovr < 75 && !p.special : true)) && isCardReleased(p));
   const grp = (p) => (p.pos === 'GK' ? 'GK' : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(p.pos) ? 'DEF' : ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.pos) ? 'MID' : 'ATT');
   const picked = [];
   const want = { GK: 2, DEF: 7, MID: 7, ATT: 5 };

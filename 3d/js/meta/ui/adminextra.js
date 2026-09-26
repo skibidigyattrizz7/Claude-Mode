@@ -105,11 +105,11 @@ export function moderationPanel(app, { level }) {
   if (typeof svc.mount === 'function') { const el = h('div'); try { const un = svc.mount(el, { level, app }); if (typeof un === 'function') app.onCleanup(un); } catch (e) { console.warn('[meta] moderation mount failed', e); } return el; }
   const st = { q: '' };
   const results = h('div', { class: 'pm-admin-results' });
-  const row = (label, ico, action, danger) => h('button', { class: `pm-btn pm-btn--sm ${danger ? 'pm-btn--danger' : ''}`, disabled: !has(action), title: has(action) ? '' : 'Not available yet', onclick: () => runAction(action, label) }, icon(ico), ` ${label}`);
-  async function runAction(fn, label, ...args) {
+  const row = (label, ico, id, action, danger) => h('button', { class: `pm-btn pm-btn--sm ${danger ? 'pm-btn--danger' : ''}`, disabled: !has(action), title: has(action) ? '' : 'Not available yet', onclick: () => runAction(action, label, id) }, icon(ico), ` ${label}`);
+  async function runAction(fn, label, id, ...args) {
     if (!has(fn)) return;
     if (!(await confirmBox(app.root, label, `${label}?`, label, /ban|reset/i.test(label)))) return;
-    const r = await safeCall(() => svc[fn](...args), { ok: false });
+    const r = await safeCall(() => svc[fn](id, ...args), { ok: false });
     app.toast(r && r.ok !== false ? `${label} done.` : `${label} failed${r && r.error ? `: ${r.error}` : ''}`, r && r.ok !== false ? 'good' : 'bad');
     draw();
   }
@@ -118,18 +118,25 @@ export function moderationPanel(app, { level }) {
     if (st.q.trim().length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 characters of a username.')); return; }
     if (!has('search')) { results.appendChild(h('p', { class: 'pm-dim' }, 'User search is not available from the online service yet.')); return; }
     const r = await safeCall(() => svc.search(st.q.trim()), { ok: false });
-    const users = r && (r.items || r.users || (Array.isArray(r) ? r : null)) || [];
+    const users = (r && r.ok !== false && (r.items || (Array.isArray(r) ? r : null))) || [];
     if (!users.length) { results.appendChild(h('p', { class: 'pm-dim' }, 'No matches.')); return; }
     for (const u of users) {
+      const ownerLevel = can('owner', level);
       results.appendChild(h('div', { class: 'pm-mktrow' },
-        h('div', { class: 'pm-mkt-info' }, h('b', null, u.name || u.id), h('span', { class: 'pm-dim' }, `${u.role || 'player'}${u.banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`)),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || u.name || u.id), h('span', { class: 'pm-dim' }, `${u.role || 'player'}${u.ban || u.banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`)),
         h('div', { class: 'pm-btnrow pm-wrap' },
-          row(u.banned ? 'Unban' : 'Ban', 'ban', u.banned ? 'unban' : 'ban', !u.banned),
-          row('Reset coins', 'coins', 'resetCoins', true),
-          row('Reset progress', 'reset', 'resetProgress', true),
-          row('Reset club', 'squad', 'resetClub', true),
-          row('Make mod', 'admin', 'makeMod', false))));
+          row((u.ban || u.banned) ? 'Unban' : 'Ban', 'ban', u.id, (u.ban || u.banned) ? 'unban' : 'ban', !(u.ban || u.banned)),
+          row('Adjust coins', 'coins', u.id, 'adjustCoins'),
+          row('Make mod', 'admin', u.id, 'setRole'),
+          ownerLevel ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: !app.online || !app.online.owner, onclick: () => runOwnerReset(u.id, 'coins') }, icon('coins'), ' Reset coins') : null,
+          ownerLevel ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: !app.online || !app.online.owner, onclick: () => runOwnerReset(u.id, 'progress') }, icon('reset'), ' Reset progress') : null,
+          ownerLevel ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: !app.online || !app.online.owner, onclick: () => runOwnerReset(u.id, 'club') }, icon('squad'), ' Reset club') : null)));
     }
+  }
+  async function runOwnerReset(id, what) {
+    if (!(await confirmBox(app.root, `Reset ${what}`, `Reset this player's ${what}?`, 'Reset', true))) return;
+    const r = await safeCall(() => app.online.owner.reset(id, what), { ok: false });
+    app.toast(r && r.ok !== false ? `Reset ${what} done.` : `Reset failed${r && r.error ? `: ${r.error}` : ''}`, r && r.ok !== false ? 'good' : 'bad');
   }
   const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search a username…', 'aria-label': 'Search players' });
   search.addEventListener('input', () => { st.q = search.value; draw(); });
@@ -139,31 +146,31 @@ export function moderationPanel(app, { level }) {
 
 // ---------------------------------------------------------------- Broadcast + giveaways
 export function broadcastPanel(app) {
-  const svc = app.online && (app.online.broadcast || (app.online.admin && app.online.admin.broadcast ? app.online.admin : null));
-  const send = svc && (svc.send || svc.broadcast);
-  const msg = h('textarea', { class: 'pm-input', rows: '2', maxlength: '240', placeholder: 'Message shown to every online player…' });
+  const svc = app.online && app.online.owner;
+  const msg = h('textarea', { class: 'pm-input', rows: '2', maxlength: '200', placeholder: 'Message shown to every online player…' });
+  const mins = h('input', { class: 'pm-input pm-input--num', type: 'number', value: '30', min: '1', max: '1440', 'aria-label': 'Minutes shown' });
   const status = h('small', { class: 'pm-dim' });
   return h('section', { class: 'pm-panel pm-admin-sec' },
     h('h3', null, icon('broadcast'), ' Global message'),
     msg,
-    h('div', { class: 'pm-btnrow' },
+    h('div', { class: 'pm-btnrow' }, h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Minutes shown'), mins),
       h('button', {
-        class: 'pm-btn pm-btn--primary', disabled: typeof send !== 'function',
+        class: 'pm-btn pm-btn--primary', disabled: !svc || typeof svc.broadcast !== 'function',
         onclick: async () => {
           const text = msg.value.trim(); if (!text) return;
-          const r = await safeCall(() => send.call(svc, text), { ok: false });
+          const r = await safeCall(() => svc.broadcast(text, Math.max(1, Math.min(1440, Number(mins.value) || 30))), { ok: false });
           if (r && r.ok !== false) { status.textContent = 'Broadcast sent.'; app.toast('Broadcast sent to everyone online.', 'good'); msg.value = ''; }
           else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
         },
       }, 'Broadcast to everyone')),
     status,
-    typeof send !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service — not connected in this session.') : null);
+    !svc || typeof svc.broadcast !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service — not connected in this session.') : null);
 }
 
 export function giveawayPanel(app) {
   const st = { target: '', kind: 'coins', amount: 5000, packId: 'gold', pid: '' };
   const db = getDB();
-  const gw = app.online && app.online.giveaway;
+  const owner = app.online && app.online.owner;
   const targetInp = h('input', { class: 'pm-input', placeholder: 'Username (leave blank + "Everyone" for all)', 'aria-label': 'Giveaway target' });
   targetInp.addEventListener('input', () => { st.target = targetInp.value; });
   const kindSel = select([['coins', 'Coins'], ['pack', 'Pack'], ['player', 'Player']], st.kind, (v) => { st.kind = v; redrawExtra(); }, { 'aria-label': 'Giveaway type' });
@@ -177,10 +184,10 @@ export function giveawayPanel(app) {
   redrawExtra();
   const status = h('small', { class: 'pm-dim' });
   async function give(everyone) {
-    const gift = st.kind === 'coins' ? { kind: 'coins', amount: st.amount } : st.kind === 'pack' ? { kind: 'pack', packId: st.packId } : { kind: 'player', pid: st.pid };
     if (st.kind === 'player' && !st.pid) { status.textContent = 'Type an exact player name.'; return; }
-    if (gw && typeof (everyone ? gw.everyone : gw.toUser) === 'function') {
-      const r = await safeCall(() => (everyone ? gw.everyone(gift) : gw.toUser(st.target.trim(), gift)), { ok: false });
+    const gift = { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: st.kind === 'player' ? { id: st.pid } : undefined, count: 1 };
+    if (owner && typeof owner.gift === 'function') {
+      const r = await safeCall(() => owner.gift(gift), { ok: false });
       status.textContent = r && r.ok !== false ? `Sent${everyone ? ' to everyone' : ` to ${st.target}`}.` : `Failed${r && r.error ? `: ${r.error}` : ''}.`;
       if (r && r.ok !== false) app.toast('Giveaway sent.', 'good');
       return;
