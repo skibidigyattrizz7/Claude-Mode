@@ -1,6 +1,6 @@
 # Pitchside 3D — online backend (Supabase)
 
-Everything lives in one idempotent migration: `migrations/001_pitchside.sql` (safe to re-run).
+Idempotent migrations, applied in order: `20260925140338_pitchside_001.sql` (live), `20260926000000_pitchside_002_accounts.sql`, `20260926000100_pitchside_003_owner_social.sql`.
 All objects are prefixed `pitchside_`. No Supabase Auth is used.
 
 ## What it contains
@@ -58,3 +58,12 @@ All objects are prefixed `pitchside_`. No Supabase Auth is used.
 `3d/index.html?mockOnline=1` swaps the backend for an in-browser mock (`3d/js/net/mockbackend.js`)
 that mirrors these functions; open two tabs to matchmake / add friends against each other.
 Unit tests: `node 3d/js/net/tests/net.test.mjs`.
+
+## Admin code hashes (003) — run privately, never commit codes
+```sql
+insert into pitchside_admin_codes(level, code_hash) values ('full', extensions.crypt('<FULL_CODE>', extensions.gen_salt('bf', 10)))
+on conflict (level) do update set code_hash = excluded.code_hash, updated_at = now();
+insert into pitchside_admin_codes(level, code_hash) values ('super', extensions.crypt('<SUPER_CODE>', extensions.gen_salt('bf', 10)))
+on conflict (level) do update set code_hash = excluded.code_hash, updated_at = now();
+```
+(003 copies the existing `pitchside_admin` row as the 'full' code automatically.)

@@ -139,7 +139,7 @@ export function adminCaps(level = getAdminLevel()) {
  * Redeem a code: the server first (when reachable; also stores the admin token for owner RPCs), else locally.
  * Never throws. -> { ok:true, level, server } | { ok:false, error, locked? }
  */
-export async function verifyAdminCode(code, online = boundOnline) {
+export async function verifyAdminCode(code, online = boundOnline, { table = ADMIN_CODE_PARAMS } = {}) {
   code = String(code ?? '');
   if (!code.trim()) return { ok: false, error: 'Enter a code' };
   const locked = lockRemainingMs();
@@ -152,7 +152,7 @@ export async function verifyAdminCode(code, online = boundOnline) {
     } catch { /* fall back to local */ }
   }
   if (!level) {
-    try { level = await verifyAdminCodeLocal(code); } catch { return { ok: false, error: 'Code check needs a secure (https) connection in this browser.' }; }
+    try { level = await verifyAdminCodeLocal(code, table); } catch { return { ok: false, error: 'Code check needs a secure (https) connection in this browser.' }; }
   }
   if (!level) {
     const lk = registerFailure();

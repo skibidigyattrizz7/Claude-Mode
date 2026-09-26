@@ -9,7 +9,7 @@
 // The SUPER code unlocks everything 'full' does (+ admin cards / 999 OVR). For compatibility with the UI's
 // `level === 'full'` checks, getAdminLevel() reports a super session as 'full'; adminInfo().super / isSuperAdmin() tell them apart.
 import { ADMIN_CODE_PARAMS as SHARED_PARAMS, verifyAdminCode as sharedVerifyAdminCode } from '../../shared/adminauth.js';
-export const ADMIN_CODE_PARAMS = SHARED_PARAMS;
+export const ADMIN_CODE_PARAMS = Object.fromEntries(Object.entries(SHARED_PARAMS).map(([k, v]) => [k, { ...v }])); // mutable copy (tests swap vectors)
 export const TEMP_ADMIN_MS = 60 * 60 * 1000;
 export const MAX_ATTEMPTS = 5;
 export const LOCK_MS = 60 * 1000;
@@ -160,8 +160,18 @@ export async function redeemAdminCode(code, online = null) {
   // One verifier for every entry point (shared/adminauth.js): server bcrypt first (returns 'super' | 'full' and
   // stores the admin token for owner RPCs), else the local PBKDF2 table (super / full / temp). Same lockout.
   const srv = online && online.admin && typeof online.admin.verifyLevel === 'function' ? online : null;
-  const r = await sharedVerifyAdminCode(code, srv);
+  if (!srv && online && online.admin && typeof online.admin.verify === 'function' && String(code ?? '').trim() && lockRemainingMs() <= 0) {
+    // older online layers: boolean verify only
+    const up = typeof online.available === 'function' ? await tryCall(() => online.available()) : true;
+    const v = up ? await tryCall(() => online.admin.verify(String(code)), 8000) : null;
+    if (v === true || (v && typeof v === 'object' && (v.valid === true || v.admin === true))) {
+      const level = v && ['super', 'full', 'temp'].includes(v.level) ? v.level : 'full';
+      clearFailures(); setSessionLevel(level);
+      return { ok: true, level };
+    }
+  }
+  const r = await sharedVerifyAdminCode(code, srv, { table: ADMIN_CODE_PARAMS });
   if (!r.ok) return r;
   setSessionLevel(r.level);
-  return { ok: true, level: r.level, server: r.server };
+  return r.server ? { ok: true, level: r.level, server: true } : { ok: true, level: r.level };
 }

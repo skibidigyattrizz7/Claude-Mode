@@ -76,6 +76,7 @@ change goes through an atomic RPC. Offline the UT save's local balance is used.
 - `spend(amount, reason)` → `{ ok, coins }` | `insufficient_coins` (infinite wallets never fail)
 - `earn(amount, reason)` → `{ ok, coins, granted }` — capped server-side (reason whitelist: `quicksell`, `objective`,
   `sbc`, `season`, `ut-earn`, `event`; ≤ 250 000/h, ≤ 1 000 000/day; over the cap `granted` < amount).
+- `onChange(fn)` → fn(balance) whenever a server balance is seen (buy, coin ops, gifts, rewards, presence) — meta `app.setOnlineBalance` subscribes.
 - `add(delta, reason)` (compat) → spend when negative, earn when positive (admin top-ups: `online.owner.giveCoins`).
 
 ## Market — `online.market`
@@ -106,3 +107,12 @@ the card can be taken back with `cancel`). `claimSales()` stays for old unclaime
 - `squads.publish(snapshot)` (JSON ≤ 20 KB: `{ name, formation, players:[{ name, pos, ovr, ... }] }`),
   `squads.view(usernameOrFriendCode)` → `{ ok, owner:{ username, name }, squad, updatedAt }`
 - UI: `3d/js/net/social.js` (`mountSocial(root, { online })`) — Messages + View squad, opened from the Online screen.
+
+## Transfer list pile (meta/core/pmarket.js, local UT state `state.transferList`)
+`sendToTransferList(state, pid)`, `removeFromTransferList(state, pid)`, `transferList(state)` (owned + tradeable only, max 100),
+`onTransferList(state, pid)`, `listFromTransferList(state, online, pid, price)`. `listCard` removes the card from the pile.
+`fetchMine(state, online)` → `{ ok, items, sold }` (sold = local listings that disappeared: already paid). `buyListing` returns `coins`.
+
+## Status / notes
+- Meta `getAdminLevel()` reports a SUPER session as `'full'` (UI compat); use `isSuperAdmin()` / `adminInfo().super` or shared `getAdminLevel()`.
+- `accountui.js` (gate, Settings → Account pane, broadcast banner, online counter) and `social.js` exist but are **not yet hooked into main.js**.
