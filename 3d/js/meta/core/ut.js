@@ -536,7 +536,7 @@ export function grantReward(state, reward, from = '') {
   if (reward.pack) { state.packs.push({ type: reward.pack, from }); out.push(PACK_BY_ID[reward.pack].name); }
   if (reward.player) {
     const p = getPlayer(reward.player);
-    if (state.club.includes(reward.player)) { state.coins += 20000; out.push('20,000 coins (duplicate reward)'); }
+    if (state.club.includes(reward.player)) { sendToVault(state, reward.player); out.push(`${p.name} sent to your SBC storage vault (duplicate)`); }
     else {
       state.club.push(reward.player);
       if (state.untradeable && !state.untradeable.includes(reward.player)) state.untradeable.push(reward.player);
