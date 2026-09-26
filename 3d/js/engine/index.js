@@ -9,6 +9,7 @@ import { InputManager, emptyInput, EXTRA_BINDS } from './ui/input.js';
 import { Hud } from './ui/hud.js';
 import { MatchAudio } from './ui/audio.js';
 import { Commentary } from './ui/commentary.js';
+import { resolveMatchKits } from './core/kits.js';
 
 const SIDES = ['home', 'away'];
 const SP_TOAST = { [SP.THROW]: 'THROW-IN', [SP.CORNER]: 'CORNER', [SP.GOALKICK]: 'GOAL KICK', [SP.FREEKICK]: 'FREE KICK' };
@@ -106,8 +107,15 @@ export function createMatch(container, opts = {}) {
   const audio = new MatchAudio();
   audio.setVolume(Number.isFinite(+opts.volume) ? Math.max(0, Math.min(1, +opts.volume)) : 1);
   const commentary = new Commentary(uiGp.commentary, home, away);
+  // Resolve the kits actually worn on the pitch once (perceptual clash check: away falls back
+  // away -> third -> generated; GK kits nudged off both outfield kits), and hand the same
+  // home/away down to the HUD and every renderer attempt so the scoreboard colours always
+  // match what's rendered — never the raw, possibly-clashing team data.
+  const resolvedKits = resolveMatchKits(home, away);
+  const rHome = { ...home, kit: resolvedKits.home, gkKit: resolvedKits.homeGk };
+  const rAway = { ...away, kit: resolvedKits.away, gkKit: resolvedKits.awayGk };
   const hud = new Hud(root, {
-    home, away, binds, slots: local, touch,
+    home: rHome, away: rAway, binds, slots: local, touch,
     onResume: () => resume(),
     onCamera: () => toggleCamera(),
     onQuit: () => quit(),
@@ -162,7 +170,7 @@ export function createMatch(container, opts = {}) {
       const a = rendererAttempts[i];
       try {
         const m = await import(a.path);
-        const r = m.createRenderer(stage, { home, away, stadium, quality: a.quality, weather, safe: safeMode });
+        const r = m.createRenderer(stage, { home: rHome, away: rAway, stadium, quality: a.quality, weather, safe: safeMode });
         rendererRung = i;
         return r;
       } catch (err) {

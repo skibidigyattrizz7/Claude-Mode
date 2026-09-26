@@ -441,3 +441,90 @@ export class TunnelScene {
     this.renderer.dispose();
   }
 }
+
+// ---------------------------------------------------------------- end-of-reveal walkout figure (NEW animation)
+const smooth01 = (t) => { t = clamp01(t); return t * t * (3 - 2 * t); };
+/**
+ * The player standing beside the revealed card (packopen_fut.js, walkouts only). A small transparent
+ * WebGL canvas: he walks in a few eased steps from the side, turns to camera, celebrates ONCE, then
+ * stands with the rig's own idle breathing / weight shift. Fixed camera, no shadows, pixel ratio <= 1.5.
+ * Throws from the constructor when WebGL is unavailable (the caller just skips the figure).
+ */
+export class WalkoutFigure {
+  constructor(canvas, { player, kit, accent = '#ffc933' } = {}) {
+    this.canvas = canvas; this.disposed = false; this.raf = 0;
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
+    renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.setClearColor(0x000000, 0);
+    this.renderer = renderer;
+    const scene = new THREE.Scene(); this.scene = scene;
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
+    camera.position.set(0, 1.1, 5.0); camera.lookAt(0, 1.05, 0);
+    this.camera = camera;
+    scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2418, 1.1));
+    const key = new THREE.DirectionalLight(0xfff1de, 2.3); key.position.set(-2.5, 4, 5); scene.add(key);
+    const rim = new THREE.DirectionalLight(new THREE.Color(accent), 2.2); rim.position.set(2.5, 3, -4); scene.add(rim);
+    const fill = new THREE.DirectionalLight(0xbcd2ff, 0.6); fill.position.set(3, 1.5, 3); scene.add(fill);
+
+    const geo = acquireGeometry(); this._geoHeld = true;
+    this.shared = new SharedMaterials();
+    this.rig = new PlayerRig(geo, this.shared, null, { shadows: false });
+    this.rig.setIdentity(player || null, kit || { primary: '#2a3a55', secondary: '#ffffff', number: 10 }, (player && (player.id || player.name)) || 'walkout');
+    scene.add(this.rig.root);
+    this.resize();
+    this._onResize = () => this.resize();
+    window.addEventListener('resize', this._onResize);
+  }
+
+  resize() {
+    const r = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(r.width || 200)), h = Math.max(1, Math.round(r.height || 400));
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+  }
+
+  /** Timeline (seconds): 0-1.7 walk in from the right, 1.7-2.2 turn to camera, 2.3-4.0 one celebration, then idle. */
+  play() {
+    const WALK = 1.7, TURN_END = 2.2, CEL0 = 2.3, CEL1 = 4.0;
+    const x0 = 1.9, faceCam = Math.PI / 2, faceLeft = Math.PI;
+    const t0 = performance.now(); let last = t0, x = x0;
+    const frame = (now) => {
+      if (this.disposed) return;
+      this.raf = requestAnimationFrame(frame);
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000)); last = now;
+      const t = (now - t0) / 1000;
+      let anim = ANIM.RUN, animT = 0, speed = 0, face = faceCam;
+      if (t < WALK) {
+        const u = t / WALK;
+        const nx = x0 * (1 - smooth01(u));
+        speed = dt > 0 ? Math.abs(nx - x) / dt : 0; x = nx;
+        speed = Math.min(1.9, speed);
+        face = faceLeft;
+      } else {
+        x = 0;
+        face = t < TURN_END ? lerp(faceLeft, faceCam, smooth01((t - WALK) / (TURN_END - WALK))) : faceCam;
+        if (t >= CEL0 && t < CEL1) { anim = ANIM.CELEB; animT = t - CEL0; }
+      }
+      // look at the camera (+z) once he has turned; ahead of him while walking
+      const lookX = t < WALK ? x - 3 : 0, lookZ = t < WALK ? 0.5 : 5;
+      this.rig.update(x, 0, face, anim, animT, 0, speed, { dt, t, ballX: lookX, ballY: 1, ballZ: lookZ, scorer: -1, idx: 0 });
+      this.renderer.render(this.scene, this.camera);
+    };
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true; cancelAnimationFrame(this.raf);
+    window.removeEventListener('resize', this._onResize);
+    if (this.rig) { this.scene.remove(this.rig.root); this.rig.dispose(); this.rig = null; }
+    if (this._geoHeld) { releaseGeometry(); this._geoHeld = false; }
+    if (this.shared) { this.shared.dispose(); this.shared = null; }
+    this.scene.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); });
+    this.renderer.dispose();
+    try { this.renderer.forceContextLoss(); } catch { /* ignore */ }
+  }
+}

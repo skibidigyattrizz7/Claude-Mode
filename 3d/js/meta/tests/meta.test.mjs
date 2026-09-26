@@ -942,6 +942,31 @@ test('sensible alt positions (e.g. Messi RW + RM/CAM/CF/ST); coins never go nega
   assert.equal(s.coins, 1501);
 });
 
+test('pack opening (new): pull classification, beat sequence and packAnim setting', async () => {
+  const SEQ = await import('../ui/packopen_seq.js');
+  const { PROMO_BY_ID } = await import('../core/promos.js');
+  const silver = SEQ.classifyPull({ ovr: 70, tier: 'silver' }, PROMO_BY_ID);
+  assert.equal(silver.walkout, false); assert.equal(silver.level, 0);
+  assert.equal(SEQ.classifyPull({ ovr: 78, tier: 'gold' }, PROMO_BY_ID).level, 1);
+  assert.equal(SEQ.classifyPull({ ovr: 82, tier: 'gold' }, PROMO_BY_ID).level, 2);
+  const walk = SEQ.classifyPull({ ovr: 90, tier: 'gold' }, PROMO_BY_ID);
+  assert.ok(walk.walkout); assert.equal(walk.level, 3);
+  const pr = SEQ.classifyPull({ ovr: 84, tier: 'gold', special: 'toty' }, PROMO_BY_ID);
+  assert.ok(pr.walkout); assert.equal(pr.promoId, 'toty'); assert.deepEqual(pr.colors, PROMO_BY_ID.toty.colors);
+  const kinds = (steps) => steps.map((s) => s.kind);
+  const w = SEQ.buildPackSequence(walk, { figure: true });
+  assert.deepEqual(kinds(w), ['rise', 'tension', 'rip', 'burst', 'card', 'banners', 'flag', 'rating', 'club', 'fireworks', 'flip', 'figure', 'done']);
+  for (let i = 1; i < w.length; i++) assert.ok(w[i].at >= w[i - 1].at, 'beats are in time order');
+  assert.ok(kinds(SEQ.buildPackSequence(pr, {})).includes('promo'));
+  const n = SEQ.buildPackSequence(silver, { figure: true });
+  assert.deepEqual(kinds(n), ['rise', 'tension', 'rip', 'burst', 'card', 'flag', 'flip', 'done']);
+  assert.ok(SEQ.beatAt(n, 'flip') < SEQ.beatAt(w, 'flip'), 'non-walkouts reveal quicker');
+  assert.ok(SEQ.beatAt(SEQ.buildPackSequence(walk, { reduce: true }), 'flip') < SEQ.beatAt(w, 'flip'));
+  assert.equal(SEQ.normalizePackAnim('classic'), 'classic');
+  assert.equal(SEQ.normalizePackAnim(undefined), 'new');
+  assert.equal(SEQ.normalizePackAnim('weird'), 'new');
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

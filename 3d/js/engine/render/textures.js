@@ -217,12 +217,41 @@ export function ringTexture(color = '#ffffff', S = 256) {
 export function shirtTexture(kit, number, name, opts = {}) {
   const W = 512, H = 256, cv = makeCanvas(W, H), g = cv.getContext('2d');
   g.fillStyle = kit.primary; g.fillRect(0, 0, W, H);
-  const pattern = opts.pattern || 0;
-  if (pattern === 1) { // vertical stripes
+  const pattern = opts.pattern || 'plain';
+  if (pattern === 'stripes') { // vertical stripes, wrapping the whole torso
     g.fillStyle = kit.secondary;
     for (let i = 0; i < 16; i += 2) g.fillRect(i * W / 16, 0, W / 16, H);
-  } else if (pattern === 2) { // chest band
-    g.fillStyle = kit.secondary; g.fillRect(0, H * 0.3, W, H * 0.12);
+  } else if (pattern === 'hoops') { // horizontal hooped bands (Celtic-style)
+    g.fillStyle = kit.secondary;
+    const bands = 5;
+    for (let i = 1; i < bands; i += 2) g.fillRect(0, i * H / bands, W, H / bands);
+  } else if (pattern === 'halves') { // left/right half in the secondary colour
+    g.fillStyle = kit.secondary;
+    g.fillRect(W * 0.5, 0, W * 0.5, H);
+  } else if (pattern === 'pinstripes') { // fine vertical pinstripes
+    g.fillStyle = kit.secondary;
+    for (let x = 0; x < W; x += 10) g.fillRect(x, 0, 3, H);
+  } else if (pattern === 'sash') { // diagonal sash wrapping the torso
+    g.save();
+    g.fillStyle = kit.secondary;
+    g.translate(W * 0.5, H * 0.5);
+    g.rotate(0.55);
+    g.fillRect(-W * 0.9, -H * 0.16, W * 1.8, H * 0.3);
+    g.restore();
+  } else if (pattern === 'fade') { // vertical gradient fade primary -> secondary
+    const grd = g.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, kit.primary); grd.addColorStop(1, kit.secondary);
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  } else if (pattern === 'chevron') { // repeated chevrons across the chest
+    g.fillStyle = kit.secondary;
+    const step = W / 8;
+    for (let i = -1; i < 9; i++) {
+      const x = i * step;
+      g.beginPath();
+      g.moveTo(x, H * 0.15); g.lineTo(x + step * 0.5, H * 0.45); g.lineTo(x + step, H * 0.15);
+      g.lineTo(x + step, H * 0.28); g.lineTo(x + step * 0.5, H * 0.58); g.lineTo(x, H * 0.28);
+      g.closePath(); g.fill();
+    }
   }
   // side panels
   g.fillStyle = kit.secondary; g.globalAlpha = 0.85;

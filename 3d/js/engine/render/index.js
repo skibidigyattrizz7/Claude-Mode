@@ -13,6 +13,7 @@ import { buildOverlays, buildNightShadows } from './extras.js';
 import { PlayerRig, KitMaterials, SharedMaterials, acquireGeometry, releaseGeometry } from './player.js';
 import { radialTexture } from './textures.js';
 import { AdminRender } from './admin.js';
+import { resolveMatchKits, colorDist, CLASH_THRESHOLD } from '../core/kits.js';
 
 const STRIDE = 7;
 
@@ -36,11 +37,6 @@ const REF_KITS = [
   { primary: '#e8e21a', secondary: '#111111', number: '#111111', shorts: '#111111', socks: '#111111' },
   { primary: '#e0197d', secondary: '#111111', number: '#111111', shorts: '#111111', socks: '#e0197d' },
 ];
-
-function colorDist(a, b) {
-  const x = new THREE.Color(a), y = new THREE.Color(b);
-  return Math.hypot(x.r - y.r, x.g - y.g, x.b - y.b);
-}
 
 export function createRenderer(container, opts = {}) {
   const home = opts.home || {}, away = opts.away || {};
@@ -119,16 +115,21 @@ export function createRenderer(container, opts = {}) {
   // ---------------------------------------------------------------- players
   const geo = acquireGeometry();
   const shared = new SharedMaterials();
+  // Resolved once per match: home keeps its kit, away falls back away -> third -> a freshly
+  // generated contrasting kit if it would otherwise clash (perceptual colour distance, not an
+  // exact-match check), and both GK kits are nudged away from both outfield kits. Idempotent,
+  // so calling it here again after engine/index.js already resolved home/away is harmless.
+  const resolved = resolveMatchKits(home, away);
   const kits = {
-    h: new KitMaterials(home.kit || { primary: '#d00', secondary: '#fff', number: '#fff', shorts: '#fff', socks: '#d00' }),
-    hg: new KitMaterials(home.gkKit || { primary: '#222', secondary: '#555', number: '#fff', shorts: '#222', socks: '#222' }),
-    a: new KitMaterials(away.kit || { primary: '#00d', secondary: '#fff', number: '#fff', shorts: '#00d', socks: '#fff' }),
-    ag: new KitMaterials(away.gkKit || { primary: '#2a2', secondary: '#151', number: '#fff', shorts: '#2a2', socks: '#2a2' }),
+    h: new KitMaterials(resolved.home),
+    hg: new KitMaterials(resolved.homeGk),
+    a: new KitMaterials(resolved.away),
+    ag: new KitMaterials(resolved.awayGk),
   };
-  // referee kit that doesn't clash with either team
+  // referee kit that doesn't clash with either team or either goalkeeper
   let refKit = REF_KITS[0];
   for (const k of REF_KITS) {
-    const ok = [home.kit, away.kit, home.gkKit, away.gkKit].every((tk) => !tk || colorDist(tk.primary, k.primary) > 0.45);
+    const ok = [resolved.home, resolved.away, resolved.homeGk, resolved.awayGk].every((tk) => colorDist(tk.primary, k.primary) > CLASH_THRESHOLD);
     if (ok) { refKit = k; break; }
   }
   kits.r = new KitMaterials(refKit);
@@ -197,9 +198,8 @@ export function createRenderer(container, opts = {}) {
   const applyRoster = (subs) => {
     for (let i = 0; i < 22; i++) {
       const team = i < 11 ? 0 : 1, gk = i % 11 === 0;
-      const t = team ? away : home;
-      const kit = (gk ? t.gkKit : t.kit) || (gk ? kits[team ? 'ag' : 'hg'] : kits[team ? 'a' : 'h']);
-      rigs[i].setIdentity(rosterData(i, subs), kit.primary ? kit : { primary: '#888', secondary: '#fff', number: '#fff' }, 'p' + i);
+      const kit = team === 0 ? (gk ? resolved.homeGk : resolved.home) : (gk ? resolved.awayGk : resolved.away);
+      rigs[i].setIdentity(rosterData(i, subs), kit, 'p' + i);
     }
   };
   applyRoster(null);

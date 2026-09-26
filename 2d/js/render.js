@@ -180,6 +180,17 @@ function kitFill(ctx, kit, rx, ry) {
     ctx.fillRect(-rx * 1.5, -ry * 0.28, rx * 3, ry * 0.56);
     ctx.restore();
   }
+  else if (kit.pattern === 'halves') { ctx.fillRect(0, -ry, rx, ry * 2); }
+  else if (kit.pattern === 'pinstripes') { for (let x = -rx; x < rx; x += 0.09) ctx.fillRect(x, -ry, 0.025, ry * 2); }
+  else if (kit.pattern === 'fade') {
+    const grd = ctx.createLinearGradient(0, -ry, 0, ry);
+    grd.addColorStop(0, kit.shirt); grd.addColorStop(1, kit.sec);
+    ctx.fillStyle = grd; ctx.fillRect(-rx, -ry, rx * 2, ry * 2);
+  }
+  else if (kit.pattern === 'chevron') {
+    ctx.save(); ctx.rotate(0.5); ctx.fillRect(-rx * 1.4, -0.05, rx * 2.8, 0.1); ctx.restore();
+    ctx.save(); ctx.rotate(-0.5); ctx.fillRect(-rx * 1.4, -0.05, rx * 2.8, 0.1); ctx.restore();
+  }
   else { ctx.fillRect(-rx, -ry, 0.08, ry * 2); }           // collar trim at the back
   ctx.restore();
   ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 0.04;

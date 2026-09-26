@@ -3,6 +3,7 @@
 import * as THREE from '../../../vendor/three.module.min.js';
 import { ANIM } from '../core/constants.js';
 import { shirtTexture, luminance as luma } from './textures.js';
+import { pickPattern } from '../core/kits.js';
 
 // ---------------------------------------------------------------- dimensions
 const THIGH = 0.42, SHIN = 0.42, FOOT_H = 0.075, HIP_DY = -0.06, HIP_DX = 0.092;
@@ -376,11 +377,12 @@ export class PlayerRig {
     if (hairStyle !== this.hairStyle) this._buildMesh(hairStyle);
     else this._paint();
     // shirt
-    const key = `${kit.primary}|${kit.secondary}|${kit.number}|${pd ? pd.number : ''}|${pd ? pd.name : ''}`;
+    const pattern = pickPattern(kit);
+    const key = `${kit.primary}|${kit.secondary}|${kit.number}|${pattern}|${pd ? pd.number : ''}|${pd ? pd.name : ''}`;
     if (key !== this._shirtKey) {
       this._shirtKey = key;
       if (this.torsoMat.map) this.torsoMat.map.dispose();
-      this.torsoMat.map = shirtTexture(kit, pd ? pd.number : '', pd ? pd.name : '', { pattern: kit.pattern || 0 });
+      this.torsoMat.map = shirtTexture(kit, pd ? pd.number : '', pd ? pd.name : '', { pattern });
       this.torsoMat.needsUpdate = true;
     }
   }

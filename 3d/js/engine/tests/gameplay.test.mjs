@@ -8,6 +8,7 @@ import { rateStats, computeRatings, playerOfMatch } from '../core/ratings.js';
 import { decided } from '../core/knockout.js';
 import { humanShot } from '../core/assist.js';
 import { BRAZIL, FRANCE } from './sampleTeams.mjs';
+import { colorDist, kitTone, kitsClash, resolveMatchKits, pickPattern, PATTERNS, CLASH_THRESHOLD } from '../core/kits.js';
 
 const DT = 1 / 120;
 const NONE = { mx: 0, my: 0, aimX: 0, aimY: 0 };
@@ -354,6 +355,80 @@ export function runGameplayTests(test) {
     assert.ok(sim.applyTactic(0, { k: 'formation', f: '4-4-2' }));
     assert.equal(sim.formation[0], '4-4-2');
     assert.ok(sim.applyTactic(0, { k: 'sub', i: 9, bi: 4 }));
+  });
+
+  console.log('kits');
+  test('pickPattern normalises legacy/absent pattern fields but honours a known name', () => {
+    assert.equal(pickPattern({}), 'plain');
+    assert.equal(pickPattern({ pattern: 0 }), 'plain');
+    assert.equal(pickPattern({ pattern: 'sash' }), 'sash');
+    assert.equal(pickPattern({ pattern: 'not-a-pattern' }), 'plain');
+    assert.equal(pickPattern({ pattern: 1 }), 'stripes');
+    for (const p of PATTERNS) assert.equal(pickPattern({ pattern: p }), p);
+  });
+
+  test('colorDist is symmetric, zero for identical colours, and perceptual (not exact-match)', () => {
+    assert.equal(colorDist('#ffffff', '#ffffff'), 0);
+    assert.equal(colorDist('#123456', '#abcdef'), colorDist('#abcdef', '#123456'));
+    assert.ok(colorDist('#ff0000', '#fe0101') < CLASH_THRESHOLD, 'near-identical reds should read as clashing');
+    assert.ok(colorDist('#000000', '#ffffff') > CLASH_THRESHOLD, 'black vs white should not clash');
+  });
+
+  test('kitTone blends a patterned kit toward its secondary, unlike a plain kit', () => {
+    const plain = { primary: '#ff0000', secondary: '#0000ff', pattern: 'plain' };
+    const striped = { primary: '#ff0000', secondary: '#0000ff', pattern: 'stripes' };
+    assert.equal(kitTone(plain), '#ff0000');
+    assert.notEqual(kitTone(striped), kitTone(plain));
+  });
+
+  test('kitsClash: identical kits clash, clearly different colours do not', () => {
+    assert.ok(kitsClash({ primary: '#c8102e' }, { primary: '#c8102e' }));
+    assert.ok(!kitsClash({ primary: '#111111' }, { primary: '#ffffff' }));
+  });
+
+  test('resolveMatchKits keeps a non-clashing away kit untouched', () => {
+    const r = resolveMatchKits(BRAZIL, FRANCE);
+    assert.deepEqual(r.home.primary, BRAZIL.kit.primary);
+    assert.deepEqual(r.away.primary, FRANCE.kit.primary);
+    assert.equal(r.awayKitTag, 'own');
+    assert.ok(!kitsClash(r.home, r.away));
+  });
+
+  test('resolveMatchKits falls back away -> third -> generated when kits clash', () => {
+    const home = { kit: { primary: '#c8102e', secondary: '#ffffff' } };
+    // away's "own" kit is a near-identical red: should be rejected
+    const clashingAway = { kit: { primary: '#c8102e', secondary: '#000000' } };
+    const r1 = resolveMatchKits(home, clashingAway);
+    assert.equal(r1.awayKitTag, 'generated');
+    assert.ok(!kitsClash(r1.home, r1.away), 'generated fallback must actually contrast');
+
+    // a supplied third kit that does contrast should be preferred over generating one
+    const withThird = { kit: { primary: '#c8102e', secondary: '#000000' }, thirdKit: { primary: '#00c2a8', secondary: '#111111' } };
+    const r2 = resolveMatchKits(home, withThird);
+    assert.equal(r2.awayKitTag, 'third');
+    assert.equal(r2.away.primary, '#00c2a8');
+  });
+
+  test('resolveMatchKits keeps GK kits distinct from both outfield kits and from each other', () => {
+    const home = { kit: { primary: '#111111', secondary: '#ffffff' }, gkKit: { primary: '#0f0f0f' } }; // GK too close to home shirt
+    const away = { kit: { primary: '#0057b8', secondary: '#ffffff' }, gkKit: { primary: '#0f0f0f' } }; // and to away GK
+    const r = resolveMatchKits(home, away);
+    assert.ok(colorDist(r.homeGk.primary, r.home.primary) > CLASH_THRESHOLD);
+    assert.ok(colorDist(r.homeGk.primary, r.away.primary) > CLASH_THRESHOLD);
+    assert.ok(colorDist(r.awayGk.primary, r.home.primary) > CLASH_THRESHOLD);
+    assert.ok(colorDist(r.awayGk.primary, r.away.primary) > CLASH_THRESHOLD);
+    assert.ok(colorDist(r.awayGk.primary, r.homeGk.primary) > CLASH_THRESHOLD, 'the two GK kits must also differ');
+  });
+
+  test('resolveMatchKits is idempotent (re-resolving already-resolved kits changes nothing)', () => {
+    const home = { kit: { primary: '#c8102e', secondary: '#ffffff' } };
+    const away = { kit: { primary: '#c8102e', secondary: '#000000' } };
+    const once = resolveMatchKits(home, away);
+    const twice = resolveMatchKits({ kit: once.home, gkKit: once.homeGk }, { kit: once.away, gkKit: once.awayGk });
+    assert.deepEqual(twice.home, once.home);
+    assert.deepEqual(twice.away, once.away);
+    assert.deepEqual(twice.homeGk, once.homeGk);
+    assert.deepEqual(twice.awayGk, once.awayGk);
   });
 }
 
