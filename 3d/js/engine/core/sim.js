@@ -19,6 +19,11 @@ const HL = PITCH.HL, HW = PITCH.HW;
 const HUMAN_AI = { ...DIFFICULTY.world, err: 1 };
 const HOLD_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse', 'tackle', 'switchP', 'skill', 'jockey'];
 const KICK_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse'];
+// FIFA-style pass reception assist: while a pass is inbound to the controlled player, his movement
+// is AI-driven onto the interception point (or, for a through ball, the run it was threaded onto);
+// the held stick only nudges that run by this fraction instead of overriding it (see _human()).
+const RECEIVE_NUDGE = 0.22;
+const RECEIVE_TIMEOUT = 2.5; // seconds an inbound pass stays assisted before control reverts fully to the stick
 export const REPLAY_LEN = 12; // max wait; the UI ends replays earlier via skipReplay()
 const EMPTY_IN = { mx: 0, my: 0, aimX: 0, aimY: 0, cx: 0, cy: 0, kx: 0, ky: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false, jockey: false };
 const GP_ENUMS = {
@@ -73,7 +78,6 @@ export class MatchSim {
     this.breakNext = 'half';
     this.switchT = [-9, -9];
     this.switchAuto = [false, false];
-    this.recvStick = [null, null];
     this.recvLock = [null, null];
     this.pendingSwitch = [null, null];
     this.pendingShot = [null, null];
@@ -483,13 +487,7 @@ export class MatchSim {
       if (b.owner < 0 && b.intended === ps0.idx) { this._setCtrl(team, ps0.idx); p = this.players[ps0.idx]; }
     }
     const mv = this._worldMove(inp);
-    let hasMove = mv.l > 0.2;
-    // receiving a pass: move to meet the ball until the user deliberately steers elsewhere
-    const rs = this.recvStick[team];
-    if (rs && b.owner < 0 && b.intended === p.idx && rs.idx === p.idx) {
-      if (!hasMove || (mv.x * rs.x + mv.z * rs.z) / mv.l > 0.64) hasMove = false;
-      else this.recvStick[team] = null;
-    } else if (rs && (b.owner >= 0 || b.intended !== rs.idx)) this.recvStick[team] = null;
+    const hasMove = mv.l > 0.2;
     let aim;
     const al = Math.hypot(inp.aimX || 0, inp.aimY || 0);
     if (al > 0.3) aim = { x: inp.aimX / al, z: -inp.aimY / al };
@@ -502,6 +500,13 @@ export class MatchSim {
       this._switch(team, hasMove ? mv : null);
       p = this.players[this.ctrl[team]];
     }
+    // pass reception assist: computed against whoever ends up controlled this frame, so a
+    // switch-player press (above) hands a switched-to player normal control, not a stale assist.
+    // a pass is inbound to him and hasn't timed out yet (a touch, interception or loose ball all
+    // clear b.intended/b.owner and end it on their own).
+    const pp = this.pendingPass;
+    const incoming = !own && b.owner < 0 && b.intended === p.idx;
+    const assisting = incoming && (!pp || pp.team !== team || t - pp.t < RECEIVE_TIMEOUT);
     const locked = p.act && ['slide', 'dive', 'fall', 'down', 'tackle', 'throw', 'sentoff'].includes(p.act.type);
     const opp = this.owner();
     const oppHas = !!opp && opp.team !== team && !b.inHands;
@@ -516,8 +521,23 @@ export class MatchSim {
       if (jockey) spMul = 0.56 * (1 + ps(p, 'jockey') * 0.12);
       if (shield) spMul = 0.42;
       const smax = p.vmax * this.stamFactor(p) * spMul;
-      const assist = !own && !jockey && this._assistActive(team) ? this._assistTarget(p) : null;
-      if (jockey && gp.jockeyAssist) {
+      const assist = !own && !jockey && !assisting && this._assistActive(team) ? this._assistTarget(p) : null;
+      if (assisting) {
+        // FIFA-style pass reception assist: AI drives the run onto the ball's predicted path (or,
+        // for a through ball, the space it was threaded onto — see ai.js think()) so the receiver
+        // arrives on time instead of free-roaming; the held stick only nudges that run.
+        const wait = b.throughBall && p.run && p.run.until > t;
+        const ic = wait ? p.run : this.intercept(p, b.p.y > 1 || b.v.y > 2 ? 1.3 : undefined);
+        const dx = ic.x - p.x, dz = ic.z - p.z, d = Math.hypot(dx, dz);
+        let ux = d > 1e-4 ? dx / d : Math.cos(p.face), uz = d > 1e-4 ? dz / d : Math.sin(p.face);
+        if (hasMove) {
+          const nx = ux * (1 - RECEIVE_NUDGE) + mv.x * RECEIVE_NUDGE, nz = uz * (1 - RECEIVE_NUDGE) + mv.z * RECEIVE_NUDGE;
+          const nl = Math.hypot(nx, nz) || 1; ux = nx / nl; uz = nz / nl;
+        }
+        const s = Math.min(p.vmax * this.stamFactor(p), d * 1.8 + 0.3);
+        p.des.x = ux * s; p.des.z = uz * s;
+        p.sprint = d > 4 || !!inp.sprint; // sprint held still speeds the run up further
+      } else if (jockey && gp.jockeyAssist) {
         // contain: stay goal-side of the carrier, mirroring him; the stick adds side-steps
         const gx = this.ownGoalX(team) - opp.x, gz = -opp.z, gl = Math.hypot(gx, gz) || 1;
         const tx = opp.x + opp.vx * 0.3 + (gx / gl) * 1.8, tz = opp.z + opp.vz * 0.3 + (gz / gl) * 1.8;
@@ -534,12 +554,10 @@ export class MatchSim {
           const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l;
         }
         p.des.x = mx * smax; p.des.z = mz * smax;
-      } else if (!own && b.owner < 0 && b.intended === p.idx) {
-        AI.goTo(this, p, this.intercept(p), 'run', 0);
       } else if (assist) {
         AI.goTo(this, p, assist, 'run', 0.3);
       } else { p.des.x = 0; p.des.z = 0; }
-      p.sprint = !!inp.sprint && hasMove && !jockey && !shield && !ctrlSprint;
+      if (!assisting) p.sprint = !!inp.sprint && hasMove && !jockey && !shield && !ctrlSprint;
       p.faceBall = own ? null : Math.atan2(b.p.z - p.z, b.p.x - p.x);
       if (jockey) {
         p.jockeyT = t;
@@ -1148,9 +1166,8 @@ export class MatchSim {
     const dist = Math.hypot(m.x - b.p.x, m.z - b.p.z);
     const sp = Math.hypot(vel.x, vel.z) || 1;
     const travel = vel.y > 1 ? 0.3 + dist / 17 : Math.min(3, (Number.isFinite(rollTimeTo(sp, dist)) ? rollTimeTo(sp, dist) : dist / sp));
-    // the stick is usually still held in the pass direction: that must not steer the receiver away
-    const mv = this._worldMove(this.inputs[team] || EMPTY_IN);
-    this.recvStick[team] = { idx: m.idx, x: mv.l > 0.2 ? mv.x / mv.l : 0, z: mv.l > 0.2 ? mv.z / mv.l : 0 };
+    // pass reception assist (_human()) takes it from here: AI drives the receiver onto the ball,
+    // the stick only nudges it, so holding the pass direction can't steer him away from it.
     if (g.switchOnPass === 'instant') this._setCtrl(team, m.idx);
     else if (g.switchOnPass === 'release') this.pendingSwitch[team] = { idx: m.idx, at: t + travel * 0.5 };
     this.recvLock[team] = g.passReceiverLock === 'off' ? null : { idx: m.idx, until: g.passReceiverLock === 'lateRelease' ? t + travel + 0.2 : t + travel * 0.55 };

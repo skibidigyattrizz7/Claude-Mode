@@ -207,6 +207,34 @@ export function runGameplayTests(test) {
     assert.equal(sim.ball.owner, m.idx);
     assert.ok(v > 5, 'arrival speed ' + v);
   });
+  test('pass reception assist: the receiver still reaches an inbound pass with the stick held sideways/away', () => {
+    for (const stick of [{ mx: 0, my: -1 }, { mx: -1, my: 0 }]) {
+      const { sim, c } = scenario({ switchOnPass: 'instant', passReceiverLock: 'off' });
+      const m = sim.players[7];
+      sim._teleport(m, c.x + 24, c.z + 6); // off to one side, not straight ahead
+      m.vx = 0; m.vz = 0;
+      kick(sim, 'pass', 24, 6, 0.15);
+      assert.equal(sim.ctrl[0], m.idx, 'control switches to the receiver on the pass (switchOnPass: instant)');
+      const held = inp(stick); // world-space direction unrelated to the ball's line, held the whole flight
+      const t0 = sim.t;
+      while (sim.ball.owner < 0 && sim.t - t0 < 2.5) sim.step(DT, [held, null]);
+      assert.equal(sim.ball.owner, m.idx, `receiver should still receive it (stick ${JSON.stringify(stick)}), took ${(sim.t - t0).toFixed(2)}s`);
+    }
+  });
+  test('pass reception assist ends the moment the receiver touches the ball: the stick then moves him directly', () => {
+    const { sim, c } = scenario({ switchOnPass: 'instant', passReceiverLock: 'off' });
+    const m = sim.players[7];
+    sim._teleport(m, c.x + 24, c.z + 6);
+    m.vx = 0; m.vz = 0;
+    kick(sim, 'pass', 24, 6, 0.15);
+    const held = inp({ mx: 0, my: -1 }); // world (0, 1): perpendicular to the ball's line
+    const t0 = sim.t;
+    while (sim.ball.owner < 0 && sim.t - t0 < 2.5) sim.step(DT, [held, null]);
+    assert.equal(sim.ball.owner, m.idx, 'assist should still deliver the receiver onto the ball');
+    sim.step(DT, [held, null]);
+    const l = Math.hypot(m.des.x, m.des.z) || 1;
+    assert.ok(m.des.z / l > 0.95, `once in possession the same stick should move him along it, not a blended run (des=${m.des.x.toFixed(2)},${m.des.z.toFixed(2)})`);
+  });
 
   console.log('attributes, physique and PlayStyles');
   const withPlayer = (patch) => {
