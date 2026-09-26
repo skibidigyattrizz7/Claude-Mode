@@ -29,6 +29,11 @@ export function groundPassSpeed(d, va) {
  */
 export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(5.5 + d * 0.08, 6, 8.5) : clamp(7 + d * 0.16, 8, 12.5));
 
+// AI ground/through passes use arriveSpeedFor above untouched. Owners felt human passes were
+// weak next to the AI's, so human-issued ground/through passes (planPass only, never AI) get
+// a small extra bit of pace on top of that same target speed.
+export const HUMAN_PASS_BOOST = 1.12;
+
 /** Lofted ball: find horizontal speed & vz so the ball lands at distance d after ~T seconds. */
 export function lobParams(d, T) {
   const vz = (PHYS.G * T) / 2 * 1.04;
@@ -236,7 +241,7 @@ export function planPass(o, rng = Math.random) {
       const v = passVelocity(from, target, 'lob');
       return { mate: null, target, v, mode, err: 0 };
     }
-    const v0 = manualPassSpeed(kind, f);
+    const v0 = manualPassSpeed(kind, f) * HUMAN_PASS_BOOST;
     const r = rollDistance(v0, 0);
     return { mate: null, target: { x: from.x + aim.x * r.d, y: from.y + aim.y * r.d }, v: { vx: aim.x * v0, vy: aim.y * v0, vz: 0, t: r.t }, mode, err: 0 };
   };
@@ -249,12 +254,12 @@ export function planPass(o, rng = Math.random) {
     // assisted pass into space along the aim
     const L = kind === 'lob' ? 24 : kind === 'through' ? 18 : 13;
     const target = clampToPitch({ x: from.x + aim.x * L, y: from.y + aim.y * L }, 1.5, 1.5);
-    return { mate: null, target, v: passVelocity(from, target, kind, kind === 'lob' ? null : 1.8), mode, err: 0 };
+    return { mate: null, target, v: passVelocity(from, target, kind, kind === 'lob' ? null : 1.8 * HUMAN_PASS_BOOST), mode, err: 0 };
   }
-  const v = passVelocity(from, sel.target, kind);
+  const d = Math.hypot(sel.target.x - from.x, sel.target.y - from.y);
+  const v = passVelocity(from, sel.target, kind, kind === 'lob' ? null : arriveSpeedFor(d, kind) * HUMAN_PASS_BOOST);
   if (mode === 'Assisted') return { mate: sel.mate, target: sel.target, v, mode, err: 0 };
   // Semi-assisted: the hold time decides the weight of the pass
-  const d = Math.hypot(sel.target.x - from.x, sel.target.y - from.y);
   const scale = clamp(1 + (f - idealPassPower(kind, d)) * 0.55, 0.8, 1.3);
   const err = gauss(rng) * 0.035 * (1.25 - clamp(o.passing ?? 0.7, 0, 1));
   const vv = rotate(v, err, scale);

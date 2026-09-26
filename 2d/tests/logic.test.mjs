@@ -3,7 +3,7 @@ import { PITCH, CY, GOAL, BALL_R, PHYS, POST_R } from '../js/constants.js';
 import { DEG } from '../js/util.js';
 import { makeBall, stepBallWorld, integrate, solveKick } from '../js/physics.js';
 import { goalScored, keeperMaySave, resolveKeeperContact, outOfPlay, restartFor, judgeTackle, isFromBehind, applyCard, tackleSweep } from '../js/rules.js';
-import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk, planPass, manualPassSpeed, PASS_CONES } from '../js/passing.js';
+import { choosePassTarget, passVelocity, groundPassSpeed, leadTarget, laneRisk, planPass, manualPassSpeed, PASS_CONES, HUMAN_PASS_BOOST } from '../js/passing.js';
 import { touchHeaviness, savedKickRestart, timedFinishGrade, shoulderWinChance } from '../js/feel.js';
 import { defensiveRoles, markTargets } from '../js/ai.js';
 import { sanitizeGameplay, GAMEPLAY_DEFAULTS } from '../js/settings.js';
@@ -455,7 +455,7 @@ test('manual pass goes exactly where aimed with the power held (no targeting)', 
       assert(pl.mate === null, 'no receiver chosen');
       const sp = Math.hypot(pl.v.vx, pl.v.vy);
       assert(Math.abs(pl.v.vx / sp - aimDir.x) < 1e-9 && Math.abs(pl.v.vy / sp - aimDir.y) < 1e-9, 'exact direction');
-      assert(near(sp, manualPassSpeed('ground', power), 1e-9) && sp > prev, 'speed from power');
+      assert(near(sp, manualPassSpeed('ground', power) * HUMAN_PASS_BOOST, 1e-9) && sp > prev, 'speed from power, boosted a touch over the raw manual-pass formula');
       prev = sp;
     }
     const lob = planPass({ passer, from: passer, mates: [passer, mate], opps: [], aimDir, kind: 'lob', mode: 'Manual', power: 0.5 });
@@ -497,19 +497,28 @@ test('auto marking: runners are tracked when on, zones held when off', () => {
 });
 
 console.log('2D gameplay sims: user-team parity, receiving, interceptions (AI vs AI)');
-test('assisted human passing uses the exact same target-selection and speed solver as an AI pass', () => {
+test('assisted human passing uses the exact same target-selection as an AI pass, with a bit more pace', () => {
   const passer = { x: 28, y: 24 }, mate = { x: 46, y: 33, vx: 1.5, vy: -0.5 };
   const opps = [{ x: 34, y: 27 }];
   for (const kind of ['ground', 'through', 'lob']) {
     const aim = norm(mate.x - passer.x, mate.y - passer.y);
     const C = PASS_CONES.Assisted;
-    // choosePassTarget / leadTarget / passVelocity are the exact functions planPass('Assisted') calls;
+    // choosePassTarget / leadTarget are the exact functions planPass('Assisted') calls;
     // reproducing its own cone (and full lead) here proves the human pass IS that AI solver, not a copy.
     const ai = choosePassTarget(passer, [passer, mate], opps, aim, kind, 1, { cone: C[kind] * DEG, wide: C.wide * DEG, alignW: C.alignW, fullLead: true });
     const humanPlan = planPass({ passer, from: passer, mates: [passer, mate], opps, aimDir: aim, kind, attackDir: 1, mode: 'Assisted', power: 0.5, passing: 0.7 });
     assert(ai.mate === humanPlan.mate, `${kind}: assisted pass should pick the same team-mate as the AI`);
     const aiV = passVelocity(passer, ai.target, kind);
-    assert(near(aiV.vx, humanPlan.v.vx, 1e-9) && near(aiV.vy, humanPlan.v.vy, 1e-9), `${kind}: assisted pass velocity must match the AI's`);
+    const aiSpeed = Math.hypot(aiV.vx, aiV.vy), humanSpeed = Math.hypot(humanPlan.v.vx, humanPlan.v.vy);
+    if (kind === 'lob') {
+      // the owner asked for ground/through passes to feel firmer; lobs (landing-spot driven) are untouched
+      assert(near(aiV.vx, humanPlan.v.vx, 1e-9) && near(aiV.vy, humanPlan.v.vy, 1e-9), 'lob velocity must match the AI\'s');
+    } else {
+      // same direction, but a human ground/through pass carries a bit more pace than the AI's (never weaker)
+      assert(Math.abs(aiV.vx / aiSpeed - humanPlan.v.vx / humanSpeed) < 1e-6, `${kind}: same direction as the AI`);
+      assert(humanSpeed > aiSpeed * 1.03 && humanSpeed < aiSpeed * (HUMAN_PASS_BOOST + 0.1),
+        `${kind}: human pass should be a bit firmer than the AI's (got ${(humanSpeed / aiSpeed).toFixed(3)}x)`);
+    }
   }
 });
 test('AI vs AI: user-side (team 0) pass completion is on par with the AI opponent\'s, and both sides record interceptions', () => {
@@ -609,6 +618,80 @@ test('jockey action: default V, rebindable, old saves get it unless V is taken',
   assert(sanitizeBinds(old).p1.jockey === 'KeyV', 'added to an old save');
   old.p1.skill = 'KeyV';
   assert(sanitizeBinds(old).p1.jockey === '', 'left unbound instead of clashing');
+});
+
+console.log('FIFA-style pass reception assist (human receiver)');
+/** A fake controller: never presses anything, always holds the same stick direction. */
+function stickCtrl(x, y) {
+  return { isHeld: () => false, wasPressed: () => false, move: () => ({ x, y }) };
+}
+/** A human-controlled passer plays a ground pass to a human-controlled receiver, with every
+ *  other player parked far off the pitch so nobody can interfere or intercept. */
+function setupAssistScenario(ctrl) {
+  const m = new Match({ home: TEAMS[0], away: TEAMS[1], humans: [{ ctrl: 0, team: 0 }], ctrls: [ctrl], minutes: 4, noClock: true });
+  for (let i = 0; i < 300 && m.state !== 'play'; i++) m.update(1 / 60);
+  assert(m.state === 'play', 'kickoff must resolve to play');
+  const passer = m.mates(0).find((p) => p.role !== 'GK');
+  const receiver = m.mates(0).find((p) => p !== passer && p.role !== 'GK');
+  for (const q of m.players) {
+    if (q === passer || q === receiver) continue;
+    q.x = -60; q.y = -60; q.vx = 0; q.vy = 0;
+  }
+  passer.x = 20; passer.y = 27; passer.vx = 0; passer.vy = 0;
+  receiver.x = 40; receiver.y = 27; receiver.vx = 0; receiver.vy = 0;
+  m.ball.x = passer.x; m.ball.y = passer.y; m.ball.z = 0; m.ball.vx = 0; m.ball.vy = 0; m.ball.vz = 0;
+  m.setOwner(passer, true);
+  m.setHumanPlayer(m.humans[0], passer);
+  m.doPass(passer, 'ground', receiver, null);
+  assert(m.pass && m.pass.receiver === receiver, 'pass targets the intended receiver');
+  assert(m.humans[0].player === receiver, 'control switches to the intended receiver the moment the pass is played');
+  return { m, passer, receiver };
+}
+test('receiver reaches a ground pass despite continuous sideways user input', () => {
+  // stick held hard "sideways" (across the pass lane), never towards the ball
+  const { m, receiver } = setupAssistScenario(stickCtrl(0, 1));
+  let reached = false;
+  for (let i = 0; i < 240 && !reached; i++) {
+    m.update(1 / 60);
+    if (m.owner === receiver) reached = true;
+  }
+  assert(reached, 'the AI-driven receiver must still get to the ball despite the sideways nudge');
+});
+test('a hard steer straight away from the ball only nudges the receiver, it does not send him free-roaming', () => {
+  const { m, passer, receiver } = setupAssistScenario(stickCtrl(-1, 0));   // stick held back towards the passer
+  let reached = false;
+  for (let i = 0; i < 240 && !reached; i++) {
+    m.update(1 / 60);
+    if (m.owner === receiver) reached = true;
+  }
+  assert(reached, 'even steering back towards the passer must not stop him receiving it (~20-25% nudge, not full control)');
+});
+test('the assist ends the instant he receives the ball: pass state clears and full manual control resumes', () => {
+  const { m, receiver } = setupAssistScenario(stickCtrl(0, 1));
+  let reached = false;
+  for (let i = 0; i < 240 && !reached; i++) { m.update(1 / 60); if (m.owner === receiver) reached = true; }
+  assert(reached, 'setup must actually complete the pass');
+  assert(m.pass === null, 'this.pass clears once the receiver has the ball');
+  // with no more assist, a hard stick input now drives him fully (no AI blend towards an old intercept point)
+  const ctrl = m.ctrls[0];
+  ctrl.move = () => ({ x: -1, y: 0 });
+  m.update(1 / 60);
+  const sp = Math.hypot(receiver.want.x, receiver.want.y);
+  assert(sp > 0.1, 'the receiver still moves under plain user control');
+  assert(near(receiver.want.x / sp, -1, 1e-6) && near(receiver.want.y / sp, 0, 1e-6),
+    'once he has the ball, his heading is exactly the stick direction, not blended with any leftover AI target');
+});
+test('switching player cancels the assist outright', () => {
+  const { m, passer, receiver } = setupAssistScenario(stickCtrl(0, 0));
+  m.update(1 / 60);
+  const before = { x: receiver.x, y: receiver.y };
+  // hand control to the passer instead (as pressing "switch" would)
+  m.setHumanPlayer(m.humans[0], passer);
+  assert(m.humans[0].player === passer, 'control moved off the receiver');
+  // the receiver is no longer the controlled player, so the assist branch in updateHumans can
+  // no longer drive him; only the (unrelated) team AI can move him now
+  for (let i = 0; i < 30; i++) m.update(1 / 60);
+  assert(m.humans[0].player === passer, 'switch is not reverted by the (former) assist');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
