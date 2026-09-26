@@ -157,26 +157,11 @@ export function matchAdminLevel(level = getAdminLevel()) { return level === 'ful
  * Returns { ok:true, level } | { ok:false, error, locked?: ms }.
  */
 export async function redeemAdminCode(code, online = null) {
-  code = String(code ?? '');
-  if (!code.trim()) return { ok: false, error: 'Enter a code' };
-  const locked = lockRemainingMs();
-  if (locked > 0) return { ok: false, error: `Too many attempts. Try again in ${Math.ceil(locked / 1000)} s.`, locked };
-  let level = null;
-  if (online && online.admin && typeof online.admin.verify === 'function') {
-    const up = typeof online.available === 'function' ? await tryCall(() => online.available()) : true;
-    if (up) {
-      const r = await tryCall(() => online.admin.verify(code), 8000);
-      if (r === true || (r && typeof r === 'object' && (r.valid === true || r.admin === true))) level = r && r.level === 'temp' ? 'temp' : 'full';
-    }
-  }
-  if (!level) {
-    try { level = await verifyLocalCode(code); } catch { return { ok: false, error: 'Code check needs a secure (https) connection in this browser.' }; }
-  }
-  if (!level) {
-    const lk = registerFailure();
-    return lk ? { ok: false, error: 'Invalid code', locked: lk } : { ok: false, error: 'Invalid code' };
-  }
-  clearFailures();
-  setSessionLevel(level);
-  return { ok: true, level };
+  // One verifier for every entry point (shared/adminauth.js): server bcrypt first (returns 'super' | 'full' and
+  // stores the admin token for owner RPCs), else the local PBKDF2 table (super / full / temp). Same lockout.
+  const srv = online && online.admin && typeof online.admin.verifyLevel === 'function' ? online : null;
+  const r = await sharedVerifyAdminCode(code, srv);
+  if (!r.ok) return r;
+  setSessionLevel(r.level);
+  return { ok: true, level: r.level, server: r.server };
 }
