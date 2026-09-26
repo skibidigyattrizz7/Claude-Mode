@@ -20,6 +20,65 @@
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 
+-- Production may hold objects from an older partial 002.
+-- Drop every overload of the functions this file (re)creates, so an earlier partial version with other
+-- signatures / return types cannot block "create or replace" or leave ambiguous overloads (recreated below;
+-- cascade only removes triggers / the username index, which are recreated below too).
+do $$
+declare f record;
+begin
+  for f in
+    select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = any (array[
+    'pitchside__account_json',
+    'pitchside__audit',
+    'pitchside__audit_listing_trg',
+    'pitchside__audit_profile_trg',
+    'pitchside__auth',
+    'pitchside__auth_raw',
+    'pitchside__ban_json',
+    'pitchside__is_banned',
+    'pitchside__mm_result',
+    'pitchside__mod_actor',
+    'pitchside__mod_by',
+    'pitchside__mod_rank',
+    'pitchside__mod_row',
+    'pitchside__name_norm',
+    'pitchside__name_reserved',
+    'pitchside__new_session',
+    'pitchside__password_error',
+    'pitchside__safe_name',
+    'pitchside__sign',
+    'pitchside__throttle_hits',
+    'pitchside__ua_key',
+    'pitchside__username_error',
+    'pitchside__username_key',
+    'pitchside_account_status',
+    'pitchside_admin_add_coins',
+    'pitchside_admin_match_token',
+    'pitchside_claim_profile',
+    'pitchside_get_profile',
+    'pitchside_list_friends',
+    'pitchside_login',
+    'pitchside_logout',
+    'pitchside_mod_adjust_coins',
+    'pitchside_mod_ban',
+    'pitchside_mod_player',
+    'pitchside_mod_search',
+    'pitchside_mod_set_role',
+    'pitchside_mod_unban',
+    'pitchside_poll_invites',
+    'pitchside_register',
+    'pitchside_report_result',
+    'pitchside_respond_invite',
+    'pitchside_set_name',
+    'pitchside_signup',
+    'pitchside_verify_admin_token'])
+  loop
+    execute format('drop function if exists %s cascade', f.sig);
+  end loop;
+end $$;
+
 -- ------------------------------------------------------------------ profile columns
 alter table public.pitchside_profiles add column if not exists username      text;
 alter table public.pitchside_profiles add column if not exists password_hash text;
@@ -60,6 +119,12 @@ create table if not exists public.pitchside_sessions (
   user_agent_hash text,
   constraint pitchside_sessions_token_fmt check (token_hash ~ '^[0-9a-f]{64}$')
 );
+-- an older partial 002 may have created this table with fewer columns
+alter table public.pitchside_sessions add column if not exists profile_id      uuid references public.pitchside_profiles(id) on delete cascade;
+alter table public.pitchside_sessions add column if not exists token_hash      text;
+alter table public.pitchside_sessions add column if not exists created_at      timestamptz not null default now();
+alter table public.pitchside_sessions add column if not exists last_seen       timestamptz not null default now();
+alter table public.pitchside_sessions add column if not exists user_agent_hash text;
 create unique index if not exists pitchside_sessions_token_key on public.pitchside_sessions (token_hash);
 create index if not exists pitchside_sessions_profile on public.pitchside_sessions (profile_id, last_seen desc);
 
@@ -72,6 +137,10 @@ create table if not exists public.pitchside_audit (
   constraint pitchside_audit_action_len check (char_length(action) between 1 and 32),
   constraint pitchside_audit_detail_size check (octet_length(detail::text) <= 2048)
 );
+alter table public.pitchside_audit add column if not exists profile_id uuid references public.pitchside_profiles(id) on delete set null;
+alter table public.pitchside_audit add column if not exists action     text not null default 'unknown';
+alter table public.pitchside_audit add column if not exists detail     jsonb not null default '{}'::jsonb;
+alter table public.pitchside_audit add column if not exists at         timestamptz not null default now();
 create index if not exists pitchside_audit_profile on public.pitchside_audit (profile_id, at desc);
 create index if not exists pitchside_audit_at on public.pitchside_audit (at);
 
@@ -921,6 +990,7 @@ create table if not exists public.pitchside_server_secret (
   constraint pitchside_server_secret_single check (id = 1),
   constraint pitchside_server_secret_len check (octet_length(secret) >= 32)
 );
+alter table public.pitchside_server_secret add column if not exists secret bytea;
 alter table public.pitchside_server_secret enable row level security;
 revoke all on table public.pitchside_server_secret from public;
 do $$
@@ -933,6 +1003,7 @@ begin
   end loop;
 end $$;
 insert into public.pitchside_server_secret (id, secret) values (1, extensions.gen_random_bytes(32)) on conflict (id) do nothing;
+update public.pitchside_server_secret set secret = extensions.gen_random_bytes(32) where id = 1 and (secret is null or octet_length(secret) < 32);
 
 create or replace function public.pitchside__sign(p_payload text)
 returns text language sql stable security definer

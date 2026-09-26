@@ -23,6 +23,61 @@
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 
+-- New functions of 003 (in case an earlier partial version exists).
+-- Drop every overload of the functions this file (re)creates, so an earlier partial version with other
+-- signatures / return types cannot block "create or replace" or leave ambiguous overloads (recreated below;
+-- cascade only removes triggers / the username index, which are recreated below too).
+do $$
+declare f record;
+begin
+  for f in
+    select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = any (array[
+    'pitchside__actor',
+    'pitchside__admin_level',
+    'pitchside__blocked',
+    'pitchside__broadcasts_json',
+    'pitchside__cfg_num',
+    'pitchside__clean_text',
+    'pitchside__config_error',
+    'pitchside__config_version',
+    'pitchside__find_profile',
+    'pitchside__gift_card',
+    'pitchside__gift_json',
+    'pitchside__may_act_on',
+    'pitchside__op_key_ok',
+    'pitchside__owner_power',
+    'pitchside__public_row',
+    'pitchside_admin_broadcast',
+    'pitchside_admin_clear_broadcast',
+    'pitchside_admin_coins',
+    'pitchside_admin_gift',
+    'pitchside_admin_login',
+    'pitchside_admin_reset',
+    'pitchside_admin_set_config',
+    'pitchside_admin_set_infinite',
+    'pitchside_change_password',
+    'pitchside_change_username',
+    'pitchside_claim_gift',
+    'pitchside_coins_get',
+    'pitchside_coins_op',
+    'pitchside_find_player',
+    'pitchside_get_broadcasts',
+    'pitchside_get_config',
+    'pitchside_get_messages',
+    'pitchside_gifts_inbox',
+    'pitchside_list_conversations',
+    'pitchside_match_reward',
+    'pitchside_online_count',
+    'pitchside_presence',
+    'pitchside_send_message',
+    'pitchside_set_squad',
+    'pitchside_view_squad'])
+  loop
+    execute format('drop function if exists %s cascade', f.sig);
+  end loop;
+end $$;
+
 -- ------------------------------------------------------------------ profile columns
 alter table public.pitchside_profiles add column if not exists infinite_coins       boolean not null default false;
 alter table public.pitchside_profiles add column if not exists reset_coins_epoch    int not null default 0;
