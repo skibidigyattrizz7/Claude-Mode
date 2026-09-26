@@ -25,6 +25,17 @@ function can(x, level) {
   return r >= 1; // coins, packs, grant — every level, capped for mod/temp
 }
 const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+/** FIFA-style count-up on an inline element (used by the Coins panel so "Add coins" is never a silent no-op). */
+function animateCoinNode(el, from, to, ms = 650) {
+  if (!el || !el.isConnected) return;
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / ms);
+    el.textContent = fmtNum(from + (to - from) * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 /** Local-only coin add, capped per grant (owner levels: unlimited; mod/temp: 1,000,000). */
 function addLocalCoinsClamped(state, amount, level) {
   const cap = (RANK[level] || 0) >= 3 ? Infinity : 1000000;
@@ -130,32 +141,26 @@ export function adminView() {
       const needUT = s ? null : h('p', { class: 'pm-warnline' }, 'Create an Ultimate Team club first to use the UT tools.');
       const done = (msg) => { if (s) app.saveUT(); app.toast(msg, 'good'); app.refresh(); };
 
-      // ---- coins ----
+      // ---- coins: ONE "Add coins" button that adds to whichever balance is currently shown (online when
+      // connected — app.saveUT() syncs the delta automatically — local otherwise), with a count-up + a
+      // clear "which balance" message, so it's never a no-op the admin can't see. ----
       const amt = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount), 'aria-label': 'Coin amount' });
       amt.addEventListener('input', () => { st.amount = Math.round(Number(amt.value) || 0); });
       const inf = !!(s && s.admin && s.admin.infinite);
-      const limited = !can('owner', level);
-      const coinsLimited = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
-        h('p', { class: 'pm-dim' }, s ? `Local balance: ${fmtNum(app.wallet.mode === 'online' ? (app.wallet.local || 0) : s.coins)}. Up to ${(RANK[level] || 0) >= 3 ? 'unlimited' : fmtNum(1000000)} coins per grant.` : ''),
+      const balDisplay = h('b', { 'data-coin-display': '1' }, s ? (inf ? '∞' : fmtNum(s.coins)) : '—');
+      const coins = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
+        h('p', { class: 'pm-dim' }, s ? ['Balance shown to the player right now: ', balDisplay, ` (${app.coinSourceLabel()}). Up to ${(RANK[level] || 0) >= 3 ? 'unlimited' : fmtNum(1000000)} coins per grant.`] : ''),
         h('div', { class: 'pm-btnrow' }, amt,
-          h('button', { class: 'pm-btn pm-btn--primary', disabled: !s || inf, onclick: () => {
-            if (app.wallet.mode === 'online') { const tmp = { coins: app.wallet.local || 0 }; const v = addLocalCoinsClamped(tmp, st.amount, level); app.wallet.local = tmp.coins; done(`Added ${fmtNum(v)} local coins.`); }
-            else { const v = addLocalCoinsClamped(s, st.amount, level); done(`Added ${fmtNum(v)} coins.`); }
-          } }, 'Add coins')));
-      const coins = limited ? coinsLimited : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
-        h('p', { class: 'pm-dim' }, s ? `Shown balance: ${inf ? '∞' : fmtNum(s.coins)} (${app.coinSourceLabel()}).${app.wallet.mode === 'online' ? ` Local balance: ${fmtNum(app.wallet.local || 0)}.` : ''}` : ''),
-        h('div', { class: 'pm-btnrow' }, amt,
-          h('button', { class: 'pm-btn', disabled: !s || inf, onclick: () => { if (app.wallet.mode === 'online') app.wallet.local = Math.max(0, st.amount); else s.coins = Math.max(0, st.amount); done('Local coins set.'); } }, 'Set local'),
-          h('button', { class: 'pm-btn', disabled: !s || inf, onclick: () => { if (app.wallet.mode === 'online') app.wallet.local = Math.max(0, (app.wallet.local || 0) + st.amount); else s.coins = Math.max(0, s.coins + st.amount); done('Local coins added.'); } }, 'Add local'),
           h('button', {
-            class: 'pm-btn pm-btn--primary', disabled: !app.online || !app.online.coins || app.wallet.mode !== 'online', title: app.wallet.mode === 'online' ? '' : 'Online services are offline',
-            onclick: async () => {
-              const r = await safeCall(() => app.online.coins.add(st.amount, 'admin'), { ok: false });
-              if (!r || r.ok === false) { app.toast(`Online add failed${r && r.error ? `: ${r.error}` : ''}`, 'bad'); return; }
-              await app.initWallet(true); await app.refreshOnlineCoins();
-              app.toast(`Added ${fmtNum(st.amount)} to the online balance.`, 'good'); app.refresh();
+            class: 'pm-btn pm-btn--primary', disabled: !s || inf,
+            onclick: () => {
+              const before = s.coins;
+              const v = addLocalCoinsClamped(s, st.amount, level);
+              app.saveUT(); app.topRefresh();
+              animateCoinNode(balDisplay, before, s.coins);
+              app.toast(`Added ${fmtNum(v)} coins to the ${app.coinSourceLabel()}.`, 'good');
             },
-          }, 'Add to online balance')),
+          }, 'Add coins')),
         h('label', { class: 'pm-toggle' }, h('input', {
           type: 'checkbox', checked: inf, disabled: !s,
           onchange: (e) => {

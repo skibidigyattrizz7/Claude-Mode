@@ -788,6 +788,77 @@ test('Tournaments (events): every template/round opponent builds a valid Team', 
   }
 });
 
+// ---------------- V4 (owner request Sep 26): vault, unreleased promos hidden, more promos ----------------
+test('SBC storage vault: duplicates auto-vault (capped, allows repeats), usable in SBCs, spent before the club copy', () => {
+  const s = UT.createUTState({ clubName: 'Vault FC' }, new Rng(31));
+  UT.migrateUT(s);
+  const pid = s.club[0];
+  assert.deepEqual(UT.claimPackItem(s, 'zz_never_owned_before'), { where: null }); // unknown id: no-op, no throw
+  const before = s.club.length;
+  const r1 = UT.claimPackItem(s, pid); // already owned -> vault
+  assert.equal(r1.where, 'vault');
+  assert.equal(s.club.length, before);
+  assert.ok(s.vault.includes(pid));
+  assert.ok(UT.isOwnedAnywhere(s, pid));
+  for (let i = 0; i < 10; i++) UT.sendToVault(s, pid); // vault allows repeats of the same id
+  assert.equal(s.vault.filter((x) => x === pid).length, 11);
+  const fillers = getDB().players.slice(0, 250);
+  for (const f of fillers) UT.sendToVault(s, f.id);
+  assert.ok(s.vault.length <= UT.VAULT_CAP, `vault grew past cap: ${s.vault.length}`);
+  assert.equal(s.vault.length, UT.VAULT_CAP);
+  const notOwned = getDB().players.find((p) => !s.club.includes(p.id));
+  const r2 = UT.claimPackItem(s, notOwned.id);
+  assert.equal(r2.where, 'club'); // not a duplicate -> straight into the club
+  // spend a vault duplicate in an SBC without touching the club's own copy
+  const bronzes = getDB().players.filter((p) => p.tier === 'bronze' && !s.club.includes(p.id)).slice(0, 11).map((p) => p.id);
+  for (const id of bronzes) UT.addToClub(s, id);
+  UT.sendToVault(s, bronzes[0]); // a second copy of a club card, parked in the vault
+  const vaultCountBefore = s.vault.filter((x) => x === bronzes[0]).length;
+  UT.submitSbc(s, 'bronze-up', '4-4-2', bronzes.slice());
+  assert.ok(s.club.includes(bronzes[0]), 'the club copy must survive — the vault copy should be spent first');
+  assert.equal(s.vault.filter((x) => x === bronzes[0]).length, vaultCountBefore - 1);
+});
+
+test('unreleased promo cards never appear in the AI market, packs, draft or objective/SBC rewards', () => {
+  const future = PR.PROMOS.find((p) => p.releaseWeek && p.releaseWeek > 1);
+  assert.ok(future, 'no promo has a future releaseWeek');
+  const before = future.releaseWeek - 1;
+  assert.equal(PR.isPromoReleased(future.id, before), false);
+  assert.equal(PR.isPromoReleased(future.id, future.releaseWeek), true);
+  // AI market
+  for (let seed = 0; seed < 30; seed++) {
+    const items = UT.marketSearch({ tier: 'special' }, `unreleased-${seed}`);
+    assert.ok(items.every((it) => getPlayer(it.pid).special !== future.id), `market leaked ${future.id}`);
+  }
+  // the dedicated pack never shows in the store before release, and never grants the card as a "drop from any pack" bonus
+  assert.ok(!UT.storePacks(before).some((p) => p.promo === future.id));
+  for (let seed = 0; seed < 200; seed++) {
+    const items = UT.openPack('gold', new Set(), new Rng(`unreleased-gold-${seed}`));
+    assert.ok(items.every((it) => getPlayer(it.pid).special !== future.id));
+  }
+  // SBC / objective rewards
+  const sbc = UT.SBCS.find((x) => x.promo === future.id);
+  const s = UT.createUTState({ clubName: 'Rel FC' }, new Rng(32));
+  assert.equal(UT.sbcAvailable(s, sbc), false);
+  assert.ok(!PR.releasedLivePromos(before).includes(future.id));
+  // draft: never offered as a slot/captain option
+  const d = DR.newDraft('unreleased-draft');
+  DR.chooseFormation(d, '4-3-3');
+  assert.ok(d.captainOptions.every((id) => getPlayer(id).special !== future.id));
+});
+
+test('transfer list (pmarket): flag a club card for sale without listing it yet, then list or return it', async () => {
+  const s = UT.createUTState({ clubName: 'TL FC' }, new Rng(33));
+  UT.migrateUT(s);
+  const pid = s.squad.slots.find(Boolean) ? s.club.find((x) => !s.untradeable.includes(x)) : s.club[0];
+  const r = PM.sendToTransferList(s, pid);
+  assert.ok(r.ok, r.error);
+  assert.ok(PM.onTransferList(s, pid));
+  assert.ok(s.club.includes(pid), 'transfer list keeps the card in the club until it actually sells');
+  PM.removeFromTransferList(s, pid);
+  assert.ok(!PM.onTransferList(s, pid));
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

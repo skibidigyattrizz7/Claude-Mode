@@ -187,44 +187,111 @@ export function broadcastPanel(app) {
     !svc || typeof svc.broadcast !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service — not connected in this session.') : null);
 }
 
-export function giveawayPanel(app) {
-  const st = { target: '', kind: 'coins', amount: 5000, packId: 'gold', pid: '' };
-  const db = getDB();
+/** Send a coins/pack/card gift via `online.owner.gift` (real API) with a local Gifts-inbox fallback. */
+async function sendGift(app, { to, kind, coins, packId, card, count = 1 }, label) {
   const owner = app.online && app.online.owner;
+  const gift = { to, kind, coins, packId, card, count };
+  if (owner && typeof owner.gift === 'function') {
+    const r = await safeCall(() => owner.gift(gift), { ok: false });
+    if (r && r.ok !== false) app.toast(`${label} sent${to === 'all' ? ' to everyone' : ` to ${to}`}.`, 'good');
+    else app.toast(`${label} failed${r && r.error ? `: ${r.error}` : ''}.`, 'bad');
+    return r;
+  }
+  sendLocalGift({ kind: kind === 'card' ? 'player' : kind, amount: coins, packId, pid: card && card.id, card, note: to === 'all' ? `${label} (local device only — no online service connected)` : `${label} for ${to || 'you'} (local device only)` });
+  app.toast('Online gifting is not connected — queued to this device’s Gifts inbox instead.', 'good');
+  return { ok: true, local: true };
+}
+
+/** Every sendable card: the full player DB (searchable) plus every Admin Card. */
+function findCard(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  const db = getDB();
+  return db.all.find((p) => p.name.toLowerCase() === q) || listCustomCards().find((c) => c.name.toLowerCase() === q)
+    || db.all.find((p) => p.name.toLowerCase().includes(q)) || listCustomCards().find((c) => c.name.toLowerCase().includes(q)) || null;
+}
+
+export function giveawayPanel(app) {
+  const st = { target: '', kind: 'coins', amount: 5000, packId: 'gold', cardQuery: '' };
   const targetInp = h('input', { class: 'pm-input', placeholder: 'Username (leave blank + "Everyone" for all)', 'aria-label': 'Giveaway target' });
   targetInp.addEventListener('input', () => { st.target = targetInp.value; });
-  const kindSel = select([['coins', 'Coins'], ['pack', 'Pack'], ['player', 'Player']], st.kind, (v) => { st.kind = v; redrawExtra(); }, { 'aria-label': 'Giveaway type' });
+  const kindSel = select([['coins', 'Coins'], ['pack', 'Pack'], ['card', 'Card (any player or Admin Card)']], st.kind, (v) => { st.kind = v; redrawExtra(); }, { 'aria-label': 'Giveaway type' });
   const extra = h('div', { class: 'pm-btnrow' });
+  const cardMatch = h('small', { class: 'pm-dim' });
   function redrawExtra() {
-    clear(extra);
+    clear(extra); cardMatch.textContent = '';
     if (st.kind === 'coins') { const inp = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount) }); inp.addEventListener('input', () => { st.amount = Number(inp.value) || 0; }); extra.appendChild(inp); }
     else if (st.kind === 'pack') extra.appendChild(select(['bronze', 'silver', 'gold', 'rare', 'premium'], st.packId, (v) => { st.packId = v; }, { 'aria-label': 'Pack' }));
-    else { const inp = h('input', { class: 'pm-input', placeholder: 'Player name…', list: 'admin-gw-players' }); inp.addEventListener('input', () => { st.pid = (db.all.find((p) => p.name.toLowerCase() === inp.value.trim().toLowerCase()) || {}).id || ''; }); extra.appendChild(inp); }
+    else {
+      const inp = h('input', { class: 'pm-input', placeholder: 'Player or Admin Card name…' });
+      inp.addEventListener('input', () => { st.cardQuery = inp.value; const c = findCard(st.cardQuery); cardMatch.textContent = c ? `Matched: ${c.name} (${c.ovr} OVR${c.customAdmin ? ' · Admin Card' : ''})` : (st.cardQuery.trim() ? 'No match yet…' : ''); });
+      extra.appendChild(inp);
+    }
   }
   redrawExtra();
   const status = h('small', { class: 'pm-dim' });
   async function give(everyone) {
-    if (st.kind === 'player' && !st.pid) { status.textContent = 'Type an exact player name.'; return; }
-    const gift = { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: st.kind === 'player' ? { id: st.pid } : undefined, count: 1 };
-    if (owner && typeof owner.gift === 'function') {
-      const r = await safeCall(() => owner.gift(gift), { ok: false });
-      status.textContent = r && r.ok !== false ? `Sent${everyone ? ' to everyone' : ` to ${st.target}`}.` : `Failed${r && r.error ? `: ${r.error}` : ''}.`;
-      if (r && r.ok !== false) app.toast('Giveaway sent.', 'good');
-      return;
-    }
-    // No online giveaway service yet: queue it locally so it can be tested end-to-end via the Gifts inbox.
-    sendLocalGift({ ...gift, note: everyone ? 'Giveaway (local device only — no online service connected)' : `Giveaway for ${st.target || 'you'} (local device only)` });
-    status.textContent = 'Online giveaways are not connected — queued to this device’s Gifts inbox instead.';
-    app.toast('Queued to your Gifts inbox (local demo).', 'good');
+    if (!everyone && !st.target.trim()) { status.textContent = 'Enter a username, or use "Send to everyone".'; return; }
+    let card = null;
+    if (st.kind === 'card') { card = findCard(st.cardQuery); if (!card) { status.textContent = 'No card matches that name.'; return; } card = { ...card, tradable: true }; }
+    const r = await sendGift(app, { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: card || undefined }, 'Giveaway');
+    status.textContent = r && r.ok !== false ? 'Sent.' : `Failed${r && r.error ? `: ${r.error}` : ''}.`;
   }
   return h('section', { class: 'pm-panel pm-admin-sec' },
     h('h3', null, icon('giveaway'), ' Giveaways'),
-    h('p', { class: 'pm-dim' }, 'Send coins, a pack or a player to one user or to everyone.'),
-    targetInp, h('div', { class: 'pm-btnrow' }, kindSel, extra),
+    h('p', { class: 'pm-dim' }, 'Send coins, a pack, or any card (including Admin Cards) to one user or to everyone. Gifted cards are always tradable.'),
+    targetInp, h('div', { class: 'pm-btnrow' }, kindSel, extra), cardMatch,
     h('div', { class: 'pm-btnrow' },
       h('button', { class: 'pm-btn pm-btn--primary', onclick: () => give(false) }, 'Send to user'),
       h('button', { class: 'pm-btn pm-btn--accent', onclick: () => give(true) }, 'Send to everyone')),
     status);
+}
+
+/**
+ * Prominent "Send card" modal: username/friend code + a searchable card picker (DB players + Admin Cards).
+ * Exported so the Admin panel's top-level button and Moderation's per-row "Send card" both reuse it.
+ */
+export function openSendCardModal(app, { toUsername = '' } = {}) {
+  const st = { target: toUsername, q: '', tradable: true };
+  const target = h('input', { class: 'pm-input', value: st.target, placeholder: 'Username or friend code', 'aria-label': 'Recipient' });
+  target.addEventListener('input', () => { st.target = target.value; });
+  const q = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search any player or Admin Card…', 'aria-label': 'Card search' });
+  const results = h('div', { class: 'pm-admin-results pm-cc-sendresults' });
+  const tradableChk = h('input', { type: 'checkbox', checked: true });
+  tradableChk.addEventListener('change', () => { st.tradable = tradableChk.checked; });
+  function draw() {
+    clear(results);
+    const query = st.q.trim().toLowerCase();
+    if (query.length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 letters. Admin Cards appear first.')); return; }
+    const custom = listCustomCards().filter((c) => c.name.toLowerCase().includes(query));
+    const db = getDB();
+    const dbHits = db.all.filter((p) => p.name.toLowerCase().includes(query)).sort((a, b) => b.ovr - a.ovr).slice(0, 20);
+    const all = [...custom, ...dbHits];
+    if (!all.length) { results.appendChild(h('p', { class: 'pm-dim' }, 'No matches.')); return; }
+    for (const c of all) {
+      results.appendChild(h('div', { class: 'pm-mktrow' }, playerCard(c, { size: 'xs' }),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, c.name), h('span', { class: 'pm-dim' }, `${c.ovr} ${c.pos}${c.customAdmin ? ' · Admin Card' : ''}`)),
+        h('button', {
+          class: 'pm-btn pm-btn--primary pm-btn--sm',
+          onclick: async () => {
+            if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
+            const r = await sendGift(app, { to: st.target.trim(), kind: 'card', card: { ...c, tradable: st.tradable } }, 'Card');
+            if (r && r.ok !== false) close();
+          },
+        }, 'Send')));
+    }
+  }
+  q.addEventListener('input', () => { st.q = q.value; draw(); });
+  draw();
+  const close = modal(app.root, {
+    title: 'Send / Gift a card', wide: true,
+    body: h('div', { class: 'pm-cc-send' },
+      h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'To'), target),
+      h('label', { class: 'pm-toggle' }, tradableChk, h('span', null, 'Tradable')),
+      q, results),
+    actions: [{ label: 'Close' }],
+  });
+  return close;
 }
 
 // ---------------------------------------------------------------- Global config toggles
