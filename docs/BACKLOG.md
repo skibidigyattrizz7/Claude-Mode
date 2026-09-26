@@ -52,9 +52,21 @@ Receiver free-roam; weak passes; AI defending/marking + interceptions for user t
 - Redo ALL UIs: FC-quality, interactive, clean (3D menus, UT, 2D, landing) — after the functional work.
 - More squad/market rules.
 
+## Latest owner requests (Sep 26, night) — ALL REQUIRED
+- **End reset-on-join**: new/joining accounts must NOT be reset to 5k. `features.resetEpoch` must only apply once per deliberate owner "Reset everyone" click (never to accounts created after it). [A]
+- **Global config / broadcasts / giveaways** only work on the owner's own client → must reach EVERY player (server RPC + client polling at startup + every ~60 s; banner for broadcasts; gifts inbox for individual + global giveaways). Prove with two browser profiles. [A]
+- **Login UI**: wire `accountui.js` + `social.js` into the menus (sign up / log in / sign out / change username), `3d/css/account.css`; same UT club on every device. [A]
+- **Owner Access** (renamed from Super Admin) must visibly do MORE than the full code; Vercel shows old abilities → make sure the new admin panel is what actually loads for both codes.
+- **Card creator**: unlimited PlayStyles (+/plus), adjustable main + alt positions, choose ANY promo (no 4 limit), PNG upload, rating up to 999 for Owner Access; created cards can be **gifted** to any player (tradable). Gift button easy to find. [C]
+- Moderation search must find any player (by name/username); "All players" list with usernames. Single "Add coins" button (no local vs online confusion). "Reset everyone" button. [C + A server]
+- **Chemistry styles**: option between classic line chemistry and **FC26 chemistry** (no adjacency: club/league/nation counts across the XI, 0–3 per player, 33 max). [C]
+- **Pack opening redo** (like owner's reference videos): pack **rips from the top**, card slides out hidden, FUT walkout sequence (flag → position → club → card) for high rated; no random 3D model right after opening; any 3D model must be realistic + smooth. Keep the old version revertible (setting/flag). [D]
+- **Receiving passes (FIFA)**: after you pass, the receiver is mostly AI-driven to meet the ball, user input only nudges slightly, until he receives it. 3D [G] and 2D [F].
+
 ## Work order (max 2 agents at once; OWNER PRIORITY: UI #1 — ALL UI finished in one task (agent C), then promos)
-1. B — promos/players/rules (vault, unreleased promos hidden, more promos) [running]
-2. C — ALL UI redo, FC quality (UT, squad, tactics visible, admin panel, menus, 2D, landing) [running]
-3. A — NEXT: wire login/sign-up/sign-out + change username (accountui.js, social.js) so UT club syncs across devices; then remaining economy items [paused]
-4. G — 3D engine (receiver, AI defending, proxy/Chromebook loading, faster stadium)
-5. F — 2D gameplay + 2D online
+1. C — ALL UI + admin/card creator + chemistry styles [running]
+2. A — login UI, reset-on-join end, config/broadcast/giveaway propagation [running]
+3. B — promos/players/rules (vault, unreleased promos hidden, more promos) [paused]
+4. D — pack opening redo from reference videos
+5. G — 3D engine (receive-pass assist first, AI defending, loading, faster stadium)
+6. F — 2D gameplay (receive-pass assist) + 2D online
