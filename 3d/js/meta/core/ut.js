@@ -10,6 +10,7 @@ import { ensureTacticSets, activeTactics } from './tactics.js';
 import { totwCards } from './totw.js';
 import { weekNumber } from './calendar.js';
 import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
+import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 
 export const UT_KEY = 'ut';
 
@@ -540,7 +541,7 @@ export function grantReward(state, reward, from = '') {
   if (reward.promoPlayer) { const pid = promoRewardPid(reward.promoPlayer); reward = { ...reward, promoPlayer: undefined, ...(pid ? { player: pid } : { pack: `promo_${reward.promoPlayer.promo}` }) }; }
   if (reward.pick) { addPick(state, reward.pick, from); out.push(reward.pick.label || 'Player Pick'); }
   if (reward.item) { state.items = state.items || {}; state.items[reward.item] = (state.items[reward.item] || 0) + (reward.n || 1); out.push(`${reward.n || 1}× ${ITEM_NAMES[reward.item] || reward.item}`); }
-  if (reward.coins) { state.coins += reward.coins; out.push(`${reward.coins.toLocaleString()} coins`); }
+  if (reward.coins) { const c = configuredCoins(reward.coins); state.coins += c; out.push(`${c.toLocaleString()} coins`); }
   if (reward.pack) { state.packs.push({ type: reward.pack, from }); out.push(PACK_BY_ID[reward.pack].name); }
   if (reward.player) {
     const p = getPlayer(reward.player);
