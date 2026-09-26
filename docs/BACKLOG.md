@@ -63,10 +63,7 @@ Receiver free-roam; weak passes; AI defending/marking + interceptions for user t
 - **Pack opening redo** (like owner's reference videos): pack **rips from the top**, card slides out hidden, FUT walkout sequence (flag → position → club → card) for high rated; no random 3D model right after opening; any 3D model must be realistic + smooth. Keep the old version revertible (setting/flag). [D]
 - **Receiving passes (FIFA)**: after you pass, the receiver is mostly AI-driven to meet the ball, user input only nudges slightly, until he receives it. 3D [G] and 2D [F].
 
-## Work order (max 2 agents at once; OWNER PRIORITY: UI #1 — ALL UI finished in one task (agent C), then promos)
-1. C — ALL UI + admin/card creator + chemistry styles [running]
-2. A — login UI, reset-on-join end, config/broadcast/giveaway propagation [running]
-3. B — promos/players/rules (vault, unreleased promos hidden, more promos) [paused]
-4. D — pack opening redo from reference videos
-5. G — 3D engine (receive-pass assist first, AI defending, loading, faster stadium)
-6. F — 2D gameplay (receive-pass assist) + 2D online
+## Work order (owner allows 3 long agents + any number of small ones)
+Done + live (Sep 26): A (login UI, reset-on-join fix, config/broadcast/gift propagation, migration 004), B (vault, promo gating, 3 new promos, dedupe, coin model), C round 1 (admin/card creator/Owner Access/chemistry styles/squad UI).
+Running: C round 2 (menus, landing, 2D menus, account screens), D (pack opening redo), B2 (ratings, +500 players, admin cards, secret card, managers), small: 3D + 2D receive-pass assist.
+Queue: G (3D AI defending/marking/interceptions, Chromebook loading, faster stadiums, kits) after the 3D receive agent; F (2D AI defending, kits, 2D online) after the 2D receive agent; final UI polish.
