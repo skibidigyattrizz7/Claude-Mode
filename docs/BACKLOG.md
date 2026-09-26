@@ -40,3 +40,22 @@ Passing still weak; receiver free-roams; AI passes perfect vs user's weak; add A
 
 ## G. 3D engine — `3d/js/engine/**`
 Receiver free-roam; weak passes; AI defending/marking + interceptions for user team; 3D doesn't load on school Chromebook/proxy → robust loading + fallback + clear errors; **stadiums load faster**; more kit designs; walkout needs a reusable rig API for D.
+
+## New owner requests (Sep 26)
+- Super admin code is now `12345678910` (client hash updated in `3d/js/shared/adminauth.js`; server hash inserted by coordinator). It "didn't work at all" before — verify the whole flow end-to-end in the UI.
+- **SBC storage vault**: untradable duplicates go to an SBC storage (max 200, duplicates allowed) usable in SBCs.
+- **Send to transfer list** without listing (FUT "transfer list" pile), list from there later.
+- Transfer market + coins + **market refresh** bugs still broken — must be fixed and proven.
+- Promo view says some cards "release in a couple weeks" but those players are already in the AI market → unreleased promo cards must not appear anywhere (market, packs, SBC rewards) until released.
+- More promos (each with its own pack-opening theme like the existing ones).
+- Tactics editor must be visible/reachable in UT and in-match.
+- Redo ALL UIs: FC-quality, interactive, clean (3D menus, UT, 2D, landing) — after the functional work.
+- More squad/market rules.
+
+## Work order (max 2 agents at once; next starts when a slot frees)
+1. A — accounts/admin/economy (coins, market, refresh, transfer list, super code) [resume]
+2. B — UT content/rules (+ vault, unreleased promos hidden, more promos, rules) [resume]
+3. C — UT UI (squad builder, admin panel, tactics visible, gifts, rewards) [resume]
+4. G — 3D engine (receiver, AI defending, proxy/Chromebook loading, faster stadium) [resume]
+5. F — 2D gameplay + 2D online [resume]
+6. UI redo round (all screens, FC quality) + promo themes for new promos

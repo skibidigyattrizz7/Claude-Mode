@@ -7,7 +7,7 @@
 // (account role) > 'temp' (60 min, limited, local only).
 
 export const ADMIN_CODE_PARAMS = Object.freeze({
-  super: Object.freeze({ salt: '938b07f70b26296320e9c3c74bf7502d', iterations: 600000, hash: '4aeb01f677660f1a9ce9eba52c3339a1af01618b4ef90b574ab880fa7d081369' }),
+  super: Object.freeze({ salt: '938b07f70b26296320e9c3c74bf7502d', iterations: 600000, hash: 'a349d13834dae42238770ae528fb16b4ee02c03a7686dea04a741d6d53b41b47' }),
   full: Object.freeze({ salt: 'cd856bbe3c942763c4a331b0ede5e17c', iterations: 600000, hash: 'fc34467189b291198c5aeef3837e2d87292e3a4fd7838ba889d38c32b81c4c55' }),
   temp: Object.freeze({ salt: 'eccf54d6330ab472f5dfd2903504deb6', iterations: 600000, hash: 'b5245fee52cc48f15b52624b91750fb2bb7bdcc6087411305fad4f1c25dd2723' }),
 });
