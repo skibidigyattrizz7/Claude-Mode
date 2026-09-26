@@ -35,3 +35,9 @@ Files: `promorefs/fut21_futties.jpg`, `fut22_futties.jpg`, `worldcup_cards.jpg`,
 - Summer-party promo (Futties-like): hot pink/magenta + orange + purple variants per batch, pastel pink stage background for the promo screen.
 - World-cup-like tournament set: maroon/burgundy player, white-gold icon, red path-to-glory, teal star, gold hero, purple road-to, yellow stories, holographic phenoms.
 - Promo announcement screen (FUT21/22 style): big promo title, cards laid out in rows on a themed background — use for the promo view.
+
+## Batch 3 (final) — FC24 / FC26 card designs
+Files: `promorefs/fc24_designs.jpg`, `fc24_designs_blue.jpg`, `fc26_designs.jpg`.
+- Modern FC shape: tall rounded-rectangle with small notched "shoulders" at the top corners and a thin metallic (gold/silver/bronze) frame that follows the promo colour.
+- Each promo = a distinct full-card art theme, e.g.: purple/gold geometric triangles; dark red silk; bronze triangle-on-dark; white marble + gold V; red crystalline shards; gold wire-frame on black; purple nebula with dark triangle; green neon line-waves on black; red line-waves; blue galaxy "star-ball" (continental cup); ocean blue gradient; snowy white mountains; dark smoky storm; icy blue shards; lava/fire; neon-yellow radioactive; white/green winter triangles; green matrix triangles; teal/red crystal splash; orange geometric; purple swirl; pink/magenta confetti; holographic ribbons; lightning on black; plain red "team" card; blue diagonal stripes.
+- Build them procedurally (CSS gradients, conic/radial layers, SVG patterns, clip-path shapes) — recognisable themes, not copied images.
