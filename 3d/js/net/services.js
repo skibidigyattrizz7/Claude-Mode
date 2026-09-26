@@ -151,6 +151,7 @@ export function createOnline(deps) {
   const GUEST_KEY = `${ACC_KEY}.guest`;
   const volatile = deps.volatileStorage || volatileFallback;
   const requireAccount = deps.requireAccount === true;
+  let nameSyncTried = false;
   const accListeners = new Set();
   let pendingCreds = null; // offline sign-up kept in memory only (never persisted with the password)
   const sget = (st, k) => { try { return st.getItem(k); } catch { return null; } };
@@ -272,6 +273,15 @@ export function createOnline(deps) {
     async profile() {
       const r = dataOr(await authed('get_profile'));
       const p = sanitizeProfile(r);
+      // Until accounts are used, name the profile after the local UT club so the owner can tell players apart.
+      if (p && p.name === 'Player' && deps.getName) {
+        const want = cleanStr(deps.getName(), 16, '');
+        if (want && want !== 'Player' && !nameSyncTried) {
+          nameSyncTried = true;
+          const s = dataOr(await authed('set_name', { p_name: want }));
+          if (s.ok === true) p.name = cleanStr(s.name, 16, want);
+        }
+      }
       return p || fail(r.error || 'bad_response', r.ban ? { ban: r.ban } : undefined);
     },
 
@@ -1120,7 +1130,11 @@ function browserOnline() {
       const p = netPrefs();
       return p.host ? { host: p.host, port: p.port || undefined, path: p.path || '/', secure: p.secure !== false } : {};
     },
-    getName: () => netPrefs().name || 'Player',
+    getName: () => {
+      if (netPrefs().name) return netPrefs().name;
+      try { const ut = JSON.parse(localStorage.getItem('pitchside.ut') || 'null'); if (ut && ut.clubName) return String(ut.clubName); } catch { /* ignore */ }
+      return 'Player';
+    },
     matchmakerConfig: mock && Q.get('mmTimeout') ? { timeoutMs: Number(Q.get('mmTimeout')) * 1000 } : undefined,
     invitePollMs: mock ? 700 : 2000,
   });
