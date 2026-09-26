@@ -191,6 +191,20 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
   const mom = mrng.shuffle(actives.slice(0, 50)).slice(0, 8).concat(mrng.shuffle(icons.filter((p) => p.ovr <= 92)).slice(0, 3));
   mom.forEach((b, i) => make(b, 'moments', Math.min(96, b.ovr + scaled(b.ovr, 4, 6)), { moment: MOMENTS[i % MOMENTS.length] }));
 
+  // V4 — Rivals Showdown: 10 actives from famous rivalries, +4..+7
+  const srng = new Rng('promo-showdown');
+  for (const b of srng.shuffle(actives.slice(0, 70)).slice(0, 10)) make(b, 'showdown', Math.min(97, b.ovr + scaled(b.ovr, 4, 7)));
+
+  // V4 — One to Watch: 10 in-form actives aged <= 27, +3..+6 (dynamic-flavoured, but a normal static card here)
+  const orng = new Rng('promo-oty');
+  const otyPool = src.regulars.filter((p) => p.age <= 27 && p.ovr >= 78).concat(src.stars.filter((p) => p.age <= 27));
+  for (const b of orng.shuffle(otyPool).slice(0, 10)) make(b, 'oty', Math.min(92, b.ovr + scaled(b.ovr, 3, 6)));
+
+  // V4 — Centurions: 8 veteran actives/Icons closing in on a milestone, +3..+6 (max 98)
+  const crng = new Rng('promo-centurions');
+  const centPool = actives.filter((p) => p.age >= 28).concat(icons.filter((p) => p.ovr <= 95)).sort(byOvr);
+  for (const b of crng.shuffle(centPool.slice(0, 40)).slice(0, 8)) make(b, 'centurions', Math.min(98, b.ovr + scaled(b.ovr, 3, 6)), { milestone: '100 club/international caps' });
+
   for (const p of out) p.tier = 'gold';
   return out;
 }

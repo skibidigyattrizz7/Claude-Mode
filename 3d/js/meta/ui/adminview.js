@@ -6,7 +6,7 @@ import { playerCard } from './card.js';
 import * as UT from '../core/ut.js';
 import * as C from '../core/career.js';
 import * as A from '../core/admin.js';
-import * as AA from '../shared/adminauth.js';
+import * as AA from '../../shared/adminauth.js';
 import { getDB } from '../core/players.js';
 import { remove as removeKey } from '../core/storage.js';
 import { safeCall } from './app.js';

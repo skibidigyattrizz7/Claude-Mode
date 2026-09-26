@@ -5,13 +5,16 @@ import { h, clear, add, fmtNum, confirmBox, select } from './dom.js';
 import { icon } from './icons.js';
 import { playerCard } from './card.js';
 import { safeCall } from './app.js';
-import { createCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, POSITIONS_ALL } from './customcards.js';
+import { createCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, importCustomCard, POSITIONS_ALL } from './customcards.js';
 import { getDB } from '../core/players.js';
 import { NATIONS } from '../core/data.js';
 import { sendLocalGift } from './giftsview.js';
 import { getConfig, syncConfig } from './config.js';
+import { PROMOS } from '../core/promos.js';
 
 const TIERS = ['bronze', 'silver', 'gold', 'icon'];
+// Every card "design": base specials + every live/upcoming promo campaign (not capped to a handful).
+const DESIGN_OPTIONS = [['', 'None (plain tier look)'], ['inform', 'In-Form'], ['hero', 'Hero'], ['legend', 'Icon (Classic)'], ['lotg', 'Legend of the Game'], ['objective', 'Pathfinder'], ...PROMOS.map((pr) => [pr.id, pr.name])];
 
 // ---------------------------------------------------------------- Card Creator + gallery
 function cropToCard(file) {
@@ -34,27 +37,29 @@ function cropToCard(file) {
 }
 
 export function cardCreatorPanel(app, { level }) {
-  const st = { name: '', pos: 'ST', nat: 'ENG', tier: 'gold', photo: null, stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
   const isSuper = level === 'super';
-  if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to the owner (super) level.'));
+  const cap = isSuper ? 999 : 99;
+  const st = { name: '', pos: 'ST', nat: 'ENG', tier: 'gold', special: '', photo: null, stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
+  if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to the Super Admin level.'));
   const preview = h('div', { class: 'pm-cc-preview' });
   const drawPreview = () => {
     clear(preview);
     const isGk = st.pos === 'GK';
-    const p = { id: 'preview', name: st.name || 'New Player', last: (st.name || 'New Player').split(' ').slice(-1)[0], pos: st.pos, nat: st.nat, club: 'FUT', tier: st.tier, customAdmin: true, photo: st.photo };
+    const p = { id: 'preview', name: st.name || 'New Player', last: (st.name || 'New Player').split(' ').slice(-1)[0], pos: st.pos, nat: st.nat, club: 'FUT', tier: st.tier, special: st.special || null, customAdmin: true, photo: st.photo };
     if (isGk) p.gk = { div: st.stats.pac, han: st.stats.sho, kic: st.stats.pas, ref: st.stats.dri, spd: st.stats.def, pos: st.stats.phy };
     else p.stats = st.stats;
-    p.ovr = Object.values(st.stats).reduce((a, b) => a + b, 0) / 6 | 0;
+    p.ovr = Math.max(1, Math.min(999, Math.round(Object.values(st.stats).reduce((a, b) => a + b, 0) / 6)));
     preview.appendChild(playerCard(p, { size: 'md' }));
   };
   const statRow = (key, label) => {
-    const row = h('label', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: '99', value: st.stats[key] }), h('b', null, String(st.stats[key])));
+    const row = h('label', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: String(cap), value: st.stats[key] }), h('b', null, String(st.stats[key])));
     const range = row.querySelector('input'), out = row.querySelector('b');
     range.addEventListener('input', () => { st.stats[key] = Number(range.value); out.textContent = range.value; drawPreview(); });
     return row;
   };
   const nameInp = h('input', { class: 'pm-input', placeholder: 'Player name', maxlength: '26' });
-  nameInp.addEventListener('input', () => { st.name = nameInp.value; drawPreview(); });
+  const saveBtn = h('button', { class: 'pm-btn pm-btn--primary', disabled: true }, 'Save to gallery');
+  nameInp.addEventListener('input', () => { st.name = nameInp.value; saveBtn.disabled = !nameInp.value.trim(); drawPreview(); });
   const upload = h('input', { type: 'file', accept: 'image/png,image/jpeg', class: 'pm-cc-upload' });
   const uploadMsg = h('small', { class: 'pm-dim' }, 'PNG/JPG — auto-cropped to the card portrait.');
   upload.addEventListener('change', async () => {
@@ -76,23 +81,26 @@ export function cardCreatorPanel(app, { level }) {
           h('button', { class: 'pm-btn pm-btn--danger pm-btn--sm', onclick: () => { deleteCustomCard(c.id); drawGallery(); } }, 'Delete'))));
     }
   };
+  saveBtn.addEventListener('click', () => {
+    const card = createCustomCard({ name: st.name, pos: st.pos, nat: st.nat, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper });
+    app.toast(`${card.name} (${card.ovr} OVR) saved to the Admin Cards gallery.`, 'good');
+    nameInp.value = ''; st.name = ''; st.photo = null; saveBtn.disabled = true; drawPreview(); drawGallery();
+  });
   drawPreview(); drawGallery();
   return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
-    h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Super only')),
-    h('p', { class: 'pm-dim' }, 'Design a fully custom card. Grants are untradeable; without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.'),
+    h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Super Admin')),
+    h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat. Grants are untradeable by default (toggle tradable below); without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.`),
     h('div', { class: 'pm-cc-grid' },
       h('div', { class: 'pm-cc-form' },
         nameInp,
         h('div', { class: 'pm-btnrow' },
           select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; drawPreview(); }, { 'aria-label': 'Position' }),
-          select(NATIONS.slice(0, 40).map((n) => [n.code, n.name]), st.nat, (v) => { st.nat = v; drawPreview(); }, { 'aria-label': 'Nation' }),
+          select(NATIONS.slice(0, 60).map((n) => [n.code, n.name]), st.nat, (v) => { st.nat = v; drawPreview(); }, { 'aria-label': 'Nation' }),
           select(TIERS, st.tier, (v) => { st.tier = v; drawPreview(); }, { 'aria-label': 'Tier' })),
+        h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Design'), select(DESIGN_OPTIONS, st.special, (v) => { st.special = v; drawPreview(); }, { 'aria-label': 'Card design / promo' })),
         h('div', { class: 'pm-cc-stats' }, (st.pos === 'GK' ? [['pac', 'DIV'], ['sho', 'HAN'], ['pas', 'KIC'], ['dri', 'REF'], ['def', 'SPD'], ['phy', 'POS']] : [['pac', 'PAC'], ['sho', 'SHO'], ['pas', 'PAS'], ['dri', 'DRI'], ['def', 'DEF'], ['phy', 'PHY']]).map(([k, l]) => statRow(k, l))),
         h('label', { class: 'pm-cc-uploadrow' }, icon('upload'), ' Upload photo', upload), uploadMsg,
-        h('button', {
-          class: 'pm-btn pm-btn--primary', disabled: !nameInp.value.trim(),
-          onclick: () => { createCustomCard({ name: st.name, pos: st.pos, nat: st.nat, tier: st.tier, stats: st.stats, photo: st.photo }); app.toast('Card saved to the Admin Cards gallery.', 'good'); nameInp.value = ''; st.name = ''; st.photo = null; drawPreview(); drawGallery(); },
-        }, 'Save to gallery')),
+        saveBtn),
       h('div', { class: 'pm-cc-previewwrap' }, h('div', { class: 'pm-sq-label' }, 'Preview'), preview)),
     h('div', { class: 'pm-cc-galwrap' }, h('div', { class: 'pm-sq-label' }, icon('crop'), ' Admin Cards'), gallery));
 }
