@@ -91,19 +91,22 @@ export function adminCodesView() {
 
 /** Visible badge in the UT hub while admin is active (countdown for temporary admin, crown for the owner account). */
 export function adminBadge(app) {
-  const info = A.adminInfo();
-  if (!info.level) return null;
-  const owner = info.fromAccount && info.role === 'owner';
+  AA.bindOnline(app.online);
+  const level = AA.getAdminLevel();
+  if (!level) return null;
+  let role = null;
+  try { const c = app.online && app.online.account && typeof app.online.account.current === 'function' ? app.online.account.current() : null; role = c && c.state === 'account' ? c.role : null; } catch { /* ignore */ }
+  const owner = role === 'owner' && (level === 'full' || level === 'super');
   const label = h('span', { class: 'pm-adminbadge-t' });
   const draw = () => {
-    const i = A.adminInfo();
-    if (!i.level) { app.toast('Temporary admin expired.', 'warn'); app.refresh(); return false; }
-    label.textContent = owner ? 'OWNER' : i.level === 'mod' ? 'MOD' : i.level === 'temp' ? `Temp admin · ${mmss(i.tempRemainingMs)}` : 'Admin';
+    const lv = AA.getAdminLevel();
+    if (!lv) { app.toast('Temporary admin expired.', 'warn'); app.refresh(); return false; }
+    label.textContent = owner ? 'OWNER' : lv === 'super' ? 'SUPER' : lv === 'mod' ? 'MOD' : lv === 'temp' ? `Temp admin · ${mmss(AA.tempRemainingMs())}` : 'Admin';
     return true;
   };
   draw();
-  if (info.level === 'temp') { const t = setInterval(() => { if (!draw()) clearInterval(t); }, 1000); app.onCleanup(() => clearInterval(t)); }
-  return h('button', { class: `pm-adminbadge lv-${info.level} ${owner ? 'is-owner' : ''}`, 'data-admin-badge': info.level, title: 'Open the Admin panel', onclick: () => app.push(adminView()) },
+  if (level === 'temp') { const t = setInterval(() => { if (!draw()) clearInterval(t); }, 1000); app.onCleanup(() => clearInterval(t)); }
+  return h('button', { class: `pm-adminbadge lv-${level} ${owner ? 'is-owner' : ''}`, 'data-admin-badge': level, title: 'Open the Admin panel', onclick: () => app.push(adminView()) },
     owner ? icon('crown', 'pm-crown') : icon('admin'),
     label);
 }
@@ -113,9 +116,9 @@ export function adminView() {
   const view = {
     title: 'Admin', kicker: 'Owner tools', coins: true, cls: 'pm-main--wide',
     render(main, app) {
-      const level = A.getAdminLevel();
+      AA.bindOnline(app.online);
+      const level = AA.getAdminLevel();
       if (!level) { app.replace(adminCodesView()); return; }
-      const can = (x) => A.adminCan(x, level);
       const s = app.ut;
       const needUT = s ? null : h('p', { class: 'pm-warnline' }, 'Create an Ultimate Team club first to use the UT tools.');
       const done = (msg) => { if (s) app.saveUT(); app.toast(msg, 'good'); app.refresh(); };
