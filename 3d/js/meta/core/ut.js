@@ -667,7 +667,7 @@ export function applyBattleResult(state, opp, result, userSide = 'home') {
   const ga = userSide === 'home' ? result.awayGoals : result.homeGoals;
   const outcome = gf > ga ? 'W' : gf < ga ? 'L' : 'D';
   const mult = DIFF_MULT[opp.difficulty] || 1;
-  const coins = Math.round((300 + (outcome === 'W' ? 500 : outcome === 'D' ? 200 : 0) + gf * 40) * mult / 10) * 10;
+  const coins = configuredCoins(Math.round((300 + (outcome === 'W' ? 500 : outcome === 'D' ? 200 : 0) + gf * 40) * mult / 10) * 10);
   const base = DIFF_PTS[opp.difficulty] || 30;
   const points = Math.max(5, Math.round(base * (outcome === 'W' ? 1 : outcome === 'D' ? 0.4 : 0.15) + Math.max(0, gf - ga) * 5 + gf * 2));
   state.coins += coins;

@@ -859,6 +859,31 @@ test('transfer list (pmarket): flag a club card for sale without listing it yet,
   assert.ok(!PM.onTransferList(s, pid));
 });
 
+test('global config: safe local defaults, injectable provider, gates packs/promos/coins/tax', async () => {
+  const CFG = await import('../core/config.js');
+  CFG.setConfigProvider(null);
+  assert.deepEqual(CFG.getConfig(), CFG.CONFIG_DEFAULTS);
+  assert.equal(PM.afterTax(1000), 950);
+  CFG.setConfigProvider(() => { throw new Error('offline'); });
+  assert.deepEqual(CFG.getConfig(), CFG.CONFIG_DEFAULTS); // never throws, never returns a partial object
+  CFG.setConfigProvider(() => ({ packsEnabled: false }));
+  assert.deepEqual(UT.storePacks(), []);
+  CFG.setConfigProvider(() => ({ promosEnabled: false }));
+  assert.ok(UT.storePacks().every((p) => !p.promo));
+  CFG.setConfigProvider(() => ({ disabledPacks: ['gold'] }));
+  assert.ok(!UT.storePacks().some((p) => p.id === 'gold'));
+  CFG.setConfigProvider(() => ({ packPriceMult: 2 }));
+  assert.equal(UT.packPriceFor(UT.PACK_BY_ID.gold), UT.PACK_BY_ID.gold.price * 2);
+  CFG.setConfigProvider(() => ({ rewardMult: 2 }));
+  const s = UT.createUTState({ clubName: 'Cfg FC' }, new Rng(34));
+  const before = s.coins;
+  UT.grantReward(s, { coins: 1000 }, 'test');
+  assert.equal(s.coins, before + 2000);
+  CFG.setConfigProvider(() => ({ marketTaxPct: 10 }));
+  assert.equal(PM.afterTax(1000), 900);
+  CFG.setConfigProvider(null); // restore defaults for any later test
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

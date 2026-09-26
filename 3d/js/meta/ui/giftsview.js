@@ -39,7 +39,7 @@ async function listGifts(app) {
 function rewardLabel(g) {
   if (g.kind === 'coins') return `${fmtNum(g.amount || 0)} coins`;
   if (g.kind === 'pack') return `${UT.PACK_BY_ID[g.packId] ? UT.PACK_BY_ID[g.packId].name : g.packId} pack`;
-  if (g.kind === 'player') { const p = getPlayer(g.pid); return p ? `${p.name} (${p.ovr} OVR)` : 'Player card'; }
+  if (g.kind === 'player' || g.kind === 'card') { const p = getPlayer(g.pid) || g.card; return p ? `${p.name} (${p.ovr} OVR)` : 'Player card'; }
   return 'Gift';
 }
 
@@ -47,11 +47,11 @@ function rewardLabel(g) {
 async function claimGift(app, g) {
   const s = app.ut;
   if (!s) { app.toast('Create a Ultimate Team club first.', 'warn'); return; }
-  let kind = g.kind, amount = g.amount, packId = g.packId, pid = g.pid, count = g.count || 1;
+  let kind = g.kind, amount = g.amount, packId = g.packId, pid = g.pid, count = g.count || 1, card = g.card || null;
   if (g.remote && app.online && app.online.gifts && typeof app.online.gifts.claim === 'function') {
     const r = await safeCall(() => app.online.gifts.claim(g.id), { ok: false });
     if (!r || r.ok === false) { app.toast(r && r.error ? r.error : 'Claim failed', 'bad'); return; }
-    kind = r.kind || kind; amount = r.coins ?? amount; packId = r.packId || packId; pid = r.card && r.card.id; count = r.count || count;
+    kind = r.kind || kind; amount = r.coins ?? amount; packId = r.packId || packId; card = r.card || card; pid = (r.card && r.card.id) || pid; count = r.count || count;
     if (kind === 'coins') { s.coins = Math.max(0, s.coins + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); app.refresh(); return; }
   } else {
     const list = readLocal();
@@ -61,10 +61,12 @@ async function claimGift(app, g) {
   }
   if (kind === 'coins') { s.coins = Math.max(0, s.coins + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); }
   else if (kind === 'pack') { app.saveUT(); for (let i = 1; i < count; i++) s.packs.push({ type: packId, from: 'Gift' }); openPackFlow(app, packId); }
-  else if (kind === 'player') {
-    const p = getPlayer(pid);
-    if (p && !s.club.includes(p.id)) { UT.addToClub(s, p.id); app.saveUT(); app.toast(`${p.name} added to your club!`, 'good'); }
-    else { s.coins += 500; app.saveUT(); app.toast('Already owned — converted to 500 coins.', 'good'); }
+  else if (kind === 'player' || kind === 'card') {
+    const p = getPlayer(pid) || card;
+    if (!p) { app.toast('Card data missing from this gift.', 'bad'); }
+    else if (s.club.includes(p.id)) { s.coins += 500; app.saveUT(); app.toast('Already owned — converted to 500 coins.', 'good'); }
+    else if (getPlayer(p.id)) { UT.addToClub(s, p.id); app.saveUT(); app.toast(`${p.name} added to your club!`, 'good'); }
+    else { importCustomCard(p); app.saveUT(); app.toast(`${p.name} saved to your Admin Cards gallery (custom card).`, 'good'); }
   }
   app.refresh();
 }

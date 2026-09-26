@@ -302,10 +302,35 @@ export function configPanel(app) {
   const multOut = h('b', null, `${cfg.priceMult.toFixed(2)}x`);
   mult.addEventListener('change', async () => { await syncConfig(app.online, { priceMult: Number(mult.value) }); multOut.textContent = `${Number(mult.value).toFixed(2)}x`; app.toast('Price multiplier updated.', 'good'); app.refresh(); });
   mult.addEventListener('input', () => { multOut.textContent = `${Number(mult.value).toFixed(2)}x`; });
-  return h('section', { class: 'pm-panel pm-admin-sec' },
+  return h('div', null, h('section', { class: 'pm-panel pm-admin-sec' },
     h('h3', null, icon('gear'), ' Global config'),
     row('promosOn', 'Promo campaigns enabled'),
     row('packsInShop', 'Packs available in the shop'),
     h('label', { class: 'pm-cc-stat' }, h('span', null, 'Shop price multiplier'), mult, multOut),
-    h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device — the online config service is not connected yet.'));
+    h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device — the online config service is not connected yet.')),
+    resetEveryonePanel(app));
+}
+
+/** Owner-only "reset everyone": bumps the server `features.resetEpoch` so every device wipes its local
+ * admin session + infinite coins + sets its UT balance to 5000 next time it checks in, and calls a
+ * server-side economy reset RPC when one exists. */
+function resetEveryonePanel(app) {
+  const status = h('small', { class: 'pm-dim' });
+  return h('section', { class: 'pm-panel pm-admin-sec pm-admin-danger' },
+    h('h3', null, icon('reset'), ' Reset everyone'),
+    h('p', { class: 'pm-dim' }, 'Every connected player’s admin session drops, infinite coins turn off, and their local UT balance resets to 5,000 the next time their game checks in.'),
+    h('button', {
+      class: 'pm-btn pm-btn--danger', disabled: !app.online || !app.online.config,
+      onclick: async () => {
+        if (!(await confirmBox(app.root, 'Reset everyone', 'This resets every connected player’s admin session and coin balance. Continue?', 'Reset everyone', true))) return;
+        status.textContent = 'Resetting…';
+        const cur = await safeCall(() => app.online.config.get(), { ok: false });
+        const features = { ...(cur && cur.config && cur.config.features) || {}, resetEpoch: Math.floor(Date.now() / 1000) };
+        const owner = app.online.owner;
+        let r = owner && typeof owner.setConfig === 'function' ? await safeCall(() => owner.setConfig('features', features), { ok: false }) : { ok: false, error: 'not_connected' };
+        if (owner && typeof owner.resetAllEconomy === 'function') await safeCall(() => owner.resetAllEconomy(), { ok: false });
+        if (r && r.ok !== false) { status.textContent = 'Done — every device resets on its next check-in.'; app.toast('Global reset broadcast.', 'good'); app.checkResetEpoch(); }
+        else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
+      },
+    }, 'Reset everyone now'), status);
 }

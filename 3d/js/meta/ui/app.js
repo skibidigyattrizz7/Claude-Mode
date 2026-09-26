@@ -71,6 +71,41 @@ export class MetaApp {
     if (this.online && this.online.account && typeof this.online.account.onChange === 'function') {
       try { const un = this.online.account.onChange(() => { if (!this.destroyed) this.refresh(); }); if (typeof un === 'function') this.accountUnsub = un; } catch { /* ignore */ }
     }
+    this.configUnsub = null;
+    if (this.online && this.online.config && typeof this.online.config.onChange === 'function') {
+      try { const un = this.online.config.onChange(() => this.checkResetEpoch()); if (typeof un === 'function') this.configUnsub = un; } catch { /* ignore */ }
+    }
+    this.checkResetEpoch();
+  }
+
+  /**
+   * Global "owner reset everyone" epoch (server config `features.resetEpoch`, seconds). When it advances past
+   * the last one seen on this device: drop the local admin session/server token, turn off infinite coins, set
+   * the local UT balance to 5000, and toast once. Owner Access re-entry with the code still works afterwards.
+   */
+  async checkResetEpoch() {
+    if (!this.online || !this.online.config) return;
+    try {
+      let epoch = 0;
+      if (typeof this.online.config.value === 'function' && this.online.config.value('features.resetEpoch', 0)) epoch = Number(this.online.config.value('features.resetEpoch', 0)) || 0;
+      else { const r = await this.online.config.get(); if (r && r.ok !== false && r.config) epoch = Number(r.config.features && r.config.features.resetEpoch) || 0; }
+      if (!epoch) return;
+      const seen = load('resetEpochSeen', 0);
+      if (epoch <= seen) return;
+      save('resetEpochSeen', epoch);
+      clearAdminSession();
+      try { this.online.admin && typeof this.online.admin.forget === 'function' && this.online.admin.forget(); } catch { /* ignore */ }
+      if (this.ut) {
+        this.ut.admin = this.ut.admin || {};
+        this.ut.admin.infinite = false; delete this.ut.admin.stash;
+        this.ut.coins = 5000;
+        this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 };
+        this.saveUT();
+      }
+      if (this.destroyed) return;
+      this.refresh();
+      this.toast('Economy reset by the owner', 'warn');
+    } catch { /* never throws */ }
   }
 
   saveSettings() { save(SETTINGS_KEY, this.settings); }
@@ -236,6 +271,7 @@ export class MetaApp {
     this.destroyed = true;
     this.runCleanup();
     if (this.accountUnsub) { try { this.accountUnsub(); } catch { /* ignore */ } }
+    if (this.configUnsub) { try { this.configUnsub(); } catch { /* ignore */ } }
     document.removeEventListener('keydown', this.onKey);
     this.root.remove();
   }

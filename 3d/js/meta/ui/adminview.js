@@ -279,7 +279,10 @@ export function adminView() {
         class: `pm-tab ${k === st.tab ? 'on' : ''}`, role: 'tab', 'aria-selected': String(k === st.tab), 'data-tab': k,
         onclick: () => { st.tab = k; app.refresh(); },
       }, label))) : null;
-      add(main, h('p', { class: 'pm-lead' }, can('owner', level) ? 'Owner tools. Changes apply to this device (and the online balance where stated).' : `${LEVEL_NAME[level]}: limited tools. Changes apply to this device only.`), needUT,
+      const headRow = h('div', { class: 'pm-admin-headrow' },
+        h('p', { class: 'pm-lead' }, can('owner', level) ? 'Owner tools. Changes apply to this device (and the online balance where stated).' : `${LEVEL_NAME[level]}: limited tools. Changes apply to this device only.`),
+        can('grant', level) ? h('button', { class: 'pm-btn pm-btn--accent', onclick: () => X.openSendCardModal(app, {}) }, icon('gifts'), ' Gift / Send card') : null);
+      add(main, headRow, level === 'super' ? h('p', { class: 'pm-goodline' }, 'Owner Access: unlimited coins, admin cards up to 999 in any stat, and cross-account card gifting are unlocked below.') : null, needUT,
         tabs, tools, ...extraTabs.map(([k]) => panes[k]));
     },
   };

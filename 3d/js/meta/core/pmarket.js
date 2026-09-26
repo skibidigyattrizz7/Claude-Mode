@@ -3,8 +3,9 @@
 // Every function resolves { ok, ... } and never throws.
 import { getPlayer, registerCard, utPrice, niceRound } from './players.js';
 import { removeFromClub, addToClub } from './ut.js';
+import { getConfig } from './config.js';
 
-export const MARKET_TAX = 0.05;
+export const MARKET_TAX = 0.05; // local default; afterTax() reads the owner's live config first (marketTaxPct)
 export const TRANSFER_LIST_MAX = 100;
 
 // FUT-style price bands by overall (special cards get a higher floor/ceiling).
@@ -24,7 +25,7 @@ export function priceStep(v) { return v < 1000 ? 50 : v < 10000 ? 100 : v < 5000
 export function snapPrice(v) { const st = priceStep(v); return Math.max(st, Math.round(v / st) * st); }
 export function clampPrice(p, v) { const r = priceRange(p); return Math.min(r.max, Math.max(r.min, snapPrice(Number(v) || 0))); }
 export function suggestedPrice(p) { return clampPrice(p, niceRound(utPrice(p))); }
-export function afterTax(price) { return Math.floor(price * (1 - MARKET_TAX)); }
+export function afterTax(price, cfg = getConfig()) { return Math.floor(price * (1 - (cfg.marketTaxPct ?? MARKET_TAX * 100) / 100)); }
 
 export function isTradeable(state, pid) {
   return state.club.includes(pid) && !(state.untradeable || []).includes(pid) && !!getPlayer(pid);
