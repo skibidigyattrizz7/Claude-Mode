@@ -27,3 +27,11 @@ FC26 promo list to draw names from (use generic/alt names, no EA trademarks): Ce
 
 ## Rules
 Procedural (CSS gradients/SVG patterns/canvas), no copied EA art or logos. Cards must stay light and fast in squad/market grids (one CSS class per promo + shared shape). Pack-opening theme colours come from the same promo definition.
+
+## Batch 2 references (FUT 21–23 era; owner says FIFA 23 designs are the favourite)
+Files: `promorefs/fut21_futties.jpg`, `fut22_futties.jpg`, `worldcup_cards.jpg`, `fifa23_cards.jpg`, `fut23_official_designs.jpg`.
+- **FUT 23 base set is the target look for base cards**: taller shield with a softer arched top, subtle diagonal/halftone pattern; common = flat metal, rare = same metal + big sweeping "swoosh" stroke across the upper half. Bronze, silver, gold; in-form = black with gold swoosh; icon = white marble + gold; hero = dark blue/painted texture + gold; world-cup hero = copper/gold.
+- Promo cards are **full-art**: painted/abstract backgrounds (paint strokes, glitter, confetti, geometric shards, halftone) filling the whole card, player cut-out large, stats on a darker lower band.
+- Summer-party promo (Futties-like): hot pink/magenta + orange + purple variants per batch, pastel pink stage background for the promo screen.
+- World-cup-like tournament set: maroon/burgundy player, white-gold icon, red path-to-glory, teal star, gold hero, purple road-to, yellow stories, holographic phenoms.
+- Promo announcement screen (FUT21/22 style): big promo title, cards laid out in rows on a themed background — use for the promo view.
