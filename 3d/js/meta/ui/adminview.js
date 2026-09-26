@@ -14,7 +14,7 @@ import { openPackFlow } from './utview.js';
 import { icon } from './icons.js';
 import * as X from './adminextra.js';
 
-const LEVEL_NAME = { super: 'Super Admin', full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
+const LEVEL_NAME = { super: 'Owner Access', full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
 const RANK = AA.ADMIN_RANK;
 /** What a level may use in this panel (finer-grained than adminauth's own caps, but consistent with them). */
 function can(x, level) {
@@ -108,7 +108,7 @@ export function adminBadge(app) {
   const draw = () => {
     const lv = AA.getAdminLevel();
     if (!lv) { app.toast('Temporary admin expired.', 'warn'); app.refresh(); return false; }
-    label.textContent = owner ? 'OWNER' : lv === 'super' ? 'SUPER' : lv === 'mod' ? 'MOD' : lv === 'temp' ? `Temp admin · ${mmss(AA.tempRemainingMs())}` : 'Admin';
+    label.textContent = owner ? 'OWNER' : lv === 'super' ? 'OWNER ACCESS' : lv === 'mod' ? 'MOD' : lv === 'temp' ? `Temp admin · ${mmss(AA.tempRemainingMs())}` : 'Admin';
     return true;
   };
   draw();

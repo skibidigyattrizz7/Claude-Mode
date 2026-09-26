@@ -193,8 +193,9 @@ export function migrateUT(state) {
   for (const card of Object.values(state.evolved)) registerLocalCard(card);
   ensureTacticSets(state);
   for (const card of Object.values(state.foreign)) registerCard(card);
-  // V4: SBC storage vault (untradeable duplicates; duplicates allowed, capped) and the transfer list
-  // (cards pulled out of the club, not yet listed for sale — see sendToVault/sendToTransferList).
+  // V4: SBC storage vault (untradeable duplicates; duplicates allowed, capped — see sendToVault below).
+  // `transferList` (cards flagged for sale, still owned — see pmarket.js transferList/sendToTransferList)
+  // is sanitised here too so a corrupt/foreign id in an old save can't linger.
   state.vault = (Array.isArray(state.vault) ? state.vault : []).filter((id) => getPlayer(id)).slice(0, VAULT_CAP);
   state.transferList = (Array.isArray(state.transferList) ? state.transferList : []).filter((id) => getPlayer(id));
   state.club = state.club.filter((id) => getPlayer(id));
@@ -310,26 +311,6 @@ export function claimPackItem(state, pid) {
   addToClub(state, pid);
   return { where: 'club' };
 }
-
-// ---------- V4: transfer list (cards pulled out of the club, not yet listed for sale) ----------
-/** Move a tradeable club card to the transfer list pile (out of the club/squad, kept locally until listed
- * or returned). The online market lists it later via pmarket.js, which also accepts transfer-list ids. */
-export function sendToTransferList(state, pid) {
-  if (!state.club.includes(pid) || (state.untradeable || []).includes(pid)) return false;
-  removeFromClub(state, pid);
-  state.transferList = state.transferList || [];
-  if (!state.transferList.includes(pid)) state.transferList.push(pid);
-  return true;
-}
-/** Pull a card back out of the transfer list into the club (cancel the intent to sell). */
-export function returnFromTransferList(state, pid) {
-  const i = (state.transferList || []).indexOf(pid);
-  if (i < 0) return false;
-  state.transferList.splice(i, 1);
-  addToClub(state, pid);
-  return true;
-}
-export function transferListPlayers(state) { return (state.transferList || []).map(getPlayer).filter(Boolean); }
 
 export function quickSell(state, pid) {
   const p = getPlayer(pid);

@@ -40,7 +40,7 @@ export function cardCreatorPanel(app, { level }) {
   const isSuper = level === 'super';
   const cap = isSuper ? 999 : 99;
   const st = { name: '', pos: 'ST', nat: 'ENG', tier: 'gold', special: '', photo: null, stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
-  if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to the Super Admin level.'));
+  if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to Owner Access.'));
   const preview = h('div', { class: 'pm-cc-preview' });
   const drawPreview = () => {
     clear(preview);
@@ -88,7 +88,7 @@ export function cardCreatorPanel(app, { level }) {
   });
   drawPreview(); drawGallery();
   return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
-    h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Super Admin')),
+    h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Owner Access')),
     h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat. Grants are untradeable by default (toggle tradable below); without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.`),
     h('div', { class: 'pm-cc-grid' },
       h('div', { class: 'pm-cc-form' },
@@ -111,9 +111,10 @@ export function moderationPanel(app, { level }) {
   const has = (fn) => svc && typeof svc[fn] === 'function';
   if (!svc) return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), h('p', { class: 'pm-dim' }, 'Moderation connects to the online service once it is available — nothing to do here offline.'));
   if (typeof svc.mount === 'function') { const el = h('div'); try { const un = svc.mount(el, { level, app }); if (typeof un === 'function') app.onCleanup(un); } catch (e) { console.warn('[meta] moderation mount failed', e); } return el; }
-  const st = { q: '' };
+  const st = { q: '', page: 0, more: false };
   const results = h('div', { class: 'pm-admin-results' });
-  const row = (label, ico, id, action, danger) => h('button', { class: `pm-btn pm-btn--sm ${danger ? 'pm-btn--danger' : ''}`, disabled: !has(action), title: has(action) ? '' : 'Not available yet', onclick: () => runAction(action, label, id) }, icon(ico), ` ${label}`);
+  const moreWrap = h('div', { class: 'pm-btnrow' });
+  const row = (label, ico, danger, onClick) => h('button', { class: `pm-btn pm-btn--sm ${danger ? 'pm-btn--danger' : ''}`, onclick: onClick }, icon(ico), ` ${label}`);
   async function runAction(fn, label, id, ...args) {
     if (!has(fn)) return;
     if (!(await confirmBox(app.root, label, `${label}?`, label, /ban|reset/i.test(label)))) return;
@@ -122,31 +123,42 @@ export function moderationPanel(app, { level }) {
     draw();
   }
   async function draw() {
-    clear(results);
-    if (st.q.trim().length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 characters of a username.')); return; }
+    clear(results); clear(moreWrap);
     if (!has('search')) { results.appendChild(h('p', { class: 'pm-dim' }, 'User search is not available from the online service yet.')); return; }
-    const r = await safeCall(() => svc.search(st.q.trim()), { ok: false });
-    const users = (r && r.ok !== false && (r.items || (Array.isArray(r) ? r : null))) || [];
-    if (!users.length) { results.appendChild(h('p', { class: 'pm-dim' }, 'No matches.')); return; }
+    results.appendChild(h('p', { class: 'pm-dim' }, 'Loading…'));
+    const r = await safeCall(() => svc.search(st.q.trim(), undefined, st.page), { ok: false });
+    clear(results);
+    if (!r || r.ok === false) { results.appendChild(h('p', { class: 'pm-warnline' }, `Could not load players${r && r.error ? `: ${r.error}` : ''}.`)); return; }
+    const users = r.items || [];
+    st.more = !!r.more;
+    if (!users.length) { results.appendChild(h('p', { class: 'pm-dim' }, st.q.trim() ? 'No matches.' : 'No players yet.')); return; }
+    if (!st.q.trim() && st.page === 0) results.appendChild(h('p', { class: 'pm-dim' }, `All players (newest first) — ${users.length}${st.more ? '+' : ''} shown.`));
     for (const u of users) {
       const ownerLevel = can('owner', level);
+      const banned = u.ban || u.banned;
+      const onlineNow = u.lastSeenAt && (Date.now() - new Date(u.lastSeenAt).getTime()) < 60000;
       results.appendChild(h('div', { class: 'pm-mktrow' },
-        h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || u.name || u.id), h('span', { class: 'pm-dim' }, `${u.role || 'player'}${u.ban || u.banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`)),
+        h('span', { class: `pm-onlinedot ${onlineNow ? 'is-on' : ''}`, title: onlineNow ? 'Online now' : 'Offline' }),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || u.name || u.id),
+          h('span', { class: 'pm-dim' }, `${u.role || 'player'}${banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`),
+          h('span', { class: 'pm-dim' }, `Joined ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'} · Last seen ${u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}`)),
         h('div', { class: 'pm-btnrow pm-wrap' },
-          row((u.ban || u.banned) ? 'Unban' : 'Ban', 'ban', u.id, (u.ban || u.banned) ? 'unban' : 'ban', !(u.ban || u.banned)),
-          row('Adjust coins', 'coins', u.id, 'adjustCoins'),
-          row('Make mod', 'admin', u.id, 'setRole'),
-          ownerLevel ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: !app.online || !app.online.owner, onclick: () => runOwnerReset(u.id, 'coins') }, icon('coins'), ' Reset coins') : null,
-          ownerLevel ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: !app.online || !app.online.owner, onclick: () => runOwnerReset(u.id, 'progress') }, icon('reset'), ' Reset progress') : null,
-          ownerLevel ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: !app.online || !app.online.owner, onclick: () => runOwnerReset(u.id, 'club') }, icon('squad'), ' Reset club') : null)));
+          row(banned ? 'Unban' : 'Ban', 'ban', !banned, () => runAction(banned ? 'unban' : 'ban', banned ? 'Unban' : 'Ban', u.id, 'Admin action')),
+          row('Adjust coins', 'coins', false, async () => { const v = Number(prompt(`Coin delta for ${u.username || u.name} (e.g. -500 or 500):`, '0')); if (!v) return; runAction('adjustCoins', 'Adjust coins', u.id, v, 'admin'); }),
+          row('Make mod', 'admin', false, () => runAction('setRole', 'Make mod', u.id, 'mod')),
+          h('button', { class: 'pm-btn pm-btn--sm pm-btn--accent', onclick: () => openSendCardModal(app, { toUsername: u.username || '' }) }, icon('gifts'), ' Send card'),
+          ownerLevel ? row('Reset coins', 'coins', true, () => runOwnerReset(u.id, 'coins')) : null,
+          ownerLevel ? row('Reset progress', 'reset', true, () => runOwnerReset(u.id, 'progress')) : null,
+          ownerLevel ? row('Reset club', 'squad', true, () => runOwnerReset(u.id, 'club')) : null)));
     }
+    if (st.more) moreWrap.appendChild(h('button', { class: 'pm-btn', onclick: () => { st.page++; draw(); } }, 'Load more'));
   }
   async function runOwnerReset(id, what) {
     if (!(await confirmBox(app.root, `Reset ${what}`, `Reset this player's ${what}?`, 'Reset', true))) return;
     const r = await safeCall(() => app.online.owner.reset(id, what), { ok: false });
     app.toast(r && r.ok !== false ? `Reset ${what} done.` : `Reset failed${r && r.error ? `: ${r.error}` : ''}`, r && r.ok !== false ? 'good' : 'bad');
   }
-  const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search a username…', 'aria-label': 'Search players' });
+  const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search a username, friend code, or leave blank for all players…', 'aria-label': 'Search players' });
   search.addEventListener('input', () => { st.q = search.value; draw(); });
   draw();
   return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), icon('search', 'pm-inline-search-ico'), search, results);
