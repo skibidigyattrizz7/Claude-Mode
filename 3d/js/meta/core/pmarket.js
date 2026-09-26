@@ -5,6 +5,7 @@ import { getPlayer, registerCard, utPrice, niceRound } from './players.js';
 import { removeFromClub, addToClub } from './ut.js';
 
 export const MARKET_TAX = 0.05;
+export const TRANSFER_LIST_MAX = 100;
 
 // FUT-style price bands by overall (special cards get a higher floor/ceiling).
 const BANDS = [[0, 150, 10000], [65, 200, 15000], [75, 350, 50000], [80, 700, 100000], [83, 2000, 250000], [86, 8000, 1000000], [89, 25000, 5000000]];
@@ -64,6 +65,7 @@ export async function listCard(state, online, pid, price) {
   const res = await call(() => online.market.list(cardPayload(pid), v));
   if (!res.ok) return fail(res.error || 'Listing failed');
   removeFromClub(state, pid);
+  state.transferList = (state.transferList || []).filter((x) => x !== pid);
   state.listed = state.listed || [];
   state.listed.push({ listingId: String(res.listingId), pid, price: v, listedAt: Date.now(), status: 'active' });
   return { ok: true, listingId: res.listingId };
@@ -89,14 +91,17 @@ export async function buyListing(state, online, item) {
   const res = await call(() => online.market.buy(item.listingId));
   if (!res.ok) return fail(res.error || 'Purchase failed');
   const pid = acceptCard(state, res.card || item.card);
-  return pid ? { ok: true, pid } : fail('Received an invalid card');
+  // res.coins = the buyer's new server balance (the seller is credited by the server in the same step)
+  return pid ? { ok: true, pid, coins: Number.isFinite(Number(res.coins)) ? Number(res.coins) : null } : fail('Received an invalid card');
 }
 
 export async function searchMarket(online, filters = {}) {
   if (!avail(online)) return fail('Online market unavailable');
   const res = await call(() => online.market.search(filters));
   if (!res.ok) return fail(res.error || 'Search failed');
-  const items = (Array.isArray(res.items) ? res.items : []).filter((it) => it && it.card && it.listingId != null && Number.isFinite(Number(it.price)));
+  const seen = new Set();
+  const items = (Array.isArray(res.items) ? res.items : []).filter((it) => it && it.card && it.listingId != null && Number.isFinite(Number(it.price))
+    && !seen.has(String(it.listingId)) && seen.add(String(it.listingId)));
   return { ok: true, items: items.map((it) => ({ ...it, listingId: String(it.listingId), price: Number(it.price) })) };
 }
 
@@ -112,12 +117,19 @@ export async function fetchMine(state, online) {
   if (!avail(online)) return fail('Online market unavailable');
   const res = await call(() => online.market.mine());
   if (!res.ok) return fail(res.error || 'Could not load listings');
-  const items = (Array.isArray(res.items) ? res.items : []).map((it) => ({ ...it, listingId: String(it.listingId), price: Number(it.price) || 0, status: statusOf(it) }));
-  for (const l of state.listed || []) {
+  const seen = new Set();
+  const items = (Array.isArray(res.items) ? res.items : []).map((it) => ({ ...it, listingId: String(it.listingId), price: Number(it.price) || 0, status: statusOf(it) }))
+    .filter((it) => it.status !== 'sold' && it.status !== 'cancelled' && !seen.has(it.listingId) && seen.add(it.listingId));
+  // The server only returns listings that still hold a card (active / expired). Anything else we still track
+  // locally was sold (the seller was paid instantly inside the buyer's purchase) or removed elsewhere.
+  const sold = [];
+  state.listed = (state.listed || []).filter((l) => {
     const it = items.find((x) => x.listingId === l.listingId);
-    if (it) l.status = it.status;
-  }
-  return { ok: true, items };
+    if (it) { l.status = it.status; return true; }
+    sold.push({ ...l, status: 'sold' });
+    return false;
+  });
+  return { ok: true, items, sold };
 }
 
 /** Claim coins for sold listings. Sold records are dropped locally. */
@@ -127,4 +139,32 @@ export async function claimSales(state, online) {
   if (!res.ok) return fail(res.error || 'Nothing to claim');
   state.listed = (state.listed || []).filter((l) => l.status !== 'sold');
   return { ok: true, coins: Number(res.coins) || 0 };
+}
+
+// ---------- transfer list (FUT "send to transfer list": cards parked for listing later) ----------
+/** Club cards on the transfer list (still owned; they leave the club only when listed). */
+export function transferList(state) {
+  const list = (state.transferList || []).filter((pid, i, a) => a.indexOf(pid) === i && state.club.includes(pid) && !!getPlayer(pid));
+  if (list.length !== (state.transferList || []).length) state.transferList = list;
+  return list;
+}
+export function onTransferList(state, pid) { return (state.transferList || []).includes(pid); }
+/** -> { ok } | { ok:false, error } */
+export function sendToTransferList(state, pid) {
+  if (!state.club.includes(pid) || !getPlayer(pid)) return fail('Card is not in your club');
+  if (!isTradeable(state, pid)) return fail('This card is untradeable');
+  const list = transferList(state);
+  if (list.includes(pid)) return { ok: true, already: true };
+  if (list.length >= TRANSFER_LIST_MAX) return fail(`Transfer list is full (${TRANSFER_LIST_MAX})`);
+  state.transferList = [...list, pid];
+  return { ok: true };
+}
+export function removeFromTransferList(state, pid) {
+  state.transferList = (state.transferList || []).filter((x) => x !== pid);
+  return { ok: true };
+}
+/** List a card straight from the transfer list (same rules as listCard). */
+export function listFromTransferList(state, online, pid, price) {
+  if (!onTransferList(state, pid)) return Promise.resolve(fail('Card is not on your transfer list'));
+  return listCard(state, online, pid, price);
 }

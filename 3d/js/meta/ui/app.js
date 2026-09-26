@@ -146,8 +146,22 @@ export class MetaApp {
     this.wallet.mode = 'online';
     this.wallet.synced = bal;
     if (!(s.admin && s.admin.infinite)) s.coins = bal;
+    // balance changes seen anywhere (seller credited, gifts, rewards, presence) update the top bar at once
+    if (!this.wallet.unsub && typeof this.online.coins.onChange === 'function') {
+      this.wallet.unsub = this.online.coins.onChange((b) => { if (!this.destroyed) this.setOnlineBalance(b); });
+      this.onCleanup(() => { if (this.wallet.unsub) { this.wallet.unsub(); this.wallet.unsub = null; } });
+    }
     this.topRefresh();
     return 'online';
+  }
+
+  /** A fresh server balance (from a buy / gift / reward / presence tick): show it at once when nothing is syncing. */
+  setOnlineBalance(bal) {
+    const w = this.wallet;
+    if (w.mode !== 'online' || !this.ut || !Number.isFinite(bal) || w.inflight > 0) return;
+    w.synced = bal;
+    if (!(this.ut.admin && this.ut.admin.infinite)) this.ut.coins = bal;
+    this.topRefresh();
   }
 
   /** Re-read the server balance (after market buys / claims / online matches). */
@@ -166,8 +180,14 @@ export class MetaApp {
     const s = this.ut;
     if (!s) return false;
     const w = this.wallet;
-    if (s.admin && s.admin.infinite) s.coins = INFINITE_COINS;
-    else if (w.mode === 'online') {
+    if (s.admin && s.admin.infinite) {
+      s.coins = INFINITE_COINS;
+      // online: make the server wallet infinite too, so real-market buys / spends succeed (owner powers needed)
+      if (w.mode === 'online' && !w.infiniteServer && this.online.owner && this.online.admin && typeof this.online.admin.canOwner === 'function' && this.online.admin.canOwner()) {
+        w.infiniteServer = true;
+        safeCall(() => this.online.owner.setInfinite(true), { ok: false }).then((r) => { if (!r || !r.ok) w.infiniteServer = false; });
+      }
+    } else if (w.mode === 'online') {
       const delta = Math.round(s.coins - w.synced);
       if (delta) {
         w.synced = s.coins;

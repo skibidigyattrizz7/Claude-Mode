@@ -85,9 +85,11 @@ function renderSearch(body, app, st, view) {
   const f = st.f;
   const list = h('div', { class: 'pm-mktlist', 'aria-live': 'polite' });
   const run = async () => {
+    const seq = (st.seq = (st.seq || 0) + 1); // only the latest search may draw (no stale / doubled results)
     st.loading = true; drawList();
     const q = { q: f.q.trim(), pos: f.pos, minOvr: f.minOvr || 0, maxPrice: f.maxPrice || 0, rarity: f.rarity, sort: f.sort, page: f.page };
     const r = await PM.searchMarket(app.online, q);
+    if (seq !== st.seq) return;
     st.loading = false;
     if (!isTop(app, view)) return;
     if (!r.ok) { st.results = []; app.toast(r.error || 'Search failed', 'bad'); } else st.results = r.items;
@@ -117,9 +119,10 @@ function renderSearch(body, app, st, view) {
             e.target.disabled = true;
             const r = await PM.buyListing(s, app.online, it);
             if (!r.ok) { app.toast(r.error, 'bad'); e.target.disabled = false; return; }
+            if (Number.isFinite(r.coins) && typeof app.setOnlineBalance === 'function') app.setOnlineBalance(r.coins);
             persist(app);
             await app.refreshOnlineCoins();
-            st.results = st.results.filter((x) => x !== it);
+            st.results = st.results.filter((x) => x.listingId !== it.listingId);
             app.toast(`${p.name} joined your club!`, 'good');
             if (isTop(app, view)) drawList();
           },
@@ -153,10 +156,15 @@ function renderMine(body, app, st, view) {
   add(body, box);
   const load = async () => {
     st.mineLoading = true; draw();
+    const seq = (st.mineSeq = (st.mineSeq || 0) + 1);
     const r = await PM.fetchMine(s, app.online);
+    if (seq !== st.mineSeq) return;
     st.mineLoading = false;
     if (!isTop(app, view)) return;
-    if (!r.ok) { app.toast(r.error, 'bad'); st.mine = []; } else { st.mine = r.items; persist(app); }
+    if (!r.ok) { app.toast(r.error, 'bad'); st.mine = []; } else {
+      st.mine = r.items; persist(app);
+      if (r.sold && r.sold.length) { app.toast(`${r.sold.length} of your listing${r.sold.length > 1 ? 's' : ''} sold — coins already added.`, 'good'); app.refreshOnlineCoins(); }
+    }
     draw();
   };
   function draw() {

@@ -338,7 +338,10 @@ export function buildRealPlayers(helpers) {
   // Balanced placement: best players go to the most famous clubs of their league, but no club grows past
   // REG_CAP players (career squads max out at 32); overflow moves to other leagues' top flights.
   const count = new Map(Object.entries(helpers.clubCounts || {}));
-  const REG_CAP = 34; // V4: raised for the +500 real-player expansion (still comfortably under a 36-player squad)
+  // Kept at 29 (generated 22 + up to 7 regulars): a fictional club's player pool doubles as a Career Mode
+  // starting squad (see career.js userPlayers/makeBid), which is capped at 32 — never raise this without
+  // checking every club stays comfortably below that cap.
+  const REG_CAP = 29;
   const order = REG_ROWS.map((r, i) => [r, i]).sort((a, b) => b[0][9] - a[0][9] || (a[0][0] < b[0][0] ? -1 : 1));
   const placed = new Map();
   const top = CLUBS.filter((c) => c.tier === 1);

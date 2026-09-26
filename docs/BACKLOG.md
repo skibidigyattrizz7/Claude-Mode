@@ -52,10 +52,9 @@ Receiver free-roam; weak passes; AI defending/marking + interceptions for user t
 - Redo ALL UIs: FC-quality, interactive, clean (3D menus, UT, 2D, landing) — after the functional work.
 - More squad/market rules.
 
-## Work order (max 2 agents at once; next starts when a slot frees)
-1. A — accounts/admin/economy (coins, market, refresh, transfer list, super code) [resume]
-2. B — UT content/rules (+ vault, unreleased promos hidden, more promos, rules) [resume]
-3. C — UT UI (squad builder, admin panel, tactics visible, gifts, rewards) [resume]
-4. G — 3D engine (receiver, AI defending, proxy/Chromebook loading, faster stadium) [resume]
-5. F — 2D gameplay + 2D online [resume]
-6. UI redo round (all screens, FC quality) + promo themes for new promos
+## Work order (max 2 agents at once; OWNER PRIORITY: promos + UI first)
+1. B — promos/players/rules (vault, unreleased promos hidden, more promos) [running]
+2. C — ALL UI redo, FC quality (UT, squad, tactics visible, admin panel, menus, 2D, landing) [running]
+3. A — accounts/economy (market, coins, refresh, transfer list, super code) [paused at checkpoint; resume next]
+4. G — 3D engine (receiver, AI defending, proxy/Chromebook loading, faster stadium)
+5. F — 2D gameplay + 2D online
