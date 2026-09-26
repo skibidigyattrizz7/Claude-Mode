@@ -5,7 +5,8 @@ import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
 import { loadUT, saveUT } from '../core/ut.js';
-import { INFINITE_COINS, getAdminLevel, matchAdminLevel, refreshAccountRole } from '../core/admin.js';
+import { INFINITE_COINS } from '../core/admin.js';
+import { getAdminLevel, bindOnline as bindAdminOnline } from '../shared/adminauth.js';
 import { adminButton, adminView } from './adminview.js';
 import { tileIcon } from './icons.js';
 import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
@@ -65,7 +66,11 @@ export class MetaApp {
     document.addEventListener('keydown', this.onKey);
     this.reset(hubView());
     // owner / mod accounts get admin automatically (role read from the online account; never throws)
-    if (this.online) refreshAccountRole(this.online).then((changed) => { if (changed && !this.destroyed) this.refresh(); });
+    bindAdminOnline(this.online);
+    this.accountUnsub = null;
+    if (this.online && this.online.account && typeof this.online.account.onChange === 'function') {
+      try { const un = this.online.account.onChange(() => { if (!this.destroyed) this.refresh(); }); if (typeof un === 'function') this.accountUnsub = un; } catch { /* ignore */ }
+    }
   }
 
   saveSettings() { save(SETTINGS_KEY, this.settings); }
@@ -215,7 +220,8 @@ export class MetaApp {
     const busy = h('div', { class: 'pm-busy', role: 'status' }, h('div', { class: 'pm-spinner' }), h('div', null, `${home.name} vs ${away.name}`), h('small', null, 'Match in progress…'));
     this.root.appendChild(busy);
     try {
-      const res = await this.startMatchFn(home, away, { ...opts, adminLevel: matchAdminLevel() });
+      const lvl = getAdminLevel(); const matchLevel = lvl === 'super' || lvl === 'full' ? 'owner' : lvl === 'mod' ? 'mod' : null;
+      const res = await this.startMatchFn(home, away, { ...opts, adminLevel: matchLevel });
       if (this.destroyed) return null;
       if (!res || res.abandoned) { this.toast('Match abandoned — no result recorded.', 'warn'); return null; }
       return res;
@@ -229,6 +235,7 @@ export class MetaApp {
   destroy() {
     this.destroyed = true;
     this.runCleanup();
+    if (this.accountUnsub) { try { this.accountUnsub(); } catch { /* ignore */ } }
     document.removeEventListener('keydown', this.onKey);
     this.root.remove();
   }
@@ -256,6 +263,7 @@ export class MetaApp {
   }
 
   isAdmin() { return !!getAdminLevel(); }
+  adminLevel() { return getAdminLevel(); }
   /** Open the Admin panel (used after a code is accepted from the main-menu Settings page). */
   showAdmin() { this.reset(hubView()); if (this.ut) { this.push(ensureUTView(this)); } this.push(adminView()); }
   showCareer() { this.reset(hubView()); this.push(careerHomeView()); }

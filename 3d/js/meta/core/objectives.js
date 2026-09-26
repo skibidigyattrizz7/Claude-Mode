@@ -6,7 +6,7 @@ import { getPlayer } from './players.js';
 import { weekNumber } from './calendar.js';
 import { seasonNumber } from './seasons.js';
 import { grantReward, OBJECTIVES } from './ut.js';
-import { PROMO_BY_ID, livePromos, promoObjectives } from './promos.js';
+import { PROMO_BY_ID, releasedLivePromos, promoObjectives } from './promos.js';
 
 export const SECTIONS = [
   ['daily', 'Daily'], ['weekly', 'Weekly'], ['promo', 'Promo'], ['player', 'Player'], ['season', 'Season'], ['milestone', 'Milestones'], ['foundation', 'Foundations'],
@@ -157,7 +157,7 @@ const FOUNDATIONS = [
 ];
 
 /** First week of the current run of a live promo (so progress survives into its second week). */
-function promoRunStart(id, week) { let w = week; while (w > 1 && livePromos(w - 1).includes(id) && week - w < 3) w--; return w; }
+function promoRunStart(id, week) { let w = week; while (w > 1 && releasedLivePromos(w - 1).includes(id) && week - w < 3) w--; return w; }
 
 function pickFrom(pool, n, seed, prefix) {
   const rng = new Rng(seed);
@@ -173,7 +173,7 @@ export function catalog(t = Date.now()) {
   for (const o of pickFrom(WEEKLY_POOL, 4, `weekly-${week}`, 'w')) out.push({ ...o, section: 'weekly', bucket: `w${week}` });
   for (const o of pickFrom(PLAYER_POOL, 5, `pobj-${week}`, 'p')) out.push({ ...o, section: 'player', bucket: `w${week}` });
   // V3: objectives of the live promo campaigns (each campaign runs two weeks; progress is kept per campaign run)
-  for (const id of livePromos(week)) for (const o of promoObjectives(PROMO_BY_ID[id])) out.push({ ...o, section: 'promo', bucket: `pr${id}${promoRunStart(id, week)}` });
+  for (const id of releasedLivePromos(week)) for (const o of promoObjectives(PROMO_BY_ID[id])) out.push({ ...o, section: 'promo', bucket: `pr${id}${promoRunStart(id, week)}` });
   for (const c of CHAINS) c.steps.forEach((st, i) => out.push({ ...st, id: `c-${c.chain}-${i}`, chain: c.chain, chainTitle: c.title, step: i, section: 'player', bucket: 'life', requires: i ? `c-${c.chain}-${i - 1}` : null }));
   for (const o of SEASON_LIST) out.push({ ...o, section: 'season', bucket: `s${season}` });
   for (const o of OBJECTIVES) out.push({ id: o.id, label: o.label, metric: { type: 'stat', key: o.stat }, target: o.target, reward: o.reward, section: 'milestone', bucket: 'legacy' });

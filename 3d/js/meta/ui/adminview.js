@@ -25,6 +25,13 @@ function can(x, level) {
   return r >= 1; // coins, packs, grant — every level, capped for mod/temp
 }
 const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+/** Local-only coin add, capped per grant (owner levels: unlimited; mod/temp: 1,000,000). */
+function addLocalCoinsClamped(state, amount, level) {
+  const cap = (RANK[level] || 0) >= 3 ? Infinity : 1000000;
+  const v = Math.max(0, Math.min(Math.round(Number(amount) || 0), cap));
+  state.coins = Math.max(0, (state.coins || 0) + v);
+  return v;
+}
 
 /** Meta hub entry (replaces the old tiny footer link): opens the Admin Given Codes screen or the panel. */
 export function adminButton(app) {
@@ -129,11 +136,11 @@ export function adminView() {
       const inf = !!(s && s.admin && s.admin.infinite);
       const limited = !can('owner', level);
       const coinsLimited = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
-        h('p', { class: 'pm-dim' }, s ? `Local balance: ${fmtNum(app.wallet.mode === 'online' ? (app.wallet.local || 0) : s.coins)}. Up to ${fmtNum(A.COIN_CAP[level])} coins per grant.` : ''),
+        h('p', { class: 'pm-dim' }, s ? `Local balance: ${fmtNum(app.wallet.mode === 'online' ? (app.wallet.local || 0) : s.coins)}. Up to ${(RANK[level] || 0) >= 3 ? 'unlimited' : fmtNum(1000000)} coins per grant.` : ''),
         h('div', { class: 'pm-btnrow' }, amt,
           h('button', { class: 'pm-btn pm-btn--primary', disabled: !s || inf, onclick: () => {
-            if (app.wallet.mode === 'online') { const tmp = { coins: app.wallet.local || 0 }; const v = A.addLocalCoins(tmp, st.amount, level); app.wallet.local = tmp.coins; done(`Added ${fmtNum(v)} local coins.`); }
-            else { const v = A.addLocalCoins(s, st.amount, level); done(`Added ${fmtNum(v)} coins.`); }
+            if (app.wallet.mode === 'online') { const tmp = { coins: app.wallet.local || 0 }; const v = addLocalCoinsClamped(tmp, st.amount, level); app.wallet.local = tmp.coins; done(`Added ${fmtNum(v)} local coins.`); }
+            else { const v = addLocalCoinsClamped(s, st.amount, level); done(`Added ${fmtNum(v)} coins.`); }
           } }, 'Add coins')));
       const coins = limited ? coinsLimited : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
         h('p', { class: 'pm-dim' }, s ? `Shown balance: ${inf ? '∞' : fmtNum(s.coins)} (${app.coinSourceLabel()}).${app.wallet.mode === 'online' ? ` Local balance: ${fmtNum(app.wallet.local || 0)}.` : ''}` : ''),
@@ -241,11 +248,11 @@ export function adminView() {
         h('div', { class: 'pm-btnrow pm-wrap' },
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !s, onclick: async () => { if (!(await confirmBox(app.root, 'Reset UT', 'Delete the Ultimate Team save on this device?', 'Reset', true))) return; removeKey(UT.UT_KEY); app.ut = null; app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 }; app.toast('UT save reset.', 'good'); app.refresh(); } }, 'Reset UT save'),
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !slots.length, onclick: async () => { if (!(await confirmBox(app.root, 'Reset careers', 'Delete every Career Mode save slot?', 'Delete', true))) return; for (const x of C.SLOTS) C.deleteCareer(x); app.career = null; app.toast('Career saves deleted.', 'good'); app.refresh(); } }, 'Delete all careers'),
-          h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin')));
+          h('button', { class: 'pm-btn', onclick: () => { AA.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin')));
 
       const lock = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('lock'), ' Session'),
-        h('p', { class: 'pm-dim' }, `${LEVEL_NAME[level]}${A.adminInfo().fromAccount ? ' (from your account role)' : ''}.`),
-        h('button', { class: 'pm-btn', onclick: () => { A.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin'));
+        h('p', { class: 'pm-dim' }, `${LEVEL_NAME[level]}${(RANK[AA.adminSessionLevel()] || 0) < (RANK[level] || 0) ? ' (from your account role)' : ''}.`),
+        h('button', { class: 'pm-btn', onclick: () => { AA.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin'));
       const tools = h('div', { class: 'pm-admin-grid', 'data-admin-tab': 'tools' },
         can('coins', level) ? coins : null, can('packs', level) ? packs : null,
         can('owner', level) ? progress : null, can('owner', level) ? career : null, can('grant', level) ? grant : null, can('grant', level) ? tradable : null, can('owner', level) ? reset : lock);
@@ -267,7 +274,7 @@ export function adminView() {
         class: `pm-tab ${k === st.tab ? 'on' : ''}`, role: 'tab', 'aria-selected': String(k === st.tab), 'data-tab': k,
         onclick: () => { st.tab = k; app.refresh(); },
       }, label))) : null;
-      add(main, h('p', { class: 'pm-lead' }, level === 'full' ? 'Owner tools. Changes apply to this device (and the online balance where stated).' : `${LEVEL_NAME[level]}: limited tools. Changes apply to this device only.`), needUT,
+      add(main, h('p', { class: 'pm-lead' }, can('owner', level) ? 'Owner tools. Changes apply to this device (and the online balance where stated).' : `${LEVEL_NAME[level]}: limited tools. Changes apply to this device only.`), needUT,
         tabs, tools, ...extraTabs.map(([k]) => panes[k]));
     },
   };

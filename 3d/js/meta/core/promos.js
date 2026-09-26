@@ -6,45 +6,64 @@ import { Rng, clamp, hashStr } from './rng.js';
 import { weekNumber } from './calendar.js';
 import { genPhysique } from './physique.js';
 
-// colours: [dark, main, light/ink]
+// colours: [dark, main, light/ink]. `theme` is a stable id for the UI agent's pack-opening background/rig
+// per campaign (see docs/META_API.md). `releaseWeek` (absolute calendar week, from calendar.js) is the first
+// week a campaign may ever appear anywhere — omitted/1 means "already released" (the original 7 campaigns).
 export const PROMOS = [
-  { id: 'toty', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#06123a', '#2f6bff', '#dfe9ff'], range: [97, 99], price: 180000,
+  { id: 'toty', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#06123a', '#2f6bff', '#dfe9ff'], range: [97, 99], price: 180000, theme: 'toty',
     desc: 'The best XI of the year: real stars boosted to 97–99.' },
-  { id: 'tots', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#032b3a', '#19c3e6', '#d9fbff'], range: [93, 97], price: 120000,
+  { id: 'tots', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#032b3a', '#19c3e6', '#d9fbff'], range: [93, 97], price: 120000, theme: 'tots',
     desc: 'Season standouts across every league, rated 93–97.' },
-  { id: 'futurestars', name: 'Future Stars', short: 'FUTURE STARS', tag: 'FUTURE STARS', colors: ['#1c0636', '#b44dff', '#ffd9fb'], range: [83, 95], price: 70000,
+  { id: 'futurestars', name: 'Future Stars', short: 'FUTURE STARS', tag: 'FUTURE STARS', colors: ['#1c0636', '#b44dff', '#ffd9fb'], range: [83, 95], price: 70000, theme: 'futurestars',
     desc: 'The brightest young talents, boosted +5 to +8.' },
-  { id: 'flashback', name: 'Heroes Flashback', short: 'FLASHBACK', tag: 'FLASHBACK', colors: ['#2a1405', '#e0892b', '#ffe8c7'], range: [90, 99], price: 160000,
+  { id: 'flashback', name: 'Heroes Flashback', short: 'FLASHBACK', tag: 'FLASHBACK', colors: ['#2a1405', '#e0892b', '#ffe8c7'], range: [90, 99], price: 160000, theme: 'flashback',
     desc: 'Legends relive their most famous season.' },
-  { id: 'birthday', name: 'Ultimate Birthday', short: 'BIRTHDAY', tag: 'ULTIMATE BIRTHDAY', colors: ['#3a0620', '#ff4f9a', '#ffe0ef'], range: [84, 97], price: 90000,
+  { id: 'birthday', name: 'Ultimate Birthday', short: 'BIRTHDAY', tag: 'ULTIMATE BIRTHDAY', colors: ['#3a0620', '#ff4f9a', '#ffe0ef'], range: [84, 97], price: 90000, theme: 'birthday',
     desc: 'Party cards: +3 to +5 overall, +1 skill moves and +1 weak foot.' },
-  { id: 'rttk', name: 'Road to the Knockouts', short: 'RTTK', tag: 'ROAD TO THE KNOCKOUTS', colors: ['#021a12', '#18d17b', '#d7ffe9'], range: [83, 95], price: 80000,
+  { id: 'rttk', name: 'Road to the Knockouts', short: 'RTTK', tag: 'ROAD TO THE KNOCKOUTS', colors: ['#021a12', '#18d17b', '#d7ffe9'], range: [83, 95], price: 80000, theme: 'rttk',
     desc: 'Upgradable cards: +1 overall for every knockout round reached (max +4).' },
-  { id: 'moments', name: 'Moments', short: 'MOMENTS', tag: 'MOMENTS', colors: ['#1d1d1d', '#f2f2f2', '#ffffff'], range: [86, 96], price: 110000,
+  { id: 'moments', name: 'Moments', short: 'MOMENTS', tag: 'MOMENTS', colors: ['#1d1d1d', '#f2f2f2', '#ffffff'], range: [86, 96], price: 110000, theme: 'moments',
     desc: 'Iconic moments turned into boosted cards.' },
+  // V4 (owner request Sep 26): new campaigns, each with a genuine future release date and its own pack theme.
+  { id: 'showdown', name: 'Rivals Showdown', short: 'SHOWDOWN', tag: 'RIVALS SHOWDOWN', colors: ['#3a0a0a', '#ff3b3b', '#ffd9d9'], range: [88, 97], price: 130000, theme: 'showdown',
+    releaseWeek: 41, desc: 'Head-to-head rivals get matching boosted cards, +4 to +7.' },
+  { id: 'oty', name: "One to Watch", short: 'OTW', tag: 'ONE TO WATCH', colors: ['#062017', '#12c48b', '#daffee'], range: [82, 92], price: 60000, theme: 'oty',
+    releaseWeek: 44, desc: 'A dynamic card that grows with the real player’s current form.' },
+  { id: 'centurions', name: 'Centurions', short: 'CENT', tag: 'CENTURIONS', colors: ['#241100', '#e8a33d', '#fff2da'], range: [91, 98], price: 150000, theme: 'centurions',
+    releaseWeek: 47, desc: 'Career milestone cards for real players closing in on a big number.' },
 ];
 export const PROMO_BY_ID = Object.fromEntries(PROMOS.map((p) => [p.id, p]));
 export const PROMO_IDS = PROMOS.map((p) => p.id);
 export const isPromoSpecial = (sp) => !!PROMO_BY_ID[sp];
 export const promoOf = (p) => (p && PROMO_BY_ID[p.special]) || null;
+/** Has this campaign's release week arrived? (true for the original campaigns, which have none set). */
+export function isPromoReleased(id, week = weekNumber()) {
+  const pr = PROMO_BY_ID[id];
+  return !!pr && week >= (pr.releaseWeek || 1);
+}
+/** True when a card is safe to show anywhere: not a promo special, or its campaign has released. */
+export function isCardReleased(p, week = weekNumber()) { return !isPromoSpecial(p && p.special) || isPromoReleased(p.special, week); }
 
 // ---------- calendar ----------
-/** The headline promo of a week: a seeded shuffle of all campaigns per 7-week cycle. */
+/** The headline promo of a week: a seeded shuffle of all campaigns per cycle (cycle length = campaign count). */
 export function promoOfWeek(week = weekNumber()) {
   const cycle = Math.floor((week - 1) / PROMOS.length);
   const order = new Rng(`promo-cycle-${cycle}`).shuffle(PROMO_IDS.slice());
   return order[(week - 1) % PROMOS.length];
 }
-/** Promos live this week: the new headline campaign plus last week's (each runs two weeks). */
+/** Promos live this week: the new headline campaign plus last week's (each runs two weeks). Does not itself
+ * account for `releaseWeek` — callers that must hide an unreleased campaign use `isPromoLive`/`isPromoReleased`. */
 export function livePromos(week = weekNumber()) {
   const a = promoOfWeek(week), b = promoOfWeek(Math.max(1, week - 1));
   return a === b ? [a] : [a, b];
 }
+/** Live this week AND released — what stores/rewards/objectives should actually offer. */
+export function releasedLivePromos(week = weekNumber()) { return livePromos(week).filter((id) => isPromoReleased(id, week)); }
 /** Upcoming calendar: [{ week, promo }] for this and the next n-1 weeks. */
 export function promoSchedule(week = weekNumber(), n = 6) {
   return Array.from({ length: n }, (_, i) => ({ week: week + i, promo: promoOfWeek(week + i) }));
 }
-export const isPromoLive = (id, week = weekNumber()) => livePromos(week).includes(id);
+export const isPromoLive = (id, week = weekNumber()) => livePromos(week).includes(id) && isPromoReleased(id, week);
 
 // ---------- boosts ----------
 /** In-Form / TOTW boost scaled to the base card: +3 (low 70s) … +8 (90+). */

@@ -25,12 +25,12 @@ export function sendLocalGift(gift) {
   return list[0];
 }
 
-/** Normalised gift list: online first (when available), local always appended. */
+/** Normalised gift list: `online.gifts.inbox()` first (when available), local device queue always appended. */
 async function listGifts(app) {
   let remote = [];
-  if (app.online && app.online.gifts && typeof app.online.gifts.list === 'function' && (await app.onlineAvailable())) {
-    const r = await safeCall(() => app.online.gifts.list());
-    if (r && r.ok !== false && Array.isArray(r.items || r)) remote = (r.items || r).map((g) => ({ ...g, remote: true }));
+  if (app.online && app.online.gifts && typeof app.online.gifts.inbox === 'function' && (await app.onlineAvailable())) {
+    const r = await safeCall(() => app.online.gifts.inbox());
+    if (r && r.ok !== false && Array.isArray(r.items)) remote = r.items.map((g) => ({ ...g, kind: g.kind || (g.coins ? 'coins' : g.packId ? 'pack' : g.card ? 'player' : 'coins'), amount: g.coins, pid: g.card && g.card.id, remote: true }));
   }
   return [...remote, ...readLocal()];
 }
@@ -46,19 +46,22 @@ function rewardLabel(g) {
 async function claimGift(app, g) {
   const s = app.ut;
   if (!s) { app.toast('Create a Ultimate Team club first.', 'warn'); return; }
+  let kind = g.kind, amount = g.amount, packId = g.packId, pid = g.pid, count = g.count || 1;
   if (g.remote && app.online && app.online.gifts && typeof app.online.gifts.claim === 'function') {
     const r = await safeCall(() => app.online.gifts.claim(g.id), { ok: false });
     if (!r || r.ok === false) { app.toast(r && r.error ? r.error : 'Claim failed', 'bad'); return; }
+    kind = r.kind || kind; amount = r.coins ?? amount; packId = r.packId || packId; pid = r.card && r.card.id; count = r.count || count;
+    if (kind === 'coins') { s.coins = Math.max(0, s.coins + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); app.refresh(); return; }
   } else {
     const list = readLocal();
     const i = list.findIndex((x) => x.id === g.id);
     if (i >= 0) list.splice(i, 1);
     writeLocal(list);
   }
-  if (g.kind === 'coins') { s.coins = Math.max(0, s.coins + (g.amount || 0)); app.saveUT(); app.toast(`+${fmtNum(g.amount || 0)} coins claimed.`, 'good'); }
-  else if (g.kind === 'pack') { app.saveUT(); openPackFlow(app, g.packId); }
-  else if (g.kind === 'player') {
-    const p = getPlayer(g.pid);
+  if (kind === 'coins') { s.coins = Math.max(0, s.coins + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); }
+  else if (kind === 'pack') { app.saveUT(); for (let i = 1; i < count; i++) s.packs.push({ type: packId, from: 'Gift' }); openPackFlow(app, packId); }
+  else if (kind === 'player') {
+    const p = getPlayer(pid);
     if (p && !s.club.includes(p.id)) { UT.addToClub(s, p.id); app.saveUT(); app.toast(`${p.name} added to your club!`, 'good'); }
     else { s.coins += 500; app.saveUT(); app.toast('Already owned — converted to 500 coins.', 'good'); }
   }
@@ -70,7 +73,7 @@ export function giftsButton(app) {
   const btn = h('button', { class: 'pm-giftsbtn', 'aria-label': 'Gifts inbox', title: 'Gifts inbox', onclick: () => app.push(giftsView()) }, icon('gifts'));
   const n = readLocal().length;
   if (n) btn.appendChild(h('span', { class: 'pm-badge pm-badge--dot' }, String(n)));
-  if (app.online && app.online.gifts && typeof app.online.gifts.list === 'function') {
+  if (app.online && app.online.gifts && typeof app.online.gifts.inbox === 'function') {
     listGifts(app).then((all) => { if (!app.destroyed && all.length !== n) app.refresh(); }).catch(() => {});
   }
   return btn;

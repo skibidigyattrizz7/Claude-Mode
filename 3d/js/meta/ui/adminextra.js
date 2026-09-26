@@ -35,7 +35,7 @@ function cropToCard(file) {
 
 export function cardCreatorPanel(app, { level }) {
   const st = { name: '', pos: 'ST', nat: 'ENG', tier: 'gold', photo: null, stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
-  const isSuper = level === 'full';
+  const isSuper = level === 'super';
   if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to the owner (super) level.'));
   const preview = h('div', { class: 'pm-cc-preview' });
   const drawPreview = () => {

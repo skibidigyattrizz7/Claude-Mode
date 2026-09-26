@@ -9,7 +9,7 @@ import { load, save } from './storage.js';
 import { ensureTacticSets, activeTactics } from './tactics.js';
 import { totwCards } from './totw.js';
 import { weekNumber } from './calendar.js';
-import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive } from './promos.js';
+import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
 
 export const UT_KEY = 'ut';
 
@@ -572,7 +572,7 @@ export function battleOpponents(week) {
   DIFFICULTIES.forEach((diff) => {
     for (let k = 0; k < 3; k++) {
       const target = DIFF_TARGET[diff] + rng.int(-2, 2) + k;
-      const pool = db.all.filter((p) => Math.abs(p.ovr - target) <= 4 && (!p.special || diff === 'legendary'));
+      const pool = db.all.filter((p) => Math.abs(p.ovr - target) <= 4 && (!p.special || diff === 'legendary') && isCardReleased(p));
       const picked = [];
       const want = { GK: 2, DEF: 7, MID: 7, ATT: 5 };
       const grp = (p) => (p.pos === 'GK' ? 'GK' : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(p.pos) ? 'DEF' : ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.pos) ? 'MID' : 'ATT');
@@ -637,8 +637,9 @@ export function marketSearch({ pos = '', minOvr = 0, maxOvr = 99, tier = '', nat
     && (!pos || p.pos === pos) && (!nat || p.nat === nat) && (!league || p.league === league)
     && (!q || p.name.toLowerCase().includes(q) || p.last.toLowerCase().includes(q))
     && (!tier || (tier === 'special' ? !!p.special : tier === 'lotg' ? p.special === 'lotg' : tier === 'rare' ? p.rare && !p.special : p.tier === tier && !p.special)));
-  // specials rarely listed
-  pool = pool.filter((p) => p.special !== 'objective' && (!p.special || (tier && tier === p.special) || rng.chance(p.special === 'lotg' ? 0.2 : 0.35)));
+  // specials rarely listed; a promo card never appears before its campaign has actually released
+  pool = pool.filter((p) => p.special !== 'objective' && isCardReleased(p)
+    && (!p.special || (tier && tier === p.special) || rng.chance(p.special === 'lotg' ? 0.2 : 0.35)));
   rng.shuffle(pool);
   const out = [];
   for (const p of pool) {
