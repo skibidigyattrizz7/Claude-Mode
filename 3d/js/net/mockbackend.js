@@ -56,8 +56,10 @@ export function memoryStore() {
  * @param {{ now?:()=>number, rand?:()=>number, latencyMs?:number, down?:boolean }} opts
  */
 export function createMockBackend(store, { now = () => Date.now(), rand = Math.random, latencyMs = 0, down = false } = {}) {
-  const extraDefaults = () => ({ adminHashSuper: null, config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {} });
-  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: null, adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand), ...extraDefaults() });
+  // Dev-only default codes so ?mockOnline=1 has a working admin without any setup (docs/ONLINE_API.md: "mock
+  // admin codes are mock-full / mock-super"). Real deployments set their own via setAdminCode(s) (server-side).
+  const extraDefaults = () => ({ adminHashSuper: fnv('admin:mock-super'), config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {} });
+  const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: fnv('admin:mock-full'), adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand), ...extraDefaults() });
   const load = () => {
     const d = store.load();
     if (!d || !d.profiles) return fresh();

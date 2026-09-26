@@ -93,18 +93,26 @@ export function packAtLeastOne(pack, cat) {
   return 1 - none;
 }
 
+// B5: any non-promo pack's higher gold slots have a small chance of upgrading to a released, currently-live
+// promo card instead (packs "aren't repetitive"). Dedicated promo packs (`pack.promo`) are unaffected — their
+// own guaranteed slot already handles that.
+const PROMO_DROP_CATS = new Set(['goldRare', 'gold83', 'gold86', 'lotg']);
+const PROMO_DROP_CHANCE = 0.015;
 export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   const pack = PACK_BY_ID[packId];
   const pools = categoryPools();
   if (pools._week !== weekNumber()) { pools.totw = totwCards(weekNumber()); pools._week = weekNumber(); }
+  const promoDrop = pack.promo ? [] : releasedLivePromos().flatMap((id) => pools[`promo_${id}`] || []);
   const items = [];
   const seen = new Set();
   for (const slot of pack.slots) {
     for (let i = 0; i < slot.n; i++) {
-      const cat = rng.weighted(Object.entries(slot.odds));
-      const pool = pools[cat].length ? pools[cat] : pools.gold;
+      let cat = rng.weighted(Object.entries(slot.odds));
+      let pool = pools[cat] && pools[cat].length ? pools[cat] : pools.gold;
+      if (promoDrop.length && PROMO_DROP_CATS.has(cat) && rng.chance(PROMO_DROP_CHANCE)) pool = promoDrop;
       let p = rng.pick(pool);
       for (let t = 0; t < 4 && seen.has(p.id); t++) p = rng.pick(pool);
+      if (pool === promoDrop) cat = `promo_${p.special}`;
       items.push({ pid: p.id, cat, dup: ownedSet.has(p.id) || seen.has(p.id) });
       seen.add(p.id);
     }
@@ -157,7 +165,7 @@ export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primar
   ];
   const state = {
     v: UT_VERSION, listed: [], untradeable: [], foreign: {}, admin: {}, clubName, short: short.slice(0, 3).toUpperCase(), kit: { primary, secondary },
-    coins: 10000, club: [...new Set(club)], squad: defaultSquad(),
+    coins: 10000, club: [...new Set(club)], squad: defaultSquad(), vault: [], transferList: [],
     packs: [{ type: 'premium', from: 'Welcome gift' }, { type: 'gold', from: 'Welcome gift' }],
     sbc: {}, obj: {},
     stats: { matches: 0, wins: 0, draws: 0, losses: 0, goals: 0, packsOpened: 0, sbcDone: 0 },
@@ -185,6 +193,10 @@ export function migrateUT(state) {
   for (const card of Object.values(state.evolved)) registerLocalCard(card);
   ensureTacticSets(state);
   for (const card of Object.values(state.foreign)) registerCard(card);
+  // V4: SBC storage vault (untradeable duplicates; duplicates allowed, capped) and the transfer list
+  // (cards pulled out of the club, not yet listed for sale — see sendToVault/sendToTransferList).
+  state.vault = (Array.isArray(state.vault) ? state.vault : []).filter((id) => getPlayer(id)).slice(0, VAULT_CAP);
+  state.transferList = (Array.isArray(state.transferList) ? state.transferList : []).filter((id) => getPlayer(id));
   state.club = state.club.filter((id) => getPlayer(id));
   if (!state.squad || !FORMATIONS[state.squad.formation]) state.squad = defaultSquad();
   const valid = (id) => (id && state.club.includes(id) ? id : null);
