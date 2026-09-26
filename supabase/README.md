@@ -1,6 +1,6 @@
 # Pitchside 3D — online backend (Supabase)
 
-Idempotent migrations, applied in order: `20260925140338_pitchside_001.sql` (live), `20260926000000_pitchside_002_accounts.sql`, `20260926000100_pitchside_003_owner_social.sql`.
+Idempotent migrations, applied in order: `20260925140338_pitchside_001.sql` (live), `20260926000000_pitchside_002_accounts.sql`, `20260926000100_pitchside_003_owner_social.sql`, `20260926120000_pitchside_004_sync_reset.sql`.
 All objects are prefixed `pitchside_`. No Supabase Auth is used.
 
 ## What it contains

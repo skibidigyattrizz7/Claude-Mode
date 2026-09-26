@@ -67,7 +67,8 @@ Read at startup and every 3 min (also on every presence tick when `configVersion
   - `packs`: `{ [packId]: { enabled?:boolean, price?:int 0..10 000 000 } }`
   - `rewards`: `{ multiplier: 0..10, packChance: 0..1 }` (server uses both for match rewards)
   - `market`: `{ tax: 0..0.5 }` (server uses it on every sale)
-  - `features`: `{ [name]: boolean }` (free-form switches)
+  - `features`: `{ [name]: boolean | number }` (e.g. `promosEnabled`, `packsEnabled`, `packPriceMult`, `resetEpoch`)
+- `set({ promosOn, packsInShop, priceMult })` — compat for the admin toggles: merges into `features` (owner powers).
 
 ## Coins — `online.coins` (one model)
 When logged in (account or guest device profile) **and** online, the server balance is the UT balance; every
@@ -115,4 +116,17 @@ the card can be taken back with `cancel`). `claimSales()` stays for old unclaime
 
 ## Status / notes
 - Meta `getAdminLevel()` reports a SUPER session as `'full'` (UI compat); use `isSuperAdmin()` / `adminInfo().super` or shared `getAdminLevel()`.
-- `accountui.js` (gate, Settings → Account pane, broadcast banner, online counter) and `social.js` exist but are **not yet hooked into main.js**.
+- main.js wires everything: account gate (first visit; `?gate=0` skips, webdriver needs `?gate=1`), Settings → Account tab, menu chip + online counter, broadcast banner, gift toast, presence (every 25 s) + config (every 60 s) for every client, cloud save of the UT club, `setConfigProvider` for meta/core/config.js and the owner-toggle cache (meta/ui/config.js) fed from the server.
+
+## Migration 004 — reset everyone, player list, cloud save
+- `online.owner.resetEveryone()` (alias `resetAllEconomy`) → `{ ok, epoch, affected }`: new `features.resetEpoch`; every profile that
+  existed before it is set to 5 000 coins / infinite off **on the server**. Profiles created later are never reset.
+- `online.presence.last.resetDue` — epoch still to apply locally for this profile (else null); after applying call
+  `online.account.ackReset(epoch)` (meta app.js does this; at most once per profile per reset).
+- `online.owner.listPlayers({ query, limit, offset })` → `{ ok, total, items:[{ id, username, name, clubName, coins, role, banned,
+  friendCode, createdAt, lastSeenAt, online }] }` — owner/mod; empty query = everyone (newest first); matches name, username, club, friend code.
+  Moderation search (`online.moderation.search`) also matches names/usernames.
+- `online.cloud.get()` / `put(data, rev)` — UT save per account (≤ 1.5 MB). `net/cloudsave.js` syncs `pitchside.ut` automatically:
+  sign up / first login uploads, login on another device downloads (old local club kept in `pitchside.ut.backup`).
+- Dev: `node 3d/js/net/tests/mockserver.mjs 8202` + `/3d/index.html?mockServer=http://127.0.0.1:8202&presenceMs=1500` = one shared
+  mock backend for several browser contexts (mock codes `mock-full` / `mock-super`).
