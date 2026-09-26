@@ -6,7 +6,7 @@ import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
 import { loadUT, saveUT } from '../core/ut.js';
 import { INFINITE_COINS } from '../core/admin.js';
-import { getAdminLevel, bindOnline as bindAdminOnline } from '../../shared/adminauth.js';
+import { getAdminLevel, bindOnline as bindAdminOnline, clearAdminSession } from '../../shared/adminauth.js';
 import { adminButton, adminView } from './adminview.js';
 import { tileIcon } from './icons.js';
 import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';

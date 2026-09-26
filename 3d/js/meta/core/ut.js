@@ -481,10 +481,10 @@ export function submitSbc(state, sbcId, formation, slotIds) {
   const sbc = SBC_BY_ID[sbcId];
   if (!sbc || !sbcAvailable(state, sbc)) throw new Error('SBC not available');
   const slots = slotIds.map((id) => (id ? getPlayer(id) : null));
-  if (slotIds.some((id) => id && !state.club.includes(id))) throw new Error('Player not in club');
+  if (slotIds.some((id) => id && !isOwnedAnywhere(state, id))) throw new Error('Player not in club or vault');
   const ev = evaluateSbc(sbc, formation, slots);
   if (!ev.ok) throw new Error('Requirements not met');
-  for (const id of slotIds) if (id) removeFromClub(state, id);
+  for (const id of slotIds) if (id) spendOwnedCard(state, id);
   state.sbc[sbcId] = (state.sbc[sbcId] || 0) + 1;
   state.stats.sbcDone++;
   return grantReward(state, sbc.reward, `SBC: ${sbc.name}`);
@@ -552,7 +552,7 @@ export function sbcAutoFill(state, sbc, formation) {
   const maxTier = sbc.reqs.find((r) => r.t === 'maxTier');
   const minTier = sbc.reqs.find((r) => r.t === 'minTier');
   const tierOk = (p) => (!maxTier || (!p.special && TIER_RANK[p.tier] <= TIER_RANK[maxTier.v])) && (!minTier || TIER_RANK[p.tier] >= TIER_RANK[minTier.tier]);
-  const all = clubPlayers(state).filter(tierOk);
+  const all = clubPlayers(state).concat(vaultPlayers(state)).filter(tierOk);
   const reserves = all.filter((p) => !inSquad.has(p.id));
   const needsQuality = sbc.reqs.some((r) => ['rating', 'chem', 'sameLeague', 'sameNation', 'sameClub', 'rare', 'nations'].includes(r.t));
   let best = null;
