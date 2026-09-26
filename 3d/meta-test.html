@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pitchside 3D — meta dev harness</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; background: #05070d; min-height: 100%; }
+  #dev { position: fixed; right: 8px; bottom: 8px; z-index: 5000; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 60vw; font: 12px system-ui; opacity: .6; }
+  #dev button { padding: 4px 8px; border-radius: 6px; border: 1px solid #334; background: #111a2c; color: #cde; cursor: pointer; }
+  #dev:hover { opacity: 1; }
+  @media (max-width: 600px) { #dev { display: none; } }
+</style>
+</head>
+<body>
+<div id="meta"></div>
+<div id="dev">
+  <button id="sell">Mock: a buyer buys my oldest listing</button>
+  <button id="nt">Log national teams</button>
+  <button id="ut">Log UT team</button>
+  <button id="reset">Reset saves</button>
+</div>
+<script type="module">
+  // Dev harness only. URL params:
+  //   ?view=ut|career      open a mode directly
+  //   ?offline=1           mock backend unreachable (Player Market / admin show their offline states)
+  //   ?noonline=1          mount without `online` / `startOnlineMatch` at all
+  //   ?admincode=XYZ       the ONLY code the mock admin.verify() accepts (nothing is hard-coded here)
+  //   ?noopp=1             mock matchmaking finds no opponent (Rivals offers an AI Rival)
+  import { mountMeta, getNationalTeams, getSavedUltimateTeam } from './js/meta/index.js';
+  import { getDB } from './js/meta/core/players.js';
+
+  const q = new URLSearchParams(location.search);
+  const offline = q.get('offline') === '1';
+  const adminCode = q.get('admincode');
+
+  // ---- stub match engine: resolves a fake (but contract-shaped) result after 500 ms ----
+  function fakeResult(home, away) {
+    const hg = Math.floor(Math.random() * 4), ag = Math.floor(Math.random() * 3);
+    const pick = (t) => { const outfield = t.players.slice(1); return outfield[Math.floor(Math.random() * outfield.length)]; };
+    const scorers = [];
+    for (let i = 0; i < hg; i++) scorers.push({ playerId: pick(home).id, team: 'home', minute: 1 + Math.floor(Math.random() * 90) });
+    for (let i = 0; i < ag; i++) scorers.push({ playerId: pick(away).id, team: 'away', minute: 1 + Math.floor(Math.random() * 90) });
+    scorers.sort((a, b) => a.minute - b.minute);
+    const playerRatings = {};
+    for (const p of home.players.concat(away.players)) playerRatings[p.id] = Math.round((5.5 + Math.random() * 3.5) * 10) / 10;
+    const ph = 40 + Math.floor(Math.random() * 20);
+    return { homeGoals: hg, awayGoals: ag, scorers,
+      stats: { possession: [ph, 100 - ph], shots: [hg + 5, ag + 4], shotsOnTarget: [hg + 2, ag + 1], passes: [ph * 8, (100 - ph) * 8] },
+      playerRatings };
+  }
+  function stubStartMatch(home, away, opts) {
+    console.log('[stub] startMatch', home.name, 'vs', away.name, opts);
+    return new Promise((resolve) => setTimeout(() => {
+      const r = fakeResult(home, away);
+      if (opts && opts.knockout && r.homeGoals === r.awayGoals) r.pens = [5, 4];
+      resolve(r);
+    }, 500));
+  }
+
+  // ---- mock online services (contract: docs/3D_CONTRACT.md "Online services") ----
+  const wait = (ms = 120) => new Promise((r) => setTimeout(r, ms));
+  const db = getDB();
+  const mock = {
+    balance: 50000, rating: 1180, division: 7, seq: 1, rvPoints: 4, rvWins: 2, rvClaimed: false,
+    listings: [], // { listingId, card, price, seller, listedAt, mine, status, buyer }
+  };
+  const seedIds = ['rs_mbappe', 'rs_salah', 'ic_maldini', 'rs_cavani'];
+  const golds = db.players.filter((p) => !p.real && p.ovr >= 76 && p.ovr <= 84).slice(0, 8).map((p) => p.id);
+  const sellers = ['NorthStand99', 'KeeperKing', 'TikiTakaTom', 'VolleyVera', 'Row Z Rovers'];
+  [...seedIds, ...golds].forEach((id, i) => {
+    const card = JSON.parse(JSON.stringify(db.byId.get(id)));
+    const price = Math.round(((card.special === 'icon' ? 900000 : card.special === 'star' ? 90000 : 2500 + (card.ovr - 75) * 1500) * (0.9 + (i % 3) * 0.1)) / 100) * 100;
+    mock.listings.push({ listingId: `L${mock.seq++}`, card, price, seller: sellers[i % sellers.length], listedAt: Date.now() - (i + 1) * 7 * 60000, mine: false, status: 'active' });
+  });
+  const off = { ok: false, error: 'offline' };
+  const online = {
+    async available() { await wait(60); return !offline; },
+    async profile() { await wait(); return offline ? off : { ok: true, id: 'mock-1', name: 'Harness Manager', coins: mock.balance, rating: mock.rating, division: mock.division }; },
+    async setName() { return { ok: !offline }; },
+    market: {
+      async list(card, price) {
+        await wait(); if (offline) return off;
+        const l = { listingId: `L${mock.seq++}`, card: JSON.parse(JSON.stringify(card)), price, seller: 'You', listedAt: Date.now(), mine: true, status: 'active' };
+        mock.listings.push(l); return { ok: true, listingId: l.listingId };
+      },
+      async search({ q = '', pos = '', minOvr = 0, maxPrice = 0, rarity = '', sort = 'price_asc', page = 0 } = {}) {
+        await wait(); if (offline) return off;
+        const qq = q.toLowerCase();
+        let items = mock.listings.filter((l) => l.status === 'active' && (!qq || l.card.name.toLowerCase().includes(qq)) && (!pos || l.card.pos === pos)
+          && l.card.ovr >= (minOvr || 0) && (!maxPrice || l.price <= maxPrice)
+          && (!rarity || (rarity === 'special' ? !!l.card.special : ['icon', 'star'].includes(rarity) ? l.card.special === rarity : rarity === 'rare' ? l.card.rare : l.card.tier === rarity)));
+        const cmp = { price_asc: (a, b) => a.price - b.price, price_desc: (a, b) => b.price - a.price, ovr_desc: (a, b) => b.card.ovr - a.card.ovr, newest: (a, b) => b.listedAt - a.listedAt }[sort];
+        if (cmp) items.sort(cmp);
+        items = items.slice(page * 20, page * 20 + 20);
+        return { ok: true, items: items.map(({ listingId, card, price, seller, listedAt }) => ({ listingId, card, price, seller, listedAt })) };
+      },
+      async buy(listingId) {
+        await wait(); if (offline) return off;
+        const l = mock.listings.find((x) => x.listingId === listingId && x.status === 'active');
+        if (!l) return { ok: false, error: 'Listing no longer available' };
+        if (l.mine) return { ok: false, error: 'Cannot buy your own listing' };
+        if (mock.balance < l.price) return { ok: false, error: 'Not enough coins' };
+        mock.balance -= l.price; l.status = 'bought';
+        return { ok: true, card: l.card };
+      },
+      async mine() {
+        await wait(); if (offline) return off;
+        return { ok: true, items: mock.listings.filter((l) => l.mine && l.status !== 'cancelled' && l.status !== 'claimed').map((l) => ({ listingId: l.listingId, card: l.card, price: l.price, status: l.status, listedAt: l.listedAt, buyer: l.buyer })) };
+      },
+      async cancel(listingId) {
+        await wait(); if (offline) return off;
+        const l = mock.listings.find((x) => x.listingId === listingId && x.mine && (x.status === 'active' || x.status === 'expired'));
+        if (!l) return { ok: false, error: 'Listing not found' };
+        l.status = 'cancelled'; return { ok: true, card: l.card };
+      },
+      async claimSales() {
+        await wait(); if (offline) return off;
+        let coins = 0;
+        for (const l of mock.listings) if (l.mine && l.status === 'sold') { coins += Math.floor(l.price * 0.95); l.status = 'claimed'; }
+        mock.balance += coins; return { ok: true, coins };
+      },
+    },
+    coins: {
+      async get() { await wait(40); return offline ? off : { ok: true, coins: mock.balance }; },
+      async add(delta, reason) {
+        await wait(40); if (offline) return off;
+        if (mock.balance + delta < 0) return { ok: false, error: 'Insufficient balance' };
+        mock.balance += delta; console.log('[mock] coins.add', delta, reason, '->', mock.balance); return { ok: true, coins: mock.balance };
+      },
+    },
+    matchmaking: { async quickSearch() { return off; }, cancelSearch() { console.log('[mock] cancelSearch'); } },
+    rivals: {
+      async status() { await wait(); if (offline) return off; return { ok: true, division: mock.division, points: mock.rvPoints, stageTargets: [3, 6, 9], weeklyWins: mock.rvWins, rewardsReady: mock.rvWins >= 3 && !mock.rvClaimed }; },
+      async claimWeekly() { await wait(); if (offline) return off; if (mock.rvWins < 3 || mock.rvClaimed) return { ok: false, error: 'Not ready' }; mock.rvClaimed = true; mock.balance += 5000; return { ok: true, coins: 5000, packs: ['gold', 'premium'] }; },
+    },
+    async reportResult() { return { ok: true, coinsAwarded: 0, rating: mock.rating }; },
+    admin: {
+      async verify(code) { await wait(); if (offline) return false; return !!adminCode && code === adminCode; },
+    },
+  };
+
+  async function mockStartOnlineMatch({ mode, team }) {
+    console.log('[mock] startOnlineMatch', mode, team && team.name);
+    await wait(600);
+    if (q.get('noopp') === '1') return { ok: false, error: 'No opponent found (timeout)' };
+    const opp = getNationalTeams()[Math.floor(Math.random() * 12)];
+    const r = fakeResult(team, opp);
+    const won = r.homeGoals > r.awayGoals, drawn = r.homeGoals === r.awayGoals;
+    const coinsAwarded = won ? 1200 : drawn ? 600 : 300;
+    mock.balance += coinsAwarded; mock.rating += won ? 25 : drawn ? 5 : -15;
+    if (mode === 'rivals') { mock.rvPoints += won ? 3 : drawn ? 1 : 0; if (won) mock.rvWins++; if (mock.rvPoints >= 9 && mock.division > 0) { mock.division--; mock.rvPoints = 0; } }
+    return { ...r, userSide: 'home', opponent: { name: 'RivalBot' }, coinsAwarded, rating: mock.rating, division: mock.division };
+  }
+
+  const noOnline = q.get('noonline') === '1';
+  const meta = mountMeta(document.getElementById('meta'), {
+    startMatch: stubStartMatch,
+    ...(noOnline ? {} : { online, startOnlineMatch: mockStartOnlineMatch }),
+  });
+  window.__meta = meta;
+  window.__mock = mock;
+  window.__api = { getNationalTeams, getSavedUltimateTeam };
+  if (q.get('view') === 'ut') meta.showUltimateTeam();
+  if (q.get('view') === 'career') meta.showCareer();
+  document.getElementById('sell').onclick = () => {
+    const l = mock.listings.find((x) => x.mine && x.status === 'active');
+    if (!l) { console.log('[mock] no active listing'); return; }
+    l.status = 'sold'; l.buyer = 'MockBuyer'; console.log('[mock] sold', l.listingId);
+  };
+  document.getElementById('nt').onclick = () => console.log(getNationalTeams());
+  document.getElementById('ut').onclick = () => console.log(getSavedUltimateTeam());
+  document.getElementById('reset').onclick = () => {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('pitchside.')) localStorage.removeItem(k);
+    try { sessionStorage.clear(); } catch { /* ignore */ }
+    location.reload();
+  };
+</script>
+</body>
+</html>

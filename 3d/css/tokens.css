@@ -1,0 +1,86 @@
+/* ==================================================================
+   Claude-Mode / Pitchside 3D — design tokens
+   Single source of truth for colour, type, spacing, radius, shadow and
+   motion. Other stylesheets (meta.css, packs.css, account.css, 2d/style.css)
+   should read these variables rather than redefining their own copies.
+   Loaded before main.css. Values are additive — nothing here removes a
+   name another agent's CSS already relies on.
+   ================================================================== */
+:root {
+  color-scheme: dark;
+
+  /* ---- surface ---- */
+  --bg: #05070d;
+  --bg2: #0a0f1c;
+  --panel: rgba(16, 24, 42, .82);
+  --panel-solid: #101a2d;
+  --panel2: #16213a;
+  --line: #1f2c47;
+  --line2: #2e3f63;
+
+  /* ---- text ---- */
+  --txt: #eef3ff;
+  --mut: #8d9bbd;
+  --dim: #5d6b8c;
+
+  /* ---- one restrained accent (pitch green) + a small, purposeful
+     categorical set used only to tell game modes apart, never as
+     decorative background gradients ---- */
+  --acc: #19f5a4;
+  --acc-ink: #02140c;
+  --acc2: #7b5cff;   /* career / progression only */
+  --acc3: #22d3ee;   /* online / connectivity only */
+  --gold: #f5c542;   /* ultimate team / rewards only */
+  --hot: #ff3d7f;    /* local multiplayer only */
+  --orange: #ff8a1f; /* practice only */
+  --ok: #2be38b;
+  --warn: #ffb020;
+  --bad: #ff4d6d;
+
+  /* ---- type ---- */
+  --font-display: "Oswald", "Bahnschrift", "DIN Alternate", "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --step--1: clamp(.8rem, .78rem + .1vw, .85rem);
+  --step-0:  clamp(.9rem, .88rem + .1vw, .95rem);
+  --step-1:  clamp(1.05rem, 1rem + .3vw, 1.15rem);
+  --step-2:  clamp(1.3rem, 1.15rem + .6vw, 1.6rem);
+  --step-3:  clamp(1.7rem, 1.4rem + 1.2vw, 2.3rem);
+  --step-4:  clamp(2.3rem, 1.7rem + 2.4vw, 3.4rem);
+  --step-5:  clamp(3rem, 2rem + 4vw, 4.6rem);
+
+  /* ---- spacing (4px base) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- radius: deliberately uneven, not one pill-shape for everything ---- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --r: var(--radius-md);       /* legacy alias some styles still read */
+  --r-sm: var(--radius-sm);
+
+  /* ---- shadow ---- */
+  --shadow-sm: 0 2px 8px -2px rgba(0,0,0,.5);
+  --shadow-md: 0 10px 30px -14px rgba(0,0,0,.8);
+  --shadow-lg: 0 24px 64px -20px rgba(0,0,0,.85);
+  --shadow-glow: 0 0 0 1px var(--acc), 0 10px 28px -10px var(--acc);
+
+  /* ---- motion: hover lift/underline/glow live in this 150-200ms band ---- */
+  --dur-fast: 150ms;
+  --dur-base: 190ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 1ms; --dur-base: 1ms; --dur-slow: 1ms; }
+}

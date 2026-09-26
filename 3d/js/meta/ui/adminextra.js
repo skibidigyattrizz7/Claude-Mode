@@ -1,0 +1,369 @@
+// Admin panel extensions: card creator + Admin Cards gallery (super/owner only), moderation, global
+// broadcast, giveaways and global config toggles. Every call into `app.online.*` is feature-detected —
+// docs/ONLINE_API.md may not exist yet, so nothing here assumes a shape that isn't checked first.
+import { h, clear, add, fmtNum, confirmBox, select, modal } from './dom.js';
+import { icon } from './icons.js';
+import { playerCard } from './card.js';
+import { safeCall } from './app.js';
+import { createCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, importCustomCard, POSITIONS_ALL } from './customcards.js';
+import { getDB } from '../core/players.js';
+import { NATIONS } from '../core/data.js';
+import { sendLocalGift } from './giftsview.js';
+import { getConfig, syncConfig } from './config.js';
+import { PROMOS } from '../core/promos.js';
+import { PLAYSTYLES } from '../core/physique.js';
+import { psBadgeHtml } from './card.js';
+
+const TIERS = ['bronze', 'silver', 'gold', 'icon'];
+// Every card "design": base specials + every live/upcoming promo campaign (not capped to a handful).
+const DESIGN_OPTIONS = [['', 'None (plain tier look)'], ['inform', 'In-Form'], ['hero', 'Hero'], ['legend', 'Icon (Classic)'], ['lotg', 'Legend of the Game'], ['objective', 'Pathfinder'], ...PROMOS.map((pr) => [pr.id, pr.name])];
+
+// ---------------------------------------------------------------- Card Creator + gallery
+function cropToCard(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const targetW = 240, targetH = 260; // card avatar aspect
+      const c = document.createElement('canvas'); c.width = targetW; c.height = targetH;
+      const ctx = c.getContext('2d');
+      const s = Math.max(targetW / img.width, targetH / img.height);
+      const w = img.width * s, hh = img.height * s;
+      ctx.drawImage(img, (targetW - w) / 2, (targetH - hh) / 2, w, hh);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+export function cardCreatorPanel(app, { level }) {
+  const isSuper = level === 'super';
+  const cap = isSuper ? 999 : 99;
+  const st = { name: '', pos: 'ST', alt: [], nat: 'ENG', tier: 'gold', special: '', photo: null, playstyles: [], stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
+  if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to Owner Access.'));
+  const preview = h('div', { class: 'pm-cc-preview' });
+  const drawPreview = () => {
+    clear(preview);
+    const isGk = st.pos === 'GK';
+    const p = { id: 'preview', name: st.name || 'New Player', last: (st.name || 'New Player').split(' ').slice(-1)[0], pos: st.pos, alt: st.alt.slice(), nat: st.nat, club: 'FUT', tier: st.tier, special: st.special || null, customAdmin: true, photo: st.photo, playstyles: st.playstyles };
+    if (isGk) p.gk = { div: st.stats.pac, han: st.stats.sho, kic: st.stats.pas, ref: st.stats.dri, spd: st.stats.def, pos: st.stats.phy };
+    else p.stats = st.stats;
+    p.ovr = Math.max(1, Math.min(999, Math.round(Object.values(st.stats).reduce((a, b) => a + b, 0) / 6)));
+    preview.appendChild(playerCard(p, { size: 'md' }));
+  };
+  const altRow = h('div', { class: 'pm-cc-alt' });
+  const drawAlt = () => {
+    clear(altRow);
+    add(altRow, h('span', { class: 'pm-dim' }, 'Alt positions'), h('div', { class: 'pm-chips' }, POSITIONS_ALL.filter((p) => p !== st.pos).map((p) => h('button', {
+      class: `pm-chip ${st.alt.includes(p) ? 'on' : ''}`,
+      onclick: () => { st.alt = st.alt.includes(p) ? st.alt.filter((x) => x !== p) : [...st.alt, p].slice(0, 3); drawAlt(); drawPreview(); },
+    }, p))));
+  };
+  const psRow = h('div', { class: 'pm-cc-ps' });
+  const drawPs = () => {
+    clear(psRow);
+    add(psRow, h('span', { class: 'pm-dim' }, 'PlayStyles (tap to add, tap again for +)'),
+      h('div', { class: 'pm-chips pm-wrap' }, Object.entries(PLAYSTYLES).map(([id, d]) => {
+        const cur = st.playstyles.find((x) => x.id === id);
+        return h('button', {
+          class: `pm-chip ${cur ? 'on' : ''} ${cur && cur.plus ? 'is-plus' : ''}`, title: d[3],
+          onclick: () => {
+            if (!cur) st.playstyles = [...st.playstyles, { id, plus: false }];
+            else if (!cur.plus) st.playstyles = st.playstyles.map((x) => (x.id === id ? { ...x, plus: true } : x));
+            else st.playstyles = st.playstyles.filter((x) => x.id !== id);
+            drawPs(); drawPreview();
+          },
+        }, `${d[2]}${cur && cur.plus ? '+' : ''}`);
+      })));
+  };
+  const statRow = (key, label) => {
+    const row = h('label', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: String(cap), value: st.stats[key] }), h('b', null, String(st.stats[key])));
+    const range = row.querySelector('input'), out = row.querySelector('b');
+    range.addEventListener('input', () => { st.stats[key] = Number(range.value); out.textContent = range.value; drawPreview(); });
+    return row;
+  };
+  const nameInp = h('input', { class: 'pm-input', placeholder: 'Player name', maxlength: '26' });
+  const saveBtn = h('button', { class: 'pm-btn pm-btn--primary', disabled: true }, 'Save to gallery');
+  nameInp.addEventListener('input', () => { st.name = nameInp.value; saveBtn.disabled = !nameInp.value.trim(); drawPreview(); });
+  const upload = h('input', { type: 'file', accept: 'image/png,image/jpeg', class: 'pm-cc-upload' });
+  const uploadMsg = h('small', { class: 'pm-dim' }, 'PNG/JPG — auto-cropped to the card portrait.');
+  upload.addEventListener('change', async () => {
+    const f = upload.files && upload.files[0];
+    if (!f) return;
+    uploadMsg.textContent = 'Processing…';
+    try { st.photo = await cropToCard(f); uploadMsg.textContent = 'Photo set.'; drawPreview(); }
+    catch { uploadMsg.textContent = 'Could not read that image.'; }
+  });
+  const gallery = h('div', { class: 'pm-cc-gallery' });
+  const drawGallery = () => {
+    clear(gallery);
+    const cards = listCustomCards();
+    if (!cards.length) { gallery.appendChild(h('p', { class: 'pm-dim' }, 'No admin cards created yet.')); return; }
+    for (const c of cards) {
+      gallery.appendChild(h('div', { class: 'pm-cc-item' }, playerCard(c, { size: 'sm' }),
+        h('div', { class: 'pm-btnrow' },
+          h('button', { class: 'pm-btn pm-btn--sm', onclick: () => { const r = grantCustomCard(app.ut, c); app.saveUT(); app.toast(r.integrated ? `${c.name} granted to your club.` : `${c.name} saved (gallery-only — full club integration awaits a core update).`, 'good'); } }, 'Grant to my club'),
+          h('button', { class: 'pm-btn pm-btn--danger pm-btn--sm', onclick: () => { deleteCustomCard(c.id); drawGallery(); } }, 'Delete'))));
+    }
+  };
+  saveBtn.addEventListener('click', () => {
+    const card = createCustomCard({ name: st.name, pos: st.pos, alt: st.alt, nat: st.nat, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper, playstyles: st.playstyles });
+    app.toast(`${card.name} (${card.ovr} OVR) saved to the Admin Cards gallery.`, 'good');
+    nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; drawPs(); drawAlt(); drawPreview(); drawGallery();
+  });
+  drawPreview(); drawGallery(); drawAlt(); drawPs();
+  return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
+    h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Owner Access')),
+    h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat, any promo design, unlimited PlayStyles and alt positions. Grants are untradeable by default (toggle tradable when gifting); without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.`),
+    h('div', { class: 'pm-cc-grid' },
+      h('div', { class: 'pm-cc-form' },
+        nameInp,
+        h('div', { class: 'pm-btnrow' },
+          select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; st.alt = st.alt.filter((x) => x !== v); drawAlt(); drawPreview(); }, { 'aria-label': 'Position' }),
+          select(NATIONS.slice(0, 60).map((n) => [n.code, n.name]), st.nat, (v) => { st.nat = v; drawPreview(); }, { 'aria-label': 'Nation' }),
+          select(TIERS, st.tier, (v) => { st.tier = v; drawPreview(); }, { 'aria-label': 'Tier' })),
+        altRow,
+        h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Design'), select(DESIGN_OPTIONS, st.special, (v) => { st.special = v; drawPreview(); }, { 'aria-label': 'Card design / promo' })),
+        h('div', { class: 'pm-cc-stats' }, (st.pos === 'GK' ? [['pac', 'DIV'], ['sho', 'HAN'], ['pas', 'KIC'], ['dri', 'REF'], ['def', 'SPD'], ['phy', 'POS']] : [['pac', 'PAC'], ['sho', 'SHO'], ['pas', 'PAS'], ['dri', 'DRI'], ['def', 'DEF'], ['phy', 'PHY']]).map(([k, l]) => statRow(k, l))),
+        psRow,
+        h('label', { class: 'pm-cc-uploadrow' }, icon('upload'), ' Upload photo', upload), uploadMsg,
+        saveBtn),
+      h('div', { class: 'pm-cc-previewwrap' }, h('div', { class: 'pm-sq-label' }, 'Preview'), preview)),
+    h('div', { class: 'pm-cc-galwrap' }, h('div', { class: 'pm-sq-label' }, icon('crop'), ' Admin Cards'), gallery));
+}
+
+// ---------------------------------------------------------------- Moderation
+export function moderationPanel(app, { level }) {
+  const svc = app.online && app.online.moderation;
+  const has = (fn) => svc && typeof svc[fn] === 'function';
+  if (!svc) return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), h('p', { class: 'pm-dim' }, 'Moderation connects to the online service once it is available — nothing to do here offline.'));
+  if (typeof svc.mount === 'function') { const el = h('div'); try { const un = svc.mount(el, { level, app }); if (typeof un === 'function') app.onCleanup(un); } catch (e) { console.warn('[meta] moderation mount failed', e); } return el; }
+  const st = { q: '', page: 0, more: false };
+  const results = h('div', { class: 'pm-admin-results' });
+  const moreWrap = h('div', { class: 'pm-btnrow' });
+  const row = (label, ico, danger, onClick) => h('button', { class: `pm-btn pm-btn--sm ${danger ? 'pm-btn--danger' : ''}`, onclick: onClick }, icon(ico), ` ${label}`);
+  async function runAction(fn, label, id, ...args) {
+    if (!has(fn)) return;
+    if (!(await confirmBox(app.root, label, `${label}?`, label, /ban|reset/i.test(label)))) return;
+    const r = await safeCall(() => svc[fn](id, ...args), { ok: false });
+    app.toast(r && r.ok !== false ? `${label} done.` : `${label} failed${r && r.error ? `: ${r.error}` : ''}`, r && r.ok !== false ? 'good' : 'bad');
+    draw();
+  }
+  async function draw() {
+    clear(results); clear(moreWrap);
+    if (!has('search')) { results.appendChild(h('p', { class: 'pm-dim' }, 'User search is not available from the online service yet.')); return; }
+    results.appendChild(h('p', { class: 'pm-dim' }, 'Loading…'));
+    const r = await safeCall(() => svc.search(st.q.trim(), undefined, st.page), { ok: false });
+    clear(results);
+    if (!r || r.ok === false) { results.appendChild(h('p', { class: 'pm-warnline' }, `Could not load players${r && r.error ? `: ${r.error}` : ''}.`)); return; }
+    const users = r.items || [];
+    st.more = !!r.more;
+    if (!users.length) { results.appendChild(h('p', { class: 'pm-dim' }, st.q.trim() ? 'No matches.' : 'No players yet.')); return; }
+    if (!st.q.trim() && st.page === 0) results.appendChild(h('p', { class: 'pm-dim' }, `All players (newest first) — ${users.length}${st.more ? '+' : ''} shown.`));
+    for (const u of users) {
+      const ownerLevel = can('owner', level);
+      const banned = u.ban || u.banned;
+      const onlineNow = u.lastSeenAt && (Date.now() - new Date(u.lastSeenAt).getTime()) < 60000;
+      results.appendChild(h('div', { class: 'pm-mktrow' },
+        h('span', { class: `pm-onlinedot ${onlineNow ? 'is-on' : ''}`, title: onlineNow ? 'Online now' : 'Offline' }),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || u.name || u.id),
+          h('span', { class: 'pm-dim' }, `${u.role || 'player'}${banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`),
+          h('span', { class: 'pm-dim' }, `Joined ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'} · Last seen ${u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}`)),
+        h('div', { class: 'pm-btnrow pm-wrap' },
+          row(banned ? 'Unban' : 'Ban', 'ban', !banned, () => runAction(banned ? 'unban' : 'ban', banned ? 'Unban' : 'Ban', u.id, 'Admin action')),
+          row('Adjust coins', 'coins', false, async () => { const v = Number(prompt(`Coin delta for ${u.username || u.name} (e.g. -500 or 500):`, '0')); if (!v) return; runAction('adjustCoins', 'Adjust coins', u.id, v, 'admin'); }),
+          row('Make mod', 'admin', false, () => runAction('setRole', 'Make mod', u.id, 'mod')),
+          h('button', { class: 'pm-btn pm-btn--sm pm-btn--accent', onclick: () => openSendCardModal(app, { toUsername: u.username || '' }) }, icon('gifts'), ' Send card'),
+          ownerLevel ? row('Reset coins', 'coins', true, () => runOwnerReset(u.id, 'coins')) : null,
+          ownerLevel ? row('Reset progress', 'reset', true, () => runOwnerReset(u.id, 'progress')) : null,
+          ownerLevel ? row('Reset club', 'squad', true, () => runOwnerReset(u.id, 'club')) : null)));
+    }
+    if (st.more) moreWrap.appendChild(h('button', { class: 'pm-btn', onclick: () => { st.page++; draw(); } }, 'Load more'));
+  }
+  async function runOwnerReset(id, what) {
+    if (!(await confirmBox(app.root, `Reset ${what}`, `Reset this player's ${what}?`, 'Reset', true))) return;
+    const r = await safeCall(() => app.online.owner.reset(id, what), { ok: false });
+    app.toast(r && r.ok !== false ? `Reset ${what} done.` : `Reset failed${r && r.error ? `: ${r.error}` : ''}`, r && r.ok !== false ? 'good' : 'bad');
+  }
+  const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search a username, friend code, or leave blank for all players…', 'aria-label': 'Search players' });
+  search.addEventListener('input', () => { st.q = search.value; draw(); });
+  draw();
+  return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), h('p', { class: 'pm-dim' }, 'Search by username, friend code or name — or leave it blank for the all-players list.'), icon('search', 'pm-inline-search-ico'), search, results, moreWrap);
+}
+
+// ---------------------------------------------------------------- Broadcast + giveaways
+export function broadcastPanel(app) {
+  const svc = app.online && app.online.owner;
+  const msg = h('textarea', { class: 'pm-input', rows: '2', maxlength: '200', placeholder: 'Message shown to every online player…' });
+  const mins = h('input', { class: 'pm-input pm-input--num', type: 'number', value: '30', min: '1', max: '1440', 'aria-label': 'Minutes shown' });
+  const status = h('small', { class: 'pm-dim' });
+  return h('section', { class: 'pm-panel pm-admin-sec' },
+    h('h3', null, icon('broadcast'), ' Global message'),
+    msg,
+    h('div', { class: 'pm-btnrow' }, h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Minutes shown'), mins),
+      h('button', {
+        class: 'pm-btn pm-btn--primary', disabled: !svc || typeof svc.broadcast !== 'function',
+        onclick: async () => {
+          const text = msg.value.trim(); if (!text) return;
+          const r = await safeCall(() => svc.broadcast(text, Math.max(1, Math.min(1440, Number(mins.value) || 30))), { ok: false });
+          if (r && r.ok !== false) { status.textContent = 'Broadcast sent.'; app.toast('Broadcast sent to everyone online.', 'good'); msg.value = ''; }
+          else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
+        },
+      }, 'Broadcast to everyone')),
+    status,
+    !svc || typeof svc.broadcast !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service — not connected in this session.') : null);
+}
+
+/** Send a coins/pack/card gift via `online.owner.gift` (real API) with a local Gifts-inbox fallback. */
+async function sendGift(app, { to, kind, coins, packId, card, count = 1 }, label) {
+  const owner = app.online && app.online.owner;
+  const gift = { to, kind, coins, packId, card, count };
+  if (owner && typeof owner.gift === 'function') {
+    const r = await safeCall(() => owner.gift(gift), { ok: false });
+    if (r && r.ok !== false) app.toast(`${label} sent${to === 'all' ? ' to everyone' : ` to ${to}`}.`, 'good');
+    else app.toast(`${label} failed${r && r.error ? `: ${r.error}` : ''}.`, 'bad');
+    return r;
+  }
+  sendLocalGift({ kind: kind === 'card' ? 'player' : kind, amount: coins, packId, pid: card && card.id, card, note: to === 'all' ? `${label} (local device only — no online service connected)` : `${label} for ${to || 'you'} (local device only)` });
+  app.toast('Online gifting is not connected — queued to this device’s Gifts inbox instead.', 'good');
+  return { ok: true, local: true };
+}
+
+/** Every sendable card: the full player DB (searchable) plus every Admin Card. */
+function findCard(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  const db = getDB();
+  return db.all.find((p) => p.name.toLowerCase() === q) || listCustomCards().find((c) => c.name.toLowerCase() === q)
+    || db.all.find((p) => p.name.toLowerCase().includes(q)) || listCustomCards().find((c) => c.name.toLowerCase().includes(q)) || null;
+}
+
+export function giveawayPanel(app) {
+  const st = { target: '', kind: 'coins', amount: 5000, packId: 'gold', cardQuery: '' };
+  const targetInp = h('input', { class: 'pm-input', placeholder: 'Username (leave blank + "Everyone" for all)', 'aria-label': 'Giveaway target' });
+  targetInp.addEventListener('input', () => { st.target = targetInp.value; });
+  const kindSel = select([['coins', 'Coins'], ['pack', 'Pack'], ['card', 'Card (any player or Admin Card)']], st.kind, (v) => { st.kind = v; redrawExtra(); }, { 'aria-label': 'Giveaway type' });
+  const extra = h('div', { class: 'pm-btnrow' });
+  const cardMatch = h('small', { class: 'pm-dim' });
+  function redrawExtra() {
+    clear(extra); cardMatch.textContent = '';
+    if (st.kind === 'coins') { const inp = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount) }); inp.addEventListener('input', () => { st.amount = Number(inp.value) || 0; }); extra.appendChild(inp); }
+    else if (st.kind === 'pack') extra.appendChild(select(['bronze', 'silver', 'gold', 'rare', 'premium'], st.packId, (v) => { st.packId = v; }, { 'aria-label': 'Pack' }));
+    else {
+      const inp = h('input', { class: 'pm-input', placeholder: 'Player or Admin Card name…' });
+      inp.addEventListener('input', () => { st.cardQuery = inp.value; const c = findCard(st.cardQuery); cardMatch.textContent = c ? `Matched: ${c.name} (${c.ovr} OVR${c.customAdmin ? ' · Admin Card' : ''})` : (st.cardQuery.trim() ? 'No match yet…' : ''); });
+      extra.appendChild(inp);
+    }
+  }
+  redrawExtra();
+  const status = h('small', { class: 'pm-dim' });
+  async function give(everyone) {
+    if (!everyone && !st.target.trim()) { status.textContent = 'Enter a username, or use "Send to everyone".'; return; }
+    let card = null;
+    if (st.kind === 'card') { card = findCard(st.cardQuery); if (!card) { status.textContent = 'No card matches that name.'; return; } card = { ...card, tradable: true }; }
+    const r = await sendGift(app, { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: card || undefined }, 'Giveaway');
+    status.textContent = r && r.ok !== false ? 'Sent.' : `Failed${r && r.error ? `: ${r.error}` : ''}.`;
+  }
+  return h('section', { class: 'pm-panel pm-admin-sec' },
+    h('h3', null, icon('giveaway'), ' Giveaways'),
+    h('p', { class: 'pm-dim' }, 'Send coins, a pack, or any card (including Admin Cards) to one user or to everyone. Gifted cards are always tradable.'),
+    targetInp, h('div', { class: 'pm-btnrow' }, kindSel, extra), cardMatch,
+    h('div', { class: 'pm-btnrow' },
+      h('button', { class: 'pm-btn pm-btn--primary', onclick: () => give(false) }, 'Send to user'),
+      h('button', { class: 'pm-btn pm-btn--accent', onclick: () => give(true) }, 'Send to everyone')),
+    status);
+}
+
+/**
+ * Prominent "Send card" modal: username/friend code + a searchable card picker (DB players + Admin Cards).
+ * Exported so the Admin panel's top-level button and Moderation's per-row "Send card" both reuse it.
+ */
+export function openSendCardModal(app, { toUsername = '' } = {}) {
+  const st = { target: toUsername, q: '', tradable: true };
+  const target = h('input', { class: 'pm-input', value: st.target, placeholder: 'Username or friend code', 'aria-label': 'Recipient' });
+  target.addEventListener('input', () => { st.target = target.value; });
+  const q = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search any player or Admin Card…', 'aria-label': 'Card search' });
+  const results = h('div', { class: 'pm-admin-results pm-cc-sendresults' });
+  const tradableChk = h('input', { type: 'checkbox', checked: true });
+  tradableChk.addEventListener('change', () => { st.tradable = tradableChk.checked; });
+  function draw() {
+    clear(results);
+    const query = st.q.trim().toLowerCase();
+    if (query.length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 letters. Admin Cards appear first.')); return; }
+    const custom = listCustomCards().filter((c) => c.name.toLowerCase().includes(query));
+    const db = getDB();
+    const dbHits = db.all.filter((p) => p.name.toLowerCase().includes(query)).sort((a, b) => b.ovr - a.ovr).slice(0, 20);
+    const all = [...custom, ...dbHits];
+    if (!all.length) { results.appendChild(h('p', { class: 'pm-dim' }, 'No matches.')); return; }
+    for (const c of all) {
+      results.appendChild(h('div', { class: 'pm-mktrow' }, playerCard(c, { size: 'xs' }),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, c.name), h('span', { class: 'pm-dim' }, `${c.ovr} ${c.pos}${c.customAdmin ? ' · Admin Card' : ''}`)),
+        h('button', {
+          class: 'pm-btn pm-btn--primary pm-btn--sm',
+          onclick: async () => {
+            if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
+            const r = await sendGift(app, { to: st.target.trim(), kind: 'card', card: { ...c, tradable: st.tradable } }, 'Card');
+            if (r && r.ok !== false) close();
+          },
+        }, 'Send')));
+    }
+  }
+  q.addEventListener('input', () => { st.q = q.value; draw(); });
+  draw();
+  const close = modal(app.root, {
+    title: 'Send / Gift a card', wide: true,
+    body: h('div', { class: 'pm-cc-send' },
+      h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'To'), target),
+      h('label', { class: 'pm-toggle' }, tradableChk, h('span', null, 'Tradable')),
+      q, results),
+    actions: [{ label: 'Close' }],
+  });
+  return close;
+}
+
+// ---------------------------------------------------------------- Global config toggles
+export function configPanel(app, { level } = {}) {
+  const cfg = getConfig();
+  const row = (key, label) => h('label', { class: 'pm-toggle' }, h('input', { type: 'checkbox', checked: cfg[key], onchange: async (e) => { await syncConfig(app.online, { [key]: e.target.checked }); app.toast(`${label} ${e.target.checked ? 'on' : 'off'}.`, 'good'); app.refresh(); } }), h('span', null, label));
+  const mult = h('input', { type: 'range', min: '0.25', max: '2', step: '0.05', value: String(cfg.priceMult) });
+  const multOut = h('b', null, `${cfg.priceMult.toFixed(2)}x`);
+  mult.addEventListener('change', async () => { await syncConfig(app.online, { priceMult: Number(mult.value) }); multOut.textContent = `${Number(mult.value).toFixed(2)}x`; app.toast('Price multiplier updated.', 'good'); app.refresh(); });
+  mult.addEventListener('input', () => { multOut.textContent = `${Number(mult.value).toFixed(2)}x`; });
+  return h('div', null, h('section', { class: 'pm-panel pm-admin-sec' },
+    h('h3', null, icon('gear'), ' Global config'),
+    row('promosOn', 'Promo campaigns enabled'),
+    row('packsInShop', 'Packs available in the shop'),
+    h('label', { class: 'pm-cc-stat' }, h('span', null, 'Shop price multiplier'), mult, multOut),
+    h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device — the online config service is not connected yet.')),
+    level === 'super' ? resetEveryonePanel(app) : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('reset'), ' Reset everyone'), h('p', { class: 'pm-dim' }, 'Owner Access only.')));
+}
+
+/** Owner-only "reset everyone": bumps the server `features.resetEpoch` so every device wipes its local
+ * admin session + infinite coins + sets its UT balance to 5000 next time it checks in, and calls a
+ * server-side economy reset RPC when one exists. */
+function resetEveryonePanel(app) {
+  const status = h('small', { class: 'pm-dim' });
+  return h('section', { class: 'pm-panel pm-admin-sec pm-admin-danger' },
+    h('h3', null, icon('reset'), ' Reset everyone'),
+    h('p', { class: 'pm-dim' }, 'Every connected player’s admin session drops, infinite coins turn off, and their local UT balance resets to 5,000 the next time their game checks in.'),
+    h('button', {
+      class: 'pm-btn pm-btn--danger', disabled: !app.online || !app.online.config,
+      onclick: async () => {
+        if (!(await confirmBox(app.root, 'Reset everyone', 'This resets every connected player’s admin session and coin balance. Continue?', 'Reset everyone', true))) return;
+        status.textContent = 'Resetting…';
+        const owner = app.online.owner;
+        let r;
+        if (owner && typeof owner.resetEveryone === 'function') r = await safeCall(() => owner.resetEveryone(), { ok: false });
+        else {
+          // Older backend without the reset RPC: bump the epoch through config only.
+          const cur = await safeCall(() => app.online.config.get(), { ok: false });
+          const features = { ...(cur && cur.config && cur.config.features) || {}, resetEpoch: Math.floor(Date.now() / 1000) };
+          r = owner && typeof owner.setConfig === 'function' ? await safeCall(() => owner.setConfig('features', features), { ok: false }) : { ok: false, error: 'not_connected' };
+        }
+        if (r && r.ok !== false) { status.textContent = 'Done — every device resets on its next check-in.'; app.toast('Global reset broadcast.', 'good'); app.checkResetEpoch(); }
+        else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
+      },
+    }, 'Reset everyone now'), status);
+}
