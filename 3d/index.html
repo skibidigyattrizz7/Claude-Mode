@@ -22,6 +22,7 @@
 <div class="boot-fail" id="boot-fail" hidden>
   <h1>Pitchside 3D</h1>
   <p>The game could not start. Please use a recent Chrome, Edge, Firefox or Safari, and open it through a web server (not <code>file://</code>).</p>
+  <p>On a school or work network, a web filter may be blocking the game's script files: reload, or ask IT to allow this site.</p>
   <p><a href="../index.html">Back to all games</a></p>
 </div>
 <script>
@@ -30,6 +31,6 @@
     if (!document.documentElement.classList.contains('ready')) document.getElementById('boot-fail').hidden = false;
   }, 5000);
 </script>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js" onerror="document.getElementById('boot-fail').hidden=false"></script>
 </body>
 </html>

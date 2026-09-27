@@ -56,7 +56,9 @@ const CSS = `
 .ps3d-menu td{padding:3px 8px;border-bottom:1px solid rgba(255,255,255,.07)}
 .ps3d-menu td:first-child{color:#9fb6de}
 .ps3d-menu kbd{background:#2b3656;border-radius:3px;padding:1px 6px;font-family:inherit;font-weight:700}
-.ps3d-loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:800;letter-spacing:3px;color:#9fb6de}
+.ps3d-loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:800;letter-spacing:3px;color:#9fb6de;text-align:center;z-index:20}
+.ps3d-loading .bar{width:min(320px,70vw);height:6px;margin:12px auto 0;border-radius:3px;background:rgba(159,182,222,.18);overflow:hidden}
+.ps3d-loading .bar i{display:block;height:100%;width:0;background:#19f5a4;border-radius:3px;transition:width .25s ease-out}
 .ps3d-touch{position:absolute;inset:0;pointer-events:none;z-index:4}
 .ps3d-joy{position:absolute;left:28px;bottom:28px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
 .ps3d-knob{position:absolute;left:42px;top:42px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:none}
@@ -164,7 +166,11 @@ export class Hud {
     this.replayEl = el('div', 'ps3d-replay', h, 'REPLAY<small>press any button to skip</small>');
     this.fadeEl = el('div', 'ps3d-fade', h);
     this.stats = el('div', 'ps3d-stats', h);
-    this.loading = el('div', 'ps3d-loading', h, 'LOADING STADIUM…');
+    this.loading = el('div', 'ps3d-loading', h);
+    this.loading.setAttribute('role', 'progressbar');
+    this.loadTxt = el('div', 'txt', this.loading, 'LOADING STADIUM…');
+    this.loadBar = el('i', '', el('div', 'bar', this.loading));
+    this.setLoading(0.03);
     this.nexts = [el('div', 'ps3d-next', h, '▼'), el('div', 'ps3d-next', h, '▼')];
     this.timedEl = el('div', 'ps3d-timed', h);
     this.timedT = 0;
@@ -203,7 +209,16 @@ export class Hud {
     this.tickerT = 3.2;
   }
 
-  setLoaded() { if (this.loading) { this.loading.remove(); this.loading = null; } }
+  setLoaded() { if (this.loading) { this.loading.style.display = 'none'; } }
+  // loading progress (0..1) + stage text; re-shows the overlay (e.g. a low-graphics retry)
+  setLoading(frac, text) {
+    if (!this.loading) return;
+    this.loading.style.display = '';
+    const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
+    this.loadBar.style.width = pct + '%';
+    this.loading.setAttribute('aria-valuenow', String(pct));
+    if (text) this.loadTxt.textContent = text;
+  }
 
   // big banner: {text, sub, cls, dur, card}
   bannerMsg(text, sub = '', cls = '', dur = 2.4, card = null) {

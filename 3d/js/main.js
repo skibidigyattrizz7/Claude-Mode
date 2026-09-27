@@ -11,6 +11,8 @@ import { maybeShowAccountGate, accountSettingsPane, mountBroadcastBanner, online
 import { createCloudSync } from './net/cloudsave.js';
 import { setConfigProvider } from './meta/core/config.js';
 import { setConfig as setOwnerToggles } from './meta/ui/config.js';
+// blocked/failed module downloads (school filters, proxies) -> an actionable message, not a raw TypeError
+import { explainLoadError } from './engine/ui/loading.js';
 import { mountStadium } from './ui/stadium.js';
 
 const Q = new URLSearchParams(location.search);
@@ -114,7 +116,7 @@ function loadEngine() {
         if (typeof m.createMatch !== 'function') throw new Error('engine/index.js does not export createMatch()');
         return m;
       })
-      .catch((e) => { enginePromise = null; throw e; });
+      .catch((e) => { enginePromise = null; throw explainLoadError(e, 'the 3D engine'); });
   }
   return enginePromise;
 }

@@ -28,8 +28,11 @@ const HL = PITCH.HL, HW = PITCH.HW;
 
 const QUALITY = {
   low: { pr: 1, antialias: false, shadows: false, shadowSize: 0, crowdSpacing: 1.05, crowdFill: 0.8, pitchTex: 2048, aniso: 4, roofShadow: false, trail: false, spots: false },
-  med: { pr: 1.5, antialias: true, shadows: true, shadowSize: 2048, crowdSpacing: 0.72, crowdFill: 0.9, pitchTex: 4096, aniso: 8, roofShadow: false, trail: true, spots: true },
+  med: { pr: 1.5, antialias: true, shadows: true, shadowSize: 2048, crowdSpacing: 0.72, crowdFill: 0.9, pitchTex: 2048, aniso: 8, roofShadow: false, trail: true, spots: true },
   high: { pr: 2, antialias: true, shadows: true, shadowSize: 4096, crowdSpacing: 0.54, crowdFill: 0.95, pitchTex: 4096, aniso: 16, roofShadow: false, trail: true, spots: true },
+  // "low graphics" retry for school Chromebooks / blocked GPUs: sub-native resolution, no AA, no
+  // shadows, a sparse crowd, small textures and the low-power GPU
+  potato: { pr: 0.75, antialias: false, shadows: false, shadowSize: 0, crowdSpacing: 1.6, crowdFill: 0.55, pitchTex: 1024, aniso: 1, roofShadow: false, trail: false, spots: false, lowPower: true },
 };
 
 const REF_KITS = [
@@ -46,8 +49,8 @@ export function createRenderer(container, opts = {}) {
   const track = (o) => { disposables.push(o); return o; };
 
   // ---------------------------------------------------------------- renderer
-  const renderer = new THREE.WebGLRenderer({ antialias: q.antialias, powerPreference: 'high-performance', alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
+  const renderer = new THREE.WebGLRenderer({ antialias: q.antialias, powerPreference: q.lowPower ? 'low-power' : 'high-performance', alpha: false });
+  renderer.setPixelRatio(q.pr < 1 ? q.pr : Math.min(window.devicePixelRatio || 1, q.pr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = night ? 0.88 : 1.0;
@@ -103,7 +106,11 @@ export function createRenderer(container, opts = {}) {
   const pitch = buildPitch(scene, q, maxAniso, track);
   const goals = buildGoals(scene, q, track);
   const flags = buildFlags(scene, q, track);
-  const stadium = buildStadium(scene, opts, q, track, idle);
+  // deferred stadium work (crowd per stand, LED boards): drained by warmup() behind the loading
+  // screen when the engine calls it, otherwise one slice per idle callback after the first frame
+  const pending = [];
+  const pump = () => { const fn = pending.shift(); if (fn && !destroyed) { fn(); if (pending.length) idle(pump); } };
+  const stadium = buildStadium(scene, opts, q, track, (fn) => { pending.push(fn); if (pending.length === 1) idle(pump); });
   const ball = buildBall(scene, q, track);
   const markers = buildMarkers(scene, track);
   const director = new CameraDirector(camera);
@@ -429,8 +436,44 @@ export function createRenderer(container, opts = {}) {
     return Math.atan2(fwdV.z, fwdV.x);
   }
 
+  // Finish everything the first frames would otherwise stall on, behind the loading screen:
+  // the deferred crowd/boards slices (yielding between them so the progress bar keeps moving),
+  // every shader program (compileAsync = parallel compile where KHR_parallel_shader_compile
+  // exists) and the texture uploads. onProgress(fraction 0..1, stage).
+  async function warmup(onProgress = () => {}) {
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const n0 = pending.length || 1;
+    onProgress(0.1, 'stadium');
+    await tick();
+    while (pending.length && !destroyed) {
+      pending.shift()();
+      onProgress(0.1 + 0.45 * (1 - pending.length / n0), 'crowd');
+      await tick();
+    }
+    if (destroyed) return;
+    onProgress(0.6, 'shaders');
+    resize();
+    try {
+      const c = typeof renderer.compileAsync === 'function' ? renderer.compileAsync(scene, camera) : Promise.resolve(renderer.compile(scene, camera));
+      await Promise.race([c, new Promise((r) => setTimeout(r, 8000))]);
+    } catch (e) { console.warn('[pitchside-render] shader warm-up failed', e && e.message); }
+    if (destroyed) return;
+    onProgress(0.85, 'textures');
+    await tick();
+    const seen = new Set();
+    scene.traverse((o) => {
+      const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      for (const m of ms) {
+        for (const k in m) { const v = m[k]; if (v && v.isTexture && !seen.has(v)) seen.add(v); }
+        if (m.uniforms) for (const u in m.uniforms) { const v = m.uniforms[u].value; if (v && v.isTexture && !seen.has(v)) seen.add(v); }
+      }
+    });
+    for (const tex of seen) { try { renderer.initTexture(tex); } catch { /* uploaded on first use instead */ } }
+    onProgress(1, 'ready');
+  }
+
   return {
-    render, setCamera, setControlled, resize, destroy, project, getCameraYaw, domElement: dom,
+    render, setCamera, setControlled, resize, destroy, project, getCameraYaw, warmup, domElement: dom,
     // dev-only hooks (harness / debugging)
     _debug: {
       set noDraw(v) { dbg.noDraw = v; },

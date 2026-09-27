@@ -8,6 +8,7 @@ import { rateStats, computeRatings, playerOfMatch } from '../core/ratings.js';
 import { decided } from '../core/knockout.js';
 import { humanShot } from '../core/assist.js';
 import { readDelay } from '../core/ai.js';
+import { isModuleLoadError, explainLoadError, webglStatus } from '../ui/loading.js';
 import { BRAZIL, FRANCE } from './sampleTeams.mjs';
 import { colorDist, kitTone, kitsClash, resolveMatchKits, pickPattern, PATTERNS, CLASH_THRESHOLD } from '../core/kits.js';
 
@@ -555,6 +556,18 @@ export function runGameplayTests(test) {
       if (sim.ball.owner === p.idx || sim.ball.lastTeam === 0) won++;
     }
     assert.ok(won >= 8, `won ${won}/10`);
+  });
+
+  console.log('robust loading');
+  test('blocked module downloads become an actionable message; other errors pass through', () => {
+    for (const m of ['Failed to fetch dynamically imported module: https://x/3d/vendor/three.module.min.js', 'Importing a module script failed.', 'error loading dynamically imported module']) {
+      assert.ok(isModuleLoadError(new TypeError(m)), m);
+      const e = explainLoadError(new TypeError(m), 'the 3D engine');
+      assert.ok(e.blocked && /web filter|proxy/.test(e.message), e.message);
+    }
+    const plain = new Error('boom');
+    assert.equal(explainLoadError(plain), plain);
+    assert.equal(webglStatus(), 'error'); // no DOM in node: reported, never thrown
   });
 
   console.log('tactics');
