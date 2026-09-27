@@ -1,6 +1,8 @@
 // Pitchside Ultimate Team screens.
 import { h, clear, frag, modal, confirmBox, fmtNum, select, add } from './dom.js';
-import { playerCard, psBadgeHtml } from './card.js';
+import { playerCard, attributeBlock } from './card.js';
+import { leagueBadgeSVG } from './leaguebadge.js';
+import { profileFacts } from '../core/bios.js';
 import { flagSVG, crestSVG } from './art.js';
 import { squadEditor } from './squad.js';
 import { runPackOpening, packArt } from './packopen.js';
@@ -112,12 +114,11 @@ export function tokenChip(app) {
     h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-token' })), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('span', { class: 'pm-sr' }, ' swap tokens'));
 }
 
-/** PlayStyle icons (PlayStyle+ ringed) + alternate positions, shown under cards in lists. */
+/** Alternate positions line shown under cards in grids (owner: no PlayStyle chips here — every PlayStyle, with
+ * its icon and description, lives in the card details view). */
 export function cardMeta(p, extra = null) {
-  const ps = (p.playstyles || []).slice().sort((a, b) => (b.plus ? 1 : 0) - (a.plus ? 1 : 0));
   return h('div', { class: 'pm-cardmeta' },
     h('span', { class: 'pm-cardmeta-pos', title: 'Positions' }, h('b', null, p.pos), (p.alt || []).length ? ` ${p.alt.join(' ')}` : ''),
-    ps.length ? h('span', { class: 'pm-cardmeta-ps' }, frag(ps.map(psBadgeHtml).join(''))) : null,
     extra);
 }
 
@@ -234,19 +235,16 @@ export function utHomeView() {
 }
 
 // ---------- player details (card detail view) ----------
-const STAT_NAMES = [['pac', 'Pace'], ['sho', 'Shooting'], ['pas', 'Passing'], ['dri', 'Dribbling'], ['def', 'Defending'], ['phy', 'Physical']];
-const GK_NAMES = [['div', 'Diving'], ['han', 'Handling'], ['kic', 'Kicking'], ['ref', 'Reflexes'], ['spd', 'Speed'], ['pos', 'Positioning']];
 const stars = (n) => h('span', { class: 'pm-stars', 'aria-label': `${n} of 5` }, Array.from({ length: 5 }, (_, i) => h('i', { class: i < n ? 'on' : '' })));
 export function playerModal(app, p, { actions = [], extra = null } = {}) {
   const n = NATION_BY_CODE[p.nat];
   const c = clubById(p.club);
-  const bornYear = new Date().getFullYear() - (Number(p.age) || 0);
+  // Personal info is REAL (core/bios.js) or 'Unknown' — never generated. Age is computed from the date of birth.
   const bio = [
-    ['Age', p.age], p.dob ? ['Date of birth', p.dob] : ['Born', `${bornYear}`],
+    ...profileFacts(p),
     ['Nation', h('span', { class: 'pm-factrow' }, frag(flagSVG(p.nat, 'pm-flag pm-flag--xs')), n ? n.name : p.nat)],
     ['Club', h('span', { class: 'pm-factrow' }, frag(crestSVG(c || p.club, 'pm-crest pm-crest--xs')), c ? c.name : p.club)],
-    ['League', leagueName(p.league)],
-    ['Height', `${p.height} cm`], ['Weight', `${p.weight || 75} kg`], ['Preferred foot', p.foot === 'L' ? 'Left' : 'Right'],
+    ['League', h('span', { class: 'pm-factrow' }, frag(leagueBadgeSVG(p.league)), leagueName(p.league))],
     ['Weak foot', stars(p.wf)], ['Skill moves', stars(p.sm)], ['Work rates', `${p.wr[0]} / ${p.wr[1]}`],
     ['Card', p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
     ['Potential', p.pot],
@@ -254,18 +252,13 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
   if (p.moment) bio.push(['Moment', p.moment]);
   if (p.upg) bio.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);
   if (extra) bio.push(...extra);
-  const statRows = (names, obj) => names.map(([k, label]) => {
-    const v = Number(obj[k]) || 0;
-    return h('div', { class: 'pm-attr' }, h('span', null, label), h('b', { class: v >= 85 ? 'hi' : v >= 70 ? 'mid' : v < 50 ? 'lo' : '' }, v), h('i', { style: { '--v': `${v}%` } }));
-  });
-  const isGk = p.pos === 'GK';
   return modal(app.root, {
     title: p.name, wide: true, className: 'pm-pmodal',
     body: h('div', { class: 'pm-pdetail' },
       h('div', { class: 'pm-pdetail-card' }, playerCard(p, { size: 'md' }),
         h('div', { class: 'pm-posrow', 'aria-label': 'Positions' }, h('span', { class: 'on' }, p.pos), (p.alt || []).map((x) => h('span', null, x)))),
       h('div', { class: 'pm-pdetail-info' },
-        h('section', null, h('h4', null, 'Attributes'), h('div', { class: 'pm-attrs' }, statRows(isGk ? GK_NAMES : STAT_NAMES, isGk ? p.gk : p.stats))),
+        h('section', null, h('h4', null, 'Attributes'), attributeBlock(p)),
         h('section', null, h('h4', null, 'Profile'), h('dl', { class: 'pm-facts' }, bio.map(([k, v]) => [h('dt', null, k), h('dd', null, v instanceof Node ? v : String(v))]))),
         h('section', null, playstyleList(p)),
         h('section', { class: 'pm-goalsfor' }, h('h4', null, 'Goals for your club'), h('p', { class: 'pm-dim' }, 'Appearances and goals for your club will show here in a later update.')))),
@@ -503,6 +496,7 @@ function sbcListView() {
         add(main, h('h3', { class: 'pm-h' }, g), h('div', { class: 'pm-sbcgrid' }, list.filter((x) => x.group === g).map((sbc) => {
           const done = s.sbc[sbc.id] || 0;
           const avail = UT.sbcAvailable(s, sbc);
+          const rt = rewardText(sbc.reward);
           return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
             sbc.repeatable || done ? h('div', { class: 'pm-sbc-tags' },
               sbc.repeatable ? h('span', { class: 'pm-tagmini' }, 'Repeatable') : null,
@@ -514,6 +508,12 @@ function sbcListView() {
                 h('ul', { class: 'pm-reqmini' }, sbc.reqs.filter((r) => r.t !== 'count').map((r) => { const [l, v] = reqParts(r); return h('li', null, h('span', null, l), v ? h('b', null, v) : null); }))),
               h('div', { class: 'pm-sbc-art', 'aria-hidden': 'true' }, sbcRewardArt(sbc.reward))),
             h('div', { class: 'pm-sbc-reward' }, h('span', null, 'Reward'), h('b', { title: rt }, rt)));
+        })));
+      }
+    },
+  };
+}
+const rewardText = (r) => M.rewardText(r);
 const cap = (t) => (typeof t === 'string' && t ? t[0].toUpperCase() + t.slice(1) : '');
 /** SBC requirement as a compact [label, value] row ("Team rating" · "Min. 86"). */
 function reqParts(r) {
@@ -533,12 +533,6 @@ function reqParts(r) {
     default: return [UT.reqLabel(r), ''];
   }
 }
-        })));
-      }
-    },
-  };
-}
-const rewardText = (r) => M.rewardText(r);
 
 export function sbcDetailView(id) {
   const sbc = UT.SBC_BY_ID[id];

@@ -3,8 +3,11 @@ import { h, frag, esc } from './dom.js';
 import { flagSVG, crestSVG, avatarSVG } from './art.js';
 import { cardName } from '../core/players.js';
 import { clubById } from '../core/data.js';
-import { PLAYSTYLES } from '../core/physique.js';
+import { PLAYSTYLES, canonStyle } from '../core/physique.js';
+import { psBadge, psIconSvg, ensurePsiStyles } from './playstyleicons.js';
+import { leagueBadgeSVG } from './leaguebadge.js';
 import { PROMOS, PROMO_BY_ID } from '../core/promos.js';
+import { subStats } from '../core/substats.js';
 
 const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
 const GK_LABELS = ['DIV', 'HAN', 'KIC', 'REF', 'SPD', 'POS'];
@@ -21,23 +24,69 @@ if (typeof document !== 'undefined' && !document.getElementById('pm-promo-vars')
   el.textContent = css;
   document.head.appendChild(el);
 }
-
-/** Small round PlayStyle badge (gold ring = PlayStyle+). */
-export function psBadgeHtml(ps) {
-  const d = PLAYSTYLES[ps.id];
-  if (!d) return '';
-  return `<i class="ps ps-${d[1]}${ps.plus ? ' plus' : ''}" title="${esc(d[0])}${ps.plus ? '+' : ''}">${d[2]}</i>`;
+// FC-style: nation flag, league badge and club crest side by side under OVR / position. Injected here
+// (not in the shared stylesheets) so the card component owns its own face layout.
+if (typeof document !== 'undefined' && !document.getElementById('pm-card-league-css')) {
+  const el = document.createElement('style');
+  el.id = 'pm-card-league-css';
+  el.textContent = '.pm-card .pc-badges{gap:.12em;justify-content:center}'
+    + '.pm-card .pc-badges .pc-flag{width:1.12em;height:.72em}'
+    + '.pm-card .pc-badges .pc-crest{width:.84em;height:1em}'
+    + '.pm-card .pc-league{width:.84em;height:.92em;display:block;flex:none;filter:drop-shadow(0 .03em .06em rgba(0,0,0,.35))}'
+    + '.pm-card--xs .pc-league{display:none}'
+    + '.pm-lgbadge{width:18px;height:20px;display:inline-block;vertical-align:middle;flex:none}';
+  document.head.appendChild(el);
 }
 
-/** Detail list of PlayStyles with names and descriptions. */
+/** FC-style PlayStyle badge (inline SVG icon; PlayStyle+ = gold gem). Kept under its old name for callers. */
+export function psBadgeHtml(ps) { return psBadge(ps); }
+
+/** PlayStyle+ first (FC order), then the rest in the player's own order. Aliases resolved, unknown ids dropped. */
+export function sortedStyles(p) {
+  const seen = new Set();
+  const list = [];
+  for (const x of p.playstyles || []) {
+    const id = canonStyle(x && x.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    list.push({ id, plus: !!x.plus });
+  }
+  return list.sort((a, b) => (b.plus ? 1 : 0) - (a.plus ? 1 : 0));
+}
+
+/** Detail list of ALL a player's PlayStyles: icon, name, PlayStyle+ tag and description. */
 export function playstyleList(p) {
-  const list = (p.playstyles || []).filter((x) => PLAYSTYLES[x.id]);
+  ensurePsiStyles();
+  const list = sortedStyles(p);
+  const nPlus = list.filter((x) => x.plus).length;
   return h('div', { class: 'pm-pslist' },
-    h('div', { class: 'pm-lbl' }, 'PlayStyles'),
+    h('div', { class: 'pm-lbl' }, `PlayStyles${list.length ? ` (${list.length}${nPlus ? ` · ${nPlus} PlayStyle+` : ''})` : ''}`),
     list.length ? list.map((x) => {
       const d = PLAYSTYLES[x.id];
-      return h('div', { class: 'pm-psrow' }, frag(psBadgeHtml(x)), h('div', null, h('b', null, d[0] + (x.plus ? '+' : '')), h('small', { class: 'pm-dim' }, d[3])));
+      return h('div', { class: `pm-psrow${x.plus ? ' is-plus' : ''}`, 'data-ps': x.id },
+        frag(psIconSvg(x.id, x.plus, { title: false }).replace('<svg ', '<svg style="width:40px;height:40px;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))" ')),
+        h('div', null, h('b', null, d[0], x.plus ? h('span', { class: 'psi-plus-tag' }, 'PlayStyle+') : null), h('small', { class: 'pm-dim' }, d[3])));
     }) : h('small', { class: 'pm-dim' }, 'None'));
+}
+
+/** Every attribute: the six face stats, each with its full FC-style detail list (core/substats.js). */
+export function attributeBlock(p) {
+  if (typeof document !== 'undefined' && !document.getElementById('pm-subattr-css')) {
+    const el = document.createElement('style');
+    el.id = 'pm-subattr-css';
+    el.textContent = '.pm-attrgroup{display:grid;gap:5px;align-content:start}'
+      + '.pm-attrgroup .pm-attr{font-weight:600}'
+      + '.pm-subattr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:baseline;font-size:12.5px;color:#aab2bf;padding-left:8px}'
+      + '.pm-subattr b{font:700 14px/1 var(--font-display,system-ui);color:var(--txt,#fff)}'
+      + '.pm-subattr b.hi{color:var(--good,#3fd08a)}.pm-subattr b.lo{color:#ff9aa5}'
+      + '.pm-subattr i{grid-column:1/-1;height:3px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}'
+      + '.pm-subattr i::before{content:"";display:block;height:100%;width:var(--v);background:rgba(255,255,255,.55)}';
+    document.head.appendChild(el);
+  }
+  const cls = (v) => (v >= 85 ? 'hi' : v >= 70 ? 'mid' : v < 50 ? 'lo' : '');
+  return h('div', { class: 'pm-attrs pm-attrs--full' }, subStats(p).map((g) => h('div', { class: 'pm-attrgroup', 'data-attr': g.key },
+    h('div', { class: 'pm-attr' }, h('span', null, g.label), h('b', { class: cls(g.value) }, g.value), h('i', { style: { '--v': `${Math.min(99, g.value)}%` } })),
+    g.subs.map((x) => h('div', { class: 'pm-subattr', 'data-attr': x.key }, h('span', null, x.label), h('b', { class: cls(x.value) }, x.value), h('i', { style: { '--v': `${x.value}%` } }))))));
 }
 
 export function cardClasses(p) {
@@ -70,7 +119,7 @@ export function playerCard(p, opts = {}) {
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
   const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
-  const ps = size === 'xs' ? '' : (p.playstyles || []).slice(0, 4).map(psBadgeHtml).join('');
+  const ps = size === 'xs' ? '' : sortedStyles(p).slice(0, 3).map((x) => psBadge(x)).join('');
   const others = [p.pos, ...(p.alt || [])].filter((x) => x !== posLabel).slice(0, 3);
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(others.join(', '))}">+${esc(others.join(' '))}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
@@ -83,7 +132,7 @@ export function playerCard(p, opts = {}) {
       <div class="pc-ovr">${p.ovr}</div>
       <div class="pc-pos">${esc(posLabel)}</div>
       ${altHtml}
-      <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${crestSVG(club, 'pc-crest')}</div>
+      <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>
     </div>
     ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
     ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}

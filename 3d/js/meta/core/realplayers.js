@@ -4,8 +4,9 @@
 // (no shared RNG is consumed, so the generated database and existing saves are unaffected).
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS } from './data.js';
-import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES } from './physique.js';
+import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES, assignPlus } from './physique.js';
 import { REG_ROWS } from './realregulars.js';
+import { bioFor } from './bios.js';
 
 // Row: [slug, full name, card name, nation, pos, alt positions, foot, weak foot, skill moves, OVR,
 //       face stats (outfield: pac sho pas dri def phy | GK: div han kic ref spd pos), age, height, skin tone 0..5, extra]
@@ -294,6 +295,15 @@ function normStyles(p, list) {
   return out.map((x) => { const keep = x.plus && plus > 0; if (keep) plus--; return { id: x.id, plus: keep }; });
 }
 
+/** Overwrite a real card's height / weight / foot with the real values from core/bios.js where known. */
+function applyBio(p) {
+  const b = bioFor(p.person);
+  if (!b) return;
+  if (b.height) p.height = clamp(b.height, 162, 202);
+  if (b.weight) p.weight = clamp(b.weight, 58, 100);
+  if (b.foot) p.foot = b.foot;
+}
+
 function starClub(slug, lg) {
   const pool = CLUBS.filter((c) => c.league === lg && c.tier === 1 && c.rep >= 3);
   const list = pool.length ? pool : CLUBS.filter((c) => c.tier === 1);
@@ -341,7 +351,8 @@ export function buildRealPlayers(helpers) {
     p.height = height;
     const ph = PHYS[slug] || [75, []];
     p.weight = ph[0];
-    p.playstyles = parseStyles(ph[1]);
+    // PlayStyle+ re-picked from the owner's tier list + best-per-position chart (see physique.assignPlus)
+    p.playstyles = assignPlus(p, parseStyles(ph[1]), { fill: true });
     p.rare = true;
     p.tier = 'gold';
     // V2: every real player is a "Legend of the Game" (LOTG) card; `era` separates retired prime
@@ -355,6 +366,9 @@ export function buildRealPlayers(helpers) {
     p.wage = weeklyWage({ ...p, age: 29 });
     p.look = hashStr(p.id) % 997;
     p.intended = ovr;
+    // real personal data (core/bios.js) wins over the row: height / weight / preferred foot
+    p.physReal = true; // Icon / Star rows are hand-authored real values
+    applyBio(p);
     return p;
   };
   const icons = ICON_ROWS.map((r) => make(r, 'icon'));
@@ -409,7 +423,10 @@ export function buildRealPlayers(helpers) {
     p.rare = true;
     p.tier = helpers.tierOf(p.ovr);
     p.weight = clamp(weight, 58, 100);
-    p.playstyles = normStyles(p, parseStyles(String(styles).split(/\s+/).filter(Boolean)));
+    // compact (EXT) rows have no PlayStyles string and GENERATED height/weight — only core/bios.js values are real
+    p.physReal = !!styles;
+    applyBio(p);
+    p.playstyles = assignPlus(p, normStyles(p, parseStyles(String(styles).split(/\s+/).filter(Boolean))), { fill: true });
     const growth = age <= 20 ? 6 : age <= 22 ? 4 : age <= 24 ? 2 : 0;
     p.pot = Math.min(95, p.ovr + growth);
     p.value = marketValue(p);

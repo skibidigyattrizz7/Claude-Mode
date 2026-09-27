@@ -30,7 +30,7 @@ function ago(ts) {
 export function marketView() {
   const ui = {
     tab: 'player',
-    pm: { status: null, sub: 'search', f: { q: '', pos: '', rarity: '', minOvr: 0, maxPrice: 0, sort: 'price_asc', page: 0 }, results: null, loading: false, mine: null, mineLoading: false },
+    pm: { status: null, sub: 'search', f: { q: '', pos: '', rarity: '', league: '', minOvr: 0, maxPrice: 0, sort: 'price_asc', page: 0 }, results: null, loading: false, mine: null, mineLoading: false },
     ai: { f: { name: '', pos: '', tier: '', nat: '', league: '', minOvr: 0, maxOvr: 99, maxPrice: 0, seed: 0 }, results: null },
   };
   const view = {
@@ -133,8 +133,10 @@ function renderSearch(body, app, st, view) {
     clear(list);
     if (st.loading) { list.appendChild(h('div', { class: 'pm-empty pm-loading' }, h('div', { class: 'pm-spinner' }), 'Searching…')); return; }
     if (!st.results) { list.appendChild(h('p', { class: 'pm-empty' }, 'Search real users’ listings. Set filters and press Search.')); return; }
-    if (!st.results.length) list.appendChild(h('p', { class: 'pm-empty' }, 'No listings found. Try broader filters.'));
-    for (const it of st.results) {
+    // league filter runs on the client (the market server doesn't index leagues)
+    const shown = st.results.filter((it) => !f.league || (getPlayer(it.card.id) || it.card).league === f.league);
+    if (!shown.length) list.appendChild(h('p', { class: 'pm-empty' }, st.results.length ? 'No listings from that league on this page.' : 'No listings found. Try broader filters.'));
+    for (const it of shown) {
       const p = getPlayer(it.card.id) || it.card;
       const owned = s.club.includes(it.card.id);
       const own = mineIds.has(it.listingId);
@@ -176,6 +178,7 @@ function renderSearch(body, app, st, view) {
       q,
       select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),
       select(RARITIES, f.rarity, (v) => { f.rarity = v; }, { 'aria-label': 'Rarity' }),
+      select([['', 'Any league'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Legends of the Game']], f.league, (v) => { f.league = v; if (st.results) drawList(); }, { 'aria-label': 'League' }),
       num('minOvr', 'Min OVR'), num('maxPrice', 'Max price'),
       select([['price_asc', 'Price: low → high'], ['price_desc', 'Price: high → low'], ['ovr_desc', 'Rating: high → low'], ['newest', 'Newest']], f.sort, (v) => { f.sort = v; }, { 'aria-label': 'Sort' }),
       h('button', { class: 'pm-btn pm-btn--primary', type: 'submit' }, 'Search')),

@@ -1168,8 +1168,10 @@ test('B2: Manager cards contribute chemistry in both styles, and never regress a
 });
 
 test('B2: bestPlaystylesFor(pos) matches the owner reference chart and drives PlayStyle+ placement', () => {
-  assert.deepEqual(PH.bestPlaystylesFor('ST'), ['finesse', 'power']);
-  assert.deepEqual(PH.bestPlaystylesFor('CB'), ['anticipate', 'jockey', 'block']);
+  // owner chart (promorefs/playstyles_plus_by_position.jpg), updated Sep 27 with the FC 25/26 list
+  assert.deepEqual(PH.bestPlaystylesFor('ST'), ['finesse', 'power', 'lowdriven']);
+  assert.deepEqual(PH.bestPlaystylesFor('CB'), ['intercept', 'anticipate', 'bruiser']);
+  assert.deepEqual(PH.bestPlaystylesFor('CDM'), ['longball', 'intercept', 'pinged']);
   assert.deepEqual(PH.bestPlaystylesFor('GK'), ['farreach', 'quickreflexes']);
   for (const pos of POSITIONS) for (const id of PH.bestPlaystylesFor(pos)) assert.ok(PH.PLAYSTYLES[id], `${pos} -> unknown style ${id}`);
   // At least some high-rated generated players actually carry a '+' on their position's best style.
@@ -1436,6 +1438,112 @@ test('admin cards are hidden from swaps and cannot be swapped', async () => {
   const SW = await import('../core/swaps.js');
   assert.equal(SW.isSwapHidden({ id: 'ad_x', ovr: 300 }), true);
   assert.equal(SW.isSwapHidden({ id: 'p1', ovr: 88 }), false);
+});
+
+// ---------- Sep 27 owner requests: FC PlayStyles + icons, real personal info, leagues ----------
+const BIO = await import('../core/bios.js');
+const PSI = await import('../ui/playstyleicons.js');
+const LB = await import('../ui/leaguebadge.js');
+const SUB = await import('../core/substats.js');
+const ENGINE_PS = await import('../../engine/core/playstyles.js');
+
+test('PlayStyles: full FC 25/26 set, each with a description, an icon (normal + PlayStyle+) and an engine effect', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const dir = fileURLToPath(new URL('../../engine/core/', import.meta.url));
+  const src = readdirSync(dir).filter((f) => f.endsWith('.js')).map((f) => readFileSync(dir + f, 'utf8')).join('\n');
+  const FC = ['Finesse Shot', 'Power Shot', 'Chip Shot', 'Dead Ball', 'Trivela', 'Low Driven Shot', 'Precision Header', 'Acrobatic', 'Gamechanger',
+    'Incisive Pass', 'Tiki Taka', 'Pinged Pass', 'Long Ball Pass', 'Whipped Pass', 'Inventive', 'First Touch', 'Technical', 'Rapid', 'Flair',
+    'Trickster', 'Press Proven', 'Anticipate', 'Intercept', 'Block', 'Jockey', 'Slide Tackle', 'Bruiser', 'Aerial Fortress', 'Quick Step',
+    'Relentless', 'Long Throw', 'Enforcer', 'Far Reach', 'Footwork', 'Rush Out', 'Cross Claimer', 'Quick Reflexes', 'Deflector'];
+  const names = new Set(Object.values(PH.PLAYSTYLES).map((d) => d[0]));
+  for (const n of FC) assert.ok(names.has(n), `missing PlayStyle ${n}`);
+  for (const [id, d] of Object.entries(PH.PLAYSTYLES)) {
+    assert.ok(typeof d[3] === 'string' && d[3].length > 10, `${id} description`);
+    assert.ok(PSI.PS_GLYPHS[id], `${id} has no icon glyph`);
+    const a = PSI.psIconSvg(id, false), b = PSI.psIconSvg(id, true);
+    assert.ok(a.startsWith('<svg') && b.startsWith('<svg') && a !== b, `${id} icon variants`);
+    assert.ok(b.includes('#e6bd57'), `${id}+ icon should be gold`);
+    assert.ok(ENGINE_PS.PLAYSTYLES[id], `${id} unknown to the engine`);
+    assert.ok(new RegExp(`\\bps\\(\\s*[\\w.]+\\s*,\\s*'${id}'\\s*\\)`).test(src), `${id} has no engine effect`);
+  }
+  // old/FC ids keep working
+  assert.equal(PH.canonStyle('precisionheader'), 'powerheader');
+  assert.equal(PH.canonStyle('aerialfortress'), 'aerial');
+  assert.deepEqual(PH.parseStyles(['precisionheader+', 'aerialfortress']), [{ id: 'powerheader', plus: true }, { id: 'aerial', plus: false }]);
+  const p = { playstyles: [{ id: 'aerialfortress', plus: true }], height: 190, weight: 85 };
+  assert.deepEqual(PH.matchPhysique(p).playstyles, [{ id: 'aerial', plus: true }]);
+});
+
+test('PlayStyle+ are placed by the owner tier list + per-position chart', () => {
+  const db = getDB();
+  // Messi (RW): Finesse Shot is both his signature and the chart's #1 for wingers
+  assert.ok(getPlayer('rs_messi').playstyles.find((x) => x.id === 'finesse').plus);
+  for (const p of db.all.filter((x) => x.real && !x.promo)) {
+    const plus = p.playstyles.filter((x) => x.plus);
+    assert.ok(plus.length <= Math.max(0, maxPlus(p.ovr)), `${p.id} too many PlayStyle+`);
+    if (p.ovr >= 85) assert.ok(plus.length >= 1, `${p.id} (${p.ovr}) should have a PlayStyle+`);
+    // any chart style the player has outranks every non-chart style for the '+'
+    const best = PH.bestPlaystylesFor(p.pos);
+    const chartOwned = p.playstyles.filter((x) => best.includes(x.id));
+    if (plus.length && chartOwned.length) assert.ok(plus.some((x) => best.includes(x.id)), `${p.id} chart style missed the +`);
+  }
+});
+
+test('Real players: age from the real date of birth (Messi 39 on 2026-09-27), never a fake one', () => {
+  const on = new Date('2026-09-27T12:00:00');
+  const f = (id) => Object.fromEntries(BIO.profileFacts(getPlayer(id), on));
+  assert.equal(f('rs_messi').Age, '39'); assert.equal(f('rs_messi')['Date of birth'], '24 Jun 1987');
+  assert.equal(f('ic_messi').Age, '39', 'the prime Icon version shows his real age too');
+  assert.equal(f('rs_ronaldo')['Date of birth'], '5 Feb 1985'); assert.equal(f('rs_ronaldo').Age, '41');
+  assert.equal(f('ic_totti').Age, '50', 'birthday today counts');
+  assert.equal(BIO.ageOn('1987-06-24', '2026-06-23'), 38);
+  assert.equal(BIO.ageOn('1987-06-24', '2026-06-24'), 39);
+  assert.match(f('ic_pele').Age, /^Died 29 Dec 2022 \(aged 82\)$/);
+  assert.equal(f('rs_messi')['Preferred foot'], 'Left'); assert.equal(f('rs_messi').Height, '170 cm');
+  assert.equal(getPlayer('rp_kahn').height, 188, 'real height replaces the generated one');
+});
+
+test('No real player shows generated personal info; fictional players show Unknown', () => {
+  const db = getDB();
+  const on = new Date('2026-09-27T12:00:00');
+  const persons = new Set(db.all.filter((p) => p.real).map((p) => p.person));
+  for (const k of Object.keys(BIO.BIOS)) assert.ok(persons.has(k), `BIOS key ${k} is not a real player`);
+  for (const p of db.all) {
+    const facts = Object.fromEntries(BIO.profileFacts(p, on));
+    const b = p.real ? BIO.bioFor(p.person) : null;
+    if (!p.real) {
+      for (const k of ['Date of birth', 'Age', 'Height', 'Weight', 'Preferred foot']) assert.equal(facts[k], 'Unknown', `${p.id} ${k} = ${facts[k]}`);
+      continue;
+    }
+    // DOB / age only ever come from BIOS
+    if (!b || !b.dob) assert.equal(facts['Date of birth'], 'Unknown', `${p.id} dob`);
+    else assert.equal(facts['Date of birth'], BIO.fmtDate(b.dob));
+    if (!b || (!b.dob && !b.died)) assert.equal(facts.Age, 'Unknown', `${p.id} age`);
+    // generated heights (compact rows) never leak
+    if (!p.physReal && !(b && b.height)) assert.equal(facts.Height, 'Unknown', `${p.id} generated height shown`);
+    if (!p.physReal && !(b && b.weight)) assert.equal(facts.Weight, 'Unknown', `${p.id} generated weight shown`);
+  }
+});
+
+test('Leagues: recognisable real names + badge per league; details attributes cover every sub-stat', () => {
+  const names = Object.fromEntries(Object.values(LEAGUE_BY_ID).map((l) => [l.id, l.name]));
+  assert.equal(names.ISL, 'Premier League'); assert.equal(names.SOL, 'LaLiga'); assert.equal(names.MEI, 'Bundesliga');
+  assert.equal(names.AUR, 'Serie A'); assert.equal(names.ETO, 'Ligue 1');
+  for (const id of [...Object.keys(LEAGUE_BY_ID), 'ICN', 'LEG', 'HER', 'SEC', 'FUT']) {
+    const svg = LB.leagueBadgeSVG(id);
+    assert.ok(svg.startsWith('<svg') && svg.includes('<text'), `${id} badge`);
+  }
+  const p = getPlayer('rs_messi');
+  const groups = SUB.subStats(p);
+  assert.equal(groups.length, 6);
+  assert.equal(groups.reduce((n, g) => n + g.subs.length, 0), 29, 'FC has 29 outfield attributes');
+  for (const g of groups) {
+    assert.equal(g.value, p.stats[g.key]);
+    const avg = g.subs.reduce((a, x) => a + x.value, 0) / g.subs.length;
+    assert.ok(Math.abs(avg - g.value) <= 2.5, `${g.key} subs average ${avg} vs ${g.value}`);
+  }
+  assert.equal(SUB.subStats(getPlayer('ic_yashin')).length, 6);
 });
 
 await runAll();

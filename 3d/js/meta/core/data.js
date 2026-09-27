@@ -194,9 +194,13 @@ export const SKIN_TONES = ['#f3cdb0', '#e6b08c', '#d09a70', '#a86f47', '#7a4b2c'
 
 // ---------- fictional leagues & clubs ----------
 // Each league: tier-1 (10 clubs) + tier-2 (8 clubs). Clubs listed strongest-first.
+// Display names follow the real top flight each league stands in for (owner request Sep 27: "make league names
+// recognisable"). Ids stay the old fictional ids so saves, SBC requirements and chemistry keep working; the
+// original fictional name is kept as `fictional`. `badge` is the short code drawn on the procedural league
+// badge (ui/leaguebadge.js). CON is the mixed "rest of the world" league (Americas / Middle East / Africa).
 export const LEAGUES = [
   {
-    id: 'ISL', name: 'Isles Premier Division', short: 'IPD', tier2Name: 'Isles Division One', country: 'ENG',
+    id: 'ISL', name: 'Premier League', short: 'PL', badge: 'PL', tier2Name: 'EFL Championship', country: 'ENG', fictional: 'Isles Premier Division',
     home: [['ENG', 6], ['SCO', 1.5], ['WAL', 1], ['IRL', 1]], strength: 0, color: '#6c3cff',
     clubs: [
       ['Brackmoor United', '#B3001B', '#FFFFFF'], ['Kingsmoor City', '#6CABDD', '#1C2C5B'], ['Ravensholt Athletic', '#101820', '#E4B500'],
@@ -209,7 +213,7 @@ export const LEAGUES = [
     ],
   },
   {
-    id: 'SOL', name: 'Liga del Sol', short: 'LDS', tier2Name: 'Liga del Sol Segunda', country: 'ESP',
+    id: 'SOL', name: 'LaLiga', short: 'LL', badge: 'LL', tier2Name: 'LaLiga 2', country: 'ESP', fictional: 'Liga del Sol',
     home: [['ESP', 8], ['ARG', 0.5], ['URU', 0.3]], strength: 0, color: '#ff5b2e',
     clubs: [
       ['Real Valdoria', '#FFFFFF', '#6A1B9A'], ['Atlético Sierramar', '#D50032', '#FFFFFF'], ['CD Puerto Alba', '#004D98', '#A50044'],
@@ -222,7 +226,7 @@ export const LEAGUES = [
     ],
   },
   {
-    id: 'MEI', name: 'Meisterliga', short: 'MSL', tier2Name: 'Meisterliga Zwei', country: 'GER',
+    id: 'MEI', name: 'Bundesliga', short: 'BL', badge: 'BL', tier2Name: '2. Bundesliga', country: 'GER', fictional: 'Meisterliga',
     home: [['GER', 7], ['AUT', 1.5], ['SUI', 1]], strength: -1, color: '#e8002d',
     clubs: [
       ['FC Falkenstadt', '#DC052D', '#FFFFFF'], ['SV Adlerhof', '#FDE100', '#1A1A1A'], ['1. FC Wolfsheide', '#65B32E', '#FFFFFF'],
@@ -235,7 +239,7 @@ export const LEAGUES = [
     ],
   },
   {
-    id: 'AUR', name: 'Lega Aurea', short: 'LAU', tier2Name: 'Lega Argento', country: 'ITA',
+    id: 'AUR', name: 'Serie A', short: 'SA', badge: 'SA', tier2Name: 'Serie B', country: 'ITA', fictional: 'Lega Aurea',
     home: [['ITA', 8], ['CRO', 0.4], ['SRB', 0.3]], strength: -1, color: '#00a3e0',
     clubs: [
       ['AC Montevaro', '#000000', '#FFFFFF'], ['Virtus Portolira', '#0068A8', '#1A1A1A'], ['US Castelbruno', '#FB090B', '#1A1A1A'],
@@ -248,7 +252,7 @@ export const LEAGUES = [
     ],
   },
   {
-    id: 'ETO', name: 'Ligue Étoile', short: 'LET', tier2Name: 'Ligue Étoile Deux', country: 'FRA',
+    id: 'ETO', name: 'Ligue 1', short: 'L1', badge: 'L1', tier2Name: 'Ligue 2', country: 'FRA', fictional: 'Ligue Étoile',
     home: [['FRA', 7], ['BEL', 1.5], ['SEN', 0.8], ['CIV', 0.8], ['CMR', 0.6], ['MAR', 0.6]], strength: -2, color: '#dafc00',
     clubs: [
       ['Olympique Belrivage', '#004170', '#DA291C'], ['AS Hautemont', '#FFFFFF', '#2FAEE0'], ['Stade Port-Lumière', '#DA291C', '#1A1A1A'],
@@ -261,7 +265,7 @@ export const LEAGUES = [
     ],
   },
   {
-    id: 'CON', name: 'Liga Continental', short: 'LCO', tier2Name: 'Liga Continental B', country: 'BRA',
+    id: 'CON', name: 'Rest of World', short: 'ROW', badge: 'ROW', tier2Name: 'Rest of World II', country: 'BRA', fictional: 'Liga Continental',
     home: [['BRA', 4], ['ARG', 3], ['URU', 1], ['COL', 1.2], ['CHI', 0.8], ['MEX', 1], ['ECU', 0.6], ['USA', 0.5]], strength: -2, color: '#00e38c',
     clubs: [
       ['Esporte Clube Serra Dourada', '#006437', '#FFFFFF'], ['Club Atlético Pampa Alta', '#0033A0', '#FFD100'], ['Deportivo Cerro Azul', '#1A1A1A', '#00A3E0'],
