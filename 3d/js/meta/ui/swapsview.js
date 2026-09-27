@@ -18,7 +18,7 @@ const tokenLabel = (n) => `${n} token${n === 1 ? '' : 's'}`;
 function tokenChip(app) {
   const s = app.ut;
   return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens — spend them in the Token Store' },
-    icon('swap'), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('small', { class: 'pm-coins-src' }, 'Tokens'));
+    h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-token' })), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('span', { class: 'pm-sr' }, ' swap tokens'));
 }
 
 export function swapsView() {

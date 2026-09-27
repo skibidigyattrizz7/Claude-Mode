@@ -109,7 +109,7 @@ export function tokenChip(app) {
   const s = app.ut;
   if (!s) return null;
   return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens — spend them in the Token Store (Swaps)' },
-    h('i', { class: 'pm-token', 'aria-hidden': 'true' }), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('small', { class: 'pm-coins-src' }, 'Tokens'));
+    h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-token' })), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('span', { class: 'pm-sr' }, ' swap tokens'));
 }
 
 /** PlayStyle icons (PlayStyle+ ringed) + alternate positions, shown under cards in lists. */
@@ -504,12 +504,35 @@ function sbcListView() {
           const done = s.sbc[sbc.id] || 0;
           const avail = UT.sbcAvailable(s, sbc);
           return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
-            h('div', { class: 'pm-sbc-art', 'aria-hidden': 'true' }, sbcRewardArt(sbc.reward)),
-            h('div', { class: 'pm-sbc-top' }, h('h4', null, sbc.name), sbc.repeatable ? h('span', { class: 'pm-tagmini' }, 'Repeatable') : null),
-            h('p', null, sbc.desc),
-            h('ul', { class: 'pm-reqmini' }, sbc.reqs.filter((r) => r.t !== 'count').map((r) => h('li', null, UT.reqLabel(r)))),
-            h('div', { class: 'pm-sbc-reward' }, h('span', { class: 'pm-dim' }, 'Reward'), h('b', null, rewardText(sbc.reward))),
-            done ? h('div', { class: 'pm-sbc-done' }, avail ? `Completed ×${done}` : '✓ Completed') : null);
+            sbc.repeatable || done ? h('div', { class: 'pm-sbc-tags' },
+              sbc.repeatable ? h('span', { class: 'pm-tagmini' }, 'Repeatable') : null,
+              done ? h('span', { class: 'pm-tagmini pm-tagmini--done' }, avail ? `Done ×${done}` : '✓ Completed') : null) : null,
+            h('h4', { title: sbc.name }, sbc.name),
+            h('div', { class: 'pm-sbc-head' },
+              h('div', { class: 'pm-sbc-headt' },
+                h('p', null, sbc.desc),
+                h('ul', { class: 'pm-reqmini' }, sbc.reqs.filter((r) => r.t !== 'count').map((r) => { const [l, v] = reqParts(r); return h('li', null, h('span', null, l), v ? h('b', null, v) : null); }))),
+              h('div', { class: 'pm-sbc-art', 'aria-hidden': 'true' }, sbcRewardArt(sbc.reward))),
+            h('div', { class: 'pm-sbc-reward' }, h('span', null, 'Reward'), h('b', { title: rt }, rt)));
+const cap = (t) => (typeof t === 'string' && t ? t[0].toUpperCase() + t.slice(1) : '');
+/** SBC requirement as a compact [label, value] row ("Team rating" · "Min. 86"). */
+function reqParts(r) {
+  const v = r.v;
+  switch (r.t) {
+    case 'count': return ['Players', String(v)];
+    case 'maxTier': return ['Quality', v === 'bronze' ? 'All Bronze' : `Max. ${cap(v)}`];
+    case 'minTier': return [`${cap(r.tier)} players`, `Min. ${v}`];
+    case 'rating': return ['Team rating', `Min. ${v}`];
+    case 'chem': return ['Chemistry', `Min. ${v}`];
+    case 'sameLeague': return ['Same league', `Min. ${v}`];
+    case 'sameNation': return ['Same nation', `Min. ${v}`];
+    case 'sameClub': return ['Same club', `Min. ${v}`];
+    case 'maxSameClub': return ['Same club', `Max. ${v}`];
+    case 'rare': return ['Rare players', `Min. ${v}`];
+    case 'nations': return ['Nations', `Min. ${v}`];
+    default: return [UT.reqLabel(r), ''];
+  }
+}
         })));
       }
     },
