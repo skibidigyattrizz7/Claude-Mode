@@ -5,9 +5,9 @@ import { h, clear, modal, confirmBox, fmtNum, select, add } from './dom.js';
 import { playerCard } from './card.js';
 import * as UT from '../core/ut.js';
 import * as PM from '../core/pmarket.js';
-import { getPlayer } from '../core/players.js';
+import { getPlayer, quickSellValue } from '../core/players.js';
 import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, POSITIONS } from '../core/data.js';
-import { playerModal } from './utview.js';
+import { playerModal, sellModal, utTabs, cardMeta, tokenChip } from './utview.js';
 import { setFlag } from '../core/objectives.js';
 
 const persist = (app) => app.saveUT();
@@ -34,21 +34,54 @@ export function marketView() {
     ai: { f: { name: '', pos: '', tier: '', nat: '', league: '', minOvr: 0, maxOvr: 99, maxPrice: 0, seed: 0 }, results: null },
   };
   const view = {
-    title: 'Transfer Market', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    title: 'Transfer Market', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
+      const tlN = PM.transferList(app.ut).length;
       const tabs = h('div', { class: 'pm-tabs pm-mkttabs', role: 'tablist' },
-        [['player', 'Player Market', 'Online · real users'], ['ai', 'AI Market', 'Simulated traders']].map(([id, label, sub]) => h('button', {
+        [['player', 'Player Market', 'Online · real users'], ['ai', 'AI Market', 'Simulated traders'], ['tl', `Transfer List${tlN ? ` (${tlN})` : ''}`, 'Cards you plan to sell']].map(([id, label, sub]) => h('button', {
           class: `pm-tab ${ui.tab === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false',
           onclick: () => { ui.tab = id; app.refresh(); },
         }, h('b', null, label), h('small', null, sub))));
       const body = h('div', { class: 'pm-tabbody', role: 'tabpanel' });
-      add(main, tabs, body);
+      add(main, utTabs(app, 'transfers'), tabs, body);
       if (ui.tab === 'player') renderPlayerMarket(body, app, ui.pm, view);
+      else if (ui.tab === 'tl') renderTransferList(body, app);
       else renderAiMarket(body, app, ui.ai);
     },
   };
   return view;
 }
+
+// ---------------- Transfer List (cards parked for selling; still in your club) ----------------
+function renderTransferList(body, app) {
+  const s = app.ut;
+  const ids = PM.transferList(s);
+  const redraw = () => app.refresh();
+  if (!ids.length) {
+    add(body, h('p', { class: 'pm-empty' }, 'Your transfer list is empty. Open a card in your Club and choose "Send to transfer list".'));
+    return;
+  }
+  const total = ids.reduce((a, id) => a + UT_quick(id), 0);
+  add(body,
+    h('div', { class: 'pm-subtabs' }, h('span', { class: 'pm-dim pm-subnote' }, `${ids.length} card${ids.length > 1 ? 's' : ''} · list them on the Player Market or the AI Market, or quick sell`),
+      h('button', { class: 'pm-btn pm-btn--sm', onclick: async () => {
+        if (!(await confirmBox(app.root, 'Quick sell all', `Quick sell all ${ids.length} cards on your transfer list for ${fmtNum(total)} coins?`, 'Quick sell', true))) return;
+        for (const id of ids) { UT.quickSell(s, id); PM.removeFromTransferList(s, id); }
+        app.saveUT(); app.toast(`+${fmtNum(total)} coins`, 'good'); redraw();
+      } }, `Quick sell all +${fmtNum(total)}`)),
+    h('div', { class: 'pm-cardgrid' }, ids.map((id) => {
+      const p = getPlayer(id);
+      return h('div', { class: 'pm-cardcell' }, playerCard(p, { size: 'sm', onClick: () => playerModal(app, p, {
+        extra: [['Quick sell', `${fmtNum(UT_quick(id))} coins`]],
+        actions: [
+          { label: 'List on Player Market', primary: true, onClick: () => { setTimeout(() => playerMarketListModal(app, p, redraw), 0); } },
+          { label: 'Sell to AI Market', onClick: () => { setTimeout(() => sellModal(app, p, () => { PM.removeFromTransferList(s, id); app.saveUT(); redraw(); }), 0); } },
+          { label: 'Remove from transfer list', onClick: () => { PM.removeFromTransferList(s, id); app.saveUT(); redraw(); } },
+        ],
+      }) }), cardMeta(p));
+    })));
+}
+const UT_quick = (id) => quickSellValue(getPlayer(id));
 
 // ---------------- Player Market (online) ----------------
 function renderPlayerMarket(body, app, st, view) {

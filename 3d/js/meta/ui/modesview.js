@@ -5,7 +5,7 @@ import { playerCard } from './card.js';
 import { crestSVG, badgeSVG } from './art.js';
 import { squadEditor } from './squad.js';
 import { resultView } from './app.js';
-import { openPackFlow, playerModal } from './utview.js';
+import { openPackFlow, playerModal, utTabs, tokenChip } from './utview.js';
 import { icon } from './icons.js';
 import { tacticsEditor } from './tacticsview.js';
 import * as UT from '../core/ut.js';
@@ -163,7 +163,7 @@ async function runUtMatch(app, team, opp, { difficulty = 'pro', knockout = false
 export function objectivesHubView(sec = 'daily') {
   const ui = { sec };
   return {
-    title: 'Objectives', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    title: 'Objectives', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
       const list = OBJ.objectiveList(s);
@@ -189,7 +189,7 @@ export function objectivesHubView(sec = 'daily') {
           }, 'Claim')));
       }
       if (!items.length) body.appendChild(h('p', { class: 'pm-empty' }, 'Nothing here right now.'));
-      add(main, tabs, h('div', { class: 'pm-objhead' }, h('span', { class: 'pm-dim' }, sub),
+      add(main, utTabs(app, 'objectives'), tabs, h('div', { class: 'pm-objhead' }, h('span', { class: 'pm-dim' }, sub),
         readyAll.length > 1 ? h('button', { class: 'pm-btn pm-btn--accent pm-btn--sm', onclick: () => rewardFlow(app, () => { const out = []; for (const o of readyAll) out.push(...(OBJ.claimObjectiveById(s, o.id) || [])); return out.length ? out : null; }, 'Objectives claimed!') }, `Claim all (${readyAll.length})`) : null), body);
     },
   };
