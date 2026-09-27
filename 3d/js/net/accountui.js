@@ -10,7 +10,7 @@ export function ensureAccountCss() {
   if (document.querySelector('link[data-account-css]')) return;
   const l = document.createElement('link');
   l.rel = 'stylesheet';
-  l.href = new URL('../../css/account.css', import.meta.url).href;
+  l.href = new URL('../../css/account.css?v=20260927', import.meta.url).href;
   l.dataset.accountCss = '1';
   document.head.appendChild(l);
 }
