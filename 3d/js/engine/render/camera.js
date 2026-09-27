@@ -67,6 +67,12 @@ export class CameraDirector {
       lx = tx + d * 9; ly = 0.8; lz = tz * 0.85;
       px = tx - d * 13; py = 6.2; pz = tz * 0.75;
       fov = 50; wLook = 3.5; wPos = 2.6;
+    } else if (mode === 'replay' && ctx.replayCam) {
+      // scripted replay path (render/replay-cameras.js), smoothed by the springs below
+      const rc = ctx.replayCam;
+      px = rc.position.x; py = rc.position.y; pz = rc.position.z;
+      lx = rc.target.x; ly = rc.target.y; lz = rc.target.z;
+      fov = rc.fov || 30; wLook = 5; wPos = 2.2;
     } else if (mode === 'replay') {
       // low tele camera beside the goal that was scored in (or nearest goal), tracking the ball
       this.replayT += dt;

@@ -13,6 +13,8 @@ import { buildOverlays, buildNightShadows } from './extras.js';
 import { PlayerRig, KitMaterials, SharedMaterials, acquireGeometry, releaseGeometry } from './player.js';
 import { radialTexture } from './textures.js';
 import { AdminRender } from './admin.js';
+import { createWeather } from './weather.js';
+import { REPLAY_CAMERAS } from './replay-cameras.js';
 import { resolveMatchKits, colorDist, CLASH_THRESHOLD } from '../core/kits.js';
 
 const STRIDE = 7;
@@ -145,34 +147,11 @@ export function createRenderer(container, opts = {}) {
   const rigs = [];
   const playerGroup = new THREE.Group();
   scene.add(playerGroup);
-  // weather (opts.weather 'rain' | 'snow'): falling particles around the camera
-  let weatherFx = null;
-  if (opts.weather === 'rain' || opts.weather === 'snow') {
-    const snow = opts.weather === 'snow';
-    const N = snow ? 2600 : 3200, BX = 60, BY = 30, BZ = 60;
-    const pos = new Float32Array(N * 3);
-    for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - 0.5) * BX; pos[i * 3 + 1] = Math.random() * BY; pos[i * 3 + 2] = (Math.random() - 0.5) * BZ; }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({ color: snow ? 0xffffff : 0xaec4e0, size: snow ? 0.16 : 0.07, transparent: true, opacity: snow ? 0.9 : 0.55, depthWrite: false });
-    const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 6;
-    scene.add(pts);
-    disposables.push(geo, mat);
-    if (!snow) scene.fog = new THREE.Fog(0x8a96a8, 70, 230);
-    weatherFx = {
-      update(dt, cam) {
-        const vy = snow ? 1.4 : 16, drift = snow ? 0.5 : 1.5;
-        for (let i = 0; i < N; i++) {
-          let y = pos[i * 3 + 1] - vy * dt * (0.8 + (i % 5) * 0.1);
-          pos[i * 3] += drift * dt * (snow ? Math.sin(i + y) : 1);
-          if (y < 0) { y += BY; pos[i * 3] = (Math.random() - 0.5) * BX; pos[i * 3 + 2] = (Math.random() - 0.5) * BZ; }
-          pos[i * 3 + 1] = y;
-        }
-        pts.position.set(cam.position.x * 0.9, 0, cam.position.z * 0.6);
-        geo.attributes.position.needsUpdate = true;
-      },
-    };
-  }
+  // weather (opts.weather 'rain' | 'snow'): instanced precipitation over the pitch + a wet sheen
+  // (render/weather.js); rain also pulls the fog in
+  const weatherFx = opts.weather === 'rain' || opts.weather === 'snow'
+    ? createWeather(scene, { type: opts.weather, count: q.lowPower ? 220 : undefined }) : null;
+  if (opts.weather === 'rain') scene.fog = new THREE.Fog(0x8a96a8, 70, 230);
   const makeRig = (kitMats, isGK) => {
     const r = new PlayerRig(geo, shared, kitMats, { isGK, shadows: q.shadows });
     const blob = new THREE.Mesh(geo.blob, blobMat);
@@ -352,7 +331,14 @@ export function createRenderer(container, opts = {}) {
       else if (!view.replay && director.prevMode && view.ph !== PHASE.REPLAY) { director.setMode(director.prevMode); director.prevMode = null; }
       let focus = null;
       if (view.ph === PHASE.GOAL && scorer >= 0 && scorer < 22 && t - scorerT > 0.8) focus = { x: p[scorer * STRIDE], z: p[scorer * STRIDE + 1] };
-      director.update(view, dt, { ctrlPos, goalSign, focus });
+      // goal replays: follow one of the scripted replay camera paths (render/replay-cameras.js)
+      let replayCam = null;
+      if (view.replay && replayPath && Number.isFinite(view.rt)) {
+        const fn = REPLAY_CAMERAS[replayPath.kind] || REPLAY_CAMERAS.broadcast;
+        replayCam = fn(replayPath.frames, view.rt, { scorerIndex: scorer >= 0 ? scorer : 0, goalSign: goalSign || Math.sign(view.b[0]) || 1 });
+        replayCam.fov = replayPath.kind === 'scorerOrbit' ? 42 : replayPath.kind === 'goalLine' ? 30 : 24;
+      }
+      director.update(view, dt, { ctrlPos, goalSign, focus, replayCam });
       overlays.update(view, rigs, t, c);
       if (nightShadows) {
         for (let i = 0; i < 25; i++) {
@@ -385,7 +371,7 @@ export function createRenderer(container, opts = {}) {
     }
     flags.update(t);
     stadium.update(t, dt, excite);
-    if (weatherFx) weatherFx.update(dt, camera);
+    if (weatherFx) weatherFx.update(dt);
     if (!dbg.noDraw) renderer.render(scene, camera);
   }
 
@@ -395,11 +381,21 @@ export function createRenderer(container, opts = {}) {
   function setControlled(ids) {
     controlled = Array.isArray(ids) ? [ids[0] ?? -1, ids[1] ?? -1] : null;
   }
+  // replay camera path: frames [{t, b, p}] of the clip about to be shown; kind picks the path
+  // (rotates broadcast -> goal line -> scorer orbit across a match's goals unless given)
+  let replayPath = null, replayN = 0;
+  function setReplayPath(frames, kind) {
+    if (!frames || !frames.length) { replayPath = null; return; }
+    const kinds = ['goalLine', 'scorerOrbit', 'broadcast'];
+    replayPath = { frames, kind: REPLAY_CAMERAS[kind] ? kind : kinds[replayN++ % kinds.length] };
+  }
+
   function destroy() {
     if (destroyed) return;
     destroyed = true;
     for (const r of [...rigs, ...refs]) r.dispose();
     adm.dispose();
+    if (weatherFx) weatherFx.dispose();
     for (const k in kits) kits[k].dispose();
     shared.dispose();
     releaseGeometry();
@@ -473,7 +469,7 @@ export function createRenderer(container, opts = {}) {
   }
 
   return {
-    render, setCamera, setControlled, resize, destroy, project, getCameraYaw, warmup, domElement: dom,
+    render, setCamera, setControlled, resize, destroy, project, getCameraYaw, warmup, setReplayPath, domElement: dom,
     // dev-only hooks (harness / debugging)
     _debug: {
       set noDraw(v) { dbg.noDraw = v; },
