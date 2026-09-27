@@ -736,7 +736,7 @@ export function createOnline(deps) {
         return r.ok ? { ok: true, items: sanitizeList(r.items, sanitizeModPlayer, 50), more: !!r.more } : r;
       },
       async player(id, code) {
-        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
         const r = await modCall('mod_player', { p_player: id }, code);
         if (!r.ok) return r;
         const player = sanitizeModPlayer(r.player);
@@ -751,7 +751,7 @@ export function createOnline(deps) {
       },
       /** until: null = permanent, else Date | ISO string | epoch ms. Cancels their listings and queue entries. */
       async ban(id, reason, until = null, code) {
-        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
         const why = cleanStr(reason, 200, '');
         if (!why) return fail('bad_reason');
         let iso = null;
@@ -764,18 +764,18 @@ export function createOnline(deps) {
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player), listingsCancelled: Number(r.listingsCancelled) || 0 } : r;
       },
       async unban(id, code) {
-        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
         const r = await modCall('mod_unban', { p_player: id }, code);
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : r;
       },
       async adjustCoins(id, delta, reason = '', code) {
-        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
         if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1e8) return fail('bad_amount');
         const r = await modCall('mod_adjust_coins', { p_player: id, p_delta: delta, p_reason: cleanStr(reason, 120, '') }, code);
         return r.ok ? { ok: true, coins: Number(r.coins) || 0 } : r;
       },
       async setRole(id, role, code) {
-        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
         if (!['player', 'mod', 'owner'].includes(role)) return fail('bad_role');
         const r = await modCall('mod_set_role', { p_player: id, p_role: role }, code);
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : r;
@@ -787,7 +787,7 @@ export function createOnline(deps) {
     owner: {
       /** Coins for one player (null = yourself). Idempotent + retried on network errors. -> { ok, coins, player } */
       async giveCoins(playerId, amount, { reason = '', key = opKey() } = {}) {
-        if (playerId != null && (typeof playerId !== 'string' || !UUID_RE.test(playerId))) return fail('not_found');
+        if (playerId != null) { const t = await resolveId(playerId); if (!t.ok) return t; playerId = t.id; }
         if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 1e9) return fail('bad_amount');
         const r = await ownerCall('admin_coins', { p_player: playerId || null, p_delta: amount, p_reason: cleanStr(reason, 120, '') || null, p_key: key }, true);
         return r.ok ? { ok: true, coins: nonNeg(r.coins), player: typeof r.player === 'string' ? r.player : null } : r;
@@ -796,7 +796,8 @@ export function createOnline(deps) {
       async gift({ to, kind, coins = null, packId = null, count = 1, card = null, message = '', minutes = null } = {}, { key = opKey() } = {}) {
         const all = to === 'all';
         if (minutes != null && (!Number.isInteger(minutes) || minutes < 1 || minutes > 129600)) return fail('bad_value');
-        if (!all && (typeof to !== 'string' || !UUID_RE.test(to))) return fail('bad_target');
+        if (!all && (typeof to !== 'string' || !to.trim())) return fail('bad_target');
+        if (!all) { const t = await resolveId(to); if (!t.ok) return t; to = t.id; }
         let payload = null;
         if (kind === 'coins') { if (!Number.isInteger(coins) || coins < 1 || coins > 1e9) return fail('bad_amount'); }
         else if (kind === 'pack') { if (typeof packId !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(packId) || !Number.isInteger(count) || count < 1 || count > 50) return fail('bad_pack'); payload = { packId, count }; }
@@ -834,7 +835,7 @@ export function createOnline(deps) {
       },
       /** what: 'coins' | 'progress' | 'club' | 'all' -> { ok, player, resets } */
       async reset(playerId, what) {
-        if (typeof playerId !== 'string' || !UUID_RE.test(playerId)) return fail('not_found');
+        { const t = await resolveId(playerId); if (!t.ok) return t; playerId = t.id; }
         if (!['coins', 'progress', 'club', 'all'].includes(what)) return fail('bad_value');
         const r = await ownerCall('admin_reset', { p_player: playerId, p_what: what });
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player), resets: sanitizeEpochs(r.resets) } : r;
@@ -863,7 +864,7 @@ export function createOnline(deps) {
       },
       /** Infinite online wallet for your own profile (spends / market buys succeed without deducting). */
       async setInfinite(on, playerId = null) {
-        if (playerId != null && (typeof playerId !== 'string' || !UUID_RE.test(playerId))) return fail('not_found');
+        if (playerId != null) { const t = await resolveId(playerId); if (!t.ok) return t; playerId = t.id; }
         const r = await ownerCall('admin_set_infinite', { p_on: !!on, p_player: playerId });
         return r.ok ? { ok: true, infinite: r.infinite === true, coins: nonNeg(r.coins) } : r;
       },
@@ -1105,6 +1106,22 @@ export function createOnline(deps) {
     return out;
   }
   /** Owner RPC: admin token (or legacy code) + the caller's identity. `retry` = idempotent call, retried on network errors. */
+  /** A player id from an id, username or friend code (staff search first: it also finds banned players).
+   * -> { ok, id, username } | { ok:false, error:'player_not_found' } */
+  async function resolveId(x, code) {
+    const raw = typeof x === 'string' ? x.trim() : '';
+    if (UUID_RE.test(raw)) return { ok: true, id: raw.toLowerCase(), username: null };
+    const q = cleanStr(raw, 40, '').replace(/^@/, '');
+    if (q.length < 2) return fail('player_not_found');
+    const k = usernameKey(q), fc = q.toUpperCase().replace(/-/g, '');
+    const pick = (items) => items.find((p) => p.username && usernameKey(p.username) === k) || items.find((p) => p.friendCode === fc) || (items.length === 1 ? items[0] : null);
+    if (adminSecret() || staffRole() || code) {
+      const r = await online.moderation.search(q, code);
+      const hit = r.ok ? pick(r.items) : null;
+      if (hit) return { ok: true, id: hit.id, username: hit.username };
+    }
+    return online.players.resolve(q);
+  }
   async function ownerCall(fn, args, retry = false, allowMod = false) {
     const a = readAcc();
     const d = a ? null : readIdent();

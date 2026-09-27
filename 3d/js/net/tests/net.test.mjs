@@ -818,6 +818,25 @@ test('card creator gift: a created card (photo, OVR 500) sent by username lands 
   assert.equal(registerCustomCard(null, { id: 'bad id', name: 'X', pos: 'ST', ovr: 50 }), null);
 });
 
+test('owner/mod actions take a username or friend code (resolved to the id), never bad_target', async () => {
+  const { A, B, O, a, b } = await world3();
+  const bFc = (await A.players.find('bob jones')).items[0].friendCode;
+  assert.equal((await O.owner.giveCoins('bob jones', 500)).ok, true);
+  assert.equal((await B.coins.get()).coins, 5500);
+  assert.equal((await O.owner.gift({ to: 'Bob_Jones', kind: 'coins', coins: 5 })).ok, true);
+  assert.equal((await O.owner.gift({ to: bFc, kind: 'coins', coins: 5 })).ok, true);
+  assert.equal((await O.owner.gift({ to: '', kind: 'coins', coins: 5 })).error, 'bad_target');
+  assert.equal((await O.owner.gift({ to: 'ghost player', kind: 'coins', coins: 5 })).error, 'player_not_found');
+  assert.equal((await O.moderation.setRole('alice smith', 'mod')).player.role, 'mod');
+  assert.equal((await O.moderation.adjustCoins(bFc, -100, 'test')).coins, 5400);
+  assert.equal((await O.moderation.ban('Bob Jones', 'spam')).ok, true);
+  assert.equal((await O.moderation.unban('bob jones')).ok, true); // banned players still resolve (staff search)
+  assert.equal((await O.owner.reset('bob jones', 'coins')).ok, true);
+  assert.equal((await O.moderation.player('alice smith')).player.id, a.id);
+  assert.equal((await O.moderation.ban('nobody at all', 'x')).error, 'player_not_found');
+  assert.equal((await O.owner.giveCoins(b.id, 1)).ok, true); // ids still work
+});
+
 test('gifts: owner lists pending gifts, cancels one, clears all; expiry picker bounds', async () => {
   const { A, B, O, b } = await world3();
   assert.equal((await O.owner.gift({ to: b.id, kind: 'coins', coins: 10, minutes: 0 })).error, 'bad_value');
