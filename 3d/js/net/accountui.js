@@ -1,6 +1,7 @@
 // Pitchside 3D — account UI: first-visit gate (Create account / Log in / Continue as guest), Settings → Account
 // (sign out, change username / password), the global broadcast banner and the "N online" counter.
 // Pure DOM on top of `online.account.*` / `online.presence.*` (services.js); styles in 3d/css/account.css.
+import { mountFriends } from './friendsui.js';
 
 let cssDone = false;
 export function ensureAccountCss() {
@@ -184,6 +185,7 @@ export function accountSettingsPane(online, { toast = null } = {}) {
         c.state === 'banned' && c.ban ? el('p', { class: 'acc-msg', 'data-kind': 'bad' }, `Banned: ${c.ban.reason}`) : null,
         el('details', { class: 'acc-details' }, el('summary', null, 'Change username'), renameForm),
         el('details', { class: 'acc-details' }, el('summary', null, 'Change password'), pwForm),
+        el('details', { class: 'acc-details', id: 'acc-friends', open: true }, el('summary', null, 'Friends'), mountFriends(online, { toast })),
         el('div', { class: 'acc-row acc-row--end' },
           el('button', { class: 'acc-btn acc-btn--ghost', type: 'button', id: 'acc-signout-all', onclick: async () => { await online.account.logout({ all: true }); note('Signed out on every device'); } }, 'Sign out everywhere'),
           el('button', { class: 'acc-btn acc-btn--danger', type: 'button', id: 'acc-signout', onclick: async () => { await online.account.logout(); note('Signed out'); } }, 'Sign out')),
@@ -197,6 +199,7 @@ export function accountSettingsPane(online, { toast = null } = {}) {
         el('div', { class: 'acc-row' },
           el('button', { class: 'acc-btn acc-btn--primary', type: 'button', id: 'acc-set-signup', onclick: () => openAccountGate(online, { view: 'signup', toast, canDismiss: true }) }, 'Create account'),
           el('button', { class: 'acc-btn', type: 'button', id: 'acc-set-login', onclick: () => openAccountGate(online, { view: 'login', toast, canDismiss: true }) }, 'Log in')),
+        c.state === 'offline' ? null : el('details', { class: 'acc-details', id: 'acc-friends' }, el('summary', null, 'Friends'), mountFriends(online, { toast })),
         msg);
     }
     pane.dataset.mounted = '1';
