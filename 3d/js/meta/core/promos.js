@@ -341,8 +341,20 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
     pick(['tots'], 5, 6); // season-best, ~97
     pick(['moments', 'cupstories', 'showdown'], 8, 8, { moment: 'Barcelona treble masterclass' }); // always-released, guaranteed 99
     pick(['fiesta', 'yuletide', 'birthday'], 8, 8); // summer-party style, 99 (future release)
-    pick(['flashback'], 4, 5, { moment: '2015 treble season' }); // legend/icon-style prime
+    pick(['flashback'], 8, 8, { moment: '2015 treble season' }); // legend/icon-style prime, guaranteed 99
     pick(['halo', 'cupicon'], 6, 6); // extra "hall of heroes" style 99
+  }
+
+  // Owner request (Sep 27): Salah also gets a guaranteed legend-level promo version (Egypt's greatest active
+  // player). Placed directly like Neymar's picks above, so it's guaranteed regardless of the seeded pools.
+  const salahBase = actives.find((p) => p.person === 'salah');
+  if (salahBase) {
+    const id = ['centurions', 'halo', 'moments'].find((x) => PROMO_BY_ID[x]);
+    if (id && !out.some((p) => p.special === id && p.baseId === salahBase.id)) {
+      const rmax = PROMO_BY_ID[id].range[1];
+      const target = Math.min(rmax, salahBase.ovr + 8);
+      if (target > salahBase.ovr) make(salahBase, id, target, { milestone: 'Egypt caps & goals record' });
+    }
   }
 
   for (const p of out) p.tier = 'gold';

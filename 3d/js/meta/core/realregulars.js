@@ -265,7 +265,6 @@ const EXT_ROWS_COMPACT = [
 ["enyeama","Vincent Enyeama","Enyeama","NGA","GK",[],"R",85,30,5,"ETO"],
 ["kameni","Carlos Kameni","Kameni","CMR","GK",[],"R",83,28,5,"ETO"],
 ["barrygk","Boubacar Barry","Barry","CIV","GK",[],"R",80,32,5,"ETO"],
-["elhadary","Essam El-Hadary","El-Hadary","EGY","GK",[],"R",84,35,4,"CON"],
 ["kaspers","Kasper Schmeichel","K. Schmeichel","DEN","GK",[],"R",85,30,0,"ISL"],
 ["peters","Peter Schmeichel","P. Schmeichel","DEN","GK",[],"R",91,30,0,"ISL"],
 ["sorensengk","Thomas Sørensen","Sørensen","DEN","GK",[],"R",83,29,0,"ISL"],
@@ -540,7 +539,6 @@ const EXT_ROWS_COMPACT = [
 ["nedved","Pavel Nedvěd","Nedvěd","CZE","CM",["LW"],"R",90,28,0,"AUR"],
 ["emrebelozoglu","Emre Belözoğlu","Emre","TUR","CM",["CAM"],"L",83,28,0,"CON"],
 ["nikokovac","Niko Kovač","Kovač","CRO","CDM",["CM"],"R",83,28,0,"MEI"],
-["ahmedhassan","Ahmed Hassan","A. Hassan","EGY","CM",[],"R",83,28,4,"CON"],
 ["essien","Michael Essien","Essien","GHA","CDM",["CM"],"R",87,28,5,"ISL"],
 ["mikelobi","John Obi Mikel","Obi Mikel","NGA","CDM",[],"R",82,28,5,"ISL"],
 ["oliseh","Sunday Oliseh","Oliseh","NGA","CDM",[],"R",82,28,5,"MEI"],
@@ -606,7 +604,6 @@ const EXT_ROWS_COMPACT = [
 ["christianeriksen","Christian Eriksen","Eriksen","DEN","CAM",["CM"],"R",86,28,0,"ISL"],
 ["jayjayokocha","Jay-Jay Okocha","Okocha","NGA","CAM",[],"R",87,28,5,"ISL"],
 ["abedipele","Abedi Pelé","Abedi Pelé","GHA","CAM",[],"L",88,28,5,"ETO"],
-["aboutrika","Mohamed Aboutrika","Aboutrika","EGY","CAM",[],"R",83,28,4,"CON"],
 ["parkjisung","Park Ji-sung","Park","KOR","CM",["RM"],"R",83,26,1,"ISL"],
 ["kisungyueng","Ki Sung-yueng","Ki","KOR","CM",[],"R",80,25,1,"ISL"],
 ["kagawa","Shinji Kagawa","Kagawa","JPN","CAM",[],"R",83,26,1,"MEI"],
@@ -622,7 +619,35 @@ const EXT_ROWS_COMPACT = [
 ["jairzinho","Jairzinho","Jairzinho","BRA","RW",["ST"],"R",89,28,3,"CON"],
 ["tostao","Tostão","Tostão","BRA","ST",["CF"],"R",88,28,3,"CON"],
 ["batistuta","Gabriel Batistuta","Batistuta","ARG","ST",[],"R",90,28,1,"AUR"],
-["crespo","Hernán Crespo","Crespo","ARG","ST",[],"R",86,28,1,"AUR"]
+["crespo","Hernán Crespo","Crespo","ARG","ST",[],"R",86,28,1,"AUR"],
+// ---------- Egypt: 2026 FIFA World Cup squad (owner request Sep 27) — current internationals as regular
+// gold/rare-gold cards; Salah (realplayers.js Stars) and Marmoush (above) are already in the pool. Domestic
+// Egyptian clubs (Al Ahly/Zamalek etc.) have no fictional league of their own in this game, so — matching the
+// convention every earlier Egyptian regular already used (El-Hadary/Ahmed Hassan/Aboutrika, now Icons) —
+// they're placed in 'CON' (the catch-all "rest of world" league) like every other non-big-5-league nation.
+["elshenawy","Mohamed El Shenawy","El Shenawy","EGY","GK",[],"R",83,37,3,"CON"],
+["shobeir","Mostafa Shobeir","Shobeir","EGY","GK",[],"R",78,28,2,"CON"],
+["mohamedsobhi","Mohamed Sobhi","Sobhi","EGY","GK",[],"R",78,25,2,"CON"],
+["ahmedhegazi","Ahmed Hegazi","Hegazi","EGY","CB",["CDM"],"R",79,34,4,"CON"],
+["abdelmonem","Mohamed Abdelmonem","Abdelmonem","EGY","CB",[],"R",78,29,3,"CON"],
+["ramyrabia","Ramy Rabia","Rabia","EGY","CB",[],"R",78,31,3,"CON"],
+["yasseribrahim","Yasser Ibrahim","Y. Ibrahim","EGY","CB",[],"R",79,28,3,"CON"],
+["marwanattia","Marwan Attia","Attia","EGY","CB",[],"R",78,25,3,"CON"],
+["mahmoudalaa","Mahmoud Alaa","Alaa","EGY","CB",["RB"],"R",78,32,3,"CON"],
+["mohamedhany","Mohamed Hany","Hany","EGY","LB",["LWB"],"L",78,28,3,"CON"],
+["ahmedfatouh","Ahmed Fatouh","Fatouh","EGY","LB",["LWB"],"L",78,27,3,"CON"],
+["karimhafez","Karim Hafez","Hafez","EGY","LB",["LWB"],"L",78,28,3,"CON"],
+["mohamedhamdy","Mohamed Hamdy","Hamdy","EGY","RB",["RWB"],"R",78,31,3,"CON"],
+["akramtawfik","Akram Tawfik","Tawfik","EGY","RB",["RWB"],"R",78,30,3,"CON"],
+["hamdifathi","Hamdi Fathi","H. Fathi","EGY","CDM",["CB"],"R",78,35,4,"CON"],
+["emamashour","Emam Ashour","Ashour","EGY","CDM",["CM"],"R",79,25,4,"CON"],
+["elneny","Mohamed Elneny","Elneny","EGY","CM",["CDM"],"R",78,33,3,"CON"],
+["ahmedrefaat","Ahmed Refaat","Refaat","EGY","CM",["CDM"],"R",78,32,3,"CON"],
+["koka","Ahmed Koka","Koka","EGY","RW",["RM"],"R",78,30,4,"CON"],
+["zizosayed","Ahmed Sayed Zizo","Zizo","EGY","RW",["RM","CAM"],"R",80,28,3,"CON"],
+["trezeguethassan","Mahmoud Hassan","Trezeguet","EGY","LW",["RW","RM"],"R",80,31,3,"CON"],
+["mostafamohamed","Mostafa Mohamed","M. Mohamed","EGY","ST",["CF"],"R",79,28,3,"CON"],
+["ibrahimadel","Ibrahim Adel","I. Adel","EGY","ST",["CF","LW"],"R",78,24,3,"CON"]
 ];
 const EXT_ROWS = EXT_ROWS_COMPACT.map(expandExt);
 

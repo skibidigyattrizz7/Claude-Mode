@@ -349,7 +349,8 @@ const { getPlayer } = await import('../core/players.js');
 const { REAL_ROW_COUNT } = await import('../core/realplayers.js');
 const { effectiveOvr, positionFit } = await import('../core/formations.js');
 
-const EXPECTED_REAL = ['Lionel Messi', 'Pelé', 'Diego Maradona', 'Cristiano Ronaldo', 'Johan Cruyff', 'Alfredo Di Stéfano', 'Franz Beckenbauer', 'Zinedine Zidane', 'George Best', 'Michel Platini', 'Ronaldo Nazário', 'Ronaldinho', 'Paolo Maldini', 'Garrincha', 'Lev Yashin', 'Stanley Matthews', 'Roberto Baggio', 'Thierry Henry', 'Marco van Basten', 'Xavi Hernández', 'Andrés Iniesta', 'Luís Figo', 'Romário', 'Eusébio', 'Karl-Heinz Rummenigge', 'Fabio Cannavaro', 'Iker Casillas', 'Raúl González', 'Neymar Jr.', 'Sergio Ramos', 'Paolo Rossi', 'Roberto Carlos', 'Kylian Mbappé', 'Luka Modrić', 'Gheorghe Hagi', 'Zlatan Ibrahimović', 'Frank Lampard', 'Steven Gerrard', 'David Beckham', 'Clarence Seedorf', 'Dani Alves', 'Patrick Vieira', 'Ronald Koeman', 'Giacinto Facchetti', 'Philipp Lahm', 'Javier Zanetti', 'Sándor Kocsis', 'Just Fontaine', 'Teófilo Cubillas', 'Mario Kempes', 'Jimmy Johnstone', 'Eric Cantona', 'Kevin De Bruyne', 'Alessandro Del Piero', 'Francesco Totti', 'Diego Forlán', 'Rivaldo', 'Michael Laudrup', 'Johan Neeskens', 'Hristo Stoichkov', 'Didier Drogba', 'Paul Scholes', 'Gunnar Nordahl', 'Arjen Robben', 'Raul Meireles', 'Fernandinho', 'Edinson Cavani', 'Karim Benzema', 'Toni Kroos', 'Ivan Rakitić', 'Sergio Busquets', 'Gianluigi Buffon', 'Manuel Neuer', 'Kaká', 'Roberto Mancini', 'Hakan Şükür', 'Wayne Rooney', 'Alessandro Nesta', 'Sol Campbell', 'Patrick Kluivert', 'Dino Zoff', 'Sócrates', 'Cafu', 'Lothar Matthäus', 'Daniel Passarella', 'Fernando Hierro', 'Javier Mascherano', 'David Villa', 'Gary Lineker', 'Romelu Lukaku', 'Karim Bagheri', 'Didier Deschamps', 'Emmanuel Petit', 'Paulo Futre', 'Hristo Bonev', 'Mohamed Salah', 'Ray Clemence'];
+const EXPECTED_REAL = ['Lionel Messi', 'Pelé', 'Diego Maradona', 'Cristiano Ronaldo', 'Johan Cruyff', 'Alfredo Di Stéfano', 'Franz Beckenbauer', 'Zinedine Zidane', 'George Best', 'Michel Platini', 'Ronaldo Nazário', 'Ronaldinho', 'Paolo Maldini', 'Garrincha', 'Lev Yashin', 'Stanley Matthews', 'Roberto Baggio', 'Thierry Henry', 'Marco van Basten', 'Xavi Hernández', 'Andrés Iniesta', 'Luís Figo', 'Romário', 'Eusébio', 'Karl-Heinz Rummenigge', 'Fabio Cannavaro', 'Iker Casillas', 'Raúl González', 'Neymar Jr.', 'Sergio Ramos', 'Paolo Rossi', 'Roberto Carlos', 'Kylian Mbappé', 'Luka Modrić', 'Gheorghe Hagi', 'Zlatan Ibrahimović', 'Frank Lampard', 'Steven Gerrard', 'David Beckham', 'Clarence Seedorf', 'Dani Alves', 'Patrick Vieira', 'Ronald Koeman', 'Giacinto Facchetti', 'Philipp Lahm', 'Javier Zanetti', 'Sándor Kocsis', 'Just Fontaine', 'Teófilo Cubillas', 'Mario Kempes', 'Jimmy Johnstone', 'Eric Cantona', 'Kevin De Bruyne', 'Alessandro Del Piero', 'Francesco Totti', 'Diego Forlán', 'Rivaldo', 'Michael Laudrup', 'Johan Neeskens', 'Hristo Stoichkov', 'Didier Drogba', 'Paul Scholes', 'Gunnar Nordahl', 'Arjen Robben', 'Raul Meireles', 'Fernandinho', 'Edinson Cavani', 'Karim Benzema', 'Toni Kroos', 'Ivan Rakitić', 'Sergio Busquets', 'Gianluigi Buffon', 'Manuel Neuer', 'Kaká', 'Roberto Mancini', 'Hakan Şükür', 'Wayne Rooney', 'Alessandro Nesta', 'Sol Campbell', 'Patrick Kluivert', 'Dino Zoff', 'Sócrates', 'Cafu', 'Lothar Matthäus', 'Daniel Passarella', 'Fernando Hierro', 'Javier Mascherano', 'David Villa', 'Gary Lineker', 'Romelu Lukaku', 'Karim Bagheri', 'Didier Deschamps', 'Emmanuel Petit', 'Paulo Futre', 'Hristo Bonev', 'Mohamed Salah', 'Ray Clemence',
+  'Mohamed Aboutrika', 'Hossam Hassan', 'Essam El-Hadary', 'Ahmed Hassan', 'Hany Ramzy', 'Mahmoud El Khatib', 'Wael Gomaa', 'Mohamed Zidan', 'Amr Zaki', 'Ahmed Hossam Mido', 'Mohamed Barakat', 'Ahmed Fathy'];
 
 test('real players: every requested player present once per version, LOTG rarity, valid stats', () => {
   const db = getDB();
@@ -1190,6 +1191,64 @@ test('B2: Neymar has several promo versions, the highest reaching 99, at least o
   for (const p of promos) assert.ok(p.ovr > base.ovr);
 });
 function getPlayerNeymar(db) { return db.stars.find((p) => p.person === 'neymar'); }
+
+test('B2 (owner Sep 27): Neymar FLASHBACK promo card is 99 with boosted stats', () => {
+  const db = getDB();
+  const base = getPlayerNeymar(db);
+  const flashback = db.promos.find((p) => p.baseId === base.id && p.special === 'flashback');
+  assert.ok(flashback, 'Neymar has no FLASHBACK promo card');
+  assert.equal(flashback.ovr, 99, `Neymar FLASHBACK should be 99, got ${flashback.ovr}`);
+  assert.ok(flashback.ovr > base.ovr, 'FLASHBACK should be boosted over the base card');
+  for (const k of Object.keys(flashback.stats)) assert.ok(flashback.stats[k] >= base.stats[k], `${k} should not regress on the boosted card`);
+});
+
+test('B2 (owner Sep 27): Salah has a guaranteed legend-level promo version', () => {
+  const db = getDB();
+  const base = db.stars.find((p) => p.person === 'salah');
+  assert.ok(base, 'Salah missing from stars');
+  const promos = db.promos.filter((p) => p.baseId === base.id);
+  assert.ok(promos.length >= 1, 'Salah should have at least one promo version');
+  assert.ok(Math.max(...promos.map((p) => p.ovr)) >= 94, 'Salah should have a legend-level (94+) promo card');
+});
+
+test('B2 (owner Sep 27): Egypt has a full, playable 2026 World Cup squad', () => {
+  const db = getDB();
+  const egypt = db.players.filter((p) => p.nat === 'EGY' && p.real);
+  assert.ok(egypt.length >= 23, `only ${egypt.length} EGY real players in db.players`);
+  const gks = egypt.filter((p) => p.pos === 'GK');
+  assert.ok(gks.length >= 2, `only ${gks.length} EGY goalkeepers`);
+  for (const p of egypt) {
+    assert.ok(p.league && (LEAGUE_BY_ID[p.league] || SPECIAL_CLUBS[p.league]), `${p.name} has no usable league`);
+    assert.ok(p.nat === 'EGY');
+  }
+  // Salah (Star) and Marmoush (regular) must both still be present.
+  assert.ok(db.stars.some((p) => p.person === 'salah' && p.nat === 'EGY'), 'Salah missing');
+  assert.ok(db.regulars.some((p) => p.person === 'marmoush'), 'Marmoush missing');
+});
+
+test('B2 (owner Sep 27): Egyptian all-time greats are Icons (Aboutrika, El-Hadary, Hossam Hassan…)', () => {
+  const db = getDB();
+  const iconSlugs = ['aboutrika', 'elhadary', 'hossamhassan', 'ahmedhassan', 'hanyramzy', 'elkhatib', 'waelgomaa', 'zidanmo', 'amrzaki', 'mido', 'barakat', 'ahmedfathy'];
+  for (const slug of iconSlugs) {
+    const icon = db.icons.find((p) => p.person === slug);
+    assert.ok(icon, `Icon ${slug} missing`);
+    assert.equal(icon.nat, 'EGY');
+    assert.equal(icon.club, 'ICN', `${slug} should play for the Icons club`);
+  }
+  const aboutrika = db.icons.find((p) => p.person === 'aboutrika');
+  assert.ok(aboutrika.ovr >= 90, `Aboutrika should be a peak-tier Icon, got ${aboutrika.ovr}`);
+  const elhadary = db.icons.find((p) => p.person === 'elhadary');
+  assert.equal(elhadary.pos, 'GK');
+  assert.ok(elhadary.ovr >= 87, `El-Hadary should be ~88, got ${elhadary.ovr}`);
+  const hossam = db.icons.find((p) => p.person === 'hossamhassan');
+  assert.ok(hossam.ovr >= 87, `Hossam Hassan should be ~88, got ${hossam.ovr}`);
+  // No name may appear in both the Icons/Stars lists and the regulars list (duplicate-player rule).
+  const regNames = new Set(db.regulars.map((p) => p.name.toLowerCase()));
+  for (const slug of iconSlugs) {
+    const icon = db.icons.find((p) => p.person === slug);
+    assert.ok(!regNames.has(icon.name.toLowerCase()), `${icon.name} duplicated in regulars`);
+  }
+});
 
 // ---------- A2: one balance model (local coins <-> infinite) + custom card registry ----------
 test('wallet: toggling infinite on/off never loses, NaNs or corrupts the real balance; earnings while infinite count', async () => {
