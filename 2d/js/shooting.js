@@ -1,7 +1,7 @@
 // Shot planning with three assist modes (pure). The result is a target point on the
 // goal plane plus speed/spin; physics.solveKick converts it into a launch velocity.
 import { PITCH, CY, GOAL, BALL_R, SHOT_TYPES } from './constants.js';
-import { clamp, gauss, angleBetween, lerp, DEG } from './util.js';
+import { clamp, gauss, angleBetween, lerp, DEG, rand } from './util.js';
 import { solveKick } from './physics.js';
 
 export const ASSIST_MODES = ['Assisted', 'Precision', 'Manual'];
@@ -40,7 +40,7 @@ export function snapInsideFrame(y, z, margin = 0.2) {
  *        Manual = exactly where aimed, full error.
  * Returns {target:{x,y,z}, speed, spin, topspin, onTarget, snapped, sd, aimY, bonus}
  */
-export function planShot(o, rng = Math.random) {
+export function planShot(o, rng = rand) {
   const T = SHOT_TYPES[o.type] || SHOT_TYPES.driven;
   const gx = goalLineX(o.goalSide);
   const power = clamp(o.power, 0, 1);

@@ -1,6 +1,6 @@
 // Pure "game feel" helpers: contextual first touch, shoulder duels, timed finishing and
 // saved-kick restarts. No DOM; unit tested in tests/logic.test.mjs.
-import { clamp } from './util.js';
+import { clamp, rand } from './util.js';
 
 /**
  * How heavy is a first touch? 0 = cushioned dead at the feet, 1 = knocked well away.
@@ -51,7 +51,7 @@ export function timedFinishGrade(delta) {
  * view): he holds it, turns it round the post for a corner, or parries it back into play.
  * @param caught the keeper held the ball; y where the ball was saved (pitch y)
  */
-export function savedKickRestart(caught, y, rng = Math.random, midY = 27) {
+export function savedKickRestart(caught, y, rng = rand, midY = 27) {
   if (caught) return { type: 'catch', y };
   const r = rng();
   const s = y < midY ? -1 : 1;

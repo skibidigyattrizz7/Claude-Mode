@@ -3,7 +3,7 @@
 // goes through the sanitize* functions here — never trust the peer.
 //
 // Common transport interface:
-//   await t.host()        -> room code (5 chars). Starts listening for one guest.
+//   await t.host()        -> room code (ROOM_CODE_LEN = 6 chars). Starts listening for one guest.
 //   await t.join(code)    -> resolves when the link to the host is open (rejects e.g. "Room not found").
 //   t.send(obj, { rt })   -> send a JSON-able message. rt=true: unreliable/unordered channel if available.
 //   t.onMessage = (obj) => {}            // already decoded + size/shape-capped
@@ -15,15 +15,16 @@
 export const MAX_MSG_BYTES = 32 * 1024;
 export const PEER_PREFIX = 'touchline2d-';
 
-/** 5-char room code (no ambiguous chars: no 0/O/1/I). */
+export const ROOM_CODE_LEN = 6;
+/** 6-char room code (no ambiguous chars: no 0/O/1/I). */
 export function makeRoomCode(rand = Math.random) {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
-  for (let i = 0; i < 5; i++) s += A[Math.floor(rand() * A.length)];
+  for (let i = 0; i < ROOM_CODE_LEN; i++) s += A[Math.floor(rand() * A.length)];
   return s;
 }
 export function normalizeRoomCode(s) {
-  return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, ROOM_CODE_LEN);
 }
 
 export const encode = (m) => JSON.stringify(m);
@@ -87,7 +88,7 @@ const r2 = (v) => Math.round(v * 100) / 100;
  *  currently controlled by the human whose viewpoint this snapshot is for, or -1. */
 export function packSnapshot(m, stateCodes, myIdx = -1) {
   const b = m.ball;
-  const players = m.players.map((p) => [r2(p.x), r2(p.y), r2(p.facing), Math.round(p.anim || 0),
+  const players = m.players.map((p) => [r2(p.x), r2(p.y), r2(Math.atan2(Math.sin(p.facing), Math.cos(p.facing))), r2((p.anim || 0) % (Math.PI * 2)),
     Math.max(0, stateCodes.indexOf(p.state)), p.sentOff ? 1 : 0, p.team]);
   return {
     t: 'snap', seq: m._netSeq || 0,
@@ -126,6 +127,31 @@ export function sanitizeEvent(e) {
   const out = { type: e.type.slice(0, 24) };
   if (typeof e.strength === 'number') out.strength = num(e.strength, 0, 1, 0.5);
   return out;
+}
+
+const STAT_KEYS = ['poss', 'shots', 'onTarget', 'passAtt', 'passCmp', 'interceptions', 'fouls', 'corners', 'yellows', 'reds'];
+/** Full-time summary (host -> guest): score, per-team stats and scorers, for the stats screen. */
+export function packEnd(m) {
+  return {
+    t: 'end', sc: m.score.slice(),
+    st: m.stats.map((s) => STAT_KEYS.map((k) => Math.round((s[k] || 0) * 10) / 10)),
+    g: (m.goals || []).slice(0, 30).map((g) => [String(g.name || '').slice(0, 24), g.team ? 1 : 0, Math.round(g.min || 0), g.og ? 1 : 0]),
+  };
+}
+export function sanitizeEnd(e) {
+  const src = e && typeof e === 'object' ? e : {};
+  const st = Array.isArray(src.st) ? src.st : [];
+  const stats = [0, 1].map((t) => {
+    const row = Array.isArray(st[t]) ? st[t] : [];
+    const o = {};
+    STAT_KEYS.forEach((k, i) => { o[k] = num(row[i], 0, k === 'poss' ? 1e5 : 999, 0); });
+    return o;
+  });
+  const goals = (Array.isArray(src.g) ? src.g.slice(0, 30) : []).filter(Array.isArray).map((g) => ({
+    name: typeof g[0] === 'string' ? g[0].slice(0, 24) : '?', team: g[1] === 1 ? 1 : 0, min: int(g[2], 0, 130, 0), og: bool(g[3]),
+  }));
+  const sc = Array.isArray(src.sc) && src.sc.length === 2 ? [int(src.sc[0], 0, 99, 0), int(src.sc[1], 0, 99, 0)] : [0, 0];
+  return { score: sc, stats, goals };
 }
 
 // ---------------------------------------------------------------- transports
@@ -305,6 +331,7 @@ export function loadPeerJS() {
   if (peerLoad) return peerLoad;
   const sources = [
     new URL('../../3d/vendor/p2p-net.min.js', import.meta.url).href,
+    new URL('../../3d/vendor/peerjs.min.js', import.meta.url).href,
     'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js',
   ];
@@ -401,7 +428,7 @@ export class PeerTransport extends BaseTransport {
   }
   async join(code) {
     const c = normalizeRoomCode(code);
-    if (c.length !== 5) throw new Error('Room codes are 5 characters.');
+    if (c.length !== ROOM_CODE_LEN) throw new Error(`Room codes are ${ROOM_CODE_LEN} characters.`);
     this.role = 'guest'; this.code = c; this.target = PEER_PREFIX + c;
     if (!this.peer || this.peer.destroyed) await this._openPeer();
     this._setStatus('connecting');
