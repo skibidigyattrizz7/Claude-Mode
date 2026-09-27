@@ -1,7 +1,7 @@
 // Gameplay-settings / assist / knockout / ratings / physique tests (run via physics.test.mjs or directly).
 import assert from 'node:assert/strict';
 import { MatchSim } from '../core/sim.js';
-import { PHASE, SP, GOAL, PITCH, BALL_R } from '../core/constants.js';
+import { PHASE, SP, GOAL, PITCH, BALL_R, DIFFICULTY } from '../core/constants.js';
 import { segDist } from '../core/mathx.js';
 import { predictBall, behindLine } from '../core/physics.js';
 import { rateStats, computeRatings, playerOfMatch } from '../core/ratings.js';
@@ -341,6 +341,104 @@ export function runGameplayTests(test) {
     const ps = r.playerStats[BRAZIL.players[9].id];
     for (const k of ['goals', 'assists', 'shots', 'shotsOnTarget', 'passes', 'passesCompleted', 'tackles', 'interceptions', 'saves', 'headerGoals', 'finesseGoals', 'cleanSheet', 'minutes']) assert.ok(k in ps, k);
     assert.ok(r.motm in r.playerRatings);
+  });
+
+  console.log('AI defending and interceptions');
+  test('user team (idle user): AI teammates stay goal-side of onside attackers in our third', () => {
+    let N = 0, ok = 0;
+    for (const seed of [41, 42, 43, 44]) {
+      const sim = new MatchSim({ home: BRAZIL, away: FRANCE, halfMinutes: 1, controllers: { home: 'p1', away: 'ai' }, seed });
+      for (let n = 0; n < 120 * 60 && !sim.ended; n++) {
+        sim.step(DT, [null, null]);
+        if (n % 30 || sim.phase !== PHASE.PLAY) continue;
+        const o = sim.owner();
+        if (!o || o.team !== 1) continue;
+        const xs = sim.teamList[0].map((m) => sim.X(0, m.x)).sort((a, c) => a - c);
+        const onside = Math.min(xs[1], sim.X(0, sim.ball.p.x));
+        for (const a of sim.teamList[1]) {
+          if (a === o || a.isGK) continue;
+          const aX = sim.X(0, a.x);
+          if (aX > 40 || aX < onside) continue;
+          N++;
+          if (sim.teamList[0].some((m) => !m.isGK && m.idx !== sim.ctrl[0] && Math.hypot(m.x - a.x, m.z - a.z) < 4 && sim.X(0, m.x) < aX)) ok++;
+        }
+      }
+    }
+    assert.ok(N > 60, 'samples ' + N);
+    assert.ok(ok / N > 0.45, `goal-side ${ok}/${N}`);
+  });
+  test('user engaging the carrier: no AI double-press from distance, one teammate covers goal-side', () => {
+    const sim = new MatchSim({ home: BRAZIL, away: FRANCE, halfMinutes: 3, controllers: { home: 'p1', away: 'p2' }, seed: 5 });
+    sim.step(DT, [null, null]);
+    sim.phase = PHASE.PLAY; sim.sp.done = true; sim.dir = [1, -1];
+    sim.teamList[0].forEach((p, k) => sim._teleport(p, p.isGK ? -51 : -30, -25 + k * 5));
+    sim.teamList[1].forEach((p, k) => sim._teleport(p, p.isGK ? 50 : 5, -20 + k * 4));
+    const car = sim.teamList[1][8];
+    sim._teleport(car, -15, 0);
+    const b = sim.ball;
+    b.owner = car.idx; b.inHands = false; b.p.x = car.x - 0.45; b.p.z = 0; b.p.y = BALL_R; b.v.x = b.v.y = b.v.z = 0; b.lastTeam = 1;
+    sim.ctrl[1] = car.idx;
+    const user = sim.teamList[0][6];
+    sim._teleport(user, -17.5, 0); // goal-side, 2.5 m off the carrier
+    sim.ctrl[0] = user.idx; sim.switchT[0] = sim.t;
+    sim.nextTeamThink = 0;
+    sim.step(DT, [null, null]);
+    const info = sim.info[0];
+    assert.equal(sim.ctrl[0], user.idx);
+    assert.equal(info.press1, -1, 'no AI presser sprinting in from 12 m');
+    assert.ok(info.cover >= 0 && info.cover !== user.idx, 'a cover player is assigned');
+    assert.ok(sim.X(0, info.coverPt.x) < sim.X(0, car.x) - 3, 'cover point is goal-side behind the user');
+    // user wanders off: an AI teammate engages the carrier instead, and another still covers
+    sim._teleport(user, 20, 20);
+    sim.nextTeamThink = 0;
+    sim.step(DT, [null, null]);
+    assert.ok(info.press1 >= 0 && info.press1 !== user.idx);
+    assert.ok(info.cover >= 0 && info.cover !== info.press1);
+  });
+  // A defender standing near the lane of a firm (14-18 m/s) 22 m pass; he must read it first.
+  const laneTrial = (seed, off, speed, def, pls, diff = null) => {
+    const { sim, c } = scenario({}, { seed });
+    if (diff) sim.diff = diff;
+    const m = sim.players[7], d = sim.players[17];
+    sim._teleport(m, c.x + 22, c.z);
+    sim._teleport(d, c.x + 11, c.z + off);
+    d.a = { ...d.a, def }; d.ps = pls;
+    d.fooledUntil = 1e9; // stands still until the pass is struck
+    sim.step(DT, [inp({}), null]);
+    sim._release(c, { x: speed, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { kind: 'ground', pass: true, target: m.idx });
+    d.fooledUntil = sim.t + 0.1;
+    for (let t = 0; t < 4 && sim.ball.owner < 0; t += DT) sim.step(DT, [inp({}), null]);
+    return sim.ball.owner >= 0 && sim.players[sim.ball.owner].team === 1;
+  };
+  const laneRate = (def, pls, diff = null) => {
+    let k = 0;
+    for (let s = 0; s < 32; s++) if (laneTrial(500 + s, (1 + (s % 8) * 0.5) * (s % 2 ? 1 : -1), 14 + (Math.floor(s / 8) % 4) * 1.2, def, pls, diff)) k++;
+    return k / 32;
+  };
+  test('an AI defender steps into the lane and intercepts a slow pass', () => {
+    let k = 0;
+    for (let s = 0; s < 8; s++) if (laneTrial(600 + s, s % 2 ? 2 : -2, 11, 70, {})) k++;
+    assert.ok(k >= 7, `intercepted ${k}/8`);
+  });
+  test('interception rate is bounded (no psychic 100%) and rises with defending, Anticipate/Intercept and difficulty', () => {
+    const poor = laneRate(40, {}), elite = laneRate(92, { intercept: 1.6, anticipate: 1.6 });
+    assert.ok(poor > 0.1 && poor < 0.8, 'poor ' + poor);
+    assert.ok(elite < 0.97, 'elite ' + elite);
+    assert.ok(elite > poor + 0.15, `elite ${elite} vs poor ${poor}`);
+    const ama = laneRate(70, {}, DIFFICULTY.amateur), leg = laneRate(70, {}, DIFFICULTY.legendary);
+    assert.ok(leg > ama, `legendary ${leg} vs amateur ${ama}`);
+  });
+  test('an opposition pass must be read first: nobody commits to it on the frame it is struck', () => {
+    const { sim, c } = scenario({}, { seed: 7 });
+    const m = sim.players[7];
+    sim._teleport(m, c.x + 22, c.z);
+    sim._teleport(sim.players[17], c.x + 11, c.z + 2);
+    sim.step(DT, [inp({}), null]);
+    sim._release(c, { x: 16, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { kind: 'ground', pass: true, target: m.idx });
+    sim.nextTeamThink = 0;
+    sim.step(DT, [inp({}), null]);
+    for (const p of sim.teamList[1]) if (!p.isGK) assert.ok(p.readAt > sim.t - DT, 'read delay for ' + p.idx);
+    assert.equal(sim.info[1].chaser, -1);
   });
 
   console.log('tactics');
