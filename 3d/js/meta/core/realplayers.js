@@ -99,6 +99,19 @@ const ICON_ROWS = [
   ['futre', 'Paulo Futre', 'Futre', 'POR', 'LW', ['CAM'], 'L', 3, 5, 87, [90, 82, 82, 91, 32, 62], 21, 172, 1],
   ['bonev', 'Hristo Bonev', 'Bonev', 'BUL', 'CAM', ['CF', 'ST'], 'R', 3, 4, 86, [80, 86, 84, 86, 40, 74], 28, 180, 1],
   ['clemence', 'Ray Clemence', 'Clemence', 'ENG', 'GK', [], 'L', 3, 1, 89, [87, 88, 78, 89, 55, 90], 28, 183, 0],
+  // ---------- Egypt's greatest ever (owner request Sep 27) ----------
+  ['aboutrika', 'Mohamed Aboutrika', 'Aboutrika', 'EGY', 'CAM', ['CF', 'CM'], 'R', 4, 4, 91, [78, 86, 90, 92, 42, 76], 29, 183, 4],
+  ['hossamhassan', 'Hossam Hassan', 'H. Hassan', 'EGY', 'ST', ['CF'], 'R', 3, 3, 88, [80, 90, 74, 82, 36, 84], 27, 180, 4],
+  ['elhadary', 'Essam El-Hadary', 'El-Hadary', 'EGY', 'GK', [], 'R', 3, 1, 88, [90, 87, 78, 89, 52, 89], 30, 186, 4],
+  ['ahmedhassan', 'Ahmed Hassan', 'A. Hassan', 'EGY', 'CM', ['CDM', 'CAM'], 'R', 3, 3, 87, [76, 80, 86, 82, 68, 78], 27, 177, 4],
+  ['hanyramzy', 'Hany Ramzy', 'H. Ramzy', 'EGY', 'CB', ['CDM'], 'R', 3, 2, 86, [66, 35, 60, 58, 87, 84], 29, 183, 3],
+  ['elkhatib', 'Mahmoud El Khatib', 'El Khatib', 'EGY', 'CAM', ['ST', 'CF'], 'R', 3, 4, 87, [78, 88, 84, 88, 38, 74], 26, 178, 4],
+  ['waelgomaa', 'Wael Gomaa', 'Gomaa', 'EGY', 'CB', [], 'R', 3, 2, 86, [64, 30, 58, 55, 88, 85], 29, 185, 4],
+  ['zidanmo', 'Mohamed Zidan', 'Zidan', 'EGY', 'ST', ['CF', 'LW'], 'R', 3, 3, 86, [82, 86, 78, 84, 36, 78], 27, 180, 3],
+  ['amrzaki', 'Amr Zaki', 'A. Zaki', 'EGY', 'ST', ['CF'], 'R', 3, 3, 86, [78, 85, 70, 80, 34, 84], 27, 183, 4],
+  ['mido', 'Ahmed Hossam Mido', 'Mido', 'EGY', 'ST', ['CF'], 'R', 3, 3, 86, [72, 84, 72, 78, 36, 88], 23, 193, 3],
+  ['barakat', 'Mohamed Barakat', 'Barakat', 'EGY', 'RW', ['LW', 'RM'], 'R', 4, 4, 86, [82, 72, 80, 88, 35, 66], 27, 175, 4],
+  ['ahmedfathy', 'Ahmed Fathy', 'A. Fathy', 'EGY', 'RB', ['LB', 'CB'], 'R', 3, 3, 86, [76, 50, 72, 72, 80, 78], 29, 178, 3],
 ];
 
 // ---------- Stars (active; current-ish ratings) ----------
@@ -206,6 +219,18 @@ const PHYS = {
   futre: [68, ['trickster+', 'rapid', 'technical']],
   bonev: [76, ['deadball+', 'finesse']],
   clemence: [80, ['crossclaimer+', 'quickreflexes', 'farreach']],
+  aboutrika: [75, ['incisive+', 'flair+', 'technical', 'firsttouch']],
+  hossamhassan: [78, ['powerheader+', 'finesse', 'acrobatic', 'firsttouch']],
+  elhadary: [84, ['quickreflexes+', 'farreach', 'crossclaimer', 'deflector']],
+  ahmedhassan: [76, ['incisive+', 'pressproven', 'tikitaka', 'technical']],
+  hanyramzy: [82, ['aerial+', 'block', 'anticipate']],
+  elkhatib: [76, ['incisive+', 'chip', 'flair', 'technical']],
+  waelgomaa: [80, ['anticipate+', 'block', 'aerial']],
+  zidanmo: [76, ['finesse+', 'acrobatic', 'firsttouch']],
+  amrzaki: [78, ['power+', 'finesse', 'acrobatic']],
+  mido: [88, ['powerheader+', 'power', 'bruiser']],
+  barakat: [70, ['whipped+', 'trickster', 'technical']],
+  ahmedfathy: [75, ['jockey+', 'relentless', 'whipped']],
   // Stars
   messi: [72, ['finesse+', 'tikitaka', 'technical']],
   ronaldo: [85, ['power+', 'powerheader', 'acrobatic']],

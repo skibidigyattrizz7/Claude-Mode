@@ -117,6 +117,19 @@ UI keyed off `CATEGORIES[cat].label` keeps working unmodified.
   chart), best first; also biases which of a generated player's drawn styles gets the `+`. Card creator (or
   anything else offering a manual PlayStyle+ pick) should default to these.
 
+## Real players — Egypt & Neymar update (Sep 27)
+- Neymar's FLASHBACK promo (`core/promos.js`) now reaches the guaranteed **99** (was 96), alongside his other
+  guaranteed promo versions. Salah (`rs_salah`) also gets a guaranteed legend-level promo (94+, via
+  `centurions`/`halo`/`moments`, whichever exists), placed the same direct way as Neymar's picks.
+- Egypt's ~26-player 2026 World Cup squad is now in the pool: Salah (Star) and Marmoush (regular, pre-existing)
+  plus ~23 new regulars in `realregulars.js` (3 GKs, defenders, midfielders, forwards), all at fictional 'CON'
+  clubs (Egypt has no dedicated fictional league here, matching the convention every earlier Egyptian regular
+  already used).
+- Egypt's all-time greats are now Icons in `realplayers.js` (peak ratings): Aboutrika (91 CAM), El-Hadary
+  (88 GK), Hossam Hassan (88 ST), Ahmed Hassan (87 CM), El Khatib (87 CAM), plus Hany Ramzy, Wael Gomaa,
+  Mohamed Zidan, Amr Zaki, Mido, Mohamed Barakat and Ahmed Fathy (86 each) — moved out of the regulars list
+  (their old lower-rated regular rows were removed) to avoid the "same name in Icons and regulars" rule.
+
 ## Every card has a usable `league` (owner request: chemistry + SBC/objective/tournament "same league")
 `p.league` is a real field on every card in `db.all` (generated, real players/icons/stars/regulars, promos,
 legends, heroes, admin cards, the secret card, TOTW, evolutions, custom/Card Creator cards) — never derived
