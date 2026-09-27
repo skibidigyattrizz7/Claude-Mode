@@ -10,6 +10,10 @@ import { getPlayer, quickSellValue } from './players.js';
 import { isPromoSpecial } from './promos.js';
 import { getConfig } from './config.js';
 import * as UT from './ut.js';
+import { isAdminChem } from './chemistry.js';
+
+/** Owner request (Sep 27): admin cards (ids 'ad_…' / rated above 99) are hidden from Swaps and can't be swapped. */
+export const isSwapHidden = (p) => isAdminChem(p);
 
 const fail = (error) => ({ ok: false, error });
 
@@ -31,10 +35,12 @@ export function addTokens(state, delta) {
  */
 export function checkSwappable(state, pid) {
   if (!state || !state.club.includes(pid) || !getPlayer(pid)) return { ok: false, reason: 'not-owned' };
+  if (isSwapHidden(getPlayer(pid))) return { ok: false, reason: 'admin-card' };
   if (state.squad.slots.includes(pid)) return { ok: false, reason: 'starting-xi' };
   return { ok: true, needsConfirm: (state.squad.bench || []).includes(pid) };
 }
-const swapBlocked = (chk) => fail(chk.reason === 'starting-xi' ? 'This card is in your starting XI' : 'Card is not in your club');
+const swapBlocked = (chk) => fail(chk.reason === 'starting-xi' ? 'This card is in your starting XI'
+  : chk.reason === 'admin-card' ? 'Admin cards can’t be swapped' : 'Card is not in your club');
 
 // ---------- valuation ----------
 const SWAP_COIN_MULT = 1.5; // owner request: swapping for coins beats quick-sell (currently 1.5x)
@@ -88,6 +94,7 @@ export function evaluateSwapSet(setId, pids) {
   const set = SWAP_SET_BY_ID[setId];
   if (!set) return { ok: false, checks: [] };
   const cards = (pids || []).map(getPlayer);
+  if (cards.some((c) => c && isSwapHidden(c))) return { ok: false, checks: [{ label: 'No admin cards', ok: false }] };
   const checks = [{ label: `Exactly ${set.count} players`, ok: cards.length === set.count && cards.every(Boolean), cur: `${cards.filter(Boolean).length}/${set.count}` }];
   const known = cards.filter(Boolean);
   checks.push({ label: `All players rated ${set.minOvr}+`, ok: known.length > 0 && known.every((p) => p.ovr >= set.minOvr) });

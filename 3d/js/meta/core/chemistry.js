@@ -16,9 +16,15 @@ function managerTeamBoost(manager, slots) {
 /** Legends of the Game (and classic Legends) link to every league; LOTG are always green with their nation. */
 const linksAll = (p) => p.special === 'legend' || p.special === 'lotg' || !!p.linkAll;
 
+/** Owner request (Sep 27): admin cards (ids 'ad_…', flagged admin, or rated above 99 — incl. Card Creator
+ * cards above 99) always have full chemistry (3) in any position, and every link touching one is green. */
+export const isAdminChem = (p) => !!p && (p.admin === true || (typeof p.id === 'string' && p.id.startsWith('ad_'))
+  || Number(p.ovr) > 99 || Number(p.rawOvr) > 99);
+
 /** Link strength between two players: 0 (red), 1 (orange), 2 (green). */
 export function linkStrength(a, b) {
   if (!a || !b) return null;
+  if (isAdminChem(a) || isAdminChem(b)) return 2;
   let s = 0;
   if (a.nat === b.nat) s++;
   if (linksAll(a) || linksAll(b) || a.league === b.league) s++;
@@ -57,7 +63,7 @@ export function calcChemistry(formation, slots, manager = null) {
     }
     if (p.special === 'legend' || p.special === 'hero') base = Math.min(3, base + 1);
     if (p.special === 'lotg' || p.linkAll) base = 3; // LOTG perk (also promo versions of LOTG cards): full chemistry in any of their positions
-    const chem = fit >= 1 ? base : 0; // any listed position counts as in-position; out of position = 0
+    const chem = isAdminChem(p) ? 3 : fit >= 1 ? base : 0; // any listed position counts as in-position; out of position = 0 (admin cards: always 3)
     players.push(chem);
     total += chem;
   }
@@ -97,7 +103,7 @@ export function calcChemistryFc26(formation, slots, manager = null) {
     if (p.special === 'legend' || p.special === 'hero') base = Math.min(3, base + 1);
     if (p.special === 'lotg' || p.linkAll) base = 3;
     if (managerMatches(manager, p)) base = Math.min(3, base + 1); // owner request: manager nation/league/club match = +1
-    const chem = fit >= 1 ? base : 0;
+    const chem = isAdminChem(p) ? 3 : fit >= 1 ? base : 0;
     players.push(chem);
     total += chem;
   }
