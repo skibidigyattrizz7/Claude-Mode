@@ -197,7 +197,7 @@ export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primar
   ];
   const state = {
     v: UT_VERSION, listed: [], untradeable: [], foreign: {}, admin: {}, clubName, short: short.slice(0, 3).toUpperCase(), kit: { primary, secondary },
-    coins: 10000, club: [...new Set(club)], squad: defaultSquad(), vault: [], transferList: [],
+    coins: 10000, tokens: 0, club: [...new Set(club)], squad: defaultSquad(), vault: [], transferList: [],
     packs: [{ type: 'premium', from: 'Welcome gift' }, { type: 'gold', from: 'Welcome gift' }],
     sbc: {}, obj: {},
     stats: { matches: 0, wins: 0, draws: 0, losses: 0, goals: 0, packsOpened: 0, sbcDone: 0 },
@@ -215,6 +215,8 @@ export function migrateUT(state) {
   if (!Array.isArray(state.club)) return null;
   state.listed = Array.isArray(state.listed) ? state.listed : [];
   state.untradeable = Array.isArray(state.untradeable) ? state.untradeable : [];
+  // Swaps: a second currency (state.tokens) — always a non-negative integer, never NaN (see swaps.js addTokens).
+  state.tokens = Number.isFinite(Number(state.tokens)) ? Math.max(0, Math.round(Number(state.tokens))) : 0;
   state.foreign = state.foreign && typeof state.foreign === 'object' ? state.foreign : {};
   state.admin = state.admin && typeof state.admin === 'object' ? state.admin : {};
   state.packs = Array.isArray(state.packs) ? state.packs.filter((pk) => pk && PACK_BY_ID[pk.type]) : [];
