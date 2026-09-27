@@ -701,8 +701,8 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
   }
   const toty = db.promos.filter((p) => p.special === 'toty');
   assert.equal(toty.length, 11);
-  assert.ok(toty.every((p) => p.ovr >= 97 && p.ovr <= 99));
-  assert.ok(db.promos.filter((p) => p.special === 'tots').every((p) => p.ovr >= 93 && p.ovr <= 97));
+  assert.ok(toty.every((p) => p.ovr >= 96 && p.ovr <= 98));
+  assert.ok(db.promos.filter((p) => p.special === 'tots').every((p) => p.ovr >= 92 && p.ovr <= 96));
   assert.ok(db.promos.filter((p) => p.special === 'birthday').every((p) => p.sm >= getPlayer(p.baseId).sm && p.wf === Math.min(5, getPlayer(p.baseId).wf + 1)));
   assert.ok(db.promos.filter((p) => p.special === 'rttk').every((p) => p.upg && p.upg.level >= 0 && p.upg.level <= 4));
   assert.ok(db.promos.some((p) => p.special === 'flashback' && p.baseId === 'ic_ronaldinho'));
@@ -712,7 +712,10 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
   assert.ok(Math.max(...ifs.map((p) => p.ovr)) >= 95, 'in-forms reach 95+');
   // calendar + packs
   for (let w = 1; w < 60; w++) { const live = PR.livePromos(w); assert.ok(live.length >= 1 && live.length <= 2 && live.every((id) => PR.PROMO_BY_ID[id])); }
-  const seen = new Set(); for (let w = 1; w <= PR.PROMOS.length * 2; w++) seen.add(PR.promoOfWeek(w));
+  // Scan far enough to reach every campaign's launch week (a campaign always headlines the week it launches;
+  // late-launching campaigns like finalchapter/fiesta need more than `PROMOS.length * 2` weeks to show up).
+  const scanWeeks = Math.max(PR.PROMOS.length * 2, ...PR.PROMOS.map((p) => p.releaseWeek || 0)) + 2;
+  const seen = new Set(); for (let w = 1; w <= scanWeeks; w++) seen.add(PR.promoOfWeek(w));
   assert.equal(seen.size, PR.PROMOS.length, 'every campaign appears in the calendar');
   for (const pr of PR.PROMOS) {
     const pack = UT.PACK_BY_ID[`promo_${pr.id}`];
@@ -887,6 +890,38 @@ test('unreleased promo cards never appear in the AI market, packs, draft or obje
   const d = DR.newDraft('unreleased-draft');
   DR.chooseFormation(d, '4-3-3');
   assert.ok(d.captainOptions.every((id) => getPlayer(id).special !== future.id));
+});
+
+test('promo cards job: 20+ campaigns, each with theme, colours, card class and a launch week; unreleased stay hidden', async () => {
+  const HEX = /^#[0-9a-f]{6}$/i;
+  assert.ok(PR.PROMOS.length >= 20, `only ${PR.PROMOS.length} promos`);
+  const weeks = new Set();
+  for (const pr of PR.PROMOS) {
+    assert.ok(pr.theme && typeof pr.theme === 'string', `${pr.id} theme`);
+    assert.ok(Array.isArray(pr.colors) && pr.colors.length === 3 && pr.colors.every((c) => HEX.test(c)), `${pr.id} colours`);
+    assert.ok(pr.name && pr.short && pr.tag && pr.desc && pr.range[0] < pr.range[1] && pr.range[1] <= 99, `${pr.id} fields`);
+    assert.ok(!/\bfut\b|futties/i.test(`${pr.name} ${pr.short} ${pr.tag}`), `${pr.id} uses a trademarked name`);
+    // the original seven are already released; everything newer carries a unique launch week
+    if (pr.releaseWeek) { assert.ok(!weeks.has(pr.releaseWeek), `${pr.id} shares a launch week`); weeks.add(pr.releaseWeek); }
+    else assert.ok(['toty', 'tots', 'futurestars', 'flashback', 'birthday', 'rttk', 'moments'].includes(pr.id), `${pr.id} needs a releaseWeek`);
+    if (pr.releaseWeek > 1) {
+      assert.equal(PR.promoOfWeek(pr.releaseWeek), pr.id, `${pr.id} headlines its launch week`);
+      assert.ok(!PR.releasedLivePromos(pr.releaseWeek - 1).includes(pr.id));
+      assert.equal(PR.isCardReleased({ special: pr.id }, pr.releaseWeek - 1), false);
+    }
+  }
+  // every week from the V5 rotation on has at least one released, live campaign (no empty weeks)
+  for (let w = 39; w < 120; w++) assert.ok(PR.releasedLivePromos(w).length >= 1, `week ${w} has no promo`);
+  // every campaign has its own card design class in meta.css and its colours reach the card component
+  const css = (await import('node:fs')).readFileSync(new URL('../../../css/meta.css', import.meta.url), 'utf8');
+  for (const pr of PR.PROMOS) assert.ok(css.includes(`.sp-${pr.id} {`), `no card design for ${pr.id}`);
+  const { cardClasses } = await import('../ui/card.js');
+  // Admin card-creator cards store the chosen promo design only in \`special\` — they must still render as that promo
+  assert.ok(cardClasses({ tier: 'gold', special: 'storm', customAdmin: true }).includes('is-promo'));
+  assert.ok(cardClasses({ tier: 'gold', special: 'inform' }).every((c) => c !== 'is-promo'));
+  // pack opening reads the same colours
+  const SEQ = await import('../ui/packopen_seq.js');
+  for (const pr of PR.PROMOS) assert.deepEqual(SEQ.classifyPull({ ovr: 90, tier: 'gold', special: pr.id }, PR.PROMO_BY_ID).colors, pr.colors);
 });
 
 test('transfer list (pmarket): flag a club card for sale without listing it yet, then list or return it', async () => {

@@ -61,6 +61,20 @@ agent's per-campaign background/rig — read it off `PROMO_BY_ID[id].theme` / `.
   and `UT.openPack`'s new "promo can drop from any pack" bonus (see below). A promo with a future
   `releaseWeek` is invisible everywhere until then, then behaves exactly like the original 7.
 
+### V5 (promo cards job): 32 campaigns, launch-week calendar, FC-style card component
+- `PROMOS` has 32 entries: the 10 above + 14 FC-calendar campaigns with generic names (storm, rulebenders, potm,
+  fright, roleswap, halo, blackout, champions, frost, yuletide, fantasy, wildfire, finalchapter, fiesta) + an
+  8-campaign "Global Cup" tournament set (`set: 'cup'`: cupplayer, roadtocup, cupstories, cupstar, gloryroad,
+  cupicon, cuphero, phenoms). Every newer campaign has a unique `releaseWeek` (weeks 39–75).
+- `promoOfWeek(week)`: weeks < 39 keep their historical headline; from 39 a campaign **headlines its launch week**,
+  other weeks rotate through campaigns already released — so `releasedLivePromos` is never empty.
+- Small nerf: TOTY 96–98, TOTS 92–96, other boosts ~1 lower and capped by each campaign's `range`.
+- Card look: `ui/card.js` `playerCard` is the one renderer (FC shape, FUT23 base tiers, full-art promos). A card
+  renders in a promo design when `p.promo` **or** `p.special` names a campaign (Admin card-creator cards store the
+  design only in `special`). Promo colours are injected once as CSS vars from `PROMOS[].colors`; each campaign's
+  art is the `.sp-<id>` block in `css/meta.css` (generated procedural SVG, shared `--art-*` layers). Classic
+  pack opening derives its tunnel theme from `colors` for any campaign without a hand-tuned entry.
+
 ## Packs: promo drop-in (`core/ut.js`)
 Non-promo packs (`gold`, `premium`, `rare`, `legend`, `lotg`) now have a small (1.5%) chance on their
 higher-tier slots (`goldRare`/`gold83`/`gold86`/`lotg`) to swap in a card from a currently released+live

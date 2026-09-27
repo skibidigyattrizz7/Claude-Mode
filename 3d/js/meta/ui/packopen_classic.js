@@ -37,6 +37,11 @@ const SPECIAL_THEME = {
 };
 function themeFor(best, promo) {
   if (promo && PROMO_THEME[promo.id]) return PROMO_THEME[promo.id];
+  // Every other campaign derives its tunnel from its own colours in core/promos.js (single source of truth).
+  if (promo && Array.isArray(promo.colors)) {
+    const [dark, main, light] = promo.colors;
+    return { wall: dark, beam: main, particles: [main, light, '#ffffff'], sting: { wave: 'triangle', freq: [220, 330, 494] } };
+  }
   if (best.special && SPECIAL_THEME[best.special]) return SPECIAL_THEME[best.special];
   return { wall: '#0b1120', beam: null, particles: null, sting: { wave: 'sine', freq: [220, 330, 440] } };
 }
