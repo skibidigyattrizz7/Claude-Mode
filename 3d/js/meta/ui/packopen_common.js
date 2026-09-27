@@ -102,8 +102,9 @@ export function makeGrid(stage, pack, players, opts, destroy) {
         playerCard(x.p, { size: 'sm' }),
         x.state === 'new' ? h('div', { class: 'pm-po-actions' },
           !x.dup ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => send(x) }, 'Send to club') : null,
+          x.dup && opts.onVault ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => vault(x) }, 'Send to SBC storage') : null,
           h('button', { class: 'pm-btn pm-btn--sm', onclick: () => sell(x) }, `Quick sell +${fmtNum(opts.sellValue(x.p))}`))
-          : h('div', { class: 'pm-po-done' }, x.state === 'sent' ? '✓ Sent to club' : `Sold +${fmtNum(x.sold)}`));
+          : h('div', { class: 'pm-po-done' }, x.state === 'sent' ? '✓ Sent to club' : x.state === 'vault' ? '✓ In SBC storage' : `Sold +${fmtNum(x.sold)}`));
       grid.appendChild(tile);
     }
     const pending = players.some((x) => x.state === 'new');
@@ -119,6 +120,7 @@ export function makeGrid(stage, pack, players, opts, destroy) {
       grid));
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }
+  function vault(x) { if (x.state !== 'new' || !x.dup || !opts.onVault) return; opts.onVault(x.pid); x.state = 'vault'; renderGrid(); }
   function sell(x, silent) { if (x.state !== 'new') return; const v = opts.onSell(x.pid, x.dup); x.sold = v; coinsGained += v; x.state = 'sold'; if (!silent) renderGrid(); }
   function finish() {
     for (const x of players) { if (x.state === 'new') { if (x.dup) sell(x, true); else send(x, true); } }

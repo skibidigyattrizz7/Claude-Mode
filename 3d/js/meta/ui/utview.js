@@ -1,6 +1,6 @@
 // Pitchside Ultimate Team screens.
 import { h, clear, frag, modal, confirmBox, fmtNum, select, add } from './dom.js';
-import { playerCard } from './card.js';
+import { playerCard, psBadgeHtml } from './card.js';
 import { flagSVG, crestSVG } from './art.js';
 import { squadEditor } from './squad.js';
 import { runPackOpening, packArt } from './packopen.js';
@@ -20,9 +20,12 @@ import { playstyleList } from './card.js';
 import { adminCodesPanel, adminBadge } from './adminview.js';
 import { tileIcon } from './icons.js';
 import { giftsButton } from './giftsview.js';
+import { swapsView } from './swapsview.js';
 import { getConfig, effPrice } from './config.js';
 import { promoHubView, promoTileSub } from './promoview.js';
 import { PROMO_BY_ID } from '../core/promos.js';
+import * as PM from '../core/pmarket.js';
+import { mountStadium } from '../../ui/stadium.js';
 
 const persist = (app) => app.saveUT();
 const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary }, badge: s.badge || null });
@@ -83,10 +86,44 @@ function onboardView() {
   };
 }
 
+// ---------- FC-style section tabs (first row of every UT section) ----------
+const UT_TABS = [['home', 'Home'], ['squad', 'Squad'], ['sbc', 'SBC'], ['objectives', 'Objectives'], ['transfers', 'Transfers'], ['store', 'Store'], ['swaps', 'Swaps'], ['club', 'Club']];
+export function utTabs(app, active) {
+  try { mountStadium(app.root.querySelector('.pm-bgfx')); } catch { /* backdrop is decoration only */ }
+  const s = app.ut;
+  const badge = s ? { objectives: OBJ.claimableCount(s), store: s.packs.length + (s.picks || []).length } : {};
+  const open = { squad: squadView, sbc: sbcListView, objectives: () => M.objectivesHubView(), transfers: marketView, store: storeView, swaps: swapsView, club: clubView };
+  return h('nav', { class: 'pm-uttabs', 'aria-label': 'Ultimate Team sections' }, UT_TABS.map(([id, label]) => h('button', {
+    class: `pm-uttab ${id === active ? 'on' : ''}`, 'aria-current': id === active ? 'page' : null, 'data-uttab': id,
+    onclick: () => {
+      if (id === active) return;
+      app.popTo((v) => v.utHome);
+      if (id !== 'home') app.push(open[id]());
+    },
+  }, label, badge[id] ? h('span', { class: 'pm-dotbadge' }, badge[id]) : null)));
+}
+
+/** Swap-token balance chip, shown next to the coin chip on every UT section (view `topRight` hook). */
+export function tokenChip(app) {
+  const s = app.ut;
+  if (!s) return null;
+  return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens — spend them in the Token Store (Swaps)' },
+    h('i', { class: 'pm-token', 'aria-hidden': 'true' }), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('small', { class: 'pm-coins-src' }, 'Tokens'));
+}
+
+/** PlayStyle icons (PlayStyle+ ringed) + alternate positions, shown under cards in lists. */
+export function cardMeta(p, extra = null) {
+  const ps = (p.playstyles || []).slice().sort((a, b) => (b.plus ? 1 : 0) - (a.plus ? 1 : 0));
+  return h('div', { class: 'pm-cardmeta' },
+    h('span', { class: 'pm-cardmeta-pos', title: 'Positions' }, h('b', null, p.pos), (p.alt || []).length ? ` ${p.alt.join(' ')}` : ''),
+    ps.length ? h('span', { class: 'pm-cardmeta-ps' }, frag(ps.map(psBadgeHtml).join(''))) : null,
+    extra);
+}
+
 // ---------- home ----------
 export function utHomeView() {
   return {
-    title: 'Ultimate Team', kicker: 'Pitchside', coins: true,
+    title: 'Ultimate Team', kicker: 'Pitchside', coins: true, utHome: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
       if (!s) { app.replace(onboardView()); return; }
@@ -97,64 +134,140 @@ export function utHomeView() {
       const seasonReady = SS.claimableLevels(ss).length;
       const evo = ensureEvo(s);
       const evoReady = evo.active.length;
-      const tile = (cls, title, sub, onclick, badge = null, iconName = 'squad') => h('button', { class: `pm-tile ${cls}`, onclick },
+      // one tile shape: art (the player's own content) + title + one line
+      const hx = (cls, title, sub, onclick, art, badge = null, extra = null) => h('button', { class: `pm-tile pm-hx ${cls}`, onclick },
+        art ? h('div', { class: 'pm-hx-art', 'aria-hidden': 'true' }, art) : null,
+        badge ? h('span', { class: 'pm-badge' }, badge) : null,
+        h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null, extra));
+      const mini = (title, sub, onclick, iconName, badge = null) => h('button', { class: 'pm-tile pm-hx pm-hx--mini', onclick },
         tileIcon(iconName), badge ? h('span', { class: 'pm-badge' }, badge) : null,
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
-      add(main,
+
+      // squad: the XI's three best cards
+      const xi = info.slots.filter(Boolean).sort((a, b) => b.ovr - a.ovr);
+      const fan = [xi[1], xi[0], xi[2]].filter(Boolean).map((p) => playerCard(p, { size: 'sm' }));
+      const squadTile = hx('pm-hx--squad', 'Squad', `${s.squad.formation} · ${xi.length}/11 in the XI`, () => app.push(squadView()),
+        [h('div', { class: 'pm-art-squad', style: { position: 'absolute', inset: '0' } }), h('div', { class: 'pm-fan' }, fan)],
+        info.complete ? null : '!',
+        h('div', { class: 'pm-hx-meta' }, h('span', null, 'Rating', h('b', null, info.rating || '–')), h('span', null, 'Chemistry', h('b', null, info.chem.scaled)), h('span', null, 'Club', h('b', null, s.club.length))));
+
+      // store: packs waiting to be opened, else the featured pack
+      const waiting = s.packs.slice(0, 2).map((pk) => UT.PACK_BY_ID[pk.type]).filter(Boolean);
+      const onSale = UT.storePacks();
+      const featured = onSale.find((p) => p.promo) || onSale[onSale.length - 1];
+      const storeArt = h('div', { class: 'pm-art-store', style: { position: 'absolute', inset: '0' } }, (waiting.length ? waiting : [featured]).filter(Boolean).map((p) => packArt(p, 'md')));
+      const nPacks = s.packs.length + (s.picks || []).length;
+      const storeTile = hx('pm-hx--store', 'Store', nPacks ? `${nPacks} pack${nPacks > 1 ? 's' : ''} to open` : featured ? `${featured.name} · ${fmtNum(effPrice(featured.price))} coins` : 'Packs & Player Picks', () => app.push(storeView()), storeArt, nPacks ? String(nPacks) : null);
+
+      // sbc: the next challenge you haven't done, with its reward
+      const sbcs = UT.SBCS.filter((x) => UT.sbcAvailable(s, x));
+      const nextSbc = sbcs.find((x) => !s.sbc[x.id]) || sbcs[0];
+      let sbcArt = null;
+      if (nextSbc) {
+        const r = nextSbc.reward || {};
+        const rp = r.player ? getPlayer(r.player) : r.promoPlayer ? getPlayer(UT.promoRewardPid(r.promoPlayer)) : null;
+        const rpack = UT.PACK_BY_ID[r.pack || (r.packs || [])[0]];
+        sbcArt = h('div', { class: 'pm-art-sbc', style: { position: 'absolute', inset: '0' } },
+          h('div', { class: 'pm-sbc-req' }, h('b', null, nextSbc.name), nextSbc.reqs.filter((q) => q.t !== 'count').slice(0, 3).map((q) => h('span', null, UT.reqLabel(q)))),
+          rp ? playerCard(rp, { size: 'sm' }) : rpack ? packArt(rpack, 'md') : null);
+      }
+      const sbcTile = hx('pm-hx--sbc', 'Squad Building', nextSbc ? `Reward: ${rewardText(nextSbc.reward)}` : 'All challenges complete', () => app.push(sbcListView()), sbcArt, (s.vault || []).length ? `${s.vault.length} in storage` : null);
+      if (sbcTile.querySelector('.pm-badge')) sbcTile.querySelector('.pm-badge').classList.add('pm-badge--info');
+
+      // squad battles: rank + progress
+      const nextPts = rank.next ? rank.next[1] : s.battles.points;
+      const prevPts = UT.RANKS[rank.index][1];
+      const pct = rank.next ? ((s.battles.points - prevPts) / Math.max(1, nextPts - prevPts)) * 100 : 100;
+      const battlesTile = hx('pm-hx--battles', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()),
+        h('div', { class: 'pm-art-battles', style: { position: 'absolute', inset: '0' } }, h('div', { class: `pm-rankbadge r${Math.floor(rank.index / 3)}` }, rank.name.split(' ')[0][0], h('small', null, rank.name.split(' ')[1] || '★'))),
+        null, h('div', { class: 'pm-progress' }, h('i', { style: { width: `${Math.min(100, pct)}%` } })));
+
+      // objectives: live progress on the three closest
+      const objs = OBJ.objectiveList(s).filter((o) => !o.claimed && !o.locked).sort((a, b) => (b.ready - a.ready) || (b.prog / b.target - a.prog / a.target)).slice(0, 3);
+      const objTile = hx('pm-hx--obj', 'Objectives', claimable ? `${claimable} ready to claim` : 'Daily · Weekly · Season', () => app.push(M.objectivesHubView()),
+        h('div', { class: 'pm-art-obj', style: { position: 'absolute', inset: '0' } }, h('div', { class: 'pm-objmini' }, objs.map((o) => h('div', { class: o.ready ? 'done' : '' },
+          h('span', null, o.label), h('b', null, `${Math.min(o.prog, o.target)}/${o.target}`), h('i', { style: { '--p': `${Math.min(100, (o.prog / o.target) * 100)}%` } }))))),
+        claimable ? String(claimable) : null);
+
+      // transfers: your most valuable tradeable card
+      const tradeable = UT.clubPlayers(s).filter((p) => PM.isTradeable(s, p.id)).sort((a, b) => utPrice(b) - utPrice(a));
+      const tl = PM.transferList(s).length;
+      const listed = (s.listed || []).length;
+      const mktArt = h('div', { class: 'pm-art-cards', style: { position: 'absolute', inset: '0' } },
+        tradeable[0] ? h('div', { class: 'pm-art-price' }, h('small', null, `${tradeable[0].name} · est. value`), h('b', null, h('i', { class: 'pm-coin' }), fmtNum(utPrice(tradeable[0])))) : null,
+        tradeable.slice(0, 2).reverse().map((p) => playerCard(p, { size: 'sm' })));
+      const marketTile = hx('pm-hx--market', 'Transfers', listed || tl ? `${listed} listed · ${tl} on transfer list` : 'Player Market · AI Market', () => app.push(marketView()), mktArt, listed ? String(listed) : null);
+
+      // promos: the live promo pack in its campaign colours
+      const promoPack = onSale.find((p) => p.promo);
+      const promo = promoPack ? PROMO_BY_ID[promoPack.promo] : null;
+      const promoTile = hx('pm-hx--promo', 'Promos', promoTileSub() || 'Live campaigns', () => app.push(promoHubView(PROMO_DEPS)),
+        h('div', { class: 'pm-art-promohx pm-art-sbc', style: { position: 'absolute', inset: '0', ...(promo ? { '--pa': promo.colors[0], '--pb': promo.colors[1] } : {}) } }, promoPack ? packArt(promoPack, 'md') : null), 'LIVE');
+
+      const rivals = rivalsTile(app);
+      rivals.classList.remove('pm-tile--wide');
+      rivals.classList.add('pm-hx', 'pm-hx--rivals');
+
+      add(main, utTabs(app, 'home'),
         h('section', { class: 'pm-clubhead' },
-          h('div', { class: 'pm-clubhead-btns' }, giftsButton(app), adminBadge(app)),
           frag(crestSVG(userClubObj(s), 'pm-crest pm-crest--lg')),
-          h('div', null, h('div', { class: 'pm-kicker' }, 'Your club'), h('h2', null, s.clubName),
+          h('div', null, h('h2', null, s.clubName),
             h('div', { class: 'pm-chiprow' },
-              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Rating'), h('b', null, info.rating || '–')),
-              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Chem'), h('b', null, info.chem.scaled)),
-              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Club'), h('b', null, s.club.length)),
-              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`))),
-            h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
-        h('div', { class: 'pm-tiles' },
-          tile('pm-tile--wide pm-tile--squad', 'Squad', `${s.squad.formation} · Rating ${info.rating} · Chemistry ${info.chem.scaled}`, () => app.push(squadView()), info.complete ? null : '!', 'squad'),
-          rivalsTile(app),
-          tile('pm-tile--wide pm-tile--play', 'Squad Battles', `${rank.name} · ${s.battles.points} pts · Week ${s.battles.week}`, () => app.push(battlesView()), null, 'play'),
-          tile('pm-tile--wide pm-tile--store', 'Store', 'Packs, Player Picks & odds', () => app.push(storeView()), (s.packs.length + (s.picks || []).length) ? `${s.packs.length + (s.picks || []).length}` : null, 'store'),
-          tile('pm-tile--sbc', 'SBC', 'Squad Building Challenges', () => app.push(sbcListView()), null, 'sbc'),
-          tile('pm-tile--obj', 'Objectives', 'Daily · Weekly · Player · Season', () => app.push(M.objectivesHubView()), claimable ? `${claimable}` : null, 'objectives'),
-          tile('pm-tile--season', 'Season', `Level ${SS.levelOf(ss.xp)}/${SS.SEASON_LEVELS}`, () => app.push(M.seasonPassView()), seasonReady ? `${seasonReady}` : null, 'season'),
-          tile('pm-tile--evo', 'Evolutions', `${evoReady}/3 active`, () => app.push(M.evolutionsView()), null, 'evolutions'),
-          tile('pm-tile--draft', 'Draft', s.draft ? 'Draft in progress' : 'Pick 1 of 5 · 4-round knockout', () => app.push(M.draftView()), s.draft ? '▶' : null, 'draftpick'),
-          tile('pm-tile--event', 'Tournaments', 'Weekly knockout events', () => app.push(M.eventsView()), null, 'event'),
-          tile('pm-tile--wide pm-tile--promo', 'Promos', promoTileSub(), () => app.push(promoHubView(PROMO_DEPS)), 'LIVE', 'promo'),
-          tile('pm-tile--totw', 'Team of the Week', '3 headliners rated 88+', () => app.push(M.totwView()), null, 'totw'),
-          tile('pm-tile--tactics', 'Tactics', 'Custom tactics & presets', () => app.push(M.utTacticsView()), null, 'tactics'),
-          tile('pm-tile--wide pm-tile--club', 'Club', `${s.club.length} players`, () => app.push(clubView()), null, 'club'),
-          tile('pm-tile--wide pm-tile--market', 'Transfer Market', 'Player Market (online) · AI Market', () => app.push(marketView()), (s.listed || []).length ? `${s.listed.length}` : null, 'market'),
-          tile('pm-tile--custom', 'Customise club', 'Badge, name & home/away kits', () => app.push(M.clubEditView()), null, 'custom'),
-        ),
+              h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`)),
+              h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
+          h('div', { class: 'pm-clubhead-btns' }, giftsButton(app), adminBadge(app))),
+        h('div', { class: 'pm-uthub' },
+          squadTile, storeTile, sbcTile, battlesTile, objTile, rivals, marketTile, promoTile,
+          h('div', { class: 'pm-hxminis' }, mini('Club', `${s.club.length} players`, () => app.push(clubView()), 'club'),
+          mini('Season', `Level ${SS.levelOf(ss.xp)}/${SS.SEASON_LEVELS}`, () => app.push(M.seasonPassView()), 'season', seasonReady ? `${seasonReady}` : null),
+          mini('Evolutions', `${evoReady}/3 active`, () => app.push(M.evolutionsView()), 'evolutions'),
+          mini('Draft', s.draft ? 'In progress' : 'Pick 1 of 5', () => app.push(M.draftView()), 'draftpick', s.draft ? '▶' : null),
+          mini('Tournaments', 'Weekly knockouts', () => app.push(M.eventsView()), 'event'),
+          mini('Team of the Week', '3 headliners 88+', () => app.push(M.totwView()), 'totw'),
+          mini('Tactics', 'Custom & presets', () => app.push(M.utTacticsView()), 'tactics'),
+          mini('Customise', 'Badge, name & kits', () => app.push(M.clubEditView()), 'custom'),
+          mini('Swaps', `${fmtNum(s.tokens || 0)} tokens`, () => app.push(swapsView()), 'swap'))),
         adminCodesPanel(app, { compact: true }));
     },
   };
 }
 
-// ---------- player details ----------
+// ---------- player details (card detail view) ----------
+const STAT_NAMES = [['pac', 'Pace'], ['sho', 'Shooting'], ['pas', 'Passing'], ['dri', 'Dribbling'], ['def', 'Defending'], ['phy', 'Physical']];
+const GK_NAMES = [['div', 'Diving'], ['han', 'Handling'], ['kic', 'Kicking'], ['ref', 'Reflexes'], ['spd', 'Speed'], ['pos', 'Positioning']];
+const stars = (n) => h('span', { class: 'pm-stars', 'aria-label': `${n} of 5` }, Array.from({ length: 5 }, (_, i) => h('i', { class: i < n ? 'on' : '' })));
 export function playerModal(app, p, { actions = [], extra = null } = {}) {
   const n = NATION_BY_CODE[p.nat];
   const c = clubById(p.club);
-  const facts = [
-    ['Card', p.special ? `${UT.SPECIAL_NAME[p.special]}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' (rare)' : ''}`],
-    ['Nation', n ? n.name : p.nat], ['Club', c ? c.name : p.club], ['League', leagueName(p.league)],
-    ['Age', p.age], ['Height', `${(p.height / 100).toFixed(2)} m`], ['Weight', `${p.weight || 75} kg`], ['Preferred foot', p.foot === 'L' ? 'Left' : 'Right'],
-    ['Weak foot', '★'.repeat(p.wf) + '☆'.repeat(5 - p.wf)], ['Skill moves', '★'.repeat(p.sm) + '☆'.repeat(5 - p.sm)],
-    ['Work rates', `${p.wr[0]} / ${p.wr[1]}`], ['Positions', [p.pos, ...(p.alt || [])].join(', ')],
+  const bornYear = new Date().getFullYear() - (Number(p.age) || 0);
+  const bio = [
+    ['Age', p.age], p.dob ? ['Date of birth', p.dob] : ['Born', `${bornYear}`],
+    ['Nation', h('span', { class: 'pm-factrow' }, frag(flagSVG(p.nat, 'pm-flag pm-flag--xs')), n ? n.name : p.nat)],
+    ['Club', h('span', { class: 'pm-factrow' }, frag(crestSVG(c || p.club, 'pm-crest pm-crest--xs')), c ? c.name : p.club)],
+    ['League', leagueName(p.league)],
+    ['Height', `${p.height} cm`], ['Weight', `${p.weight || 75} kg`], ['Preferred foot', p.foot === 'L' ? 'Left' : 'Right'],
+    ['Weak foot', stars(p.wf)], ['Skill moves', stars(p.sm)], ['Work rates', `${p.wr[0]} / ${p.wr[1]}`],
+    ['Card', p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
     ['Potential', p.pot],
   ];
-  if (p.moment) facts.push(['Moment', p.moment]);
-  if (p.upg) facts.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);
-  if (extra) facts.push(...extra);
+  if (p.moment) bio.push(['Moment', p.moment]);
+  if (p.upg) bio.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);
+  if (extra) bio.push(...extra);
+  const statRows = (names, obj) => names.map(([k, label]) => {
+    const v = Number(obj[k]) || 0;
+    return h('div', { class: 'pm-attr' }, h('span', null, label), h('b', { class: v >= 85 ? 'hi' : v >= 70 ? 'mid' : v < 50 ? 'lo' : '' }, v), h('i', { style: { '--v': `${v}%` } }));
+  });
+  const isGk = p.pos === 'GK';
   return modal(app.root, {
     title: p.name, wide: true, className: 'pm-pmodal',
-    body: h('div', { class: 'pm-pdetail' }, playerCard(p, { size: 'md' }),
+    body: h('div', { class: 'pm-pdetail' },
+      h('div', { class: 'pm-pdetail-card' }, playerCard(p, { size: 'md' }),
+        h('div', { class: 'pm-posrow', 'aria-label': 'Positions' }, h('span', { class: 'on' }, p.pos), (p.alt || []).map((x) => h('span', null, x)))),
       h('div', { class: 'pm-pdetail-info' },
-        h('dl', { class: 'pm-facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])),
-        playstyleList(p))),
+        h('section', null, h('h4', null, 'Attributes'), h('div', { class: 'pm-attrs' }, statRows(isGk ? GK_NAMES : STAT_NAMES, isGk ? p.gk : p.stats))),
+        h('section', null, h('h4', null, 'Profile'), h('dl', { class: 'pm-facts' }, bio.map(([k, v]) => [h('dt', null, k), h('dd', null, v instanceof Node ? v : String(v))]))),
+        h('section', null, playstyleList(p)),
+        h('section', { class: 'pm-goalsfor' }, h('h4', null, 'Goals for your club'), h('p', { class: 'pm-dim' }, 'Appearances and goals for your club will show here in a later update.')))),
     actions: actions.concat([{ label: 'Close' }]),
   });
 }
@@ -162,9 +275,10 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
 // ---------- squad ----------
 function squadView() {
   return {
-    title: 'Squad', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    title: 'Squad', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
+      main.appendChild(utTabs(app, 'squad'));
       const autoBtn = h('button', { class: 'pm-btn pm-btn--accent', onclick: () => { UT.autoSquad(s, ed.get().formation); persist(app); ed.set(s.squad); app.toast('Best squad selected (rating + chemistry).', 'good'); } }, 'Auto-build best squad');
       const ed = squadEditor({
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
@@ -183,7 +297,7 @@ function squadView() {
 function clubView() {
   const f = { q: '', group: 'ALL', tier: '', sort: 'ovr', league: '' };
   return {
-    title: 'Club', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    title: 'Club', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
       const grid = h('div', { class: 'pm-cardgrid' });
@@ -201,13 +315,16 @@ function clubView() {
         const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
         for (const p of list) {
           const tag = inSquad.has(p.id) ? h('div', { class: 'pm-cardtag' }, s.squad.slots.includes(p.id) ? 'XI' : 'SUB') : (s.untradeable || []).includes(p.id) ? h('div', { class: 'pm-cardtag pm-cardtag--ut', title: 'Untradeable' }, 'UT') : null;
-          grid.appendChild(playerCard(p, { size: 'sm', extra: tag, onClick: () => clubPlayerModal(app, p, draw) }));
+          const onTl = PM.onTransferList(s, p.id);
+          grid.appendChild(h('div', { class: 'pm-cardcell' },
+            playerCard(p, { size: 'sm', extra: tag, onClick: () => clubPlayerModal(app, p, draw) }),
+            cardMeta(p, onTl ? h('span', { class: 'pm-cardmeta-tl', title: 'On your transfer list' }, 'TL') : null)));
         }
         if (!list.length) grid.appendChild(h('p', { class: 'pm-empty' }, 'No players match these filters.'));
       };
       const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search name…', value: f.q, 'aria-label': 'Search club' });
       search.addEventListener('input', () => { f.q = search.value; draw(); });
-      add(main, 
+      add(main, utTabs(app, 'club'),
         h('div', { class: 'pm-filterbar' },
           search,
           select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),
@@ -228,6 +345,11 @@ function clubPlayerModal(app, p, redraw) {
   playerModal(app, p, {
     extra: [['Market price', `${fmtNum(utPrice(p))} coins`], ['Quick sell', `${fmtNum(qs)} coins`], ['Tradeable', untradeable ? 'No (untradeable)' : 'Yes']],
     actions: [
+      untradeable
+        ? { label: 'Send to SBC storage', onClick: () => { UT.removeFromClub(s, p.id); UT.sendToVault(s, p.id); persist(app); app.toast(`${p.name} moved to SBC storage`, 'good'); redraw(); } }
+        : PM.onTransferList(s, p.id)
+          ? { label: 'Remove from transfer list', onClick: () => { PM.removeFromTransferList(s, p.id); persist(app); app.toast(`${p.name} removed from your transfer list`); redraw(); } }
+          : { label: 'Send to transfer list', onClick: () => { const r = PM.sendToTransferList(s, p.id); if (!r.ok) { app.toast(r.error, 'warn'); return; } persist(app); app.toast(`${p.name} sent to your transfer list`, 'good'); redraw(); } },
       { label: 'List on Player Market', disabled: untradeable, onClick: () => { setTimeout(() => playerMarketListModal(app, p, redraw), 0); } },
       { label: 'Sell to AI Market', disabled: untradeable, onClick: () => { setTimeout(() => sellModal(app, p, redraw), 0); } },
       { label: `Quick sell +${fmtNum(qs)}`, danger: true, onClick: () => {
@@ -282,6 +404,7 @@ export function openPackFlow(app, packType, onDone) {
     pack, items, getPlayer,
     sellValue: (p) => quickSellValue(p),
     onSend: (pid) => { UT.addToClub(s, pid); persist(app); },
+    onVault: (pid) => { UT.sendToVault(s, pid); persist(app); },
     onSell: (pid) => { const v = quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
     onDone: (sum) => { persist(app); app.refresh(); if (onDone) onDone(sum); },
   });
@@ -289,7 +412,7 @@ export function openPackFlow(app, packType, onDone) {
 
 function storeView() {
   return {
-    title: 'Store', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
+    title: 'Store', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
       const mine = h('section', { class: 'pm-section' });
@@ -328,17 +451,50 @@ function storeView() {
                 },
               }, 'Buy & open'))));
       }
-      add(main, M.picksRow(app), mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
+      add(main, utTabs(app, 'store'), M.picksRow(app), mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
 }
 
 // ---------- SBC ----------
+function sbcRewardArt(r = {}) {
+  const pid = r.player || (r.promoPlayer ? UT.promoRewardPid(r.promoPlayer) : null);
+  const p = pid ? getPlayer(pid) : null;
+  if (p) return playerCard(p, { size: 'xs' });
+  const pack = UT.PACK_BY_ID[r.pack || (r.packs || [])[0]];
+  if (pack) return packArt(pack, 'sm');
+  if (r.coins) return h('div', { class: 'pm-sbc-coins' }, h('i', { class: 'pm-coin' }), fmtNum(r.coins));
+  return null;
+}
 function sbcListView() {
+  const ui = { tab: 'challenges' };
   return {
-    title: 'Squad Building Challenges', kicker: 'Ultimate Team', coins: true,
+    title: 'Squad Building Challenges', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
+      const vault = UT.vaultPlayers(s);
+      add(main, utTabs(app, 'sbc'), h('div', { class: 'pm-subtabs', role: 'tablist' },
+        [['challenges', 'Challenges'], ['storage', `SBC storage${vault.length ? ` (${vault.length})` : ''}`]].map(([id, label]) => h('button', {
+          class: `pm-chip ${ui.tab === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false', 'data-sbctab': id, onclick: () => { ui.tab = id; app.refresh(); },
+        }, label))));
+      if (ui.tab === 'storage') {
+        add(main, h('p', { class: 'pm-hint' }, `Untradeable duplicates wait here (max ${UT.VAULT_CAP}). SBC Auto-fill uses them first, so your club copies stay put.`));
+        if (!vault.length) { add(main, h('p', { class: 'pm-empty' }, 'SBC storage is empty. Untradeable duplicates from packs and rewards land here, or send one from your Club.')); return; }
+        const inClub = new Set(s.club);
+        add(main, h('div', { class: 'pm-cardgrid' }, vault.map((p) => h('div', { class: 'pm-cardcell' },
+          playerCard(p, { size: 'sm', onClick: () => playerModal(app, p, {
+            extra: [['Where', 'SBC storage (untradeable)']],
+            actions: [{ label: inClub.has(p.id) ? 'Already in your club' : 'Move to club', disabled: inClub.has(p.id), onClick: () => {
+              if (UT.takeFromVault(s, p.id)) {
+                s.untradeable = s.untradeable || [];
+                if (!s.untradeable.includes(p.id)) s.untradeable.push(p.id); // stays untradeable
+                persist(app); app.toast(`${p.name} moved to your club`, 'good'); app.refresh();
+              }
+            } }],
+          }) }),
+          cardMeta(p)))));
+        return;
+      }
       const list = UT.SBCS.filter((x) => !x.promo || UT.sbcAvailable(s, x) || s.sbc[x.id]);
       const groups = [...new Set(list.map((x) => x.group))];
       for (const g of groups) {
@@ -346,7 +502,8 @@ function sbcListView() {
           const done = s.sbc[sbc.id] || 0;
           const avail = UT.sbcAvailable(s, sbc);
           return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
-            h('div', { class: 'pm-sbc-top' }, h('h4', null, sbc.name), sbc.repeatable ? h('span', { class: 'pm-chip on' }, 'Repeatable') : null),
+            h('div', { class: 'pm-sbc-art', 'aria-hidden': 'true' }, sbcRewardArt(sbc.reward)),
+            h('div', { class: 'pm-sbc-top' }, h('h4', null, sbc.name), sbc.repeatable ? h('span', { class: 'pm-tagmini' }, 'Repeatable') : null),
             h('p', null, sbc.desc),
             h('ul', { class: 'pm-reqmini' }, sbc.reqs.filter((r) => r.t !== 'count').map((r) => h('li', null, UT.reqLabel(r)))),
             h('div', { class: 'pm-sbc-reward' }, h('span', { class: 'pm-dim' }, 'Reward'), h('b', null, rewardText(sbc.reward))),

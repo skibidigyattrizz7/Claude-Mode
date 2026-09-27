@@ -8,7 +8,7 @@ import * as UT from '../core/ut.js';
 import * as SW from '../core/swaps.js';
 import { POS_GROUP } from '../core/data.js';
 import { PROMO_BY_ID } from '../core/promos.js';
-import { playerModal, openPackFlow } from './utview.js';
+import { playerModal, openPackFlow, utTabs } from './utview.js';
 import { packArt } from './packopen.js';
 
 const persist = (app) => app.saveUT();
@@ -27,6 +27,7 @@ export function swapsView() {
     title: 'Swaps', kicker: 'Ultimate Team', coins: true, cls: 'pm-main--wide',
     topRight(app) { return tokenChip(app); },
     render(main, app) {
+      main.appendChild(utTabs(app, 'swaps'));
       const tabs = h('div', { class: 'pm-tabs', role: 'tablist' },
         [['cards', 'Swap cards'], ['sets', 'Swap sets'], ['store', 'Token Store']].map(([id, label]) => h('button', {
           class: `pm-tab ${ui.tab === id ? 'on' : ''}`, role: 'tab', 'aria-selected': String(ui.tab === id),

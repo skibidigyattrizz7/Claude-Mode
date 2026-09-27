@@ -5,8 +5,8 @@
 // every slot's chemistry pip/line since chemistry is a team-wide calculation, and the small info chips) —
 // it never tears down and rebuilds the whole pitch/bench on every move, so drag/tap swapping stays smooth
 // even on low-end phones.
-import { h, clear, select, add, modal } from './dom.js';
-import { playerCard, emptyCard } from './card.js';
+import { h, clear, select, add, modal, frag } from './dom.js';
+import { playerCard, emptyCard, psBadgeHtml } from './card.js';
 import { flagSVG } from './art.js';
 import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr, playerPositions } from '../core/formations.js';
 import { calcChemistryStyled, CHEM_STYLES } from '../core/chemistry.js';
@@ -294,6 +294,7 @@ export function squadEditor(opts) {
           h('b', null, p.name),
           h('span', null, `${p.pos}${p.alt && p.alt.length ? ' · ' + p.alt.join('/') : ''} · ${NATION_BY_CODE[p.nat]?.name || p.nat}`),
           h('span', { class: 'pm-dim' }, leagueName(p.league) + (opts.rowInfo ? ' · ' + opts.rowInfo(p) : '')),
+          (p.playstyles || []).length ? h('span', { class: 'pm-prow-ps', 'aria-label': 'PlayStyles' }, frag(p.playstyles.slice().sort((a, b) => (b.plus ? 1 : 0) - (a.plus ? 1 : 0)).map(psBadgeHtml).join(''))) : null,
           loc ? h('span', { class: 'pm-tagmini' }, loc.area === 'slot' ? 'In XI' : 'On bench') : null),
         sp ? h('span', { class: `pm-fit fit${fit}`, title: fit === 2 ? 'Natural position' : fit === 1 ? 'Alternate position' : 'Out of position' }, fit === 2 ? '●' : fit === 1 ? '◐' : '○') : null);
         row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', JSON.stringify({ pid: p.id })); });
