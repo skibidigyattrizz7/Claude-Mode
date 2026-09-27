@@ -14,7 +14,7 @@
 import { GOAL, BALL_R } from './constants.js';
 import { clamp } from './mathx.js';
 import { leadPass, rollSpeedFor, rollTimeTo, groundVel } from './passing.js';
-import { ps } from './playstyles.js';
+import { ps, bst } from './playstyles.js';
 
 const ZERO = () => ({ x: 0, y: 0, z: 0 });
 export const CONE_COS = { assisted: Math.cos((70 * Math.PI) / 180), semi: Math.cos((35 * Math.PI) / 180) };
@@ -28,7 +28,7 @@ export function passMode(sim, team, kind) {
 
 // Firm ground passes: arrival speed at the receiver grows with distance and passing quality.
 export function passArrive(p, dist) {
-  return clamp(6 + dist * 0.09 + (p.a.pas - 70) * 0.03 + ps(p, 'pinged') * 1.2, 5.5, 11.5);
+  return clamp(6 + dist * 0.09 + (p.a.pas - 70) * 0.03 + ps(p, 'pinged') * 1.2, 5.5, 11.5) + bst(p, 'pas') * 5;
 }
 
 // Teammate closest to the aim direction inside the assist cone (-1 if none).

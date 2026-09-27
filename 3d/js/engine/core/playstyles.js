@@ -31,6 +31,10 @@ export function parsePlaystyles(list) {
 // strength of PlayStyle `id` for sim player p (0 if absent)
 export const ps = (p, id) => (p.ps && p.ps[id]) || 0;
 
+// Over-99 "power" of admin / Owner-Access cards (0 for every normal card, up to 1 for 300+ ratings)
+// in area k: 'pac' | 'sho' | 'pas' | 'dri' | 'def' | 'phy' | 'gk'. Set by MatchSim._applyData.
+export const bst = (p, k) => (p && p.boost && p.boost[k]) || 0;
+
 // compact string for snapshots/HUD: "FIN+ PWR"
 export function psLabel(map) {
   return Object.keys(map).map((k) => PLAYSTYLES[k] + (map[k] > 1 ? '+' : '')).join(' ');

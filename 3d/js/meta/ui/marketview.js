@@ -267,11 +267,12 @@ function listPickerModal(app, done) {
 export function playerMarketListModal(app, p, done) {
   const s = app.ut;
   if (!PM.isTradeable(s, p.id)) { app.toast('This card is untradeable.', 'warn'); return; }
-  const range = PM.priceRange(p);
+  const staff = typeof app.isAdmin === 'function' && app.isAdmin(); // admins may list at ANY price (server-checked)
+  const range = staff ? { min: 1, max: 9e15 } : PM.priceRange(p);
   let price = PM.suggestedPrice(p);
   const input = h('input', { class: 'pm-input', type: 'number', min: String(range.min), max: String(range.max), step: String(PM.priceStep(price)), value: String(price), 'aria-label': 'Buy Now price' });
   const recv = h('b', null);
-  const upd = () => { price = PM.clampPrice(p, input.value); recv.textContent = `${fmtNum(PM.afterTax(price))} coins`; };
+  const upd = () => { price = staff ? Math.max(1, Math.min(9e15, Math.round(Number(input.value) || 0))) : PM.clampPrice(p, input.value); recv.textContent = `${fmtNum(PM.afterTax(price))} coins`; };
   input.addEventListener('input', () => { const v = Number(input.value) || 0; recv.textContent = `${fmtNum(PM.afterTax(Math.min(range.max, Math.max(range.min, v))))} coins`; });
   input.addEventListener('change', () => { upd(); input.value = String(price); });
   upd();
@@ -282,7 +283,7 @@ export function playerMarketListModal(app, p, done) {
       h('div', { class: 'pm-listcard' }, playerCard(p, { size: 'sm' }),
         h('div', null,
           h('p', null, 'Real managers can buy this card. It leaves your club until it sells or you cancel the listing.'),
-          h('p', { class: 'pm-dim' }, `Allowed price for a ${p.ovr}${p.special ? ` ${UT.SPECIAL_NAME[p.special]}` : ''}: ${fmtNum(range.min)} – ${fmtNum(range.max)} coins.`),
+          h('p', { class: 'pm-dim' }, staff ? 'Admin: list at any price.' : `Allowed price for a ${p.ovr}${p.special ? ` ${UT.SPECIAL_NAME[p.special]}` : ''}: ${fmtNum(range.min)} – ${fmtNum(range.max)} coins.`),
           inSquad ? h('p', { class: 'pm-warnline' }, 'This player is in your squad and will be removed from it.') : null)),
       h('label', null, h('span', null, 'Buy Now price'), input),
       h('div', { class: 'pm-taxline' }, h('span', { class: 'pm-dim' }, 'After 5% market tax you receive'), recv)),
@@ -290,7 +291,7 @@ export function playerMarketListModal(app, p, done) {
       upd();
       (async () => {
         if (!app.online) { app.toast('Online market unavailable', 'bad'); return; }
-        const r = await PM.listCard(s, app.online, p.id, price);
+        const r = await PM.listCard(s, app.online, p.id, price, { anyPrice: staff });
         if (!r.ok) { app.toast(r.error, 'bad'); return; }
         persist(app);
         app.toast(`${p.name} listed for ${fmtNum(price)} coins.`, 'good');

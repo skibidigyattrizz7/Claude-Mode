@@ -95,6 +95,8 @@ export function toMatchPlayer(p, pos, number, scale = 1) {
   const ovr = Math.round(effectiveOvr(p, pos) * scale);
   return {
     id: p.id, name: p.name, number, pos, ovr: Math.max(1, Math.min(99, fit === 2 ? Math.round(p.ovr * scale) : ovr)),
+    // admin / Owner-Access cards (OVR > 99): the engine turns the excess into their OP boost
+    ...(p.ovr > 99 ? { rawOvr: Math.round(p.ovr) } : {}),
     ...matchPhysique(p),
     attrs: {
       pac: sc(p.stats.pac), sho: sc(p.stats.sho), pas: sc(p.stats.pas), dri: sc(p.stats.dri), def: sc(p.stats.def), phy: sc(p.stats.phy),

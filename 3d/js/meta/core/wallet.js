@@ -7,7 +7,7 @@
 import { INFINITE_COINS } from './admin.js';
 
 export { INFINITE_COINS };
-const MAX_REAL = 1e12;
+const MAX_REAL = 9e15; // safe-integer range (owner grants go this high)
 /** A finite, non-negative whole number of coins (NaN / strings / negatives -> fallback). */
 export function cleanCoins(v, fallback = 0) {
   const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;

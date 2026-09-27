@@ -12,6 +12,7 @@ import { tileIcon } from './icons.js';
 import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
+import { applyOwnerPatches } from '../core/ownerpatch.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
 export function coinNum(r) {
@@ -74,12 +75,20 @@ export class MetaApp {
     }
     this.configUnsub = null;
     if (this.online && this.online.config && typeof this.online.config.onChange === 'function') {
-      try { const un = this.online.config.onChange(() => this.checkResetEpoch()); if (typeof un === 'function') this.configUnsub = un; } catch { /* ignore */ }
+      try { const un = this.online.config.onChange(() => { this.checkResetEpoch(); this.checkAdminRevoke(); }); if (typeof un === 'function') this.configUnsub = un; } catch { /* ignore */ }
     }
     if (this.online && this.online.presence && typeof this.online.presence.onUpdate === 'function') {
-      try { const un = this.online.presence.onUpdate((u) => { if (u && u.resetDue) this.checkResetEpoch(); }); if (typeof un === 'function') this.onCleanup(un); } catch { /* ignore */ }
+      try {
+        const un = this.online.presence.onUpdate((u) => {
+          if (u && u.resetDue) this.checkResetEpoch();
+          if (u && u.patches > 0) this.applyOwnerPatches();
+          if (u) this.applyRestrictions(u.restrictions);
+        });
+        if (typeof un === 'function') this.presenceUnsub = un;
+      } catch { /* ignore */ }
     }
     this.checkResetEpoch();
+    this.applyOwnerPatches();
   }
 
   /**
@@ -120,13 +129,61 @@ export class MetaApp {
       if (this.ut) {
         walletSetInfinite(this.ut, false, { realBalance: 5000 });
         this.ut.coins = 5000;
-        this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 };
+        this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0, unsub: this.wallet.unsub };
         this.saveUT();
       }
       if (this.destroyed) return;
       this.refresh();
       this.toast('Economy reset by the owner', 'warn');
     } catch { /* never throws */ }
+  }
+
+  /**
+   * Owner edits to this club (server "owner patch" queue, migration 007): apply them to the UT save, save,
+   * then acknowledge — a patch stays pending until applied, so a stale device can never overwrite it.
+   */
+  async applyOwnerPatches() {
+    if (this.patching || !this.ut || !this.online || !this.online.patches || typeof this.online.patches.pending !== 'function') return;
+    if (typeof this.online.hasIdentity === 'function' && !this.online.hasIdentity()) return;
+    this.patching = true;
+    try {
+      const r = await safeCall(() => this.online.patches.pending(), null);
+      if (!r || r.ok === false || !Array.isArray(r.items) || !r.items.length || !this.ut || this.destroyed) return;
+      const { applied, changed } = applyOwnerPatches(this.ut, r.items);
+      this.saveUT();
+      await safeCall(() => this.online.patches.ack(applied));
+      try { const c = globalThis.__pitchsideCloud; if (c && typeof c.syncNow === 'function') c.syncNow(); } catch { /* ignore */ }
+      if (changed && !this.destroyed) { this.toast('The owner updated your club.', 'warn'); this.refresh(); }
+    } finally { this.patching = false; }
+  }
+  /** Owner "Revoke ALL admin" (config features.adminRevokeAt, unix s): drop this device's admin session once. */
+  checkAdminRevoke() {
+    try {
+      if (!this.online || !this.online.config || typeof this.online.config.value !== 'function') return;
+      const at = Number(this.online.config.value('features.adminRevokeAt', 0)) || 0;
+      const seen = Number(load('adminRevokeSeen', 0)) || 0;
+      if (!at || at <= seen) return;
+      save('adminRevokeSeen', at);
+      if (Date.now() / 1000 - at > 12 * 3600) return; // older than any admin session: nothing to revoke here
+      if (!getAdminLevel()) return;
+      clearAdminSession();
+      try { if (this.online.admin && typeof this.online.admin.forget === 'function') this.online.admin.forget(); } catch { /* ignore */ }
+      if (!this.destroyed) { this.toast('All admin access was revoked by the owner.', 'warn'); this.refresh(); }
+    } catch { /* never throws */ }
+  }
+  /** Owner restrictions (presence): 'admin' / 'codes' drop any admin session on this device. */
+  applyRestrictions(r) {
+    if (!r || typeof r !== 'object') return;
+    if ((r.admin || r.codes) && getAdminLevel()) {
+      clearAdminSession();
+      try { if (this.online.admin && typeof this.online.admin.forget === 'function') this.online.admin.forget(); } catch { /* ignore */ }
+      this.toast('The owner has restricted admin access on your account.', 'warn');
+      if (!this.destroyed) this.refresh();
+    }
+  }
+  /** True when the owner restricted this feature ('packs' | 'market' | 'messages' | 'codes' | 'admin'). */
+  restricted(key) {
+    try { return !!(this.online && this.online.admin && typeof this.online.admin.restricted === 'function' && this.online.admin.restricted(key)); } catch { return false; }
   }
 
   saveSettings() { save(SETTINGS_KEY, this.settings); }
@@ -257,8 +314,9 @@ export class MetaApp {
     if (!(s.admin && s.admin.infinite)) s.coins = bal;
     // balance changes seen anywhere (seller credited, gifts, rewards, presence) update the top bar at once
     if (!this.wallet.unsub && typeof this.online.coins.onChange === 'function') {
+      // lives as long as the app (a per-view cleanup used to drop it on the first navigation, so server
+      // balance changes — owner grants, sales, gifts — stopped reaching the top bar)
       this.wallet.unsub = this.online.coins.onChange((b) => { if (!this.destroyed) this.setOnlineBalance(b); });
-      this.onCleanup(() => { if (this.wallet.unsub) { this.wallet.unsub(); this.wallet.unsub = null; } });
     }
     this.topRefresh();
     return 'online';
@@ -356,6 +414,8 @@ export class MetaApp {
     this.runCleanup();
     if (this.accountUnsub) { try { this.accountUnsub(); } catch { /* ignore */ } }
     if (this.configUnsub) { try { this.configUnsub(); } catch { /* ignore */ } }
+    if (this.presenceUnsub) { try { this.presenceUnsub(); } catch { /* ignore */ } }
+    if (this.wallet && this.wallet.unsub) { try { this.wallet.unsub(); } catch { /* ignore */ } this.wallet.unsub = null; }
     document.removeEventListener('keydown', this.onKey);
     this.root.remove();
   }

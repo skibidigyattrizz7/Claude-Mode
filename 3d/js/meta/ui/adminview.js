@@ -13,6 +13,7 @@ import { safeCall } from './app.js';
 import { openPackFlow } from './utview.js';
 import { icon } from './icons.js';
 import * as X from './adminextra.js';
+import * as OP from './ownerpanel.js';
 
 const LEVEL_NAME = { super: 'Owner Access', full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
 const RANK = AA.ADMIN_RANK;
@@ -40,7 +41,7 @@ function animateCoinNode(el, from, to, ms = 650) {
 function addLocalCoinsClamped(state, amount, level) {
   const cap = (RANK[level] || 0) >= 3 ? Infinity : 1000000;
   const v = Math.max(0, Math.min(Math.round(Number(amount) || 0), cap));
-  state.coins = Math.max(0, (state.coins || 0) + v);
+  state.coins = Math.max(0, Math.min(9e15, (Number(state.coins) || 0) + v));
   return v;
 }
 
@@ -153,9 +154,22 @@ export function adminView() {
         h('div', { class: 'pm-btnrow' }, amt,
           h('button', {
             class: 'pm-btn pm-btn--primary', disabled: !s || inf,
-            onclick: () => {
+            onclick: async () => {
               const before = s.coins;
-              const v = addLocalCoinsClamped(s, st.amount, level);
+              const amount = Math.round(Number(String(amt.value).replace(/[\s,_]/g, '')) || 0);
+              if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 9e15) { app.toast('Enter a whole positive amount (up to 9,000,000,000,000,000).', 'warn'); return; }
+              const own = app.online && app.online.owner;
+              // online wallet: a real server grant (the ordinary earn path is capped per hour, so big amounts never landed)
+              if (app.wallet.mode === 'online' && own && typeof own.giveCoins === 'function' && app.online.admin && app.online.admin.canOwner && app.online.admin.canOwner()) {
+                const r = await safeCall(() => own.giveCoins(null, amount, { reason: 'admin panel' }), { ok: false });
+                if (!r || r.ok === false) { app.toast(`Add coins failed: ${(r && (r.message || r.error)) || 'offline'}.`, 'bad'); return; }
+                app.setOnlineBalance(r.coins); app.topRefresh();
+                animateCoinNode(balDisplay, before, s.coins);
+                app.toast(`Added ${fmtNum(amount)} coins to the online balance.`, 'good');
+                return;
+              }
+              st.amount = amount;
+              const v = addLocalCoinsClamped(s, amount, level);
               app.saveUT(); app.topRefresh();
               animateCoinNode(balDisplay, before, s.coins);
               app.toast(`Added ${fmtNum(v)} coins to the ${app.coinSourceLabel()}.`, 'good');
@@ -250,7 +264,7 @@ export function adminView() {
       // ---- reset ----
       const reset = h('section', { class: 'pm-panel pm-admin-sec pm-admin-danger' }, h('h3', null, icon('reset'), ' Reset'),
         h('div', { class: 'pm-btnrow pm-wrap' },
-          h('button', { class: 'pm-btn pm-btn--danger', disabled: !s, onclick: async () => { if (!(await confirmBox(app.root, 'Reset UT', 'Delete the Ultimate Team save on this device?', 'Reset', true))) return; removeKey(UT.UT_KEY); app.ut = null; app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 }; app.toast('UT save reset.', 'good'); app.refresh(); } }, 'Reset UT save'),
+          h('button', { class: 'pm-btn pm-btn--danger', disabled: !s, onclick: async () => { if (!(await confirmBox(app.root, 'Reset UT', 'Delete the Ultimate Team save on this device?', 'Reset', true))) return; removeKey(UT.UT_KEY); app.ut = null; app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0, unsub: app.wallet.unsub }; app.toast('UT save reset.', 'good'); app.refresh(); } }, 'Reset UT save'),
           h('button', { class: 'pm-btn pm-btn--danger', disabled: !slots.length, onclick: async () => { if (!(await confirmBox(app.root, 'Reset careers', 'Delete every Career Mode save slot?', 'Delete', true))) return; for (const x of C.SLOTS) C.deleteCareer(x); app.career = null; app.toast('Career saves deleted.', 'good'); app.refresh(); } }, 'Delete all careers'),
           h('button', { class: 'pm-btn', onclick: () => { AA.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin')));
 
@@ -265,8 +279,9 @@ export function adminView() {
       const extraTabs = [];
       if (can('moderation', level)) extraTabs.push(['moderation', 'Moderation', () => X.moderationPanel(app, { level })]);
       if (can('owner', level)) {
+        extraTabs.push(['players', 'Players', () => OP.playersPanel(app)]);
         extraTabs.push(['cards', level === 'super' ? 'Card Creator ★' : 'Card Creator', () => X.cardCreatorPanel(app, { level })]);
-        extraTabs.push(['broadcast', 'Broadcast & Giveaways', () => h('div', null, X.broadcastPanel(app), X.giveawayPanel(app))]);
+        extraTabs.push(['broadcast', 'Broadcast & Giveaways', () => h('div', null, X.broadcastPanel(app), X.giveawayPanel(app), X.pendingGiftsPanel(app))]);
         extraTabs.push(['config', 'Global Config', () => X.configPanel(app, { level })]);
       }
       if (!extraTabs.some(([k]) => k === st.tab)) st.tab = 'tools';

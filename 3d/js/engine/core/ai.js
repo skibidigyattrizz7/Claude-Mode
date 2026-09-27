@@ -7,7 +7,7 @@ import { clamp, lerp, segDist, hypot2 } from './mathx.js';
 import { isOffside, inOwnPenaltyArea } from './rules.js';
 import { leadPass, rollSpeedFor, rollTimeTo } from './passing.js';
 import { passArrive, throughLead } from './assist.js';
-import { ps } from './playstyles.js';
+import { ps, bst } from './playstyles.js';
 import { instr } from './tactics.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
@@ -40,7 +40,8 @@ export function teamThink(sim, team) {
     const oppPass = !!pp && pp.team !== team && b.kicker >= 0 && sim.players[b.kicker].team !== team && b.kickT === pp.t;
     if (oppPass && info.readKick !== b.kickT) {
       info.readKick = b.kickT;
-      for (const m of mates) m.readAt = b.kickT + readDelay(sim, m);
+      const disguise = bst(sim.players[b.kicker], 'pas') * 0.6; // admin passes are unreadable
+      for (const m of mates) m.readAt = b.kickT + readDelay(sim, m) + disguise;
     }
     // wake the team brain the moment the next player reads it (not on the next 0.1 s tick)
     info.wake = Infinity;
@@ -132,7 +133,7 @@ export function teamThink(sim, team) {
 export function readDelay(sim, m) {
   const diff = sim.diffFor(m.team), rng = sim.rng;
   const ant = ps(m, 'anticipate'), icp = ps(m, 'intercept');
-  let d = diff.react * 0.45 + (1 - clamp(m.a.def, 20, 99) / 100) * 0.16 + rng() * 0.08 - ant * 0.05 - icp * 0.04;
+  let d = diff.react * 0.6 + (1 - clamp(m.a.def, 20, 99) / 100) * 0.16 + rng() * 0.08 - ant * 0.05 - icp * 0.04;
   const misread = 0.18 + (1 - diff.press) * 0.1 - m.a.def / 500 - ant * 0.08 - icp * 0.05;
   if (rng() < misread) d += 0.3 + rng() * 0.3;
   return Math.max(0.02, d);
@@ -551,6 +552,9 @@ function decideCarrier(sim, p, pressure) {
     if (D < 12 && ang < 0.9) q += 0.35;
     if (D < 7) q += 0.3;
     opts.push({ type: 'shoot', s: q * (D < 17 ? 2.1 : 1.35) + ment * 0.04 + noise() });
+  } else if (bst(p, 'sho') > 0.3 && D < 60) {
+    // admin cards shoot (and score) from anywhere in the opposition half
+    opts.push({ type: 'shoot', s: 0.6 + bst(p, 'sho') + noise() });
   }
   // --- passes (receiver choice with lane checks)
   const offs = opps.map((o) => o.x);
