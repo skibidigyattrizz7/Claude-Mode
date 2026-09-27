@@ -55,10 +55,10 @@ function renderSwapCards(body, app) {
     const starters = new Set(s.squad.slots.filter(Boolean));
     const bench = new Set(s.squad.bench.filter(Boolean));
     const q = f.q.trim().toLowerCase();
-    let list = UT.clubPlayers(s).filter((p) => !starters.has(p.id) && (!q || p.name.toLowerCase().includes(q)) && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group));
+    let list = UT.clubPlayers(s).filter((p) => !starters.has(p.id) && !SW.isSwapHidden(p) && (!q || p.name.toLowerCase().includes(q)) && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group));
     const sorters = { ovr: (a, b) => b.ovr - a.ovr, coins: (a, b) => SW.swapCoinValue(b) - SW.swapCoinValue(a), tokens: (a, b) => SW.swapTokenValue(b) - SW.swapTokenValue(a) };
     list.sort(sorters[f.sort]);
-    count.textContent = `${list.length} eligible (starting XI hidden)`;
+    count.textContent = `${list.length} eligible (starting XI and admin cards hidden)`;
     for (const p of list) {
       const tag = bench.has(p.id) ? h('div', { class: 'pm-cardtag' }, 'SUB') : null;
       grid.appendChild(playerCard(p, { size: 'sm', extra: tag, onClick: () => swapCardModal(app, p, draw) }));

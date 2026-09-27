@@ -1419,6 +1419,25 @@ test('tokens: never NaN, always integer, clamped >= 0; old saves (pre-Swaps) mig
   assert.equal(UT.migrateUT(m).tokens, 0);
 });
 
+
+test('admin cards always have max chemistry in any position (both styles)', () => {
+  const mk = (i, extra = {}) => ({ id: 'x' + i, name: 'P' + i, pos: 'GK', altPos: [], nat: 'N' + i, league: 'L' + i, club: 'C' + i, ovr: 70, ...extra });
+  const slots = Array.from({ length: 11 }, (_, i) => mk(i));
+  slots[5] = mk(5, { id: 'ad_test', ovr: 250, pos: 'GK' }); // out of position, no shared club/league/nation
+  for (const style of ['classic', 'fc26']) {
+    const r = calcChemistryStyled('4-3-3', slots, style);
+    assert.equal(r.players[5], 3, style + ': admin card gets 3 chem');
+  }
+  assert.equal(linkStrength(slots[5], slots[4]), 2);
+});
+
+
+test('admin cards are hidden from swaps and cannot be swapped', async () => {
+  const SW = await import('../core/swaps.js');
+  assert.equal(SW.isSwapHidden({ id: 'ad_x', ovr: 300 }), true);
+  assert.equal(SW.isSwapHidden({ id: 'p1', ovr: 88 }), false);
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
