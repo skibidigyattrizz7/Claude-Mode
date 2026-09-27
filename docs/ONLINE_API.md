@@ -130,3 +130,19 @@ the card can be taken back with `cancel`). `claimSales()` stays for old unclaime
   sign up / first login uploads, login on another device downloads (old local club kept in `pitchside.ut.backup`).
 - Dev: `node 3d/js/net/tests/mockserver.mjs 8202` + `/3d/index.html?mockServer=http://127.0.0.1:8202&presenceMs=1500` = one shared
   mock backend for several browser contexts (mock codes `mock-full` / `mock-super`).
+
+## Migrations 005–007 — gifts, names, owner control panel
+- Gifts (005): `owner.gift({ ..., minutes })` (expiry 1 min – 90 days, default 14 days); Card Creator cards travel
+  with their photo (`photo` data URL ≤ 200 000 chars). `owner.gifts()` (pending), `owner.cancelGift(id)`, `owner.clearGifts()`.
+  Receivers: `meta/core/customreg.js receiveCard(state, card)` puts any gifted card in the club, tradable.
+- Every owner/mod call that takes a player accepts an id, username or friend code (`players.resolve(q)`).
+- Names (006): an account's display name is always its username (friends, market seller, matchmaking, lists).
+- Owner panel (007, owner powers only, audited): `owner.allPlayers()` / `listPlayers({limit ≤ 1000})` (accounts + guests,
+  all in-game info), `owner.playerDetail(p)` (profile, cloud-saved club, squad, pending patches, audit, listings),
+  `owner.patchPlayer(p, ops)` (club edits applied by the player's client — `meta/core/ownerpatch.js`: addCard,
+  removeCard, editCard, setTradable, resetClub, resetObjectives, resetSbcs, setClubName; `online.patches.pending()/ack(ids)`),
+  `owner.setUsername(p, name)`, `owner.giveAdmin(p)` / `revokeAdmin(p)`, `owner.revokeAllAdmin()` (roles → player,
+  every issued admin token revoked; caller gets a fresh token), `owner.restrict(p, 'codes'|'admin'|'market'|'packs'|'messages',
+  { on, minutes })` (enforced server-side; `presence.last.restrictions`, `admin.restricted(key)`), `owner.message(p, text)`.
+  `owner.giveCoins` / `moderation.adjustCoins` up to ±9e15. Staff may list on the market at any price (1 – 9e15).
+  Guests keep a cloud save too (`cloud.get/put` for any identity) so the owner sees every club.
