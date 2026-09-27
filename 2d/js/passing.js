@@ -1,7 +1,7 @@
 // Pass target selection and pass velocity planning (pure).
 import { PITCH, PHYS } from './constants.js';
 import { integrate, makeBall } from './physics.js';
-import { angleBetween, clamp, distToSegment, norm, DEG, gauss } from './util.js';
+import { angleBetween, clamp, distToSegment, norm, DEG, gauss, rand } from './util.js';
 
 const CK = PHYS.ROLL_C / PHYS.ROLL_K;
 
@@ -33,6 +33,23 @@ export const arriveSpeedFor = (d, kind) => (kind === 'through' ? clamp(5.5 + d *
 // weak next to the AI's, so human-issued ground/through passes (planPass only, never AI) get
 // a small extra bit of pace on top of that same target speed.
 export const HUMAN_PASS_BOOST = 1.12;
+
+/**
+ * Execution error of a pass struck by the AI (CPU players and the AI team-mates of a human).
+ * Human passes never go through this: they keep their own assist-mode rules (planPass).
+ * The spread grows as the passing attribute drops, on easier difficulties (lower `acc`,
+ * see DIFFICULTY in constants.js), with the length of the pass and under pressure.
+ * @param o {passing 0..1, acc 0..1 (difficulty accuracy), d metres, pressure 0..1, kind}
+ * @returns {ang: radians to rotate the pass by, speed: multiplier on its pace, sAng, sSpd}
+ */
+export function aiPassError(o = {}, rng = rand) {
+  const skill = clamp(o.passing ?? 0.7, 0, 1);
+  const diff = clamp(1.75 - (o.acc ?? 0.78), 0.5, 1.3);
+  const cond = (1 + 0.6 * clamp(o.pressure ?? 0, 0, 1)) * (0.75 + clamp(o.d ?? 15, 0, 50) / 40);
+  const sAng = (0.012 + 0.12 * (1 - skill)) * diff * cond * (o.kind === 'lob' ? 0.8 : 1);
+  const sSpd = (0.03 + 0.14 * (1 - skill)) * diff * cond;
+  return { ang: clamp(gauss(rng) * sAng, -0.5, 0.5), speed: clamp(1 + gauss(rng) * sSpd, 0.7, 1.35), sAng, sSpd };
+}
 
 /** Lofted ball: find horizontal speed & vz so the ball lands at distance d after ~T seconds. */
 export function lobParams(d, T) {
@@ -228,7 +245,7 @@ function rotate(v, a, s = 1) {
  * @param o {passer, from, mates, opps, aimDir, kind, attackDir, mode, power, passing}
  * Returns {mate, target, v:{vx,vy,vz,t}, mode, err}
  */
-export function planPass(o, rng = Math.random) {
+export function planPass(o, rng = rand) {
   const mode = PASS_MODES.includes(o.mode) ? o.mode : 'Assisted';
   const kind = o.kind || 'ground';
   const from = o.from;

@@ -4,12 +4,12 @@ import { PITCH, CX, CY, GOAL, PEN_SPOT, CIRCLE_R, BALL_R, DIFFICULTY } from './c
 import { FORMATION, chooseKits } from './data.js';
 import { makeBall, placeBall, stepBallWorld, simulatePath } from './physics.js';
 import { goalScored, keeperMaySave, outOfPlay, restartFor, judgeTackle, isFromBehind, inPenaltyArea, applyCard, tackleSweep } from './rules.js';
-import { choosePassTarget, passVelocity, leadTarget, clampToPitch, planPass } from './passing.js';
+import { choosePassTarget, passVelocity, leadTarget, clampToPitch, planPass, aiPassError } from './passing.js';
 import { planShot, shotVelocity } from './shooting.js';
 import { makePlayer, stepPlayer, topSpeed, jogSpeed, startSkill, isEvading, SKILL_NAMES } from './player.js';
 import { TeamAI } from './ai.js';
 import { beginSetPiece, updateSetPiece } from './setpieces.js';
-import { clamp, dist, norm, gauss, angDiff } from './util.js';
+import { clamp, dist, norm, gauss, angDiff, rand, makeRng, useSimRng } from './util.js';
 import { GAMEPLAY_DEFAULTS } from './settings.js';
 import { touchHeaviness, heavyTouchSpeed, shoulderWinChance, timedFinishGrade, savedKickRestart, TIMED_WINDOW } from './feel.js';
 import { solveKick } from './physics.js';
@@ -64,12 +64,33 @@ class Replay {
   get done() { return this.pos >= this.frames - 1; }
 }
 
+/**
+ * Auto-switch while defending (pure): hand control to the outfield team-mate nearest the ball,
+ * with hysteresis so it doesn't flicker between two players at similar distances. A new man is
+ * only taken when he is at least `margin` metres nearer than the current one AND has stayed the
+ * nearest for `dwell` seconds. `st` ({cand, since}) is per-human state kept between calls.
+ * Returns the player to switch to, or null to stay.
+ */
+export function autoSwitchTarget(cur, cands, ball, now, st, o = {}) {
+  const margin = o.margin ?? 2.5, dwell = o.dwell ?? 0.2;
+  let best = null, bd = Infinity;
+  for (const q of cands) { const d = Math.hypot(q.x - ball.x, q.y - ball.y); if (d < bd) { bd = d; best = q; } }
+  const dc = cur ? Math.hypot(cur.x - ball.x, cur.y - ball.y) : Infinity;
+  if (!best || best === cur || dc - bd < margin) { st.cand = null; return null; }
+  if (st.cand !== best) { st.cand = best; st.since = now; return dwell <= 0 ? best : null; }
+  return now - st.since >= dwell ? best : null;
+}
+
 export class Match {
   /**
-   * @param o {home, away, humans:[{ctrl, team}], settings, difficulty, minutes, mode, knockout, noClock}
+   * @param o {home, away, humans:[{ctrl, team}], settings, difficulty, minutes, mode, knockout, noClock, seed}
+   *   seed: optional number; the match then draws every random decision from its own
+   *   deterministic stream (tests / replays). Without it, Math.random.
    */
   constructor(o) {
     this.o = o;
+    this.rng = o.seed != null ? makeRng(o.seed) : Math.random;
+    useSimRng(this.rng);
     this.mode = o.mode || 'quick';
     this.settings = o.settings;
     this.teams = [o.home, o.away];
@@ -93,7 +114,7 @@ export class Match {
     this.stats = [mkStats(), mkStats()];
     this.time = 0; this.state = 'kickoff'; this.stateT = 0;
     this.banners = []; this.events = []; this.goals = [];
-    this.firstKick = Math.random() < 0.5 ? 0 : 1;
+    this.firstKick = rand() < 0.5 ? 0 : 1;
     this.ballPath = [];
     this.replay = new Replay(this.players.length);
     this.pendingSave = null; this.kickRequest = null; this.pendingRestart = null;
@@ -163,6 +184,7 @@ export class Match {
   // ---------- main update ----------
   update(dt) {
     if (this.paused) return;
+    useSimRng(this.rng);
     this.time += dt;
     this.stateT += dt;
     for (const b of this.banners) b.t += dt;
@@ -230,7 +252,7 @@ export class Match {
     const end = (this.half === 1 ? 45 : 90) * 60;
     const idx = this.half - 1;
     if (this.clock >= end && this.added[idx] == null) {
-      this.added[idx] = clamp(Math.round(1 + this.stoppages * 0.35 + Math.random() * 1.5), 1, 5);
+      this.added[idx] = clamp(Math.round(1 + this.stoppages * 0.35 + rand() * 1.5), 1, 5);
       this.stoppages = 0;
       this.emit('addedTime', { min: this.added[idx] });
     }
@@ -337,7 +359,7 @@ export class Match {
     if (side < 0.85 || side > 2.2) return;                                          // shoulder, not front/back
     ch.ai.shoulderT = this.time + 0.9;
     const pWin = shoulderWinChance(ch, carrier, { shielding: carrier.shield, speedEdge: vh - vc });
-    const won = Math.random() < pWin;
+    const won = rand() < pWin;
     if (won) {
       const b = this.ball;
       this.owner = null; this.lastTouch = carrier; b.kickId++;
@@ -584,12 +606,15 @@ export class Match {
         if (n.p && n.p !== p && Math.hypot(p.x - land.x, p.y - land.y) > n.d + 3 && mag < 0.9) { this.setHumanPlayer(h, n.p); continue; }
       }
       if (g.autoSwitch !== 'Auto') continue;
-      // auto-switch while defending when someone else is much closer
-      if ((!own || own.team !== h.team) && this.time - h.lastSwitch > 1.1 && !(this.pass && this.pass.team === h.team)) {
-        const n = this.nearestMateTo(h, this.ball);
-        const cur = Math.hypot(p.x - this.ball.x, p.y - this.ball.y);
-        if (n.p && n.p !== p && cur > n.d + 7 && mag < 0.9) this.setHumanPlayer(h, n.p);
-      }
+      // auto-switch while defending: take the defender nearest the ball (with hysteresis)
+      const sw = h.autoSw || (h.autoSw = { cand: null, since: 0 });
+      if ((!own || own.team !== h.team) && !(this.pass && this.pass.team === h.team) && this.time - h.lastSwitch > 0.8
+          && p.state === 'run' && !p.charging) {
+        const others = new Set(this.humans.filter((o) => o !== h).map((o) => o.player));
+        const cands = this.mates(h.team).filter((q) => q.role !== 'GK' && !others.has(q) && q.state === 'run');
+        const n = autoSwitchTarget(p, cands, this.ball, this.time, sw);
+        if (n) { this.setHumanPlayer(h, n); this.emit('switch', { p: n, auto: true }); }
+      } else sw.cand = null;
     }
   }
 
@@ -663,11 +688,20 @@ export class Match {
         arrive = kind === 'lob' ? null : 1.8;
       }
       const v0 = passVelocity(from, target, kind, arrive);
-      const acc = human ? 0.55 : 1.5 - this.prof[p.team].acc;
-      const err = gauss() * 0.028 * (1.3 - p.attrs.passing) * acc;
+      let err, sm;
+      if (human) {
+        // a human-issued pass with a named mate (keeper throw, set piece): unchanged, tight error
+        err = gauss() * 0.028 * (1.3 - p.attrs.passing) * 0.55;
+        sm = 1 + gauss() * 0.02 * 0.55;
+      } else {
+        // AI passes are no longer laser-guided: error from passing skill, difficulty, length, pressure
+        let nearOpp = 99;
+        for (const o of this.opps(p.team)) nearOpp = Math.min(nearOpp, dist(o, p));
+        const e = aiPassError({ passing: p.attrs.passing, acc: this.prof[p.team].acc, d: dist(from, target), pressure: clamp(1 - (nearOpp - 1) / 4, 0, 1), kind });
+        err = e.ang; sm = e.speed;
+      }
       const c = Math.cos(err), sn = Math.sin(err);
-      const sm = 1 + gauss() * 0.02 * acc;
-      v = { vx: (v0.vx * c - v0.vy * sn) * sm, vy: (v0.vx * sn + v0.vy * c) * sm, vz: v0.vz * sm, t: v0.t };
+      v = { vx: (v0.vx * c - v0.vy * sn) * sm, vy: (v0.vx * sn + v0.vy * c) * sm, vz: v0.vz * (kind === 'lob' ? 1 + (sm - 1) * 0.5 : sm), t: v0.t };
     } else {
       mode = opts.mode || 'Assisted';
       const plan = planPass({ passer: p, from, mates: this.mates(p.team), opps: this.opps(p.team), aimDir, kind, attackDir: dir, mode, power: opts.power ?? 0.5, passing: p.attrs.passing });
@@ -693,7 +727,7 @@ export class Match {
       if (h) this.setHumanPlayer(h, receiver);   // control follows the ball
     }
     // give-and-go: an AI passer keeps running into space after playing it forward
-    if (!human && receiver && p.role !== 'GK' && (target.x - from.x) * dir > 4 && Math.random() < 0.5) {
+    if (!human && receiver && p.role !== 'GK' && (target.x - from.x) * dir > 4 && rand() < 0.5) {
       p.ai.runT = 1.6;
       p.ai.runTo = clampToPitch({ x: p.x + dir * 12, y: p.y + (CY - p.y) * 0.2 }, 3, 3);
     }
@@ -703,11 +737,11 @@ export class Match {
   /** Hoof it clear: long and high towards the wing, sometimes deliberately into touch. */
   clearBall(p) {
     const b = this.ball, dir = this.attackDir(p.team);
-    const touch = Math.random() < 0.5;
+    const touch = rand() < 0.5;
     const up = b.y < CY;
-    const ty = touch ? (up ? -5 : PITCH.W + 5) : (up ? 4 + Math.random() * 7 : PITCH.W - 4 - Math.random() * 7);
-    const tx = clamp(b.x + dir * (24 + Math.random() * 16), 3, PITCH.L - 3);
-    const v = solveKick({ x: b.x, y: b.y, z: Math.max(b.z, BALL_R) }, { x: tx, y: ty, z: 0.5 }, 17 + Math.random() * 5, { loft: true });
+    const ty = touch ? (up ? -5 : PITCH.W + 5) : (up ? 4 + rand() * 7 : PITCH.W - 4 - rand() * 7);
+    const tx = clamp(b.x + dir * (24 + rand() * 16), 3, PITCH.L - 3);
+    const v = solveKick({ x: b.x, y: b.y, z: Math.max(b.z, BALL_R) }, { x: tx, y: ty, z: 0.5 }, 17 + rand() * 5, { loft: true });
     this.pass = null;
     this.kick(p, v.vx, v.vy, Math.min(v.vz, 15), 0, 0, 0.85);
     this.emit('clearance', { p });
@@ -738,12 +772,12 @@ export class Match {
     const gk = this.keeper(1 - p.team);
     const prof = this.prof[p.team];
     let ty = CY + (gk && gk.y < CY ? 1 : -1) * (GOAL.W / 2 - 0.55);
-    if (Math.random() < 0.3) ty = CY + (Math.random() - 0.5) * (GOAL.W - 1.2);
+    if (rand() < 0.3) ty = CY + (rand() - 0.5) * (GOAL.W - 1.2);
     let type = 'driven';
     const gkOff = gk ? Math.abs(gk.x - gc.x) : 0;
-    if (gkOff > 5 && d > 14 && Math.random() < 0.45) type = 'chip';
-    else if (d > 11 && d < 24 && Math.random() < 0.35) type = 'finesse';
-    const power = clamp(0.45 + d / 55 + Math.random() * 0.2, 0.4, type === 'chip' ? 0.7 : 0.92);
+    if (gkOff > 5 && d > 14 && rand() < 0.45) type = 'chip';
+    else if (d > 11 && d < 24 && rand() < 0.35) type = 'finesse';
+    const power = clamp(0.45 + d / 55 + rand() * 0.2, 0.4, type === 'chip' ? 0.7 : 0.92);
     const aimDir = norm(gc.x - b.x, ty - b.y);
     this.doShot(p, { aimDir, power, type, mode: 'Manual', sprinting: p.sprint, errMul: 2.6 - prof.acc * 1.2 });
   }
@@ -815,11 +849,11 @@ export class Match {
           continue;
         } else if (slide) {
           this.owner = null; this.pass = null;
-          const a = tk.dir + (Math.random() - 0.5) * 0.8;
-          b.vx = Math.cos(a) * (5 + Math.random() * 3); b.vy = Math.sin(a) * (5 + Math.random() * 3); b.vz = 0.5;
+          const a = tk.dir + (rand() - 0.5) * 0.8;
+          b.vx = Math.cos(a) * (5 + rand() * 3); b.vy = Math.sin(a) * (5 + rand() * 3); b.vz = 0.5;
           this.lastTouch = p; b.kickId++;
         } else if (victim && victim !== p) {
-          if (Math.random() < 0.6 + 0.35 * (p.attrs.tackling - victim.attrs.dribbling) + (tk.jockey ? 0.12 : 0)) this.setOwner(p);
+          if (rand() < 0.6 + 0.35 * (p.attrs.tackling - victim.attrs.dribbling) + (tk.jockey ? 0.12 : 0)) this.setOwner(p);
           else { this.owner = null; b.vx = Math.cos(tk.dir) * 4; b.vy = Math.sin(tk.dir) * 4; this.lastTouch = p; b.kickId++; victim.kickCD = 0.3; }
         } else this.setOwner(p);
       } else if (!tk.first && sw.first === 'body') {
@@ -902,11 +936,11 @@ export class Match {
     if (this.shot && !this.shot.counted) { this.stats[att].onTarget++; this.shot.counted = true; }
     const catchP = clamp(1.25 - sp / 24, 0.12, 0.92) * (0.75 + 0.3 * kp);
     const inward = side === 0 ? 1 : -1;
-    if (Math.random() < catchP) {
-      if (Math.random() < 0.07 * (1.2 - kp)) {
+    if (rand() < catchP) {
+      if (rand() < 0.07 * (1.2 - kp)) {
         // fumble!
         this.owner = null; this.lastTouch = gk; b.kickId++;
-        b.vx = inward * (1 + Math.random() * 2); b.vy = (Math.random() - 0.5) * 4; b.vz = 1; b.z = Math.max(b.z, 0.3);
+        b.vx = inward * (1 + rand() * 2); b.vy = (rand() - 0.5) * 4; b.vz = 1; b.z = Math.max(b.z, 0.3);
         this.banner('FUMBLE!', gk.name, '#ffb703', 1.5);
       } else {
         this.setOwner(gk, true);
@@ -914,10 +948,10 @@ export class Match {
       }
     } else {
       // parry away from goal, towards the side
-      const s = Math.sign(b.y - CY) || (Math.random() < 0.5 ? -1 : 1);
-      b.vx = inward * (2 + sp * 0.22) * (0.5 + Math.random() * 0.6);
-      b.vy = s * (3 + sp * 0.25) * (0.6 + Math.random() * 0.5);
-      b.vz = 1.2 + Math.random() * 2.5; b.spin = 0;
+      const s = Math.sign(b.y - CY) || (rand() < 0.5 ? -1 : 1);
+      b.vx = inward * (2 + sp * 0.22) * (0.5 + rand() * 0.6);
+      b.vy = s * (3 + sp * 0.25) * (0.6 + rand() * 0.5);
+      b.vz = 1.2 + rand() * 2.5; b.spin = 0;
       this.owner = null; this.lastTouch = gk; b.kickId++;
     }
     this.pendingSave = { t: this.time, gk };
@@ -994,11 +1028,11 @@ export class Match {
       if (b.z > 1.4 && this.pass && this.pass.team !== p.team) {
         // high ball into a crowd: punch it clear rather than risk the catch
         const crowd = this.opps(p.team).some((o) => Math.hypot(o.x - b.x, o.y - b.y) < 1.8);
-        if ((crowd && Math.random() < 0.65) || Math.random() < 0.12) {
+        if ((crowd && rand() < 0.65) || rand() < 0.12) {
           const out = this.attackDir(p.team);
-          const a = Math.atan2((b.y - CY) * 0.6 + (Math.random() - 0.5) * 6, out * 6);
-          const sp = 12 + Math.random() * 5;
-          b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.vz = 4.5 + Math.random() * 2; b.spin = 0;
+          const a = Math.atan2((b.y - CY) * 0.6 + (rand() - 0.5) * 6, out * 6);
+          const sp = 12 + rand() * 5;
+          b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.vz = 4.5 + rand() * 2; b.spin = 0;
           this.lastTouch = p; p.kickCD = 0.5; b.kickId++; this.pass = null;
           this.banner('PUNCHED CLEAR', p.name, '#8ecae6', 1.3);
           this.emit('punch', { gk: p });
@@ -1010,11 +1044,11 @@ export class Match {
       return;
     }
     // first-time volleys / headers for a charging human, or AI in front of goal
-    const wantsShot = (human && p.charging) || (!human && attackingBox && (b.z > 0.3 || relSpeed > 6) && Math.random() < 0.55 && !this.isHumanTeam(p.team));
+    const wantsShot = (human && p.charging) || (!human && attackingBox && (b.z > 0.3 || relSpeed > 6) && rand() < 0.55 && !this.isHumanTeam(p.team));
     if (wantsShot && attackingBox) {
       const side = this.attackSide(p.team);
       const gc = this.goalCenter(side);
-      const aim = human ? p.aimDir || norm(gc.x - p.x, gc.y - p.y) : norm(gc.x - b.x, CY + (Math.random() - 0.5) * 5 - b.y);
+      const aim = human ? p.aimDir || norm(gc.x - p.x, gc.y - p.y) : norm(gc.x - b.x, CY + (rand() - 0.5) * 5 - b.y);
       const type = b.z > 1.6 ? 'header' : b.z > 0.3 ? 'volley' : 'driven';
       this.lastTouch = p;
       this.doShot(p, { aimDir: aim, power: human ? Math.max(0.35, p.charge) : 0.7, type, mode: human ? this.gp(this.humanFor(p) || { ctrl: 0 }).shot : 'Manual', realism: human ? this.gp(this.humanFor(p) || { ctrl: 0 }).shotError : true, sprinting: false, errMul: human ? 1.1 : 1.3 });
@@ -1024,7 +1058,7 @@ export class Match {
     const ownBox = inPenaltyArea(b, this.ownSide(p.team));
     if (ownBox && !p.charging) {
       const hh = this.humanFor(p);
-      const autoClear = hh ? this.gp(hh).autoClear : Math.random() < 0.5;
+      const autoClear = hh ? this.gp(hh).autoClear : rand() < 0.5;
       const danger = this.opps(p.team).some((o) => Math.hypot(o.x - b.x, o.y - b.y) < 2.8);
       const fromMate = this.pass && this.pass.team === p.team && this.pass.receiver === p;
       if (autoClear && danger && !fromMate) { this.lastTouch = p; this.clearBall(p); return; }
@@ -1040,10 +1074,10 @@ export class Match {
     const trapLimit = (intended ? 21 : 16) + 6 * p.attrs.dribbling;
     if (relSpeed < trapLimit) {
       // cutting out a firm pass often only gets a toe to it: the ball deflects away
-      if (this.pass && this.pass.team !== p.team && relSpeed > 9 && b.z < 0.6 && Math.random() < 0.3 + (relSpeed - 9) * 0.04 - p.attrs.tackling * 0.15) {
-        const a = Math.atan2(b.vy, b.vx) + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.9);
-        const sp = relSpeed * (0.35 + Math.random() * 0.25);
-        b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.vz = Math.random() * 1.5; b.spin = 0;
+      if (this.pass && this.pass.team !== p.team && relSpeed > 9 && b.z < 0.6 && rand() < 0.3 + (relSpeed - 9) * 0.04 - p.attrs.tackling * 0.15) {
+        const a = Math.atan2(b.vy, b.vx) + (rand() < 0.5 ? -1 : 1) * (0.5 + rand() * 0.9);
+        const sp = relSpeed * (0.35 + rand() * 0.25);
+        b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.vz = rand() * 1.5; b.spin = 0;
         this.lastTouch = p; p.kickCD = 0.25; b.kickId++; this.pass = null;
         this.emit('deflect', { p, block: true });
         return;
@@ -1055,7 +1089,7 @@ export class Match {
         for (const o of this.opps(p.team)) near = Math.min(near, dist(o, p));
         const pressure = clamp(1 - (near - 0.8) / 2.5, 0, 1);
         const hv = touchHeaviness({ relSpeed, dribbling: p.attrs.dribbling, sprinting: p.sprint && Math.hypot(p.vx, p.vy) > jogSpeed(p), pressure, height: b.z });
-        if (Math.random() < hv * 0.55) { this.heavyTouch(p, hv); return; }
+        if (rand() < hv * 0.55) { this.heavyTouch(p, hv); return; }
       }
       this.setOwner(p); return;
     }
@@ -1073,7 +1107,7 @@ export class Match {
     const b = this.ball;
     const inc = norm(b.vx - p.vx, b.vy - p.vy);
     const f = { x: Math.cos(p.facing), y: Math.sin(p.facing) };
-    const d = norm(inc.x * 0.6 + f.x * 0.4 + (Math.random() - 0.5) * 0.5, inc.y * 0.6 + f.y * 0.4 + (Math.random() - 0.5) * 0.5);
+    const d = norm(inc.x * 0.6 + f.x * 0.4 + (rand() - 0.5) * 0.5, inc.y * 0.6 + f.y * 0.4 + (rand() - 0.5) * 0.5);
     const sp = heavyTouchSpeed(hv) + Math.hypot(p.vx, p.vy) * 0.5;
     b.vx = d.x * sp; b.vy = d.y * sp; b.vz = b.z > 0.3 ? 1.2 : 0.3; b.spin = 0;
     this.lastTouch = p; p.kickCD = 0.22; b.kickId++;
@@ -1158,7 +1192,7 @@ export class Match {
     for (const p of this.players) if (!p.sentOff) { p.state = 'run'; p.vx = p.vy = 0; }
     if (res.result === 'goal') {
       this.stats[team].onTarget++;
-      placeBall(this.ball, gx - inward * 1.2, CY + (Math.random() - 0.5) * 4);
+      placeBall(this.ball, gx - inward * 1.2, CY + (rand() - 0.5) * 4);
       this.noReplay = true;
       this.state = 'play';
       this.onGoal(side);
@@ -1168,7 +1202,7 @@ export class Match {
       this.stats[team].onTarget++;
       const gk = this.keeper(def);
       const sy = clamp(res.y != null ? res.y : CY, CY - GOAL.W / 2, CY + GOAL.W / 2);
-      const out = savedKickRestart(!!res.caught && !!gk, sy, Math.random, CY);
+      const out = savedKickRestart(!!res.caught && !!gk, sy, rand, CY);
       this.lastSavedRestart = out.type;
       if (out.type === 'catch') {
         gk.x = gx + inward * 1.5; gk.y = CY;
@@ -1201,7 +1235,7 @@ export class Match {
       // loose ball bouncing back off the wall
       const bx = r.x + (gx - r.x) * 0.3, by = r.y + (CY - r.y) * 0.3;
       placeBall(this.ball, bx, by);
-      this.ball.vx = (r.x - bx) * 0.5 + (Math.random() - 0.5) * 3; this.ball.vy = (r.y - by) * 0.5 + (Math.random() - 0.5) * 3;
+      this.ball.vx = (r.x - bx) * 0.5 + (rand() - 0.5) * 3; this.ball.vy = (r.y - by) * 0.5 + (rand() - 0.5) * 3;
       this.ball.kickId++;
       this.lastTouch = this.mates(def)[1] || this.lastTouch;
       this.state = 'play'; this.stateT = 0;
@@ -1209,7 +1243,7 @@ export class Match {
       return;
     }
     // miss / post: goal kick
-    beginSetPiece(this, { type: 'goalkick', team: def, x: gx + inward * 5.5, y: CY + (Math.random() < 0.5 ? -4.5 : 4.5) });
+    beginSetPiece(this, { type: 'goalkick', team: def, x: gx + inward * 5.5, y: CY + (rand() < 0.5 ? -4.5 : 4.5) });
   }
 
   /** Line both teams up around the edge of the box for a rebound (after a parried kick). */

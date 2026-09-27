@@ -1,5 +1,5 @@
 // Player entity: creation, speeds, stamina and per-state motion (tackles, slides, skills, dives).
-import { clamp, turnToward, angDiff } from './util.js';
+import { clamp, turnToward, angDiff, rand } from './util.js';
 import { PITCH } from './constants.js';
 
 let NEXT_ID = 1;
@@ -10,7 +10,7 @@ export function makePlayer(team, idx, info) {
     attrs: { ...info.attrs },
     x: 0, y: 0, vx: 0, vy: 0, facing: 0,
     want: { x: 0, y: 0 }, sprint: false, faceWant: null,
-    stamina: 1, speedMul: 1, anim: Math.random() * 6,
+    stamina: 1, speedMul: 1, anim: rand() * 6,
     state: 'run', stateT: 0, stateDur: 0,
     tk: null, skill: null, invuln: 0, kickCD: 0, tackleCD: 0, recover: 0,
     charge: 0, charging: false, shotMod: null,
@@ -48,7 +48,7 @@ export function startSkill(p, moveX, moveY, sprinting) {
     else if (Math.abs(d) > 0.7) type = 'roulette';
   }
   const S = SKILLS[type];
-  const side = mag > 0.3 ? Math.sign(angDiff(p.facing, Math.atan2(moveY, moveX))) || 1 : (Math.random() < 0.5 ? -1 : 1);
+  const side = mag > 0.3 ? Math.sign(angDiff(p.facing, Math.atan2(moveY, moveX))) || 1 : (rand() < 0.5 ? -1 : 1);
   p.state = 'skill'; p.stateT = 0; p.stateDur = S.dur;
   p.skill = { type, side, f0: p.facing, inv: S.inv };
   p.stamina = Math.max(0, p.stamina - S.cost);

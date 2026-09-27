@@ -2,7 +2,7 @@
 // ball, and goalkeeper positioning / shot reading / distribution.
 import { PITCH, CY, GOAL, BOX, PHYS } from './constants.js';
 import { FORMATION } from './data.js';
-import { clamp, dist, norm, angleBetween, DEG, gauss, distToSegment } from './util.js';
+import { clamp, dist, norm, angleBetween, DEG, gauss, distToSegment, rand } from './util.js';
 import { laneRisk, leadTarget } from './passing.js';
 import { topSpeed, jogSpeed } from './player.js';
 import { isFromBehind, inPenaltyArea, tackleSweep } from './rules.js';
@@ -70,14 +70,15 @@ export function defensiveRoles(field, carrier, o = {}) {
 
 /**
  * Man-marking assignments (pure). Defenders (deepest first) pick up the free attacker nearest
- * their zone (home spot), preferring the one nearer our goal. With autoMarking off the
+ * their zone (home spot), preferring the one nearer our goal and (o.prev) the man they already
+ * had, so assignments don't swap back and forth. With autoMarking off the
  * defenders hold their zones and nobody tracks runners.
  * @returns Map(defender -> attacker)
  */
 export function markTargets(defenders, attackers, homeOf, ownGoal, o = {}) {
   const marks = new Map();
   if (o.autoMarking === false) return marks;
-  const maxD = o.maxD ?? 16;
+  const maxD = o.maxD ?? 18;
   // deepest defenders pick first; each takes the free attacker nearest his zone, and
   // between equally placed attackers the one nearer our goal is the bigger threat
   const order = defenders.filter((p) => !(p.human >= 0) && !p.sentOff)
@@ -88,12 +89,50 @@ export function markTargets(defenders, attackers, homeOf, ownGoal, o = {}) {
     let best = null, bs = maxD;
     for (const a of attackers) {
       if (a.sentOff || taken.has(a)) continue;
-      const sc = dist(a, home) + dist(a, ownGoal) * 0.05;
+      // stick with the man you already have unless someone clearly more urgent turns up
+      const sc = dist(a, home) + dist(a, ownGoal) * 0.15 - (o.prev && o.prev(p) === a ? 5 : 0);
       if (sc < bs) { bs = sc; best = a; }
     }
     if (best) { taken.add(best); marks.set(p, best); }
   }
   return marks;
+}
+
+/** Depth (metres out from our own goal line) the back line holds while defending: it steps
+ *  up with the ball but stays well goal-side of it, never deeper than 7 m nor higher than 30 m. */
+export function backLineDepth(ballDepth) { return clamp(ballDepth - 14, 7, 30); }
+
+/**
+ * Goal-side marking spot (pure). Stands between the attacker `o` and our goal `gc`, `gap`
+ * metres off him, shaded by `laneW` (0..1) towards the passing lane from `carrier` to him,
+ * but never so far that he stops being goal-side (at least `minGoalSide` metres nearer our
+ * goal along the attacker->goal line). With `lineX` set (defenders), he does not follow the
+ * attacker further up the pitch than the back line.
+ */
+export function goalSideSpot(o, gc, o2 = {}) {
+  const n = norm(gc.x - o.x, gc.y - o.y);
+  const gap = o2.gap ?? 1.8;
+  let tx = o.x + n.x * gap, ty = o.y + n.y * gap;
+  const c = o2.carrier, w = o2.laneW || 0;
+  if (c && w > 0) {
+    const lx = c.x + (o.x - c.x) * 0.72, ly = c.y + (o.y - c.y) * 0.72;
+    tx += (lx - tx) * w; ty += (ly - ty) * w;
+  }
+  // stay goal-side: at least minGS along the attacker->goal line, and never so far across
+  // that he ends up no nearer our goal than the attacker (lane shading can pull him sideways)
+  const minGS = o2.minGoalSide ?? 0.8;
+  const D = Math.hypot(gc.x - o.x, gc.y - o.y);
+  let along = (tx - o.x) * n.x + (ty - o.y) * n.y;
+  let across = (tx - o.x) * -n.y + (ty - o.y) * n.x;
+  along = clamp(along, Math.min(minGS, D * 0.5), Math.max(minGS, D - 0.5));
+  const maxAcross = Math.sqrt(Math.max(0, (D - Math.min(minGS, D * 0.5) * 0.7) ** 2 - (D - along) ** 2));
+  across = clamp(across, -maxAcross, maxAcross);
+  tx = o.x + n.x * along - n.y * across; ty = o.y + n.y * along + n.x * across;
+  if (o2.lineX != null) {
+    const inward = gc.x < PITCH.L / 2 ? 1 : -1;
+    if ((tx - o2.lineX) * inward > 0) tx = o2.lineX;          // hold the line, don't chase him upfield
+  }
+  return { x: tx, y: ty };
 }
 
 export class TeamAI {
@@ -125,7 +164,11 @@ export class TeamAI {
     let chaser = null, presser = null, cover = null, container = null;
     const gp = m.gpTeam ? m.gpTeam(team) : null;
     this.gp = gp;
-    if (!own) {
+    // an opponent's pass is in flight: hold the shape, one player reads the lane
+    const oppPass = !own && m.pass && m.pass.team !== team && m.pass.receiver && !m.shot ? m.pass : null;
+    if (oppPass) {
+      chaser = this.laneInterceptor(field, oppPass);
+    } else if (!own) {
       let bestT = 1e9;
       for (const p of field) {
         if (m.pass && m.pass.receiver && m.pass.receiver.team === team && m.pass.receiver !== p) continue;
@@ -138,9 +181,12 @@ export class TeamAI {
       ({ presser, container, cover } = defensiveRoles(field, own, { mode: gp ? gp.defending : null }));
     }
 
+    this.roles = { chaser, presser, container, cover };
     // Marking assignments (refresh a few times per second)
+    const gcOwn = m.goalCenter(m.ownSide(team));
+    this.lineX = gcOwn.x + (gcOwn.x < PITCH.L / 2 ? 1 : -1) * backLineDepth(Math.abs(m.ball.x - gcOwn.x));
     this.markT -= dt;
-    if (oppPoss && this.markT <= 0) { this.assignMarks(field, own); this.markT = 0.4; }
+    if ((oppPoss || oppPass) && this.markT <= 0) { this.assignMarks(field, oppPoss ? own : null); this.markT = 0.4; }
 
     for (const p of mates) {
       if (p.sentOff) continue;
@@ -159,11 +205,47 @@ export class TeamAI {
         else if (p === cover) this.coverPos(p, own);
         else this.mark(p, own);
       } else {
-        if (p === chaser) { const ip = this.interceptPoint(p); moveTo(p, ip.x, ip.y, 2); }
+        if (p === chaser) { const ip = this.interceptPoint(p, oppPass ? 0.6 : 0.5); moveTo(p, ip.x, ip.y, 2); }
+        else if (oppPass) this.mark(p, null);
         else { const f = formationPos(m, p, 0); moveTo(p, f.x, f.y, 10); }
       }
     }
     this.separate(mates);
+  }
+
+  /**
+   * Reading an opponent's pass (not psychic): each defender gets one look per kick. He only
+   * reacts after a delay (slower with a poor defending / tackling stat and on easier
+   * difficulties), and only a share of players read it at all. Of those who did, the one who
+   * can reach a point on the ball's path first - clearly before the intended receiver - steps
+   * into the lane; everybody else keeps marking.
+   */
+  laneInterceptor(field, pass) {
+    const m = this.m, kick = m.ball.kickId;
+    const rcv = pass.receiver;
+    const rT = rcv && !rcv.sentOff && m.ai[rcv.team] ? m.ai[rcv.team].interceptPoint(rcv, 0.15, 0.12).t : 9;
+    let best = null, bt = 1e9;
+    for (const p of field) {
+      if (p.human >= 0 || p.sentOff || p.state !== 'run') continue;
+      const r = this.readPass(p, pass, kick);
+      if (!r.ok || m.time < r.at) continue;
+      const ip = this.interceptPoint(p, 0.6, 0);
+      if (ip.t >= 9 || ip.t > rT + 0.1) continue;            // the receiver is clearly there first: stay with your man
+      const t = ip.t - (p.ai.laneKick === kick ? 0.15 : 0);    // sticky once committed
+      if (t < bt) { bt = t; best = p; }
+    }
+    if (best) best.ai.laneKick = kick;
+    return best;
+  }
+
+  readPass(p, pass, kick) {
+    if (p.ai.readKick !== kick) {
+      const tk = p.attrs.tackling ?? 0.6, prof = this.prof;
+      p.ai.readKick = kick;
+      p.ai.readAt = pass.t + 0.15 + 0.25 * (1 - tk) + 0.35 * prof.react;
+      p.ai.readOk = rand() < clamp(0.5 + 0.45 * tk + 0.35 * (prof.acc - 0.78), 0.15, 0.97);
+    }
+    return { at: p.ai.readAt, ok: p.ai.readOk };
   }
 
   receive(p) {
@@ -192,7 +274,9 @@ export class TeamAI {
     const m = this.m;
     const opps = m.opps(this.team).filter((o) => o.role !== 'GK' && o !== carrier);
     const gc = m.goalCenter(m.ownSide(this.team));
-    const marks = markTargets(field, opps, (p) => formationPos(m, p, -1), gc, { autoMarking: this.gp ? this.gp.autoMarking : true });
+    // a defender's zone sits on the back line; midfielders' on their defensive shape
+    const home = (p) => { const f = formationPos(m, p, -1); if (p.role === 'DF' && this.lineX != null) f.x = this.lineX; return f; };
+    const marks = markTargets(field, opps, home, gc, { autoMarking: this.gp ? this.gp.autoMarking : true, prev: (p) => p.ai.mark });
     for (const p of field) if (p.human < 0) p.ai.mark = marks.get(p) || null;
   }
 
@@ -200,22 +284,22 @@ export class TeamAI {
     const m = this.m;
     const o = p.ai.mark;
     const gc = m.goalCenter(m.ownSide(this.team));
+    const lineX = p.role === 'DF' ? this.lineX : null;
     if (o && !o.sentOff) {
       const n = norm(gc.x - o.x, gc.y - o.y);
-      const tb = norm(m.ball.x - o.x, m.ball.y - o.y);
       // track a runner: stay goal-side and match his run
       const running = (o.vx * n.x + o.vy * n.y) < -2;
-      const gap = running ? 1.2 : 1.8;
-      let tx = o.x + n.x * gap + tb.x * 0.8 + (running ? o.vx * 0.25 : 0);
-      let ty = o.y + n.y * gap + tb.y * 0.8 + (running ? o.vy * 0.25 : 0);
-      if (this.gp && this.gp.defending === 'Assisted' && carrier) {
-        // cover the passing lane from the carrier to my man
-        const lx = carrier.x + (o.x - carrier.x) * 0.7, ly = carrier.y + (o.y - carrier.y) * 0.7;
-        tx = tx * 0.6 + lx * 0.4; ty = ty * 0.6 + ly * 0.4;
-      }
-      moveTo(p, tx, ty, running ? 3 : 5);
+      const lead = running ? 0.25 : 0.1;
+      const tb = norm(m.ball.x - o.x, m.ball.y - o.y);
+      const ahead = { x: o.x + o.vx * lead + tb.x * 0.5, y: o.y + o.vy * lead + tb.y * 0.5 };
+      // shade towards the passing lane: better defenders (and Assisted defending) read it more
+      const tk = p.attrs.tackling ?? 0.6;
+      const laneW = carrier ? clamp(0.12 + 0.3 * tk * this.prof.press + (this.gp && this.gp.defending === 'Assisted' ? 0.1 : 0), 0, 0.45) : 0;
+      const t = goalSideSpot(ahead, gc, { gap: running ? 1.2 : 1.8, carrier, laneW, lineX, minGoalSide: 0.9 });
+      moveTo(p, t.x, t.y, running ? 3 : 5);
     } else {
       const f = formationPos(m, p, -1);
+      if (lineX != null) f.x = lineX;          // the back line holds together
       moveTo(p, f.x, f.y, 8);
     }
   }
@@ -232,9 +316,9 @@ export class TeamAI {
     // only nick the ball when it's clearly there to be won from the front
     p.ai.tackT -= dt;
     if (p.ai.tackT > 0 || p.tackleCD > 0 || c.state === 'hold') return;
-    p.ai.tackT = this.prof.react * (0.8 + Math.random());
+    p.ai.tackT = this.prof.react * (0.8 + rand());
     const b = m.ball, dBall = Math.hypot(b.x - p.x, b.y - p.y), toBall = Math.atan2(b.y - p.y, b.x - p.x);
-    if (dBall < 1.25 && !isFromBehind(p, c) && tackleSweep({ x: p.x + Math.cos(toBall) * 0.3, y: p.y + Math.sin(toBall) * 0.3 }, toBall, 0.8, b, [c], false).first === 'ball' && Math.random() < 0.3 + 0.3 * p.attrs.tackling) {
+    if (dBall < 1.25 && !isFromBehind(p, c) && tackleSweep({ x: p.x + Math.cos(toBall) * 0.3, y: p.y + Math.sin(toBall) * 0.3 }, toBall, 0.8, b, [c], false).first === 'ball' && rand() < 0.3 + 0.3 * p.attrs.tackling) {
       p.facing = toBall; m.startTackle(p, 'stand', toBall);
     }
   }
@@ -262,22 +346,22 @@ export class TeamAI {
     p.want.y *= prof.press > 1 ? 1 : 0.85 + 0.15 * prof.press;
     p.ai.tackT -= dt;
     if (p.ai.tackT > 0 || p.tackleCD > 0) return;
-    p.ai.tackT = prof.react * (0.6 + Math.random() * 0.8);
+    p.ai.tackT = prof.react * (0.6 + rand() * 0.8);
     const b = m.ball;
     const dBall = Math.hypot(b.x - p.x, b.y - p.y);
     const toBall = Math.atan2(b.y - p.y, b.x - p.x);
     if (c.state === 'hold') return;            // never challenge a keeper holding the ball
     const behind = isFromBehind(p, c);
-    const careful = Math.random() < prof.careful;
+    const careful = rand() < prof.careful;
     // would the lunge meet the ball before the man? (careless AI sometimes goes in anyway)
     const clean = (reach, lunge) => {
       const from = { x: p.x + Math.cos(toBall) * lunge, y: p.y + Math.sin(toBall) * lunge };
       return tackleSweep(from, toBall, reach, b, [c], false).first === 'ball';
     };
-    const reckless = !careful && Math.random() < 0.1;
+    const reckless = !careful && rand() < 0.1;
     if (dBall < 1.35 && ((!behind && clean(0.8, 0.3)) || reckless)) {
-      if (Math.random() < 0.35 + 0.5 * p.attrs.tackling * prof.press) { p.facing = toBall; m.startTackle(p, 'stand', toBall); }
-    } else if (dBall < 3.2 && dBall > 1.6 && Math.random() < 0.12 * prof.press && ((!behind && clean(1.0, 1.4)) || reckless) && p.stamina > 0.2) {
+      if (rand() < 0.35 + 0.5 * p.attrs.tackling * prof.press) { p.facing = toBall; m.startTackle(p, 'stand', toBall); }
+    } else if (dBall < 3.2 && dBall > 1.6 && rand() < 0.12 * prof.press && ((!behind && clean(1.0, 1.4)) || reckless) && p.stamina > 0.2) {
       p.facing = toBall; m.startTackle(p, 'slide', toBall);
     }
   }
@@ -369,7 +453,7 @@ export class TeamAI {
     const opps = m.opps(this.team);
     p.ai.decT -= dt;
     if (p.ai.decT <= 0) {
-      p.ai.decT = prof.react * (0.6 + Math.random() * 0.8);
+      p.ai.decT = prof.react * (0.6 + rand() * 0.8);
       const choice = this.decide(p, dir, side, gc, opps);
       if (choice.kind === 'shoot') { m.aiShoot(p, choice); return; }
       if (choice.kind === 'pass') { m.doPass(p, choice.pass, choice.mate, null); return; }
@@ -404,7 +488,7 @@ export class TeamAI {
 
   decide(p, dir, side, gc, opps) {
     const m = this.m, prof = this.prof;
-    const noise = () => (Math.random() - 0.5) * (1.2 - prof.acc) * 0.8;
+    const noise = () => (rand() - 0.5) * (1.2 - prof.acc) * 0.8;
     const dGoal = dist(p, gc);
     const nearestOpp = Math.min(...opps.map((o) => dist(o, p)));
     const pressure = clamp(1 - (nearestOpp - 1) / 5, 0, 1);
@@ -461,8 +545,8 @@ export class TeamAI {
     const drib = 0.62 + (ahead === 0 ? 0.35 : -0.25 * ahead) + (p.attrs.dribbling - 0.5) * 0.3 - pressure * 0.35;
     const toGoal = norm(gc.x - p.x, gc.y - p.y);
     options.push({ kind: 'dribble', score: drib + noise(), dir: toGoal });
-    if (pressure > 0.7 && Math.random() < 0.18 * p.attrs.dribbling) {
-      options.push({ kind: 'skill', score: 1.2, mx: toGoal.x + (Math.random() - 0.5), my: toGoal.y + (Math.random() - 0.5) });
+    if (pressure > 0.7 && rand() < 0.18 * p.attrs.dribbling) {
+      options.push({ kind: 'skill', score: 1.2, mx: toGoal.x + (rand() - 0.5), my: toGoal.y + (rand() - 0.5) });
     }
     options.sort((a, b) => b.score - a.score);
     return options[0];
@@ -493,7 +577,7 @@ export function updateKeeper(m, gk, dt, prof) {
     const path = simulatePath(b, 1.8, (bb) => (bb.x - lineX) * inward <= 0, 1);
     const P = path[path.length - 1];
     if (P && (P.x - lineX) * inward <= 0.05 && Math.abs(P.y - CY) < GOAL.W / 2 + 1.2 && P.z < GOAL.H + 0.6) {
-      const react = clamp(0.24 - 0.12 * kp, 0.06, 0.3) + Math.random() * 0.06;
+      const react = clamp(0.24 - 0.12 * kp, 0.06, 0.3) + rand() * 0.06;
       gk.ai.pendingDive = { at: m.time + react, P, tHit: m.time + P.t, kick: b.kickId, speed, lineX };
     } else gk.ai.pendingDive = null;
   }
@@ -513,7 +597,7 @@ export function updateKeeper(m, gk, dt, prof) {
       prob *= 0.78 + 0.25 * kp;
       if (!reachable) prob = 0.05;
       if (D < 0.7) prob = Math.max(prob, 0.9 * (0.8 + 0.2 * kp));
-      gk.saveIntent = Math.random() < clamp(prob, 0.03, 0.97);
+      gk.saveIntent = rand() < clamp(prob, 0.03, 0.97);
       gk.saveKick = pd.kick;
       const s = Math.sign(P.y - gk.y) || 1;
       const bodyY = gk.saveIntent ? P.y - s * Math.min(D, reach * 0.7) : P.y - s * (reach + 0.9);
@@ -563,7 +647,7 @@ export function updateKeeper(m, gk, dt, prof) {
       const d = clamp(dist(own, gc) - 1.3, 1, BOX.D - 0.5);
       tx = gc.x + n.x * d; ty = gc.y + n.y * d; rush = true;
       const db = dist(gk, b);
-      if (db < 2.4 && gk.tackleCD <= 0 && inBox && Math.random() < (0.18 + 0.22 * kp) * dt * 10) {
+      if (db < 2.4 && gk.tackleCD <= 0 && inBox && rand() < (0.18 + 0.22 * kp) * dt * 10) {
         m.startTackle(gk, 'slide', Math.atan2(b.y - gk.y, b.x - gk.x));
         return;
       }
@@ -571,7 +655,7 @@ export function updateKeeper(m, gk, dt, prof) {
       // narrow the angle
       const d = clamp(dist(own, gc) - 2.2, 1, 9);
       tx = gc.x + n.x * d; ty = gc.y + n.y * d;
-      if (dist(gk, own) < 1.6 && gk.tackleCD <= 0 && Math.random() < 0.05 + 0.1 * kp) {
+      if (dist(gk, own) < 1.6 && gk.tackleCD <= 0 && rand() < 0.05 + 0.1 * kp) {
         m.startTackle(gk, 'stand', Math.atan2(b.y - gk.y, b.x - gk.x));
         return;
       }

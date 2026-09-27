@@ -6,7 +6,7 @@ import { placeBall, solveKick } from './physics.js';
 import { choosePassTarget, clampToPitch } from './passing.js';
 import { formationPos } from './ai.js';
 import { stepPlayer, topSpeed } from './player.js';
-import { clamp, dist, norm } from './util.js';
+import { clamp, dist, norm, rand } from './util.js';
 import { simulateDeadBall } from './kickphys.js';
 
 export const SP_LABEL = { throw: 'Throw-in', corner: 'Corner kick', goalkick: 'Goal kick', freekick: 'Free kick', fk3d: 'Free kick', penalty: 'Penalty' };
@@ -226,13 +226,13 @@ function aiExecute(m, sp) {
   const gx = side === 1 ? PITCH.L : 0;
   const mates = m.mates(sp.team).filter((p) => p !== sp.taker);
   if (sp.type === 'corner') {
-    const tgt = { x: gx - dir * (5 + Math.random() * 7), y: CY + (Math.random() - 0.5) * 9 };
+    const tgt = { x: gx - dir * (5 + rand() * 7), y: CY + (rand() - 0.5) * 9 };
     const inswing = curveTowardGoal(sp, tgt, { x: gx, y: CY });
-    executeSetPiece(m, 'long', tgt, 0.55 + Math.random() * 0.3, inswing * (0.4 + Math.random() * 0.5));
+    executeSetPiece(m, 'long', tgt, 0.55 + rand() * 0.3, inswing * (0.4 + rand() * 0.5));
     return;
   }
   if (sp.type === 'goalkick') {
-    if (Math.random() < 0.55) {
+    if (rand() < 0.55) {
       const fw = mates.find((p) => p.role === 'FW') || mates[0];
       executeSetPiece(m, 'long', clampToPitch({ x: fw.x + dir * 4, y: fw.y }, 3, 3), 0.8, 0);
     } else {
@@ -255,8 +255,8 @@ function aiExecute(m, sp) {
   }
   if (!best) best = mates[0];
   sp.aim = { x: best.x, y: best.y };
-  const far = sp.type === 'freekick' && Math.abs(gx - sp.x) < 40 && Math.random() < 0.5;
-  if (far) executeSetPiece(m, 'long', { x: gx - dir * (8 + Math.random() * 6), y: CY + (Math.random() - 0.5) * 12 }, 0.7, 0);
+  const far = sp.type === 'freekick' && Math.abs(gx - sp.x) < 40 && rand() < 0.5;
+  if (far) executeSetPiece(m, 'long', { x: gx - dir * (8 + rand() * 6), y: CY + (rand() - 0.5) * 12 }, 0.7, 0);
   else executeSetPiece(m, 'short', sp.aim, 0.5, 0);
 }
 

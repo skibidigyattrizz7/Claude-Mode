@@ -62,15 +62,26 @@ export function hashStr(str) {
   return h >>> 0;
 }
 
+// ---------- simulation RNG ----------
+// Every gameplay decision in the match sim (AI, set pieces, pass / shot error, keeper reads)
+// draws from rand(), never Math.random() directly, so a match built with a seed replays
+// identically (tests) while normal play stays random. A Match installs its own stream at the
+// top of each update() (see useSimRng), so two matches never share one.
+let simRng = Math.random;
+/** Uniform [0,1) from the current simulation stream. */
+export const rand = () => simRng();
+/** Install the stream rand() draws from (null / undefined = Math.random). Returns the previous one. */
+export function useSimRng(fn) { const prev = simRng; simRng = typeof fn === 'function' ? fn : Math.random; return prev; }
+
 /** Standard normal sample (Box–Muller). */
-export function gauss(rng = Math.random) {
+export function gauss(rng = rand) {
   let u = 0;
   while (u <= 1e-12) u = rng();
   const v = rng();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
 }
 
-export function pick(arr, rng = Math.random) { return arr[Math.floor(rng() * arr.length) % arr.length]; }
+export function pick(arr, rng = rand) { return arr[Math.floor(rng() * arr.length) % arr.length]; }
 
 export function hexToRgb(hex) {
   const h = hex.replace('#', '');
