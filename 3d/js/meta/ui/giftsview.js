@@ -9,7 +9,7 @@ import { safeCall } from './app.js';
 import * as UT from '../core/ut.js';
 import { getPlayer } from '../core/players.js';
 import { openPackFlow } from './utview.js';
-import { importCustomCard } from './customcards.js';
+import { receiveCard } from '../core/customreg.js';
 
 const LOCAL_KEY = 'meta.gifts.local';
 let uid = 0;
@@ -52,21 +52,25 @@ async function claimGift(app, g) {
     const r = await safeCall(() => app.online.gifts.claim(g.id), { ok: false });
     if (!r || r.ok === false) { app.toast(r && r.error ? r.error : 'Claim failed', 'bad'); return; }
     kind = r.kind || kind; amount = r.coins ?? amount; packId = r.packId || packId; card = r.card || card; pid = (r.card && r.card.id) || pid; count = r.count || count;
-    if (kind === 'coins') { s.coins = Math.max(0, s.coins + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); app.refresh(); return; }
+    if (kind === 'coins') {
+      // Coins were added on the server: show the server balance (never re-send them as a local delta).
+      if (app.wallet && app.wallet.mode === 'online' && Number.isFinite(r.balance)) app.setOnlineBalance(r.balance);
+      else { s.coins = Math.max(0, (Number(s.coins) || 0) + (amount || 0)); app.saveUT(); }
+      app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); app.refresh(); return;
+    }
   } else {
     const list = readLocal();
     const i = list.findIndex((x) => x.id === g.id);
     if (i >= 0) list.splice(i, 1);
     writeLocal(list);
   }
-  if (kind === 'coins') { s.coins = Math.max(0, s.coins + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); }
+  if (kind === 'coins') { s.coins = Math.max(0, (Number(s.coins) || 0) + (amount || 0)); app.saveUT(); app.toast(`+${fmtNum(amount || 0)} coins claimed.`, 'good'); }
   else if (kind === 'pack') { app.saveUT(); for (let i = 1; i < count; i++) s.packs.push({ type: packId, from: 'Gift' }); openPackFlow(app, packId); }
   else if (kind === 'player' || kind === 'card') {
-    const p = getPlayer(pid) || card;
-    if (!p) { app.toast('Card data missing from this gift.', 'bad'); }
-    else if (s.club.includes(p.id)) { s.coins += 500; app.saveUT(); app.toast('Already owned — converted to 500 coins.', 'good'); }
-    else if (getPlayer(p.id)) { UT.addToClub(s, p.id); app.saveUT(); app.toast(`${p.name} added to your club!`, 'good'); }
-    else { importCustomCard(p); app.saveUT(); app.toast(`${p.name} saved to your Admin Cards gallery (custom card).`, 'good'); }
+    const r = receiveCard(s, card || (pid ? { id: pid } : null));
+    if (!r.ok) app.toast('Card data missing from this gift.', 'bad');
+    else if (r.duplicate) { s.coins = Math.max(0, (Number(s.coins) || 0) + 500); app.saveUT(); app.toast(`${r.card.name} is already in your club — converted to 500 coins.`, 'good'); }
+    else { app.saveUT(); app.toast(`${r.card.name} added to your club (tradable)!`, 'good'); }
   }
   app.refresh();
 }

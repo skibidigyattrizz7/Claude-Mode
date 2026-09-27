@@ -11,6 +11,7 @@ import { totwCards } from './totw.js';
 import { weekNumber } from './calendar.js';
 import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
+import { restoreCustomCards } from './customreg.js';
 
 export const UT_KEY = 'ut';
 
@@ -202,6 +203,7 @@ export function migrateUT(state) {
   for (const card of Object.values(state.evolved)) registerLocalCard(card);
   ensureTacticSets(state);
   for (const card of Object.values(state.foreign)) registerCard(card);
+  restoreCustomCards(state); // Card Creator / admin-gifted cards (full data kept in state.customCards)
   // V4: SBC storage vault (untradeable duplicates; duplicates allowed, capped — see sendToVault below).
   // `transferList` (cards flagged for sale, still owned — see pmarket.js transferList/sendToTransferList)
   // is sanitised here too so a corrupt/foreign id in an old save can't linger.

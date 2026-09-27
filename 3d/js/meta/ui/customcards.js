@@ -1,10 +1,9 @@
 // Admin "Card Creator": build a fully custom card (photo, name, position, stats, club colours) for the
-// Admin Cards gallery. Full club/gameplay integration needs a core hook that does not exist yet (see
-// docs/META_API.md) — feature-detected below — so grants fall back to a local, clearly-labelled gallery
-// entry that renders with the normal card component and can still be viewed/downloaded.
+// Admin Cards gallery. Granting / receiving one goes through core/customreg.js (full card data kept in the
+// UT save and registered into getPlayer), so it works everywhere a normal club card does.
 import { computeOvr, POS_WEIGHTS } from '../core/players.js';
 import { load, save } from '../core/storage.js';
-import * as UT from '../core/ut.js';
+import { receiveCard } from '../core/customreg.js';
 
 const KEY = 'meta.admin.customcards';
 let uid = 0;
@@ -52,16 +51,12 @@ export function importCustomCard(card) {
 
 export function getCustomCard(id) { return listCustomCards().find((c) => c.id === id) || null; }
 
-/** Grant a custom card to the club when the core exposes a registration hook; otherwise gallery-only. */
+/** Grant a custom card to the club: stored in the UT save (state.customCards) and registered into the player
+ * lookup, so club / squad / market / SBC screens resolve it. Tradable. -> { ok, integrated, duplicate, error } */
 export function grantCustomCard(state, card) {
-  if (typeof UT.registerCustomCard === 'function') {
-    UT.registerCustomCard(card);
-    UT.addToClub(state, card.id);
-    state.untradeable = state.untradeable || [];
-    state.untradeable.push(card.id);
-    return { ok: true, integrated: true };
-  }
-  return { ok: true, integrated: false };
+  if (!state) return { ok: false, integrated: false, error: 'no_club' };
+  const r = receiveCard(state, { ...card, customAdmin: true });
+  return r.ok ? { ok: true, integrated: true, duplicate: r.duplicate, pid: r.pid } : { ok: false, integrated: false, error: r.error };
 }
 
 export const POSITIONS_ALL = Object.keys(POS_WEIGHTS);

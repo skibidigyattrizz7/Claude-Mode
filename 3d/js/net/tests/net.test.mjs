@@ -14,6 +14,10 @@ import { LoopbackTransport } from '../transport.js';
 import { NetSession } from '../session.js';
 import { usernameError, passwordError, nameNorm, isReservedName, usernameKey, parseBan, banActive, banText, BLOCKED_WORDS } from '../accountcore.js';
 import { readFileSync } from 'node:fs';
+import { receiveCard, giftPayloadCard, registerCustomCard } from '../../meta/core/customreg.js';
+import * as UT from '../../meta/core/ut.js';
+import { getPlayer, getDB } from '../../meta/core/players.js';
+import { isTradeable } from '../../meta/core/pmarket.js';
 
 let passed = 0, failed = 0;
 const queue = [];
@@ -760,6 +764,76 @@ test('gifts: giveaway to everyone + direct card (tradable, >99 needs super), cla
   assert.deepEqual([p.packId, p.count], ['gold', 3]);
   assert.equal((await A.gifts.inbox()).items.length, 1); // A only has the giveaway
   assert.equal((await A.gifts.claim(cardGift.id)).error, 'not_found'); // not A's gift
+});
+
+test('card creator gift: a created card (photo, OVR 500) sent by username lands in the receiver club, tradable, after reload too', async () => {
+  const { be, B, O, b } = await world3();
+  const X = mk3(be);
+  await X.admin.verifyLevel('super-code-1');
+  const photo = `data:image/webp;base64,${'QUJD'.repeat(15000)}`;
+  const created = {
+    id: 'admin_1700000000000_0', name: 'Zed Custom', last: 'Custom', pos: 'ST', alt: ['CF'], nat: 'ENG', club: 'FUT', tier: 'icon', special: 'hero',
+    customAdmin: true, photo, tradable: true, playstyles: Array.from({ length: 20 }, (_, i) => ({ id: `ps${i}`, plus: i % 2 === 0 })),
+    stats: { pac: 500, sho: 500, pas: 400, dri: 450, def: 100, phy: 300 }, ovr: 500, createdAt: 1,
+  };
+  assert.equal((await X.players.resolve('nobody here')).error, 'player_not_found');
+  const who = await X.players.resolve('bob jones');
+  assert.equal(who.id, b.id);
+  assert.equal((await X.players.resolve(b.id)).id, b.id);
+  const payload = giftPayloadCard(created);
+  assert.equal(payload.photo, photo);
+  assert.equal((await O.owner.gift({ to: who.id, kind: 'card', card: payload })).error, 'needs_super'); // owner account: OVR > 99 needs SUPER
+  const sent = await X.owner.gift({ to: who.id, kind: 'card', card: payload, minutes: 60 });
+  assert.equal(sent.ok, true);
+  const g = (await B.gifts.inbox()).items.find((x) => x.kind === 'card');
+  assert.equal(g.card.photo, photo);
+  const c = await B.gifts.claim(g.id);
+  assert.equal(c.ok, true);
+  const state = UT.createUTState();
+  state.untradeable.push(created.id);
+  const r = receiveCard(state, c.card);
+  assert.deepEqual([r.ok, r.duplicate], [true, false]);
+  assert.ok(state.club.includes(created.id));
+  assert.equal(isTradeable(state, created.id), true);
+  const p = getPlayer(created.id);
+  assert.deepEqual([p.ovr, p.stats.pac, p.photo === photo, p.tier, p.special, p.playstyles.length, p.customAdmin], [500, 500, true, 'icon', 'hero', 20, true]);
+  // the UT save keeps the full card: a fresh load (migrateUT) resolves it again
+  const saved = JSON.parse(JSON.stringify(state));
+  getDB().byId.delete(created.id);
+  assert.equal(getPlayer(created.id), null);
+  const again = UT.migrateUT(saved);
+  assert.ok(again.club.includes(created.id));
+  assert.equal(getPlayer(created.id).ovr, 500);
+  assert.equal(receiveCard(again, c.card).duplicate, true);
+  // a database card gift arrives by id (compact payload) and lands in the club too
+  const dbCard = getDB().all.find((x) => x.ovr < 90 && !state.club.includes(x.id));
+  const g2 = await X.owner.gift({ to: b.id, kind: 'card', card: giftPayloadCard(dbCard) });
+  assert.equal(g2.ok, true);
+  const c2 = await B.gifts.claim((await B.gifts.inbox()).items.find((x) => x.kind === 'card').id);
+  assert.equal(receiveCard(again, c2.card).pid, dbCard.id);
+  assert.ok(again.club.includes(dbCard.id));
+  // a bad photo is rejected by the server
+  assert.equal((await X.owner.gift({ to: b.id, kind: 'card', card: { ...payload, id: 'admin_2', photo: 'data:text/html;base64,AAAA' } })).ok, true); // client drops a bad photo
+  assert.equal((await be.call('admin_gift', { p_code: 'super-code-1', p_to: b.id, p_all: false, p_kind: 'card', p_payload: { card: { id: 'x1', name: 'X', ovr: 50, photo: 'javascript:1' } } })).data.error, 'bad_card');
+  assert.equal(registerCustomCard(null, { id: 'bad id', name: 'X', pos: 'ST', ovr: 50 }), null);
+});
+
+test('gifts: owner lists pending gifts, cancels one, clears all; expiry picker bounds', async () => {
+  const { A, B, O, b } = await world3();
+  assert.equal((await O.owner.gift({ to: b.id, kind: 'coins', coins: 10, minutes: 0 })).error, 'bad_value');
+  const g1 = await O.owner.gift({ to: b.id, kind: 'coins', coins: 10, minutes: 30 });
+  assert.ok(Date.parse(g1.until) - Date.now() <= 30 * 60000 + 5000);
+  await O.owner.gift({ to: 'all', kind: 'pack', packId: 'gold' });
+  assert.equal((await A.owner.gifts()).error, 'not_admin');
+  const list = await O.owner.gifts();
+  assert.equal(list.items.length, 2);
+  assert.equal(list.items.find((x) => x.kind === 'coins').to.username, 'Bob Jones');
+  assert.equal((await O.owner.cancelGift(g1.giftId)).ok, true);
+  assert.equal((await B.gifts.claim(g1.giftId)).error, 'expired');
+  assert.equal((await B.gifts.inbox()).items.length, 1);
+  assert.equal((await O.owner.clearGifts()).cancelled, 1);
+  assert.equal((await B.gifts.inbox()).items.length, 0);
+  assert.equal((await O.owner.gifts()).items.length, 0);
 });
 
 test('broadcasts + presence: banner once per message, counter, club reset epoch; guests poll without a profile', async () => {

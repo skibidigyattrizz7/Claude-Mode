@@ -79,9 +79,34 @@ export function sanitizePresence(d) {
     createdAt: iso(d.createdAt),
   };
 }
+export const CARD_PHOTO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+export const MAX_CARD_PHOTO_CHARS = 200000; // Card Creator photo (data URL); the server uses the same bound
+const cleanCardPhoto = (v) => (typeof v === 'string' && v.length <= MAX_CARD_PHOTO_CHARS && CARD_PHOTO_RE.test(v) ? v : null);
+const cleanPlaystyles = (v) => (Array.isArray(v) ? v.slice(0, 40).filter((x) => isObj(x) && typeof x.id === 'string').map((x) => ({ id: cleanStr(x.id, 20, '?'), plus: x.plus === true })) : undefined);
+/** Shared card cleaning: bounded JSON, except the photo (data URL) and PlayStyles (up to 40), kept separately. */
+function cleanCardJson(c) {
+  if (!isObj(c)) return null;
+  const { photo, playstyles, ...rest } = c;
+  const v = cleanJson(rest);
+  if (!isObj(v)) return null;
+  const ps = cleanPlaystyles(playstyles);
+  if (ps) v.playstyles = ps;
+  const ph = cleanCardPhoto(photo);
+  if (ph) v.photo = ph;
+  return v;
+}
+/** A card to send as a gift (owner.gift): must have id, name, integer OVR 1..999; <= 4000 chars without the photo. */
+export function cleanGiftCardOut(c) {
+  const v = cleanCardJson(c);
+  if (!v || typeof v.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(c.id) || typeof c.name !== 'string' || !cleanStr(c.name, 32, '') || !Number.isInteger(c.ovr) || c.ovr < 1 || c.ovr > 999) return null;
+  v.id = c.id; v.name = cleanStr(c.name, 32, 'Player');
+  if ('pos' in v && (typeof v.pos !== 'string' || !/^[A-Z]{2,4}$/.test(v.pos))) delete v.pos;
+  const { photo, ...rest } = v; // eslint-disable-line no-unused-vars
+  return JSON.stringify(rest).length <= 4000 ? v : null;
+}
 /** A gift card: bounded JSON, tradable forced (the server forces it too). OVR up to 999 (admin cards). */
 export function sanitizeGiftCard(c) {
-  const v = cleanJson(c);
+  const v = cleanCardJson(c);
   if (!isObj(v) || typeof v.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(v.id) || typeof v.name !== 'string' || !Number.isInteger(v.ovr) || v.ovr < 1 || v.ovr > 999) return null;
   delete v.untradable;
   return { ...v, name: cleanStr(v.name, 32, 'Player'), tradable: true };

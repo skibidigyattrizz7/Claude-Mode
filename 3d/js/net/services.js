@@ -21,10 +21,10 @@ import {
   sanitizeRivalsStatus, sanitizeRivalsClaim, sanitizeFriend, sanitizeIncomingInvite, sanitizeOutgoingInvite, parseInviteAccept,
   normalizeFriendCode, FRIEND_CODE_RE, INVITE_MODES, TOKEN_RE, cleanJson, roleOf,
 } from './validate.js';
-import { usernameError, passwordError, parseBan, banActive, banText, isReservedName, trimUsername } from './accountcore.js';
+import { usernameError, passwordError, parseBan, banActive, banText, isReservedName, trimUsername, usernameKey } from './accountcore.js';
 import {
   nonNeg, PACK_RE, JPEG_RE, MAX_IMAGE_CHARS, CONFIG_KEYS, CONFIG_TTL_MS, sanitizeConfigValue, sanitizeConfig, sanitizeEpochs, sanitizeBroadcast,
-  sanitizePresence, sanitizeGift, sanitizePublicPlayer, sanitizeConversation, sanitizeMessage, cleanSquad, compressImage,
+  sanitizePresence, sanitizeGift, sanitizePublicPlayer, sanitizeConversation, sanitizeMessage, cleanSquad, compressImage, cleanGiftCardOut,
 } from './onlinevalidate.js';
 
 export const OFFLINE_SIGNUP_MSG = 'Online services are offline — you can play offline now and your account will be created when online is back.';
@@ -793,18 +793,44 @@ export function createOnline(deps) {
         return r.ok ? { ok: true, coins: nonNeg(r.coins), player: typeof r.player === 'string' ? r.player : null } : r;
       },
       /** { to: playerId | 'all', kind: 'coins'|'pack'|'card', coins, packId, count, card, message } -> { ok, giftId } */
-      async gift({ to, kind, coins = null, packId = null, count = 1, card = null, message = '' } = {}, { key = opKey() } = {}) {
+      async gift({ to, kind, coins = null, packId = null, count = 1, card = null, message = '', minutes = null } = {}, { key = opKey() } = {}) {
         const all = to === 'all';
+        if (minutes != null && (!Number.isInteger(minutes) || minutes < 1 || minutes > 129600)) return fail('bad_value');
         if (!all && (typeof to !== 'string' || !UUID_RE.test(to))) return fail('bad_target');
         let payload = null;
         if (kind === 'coins') { if (!Number.isInteger(coins) || coins < 1 || coins > 1e9) return fail('bad_amount'); }
         else if (kind === 'pack') { if (typeof packId !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(packId) || !Number.isInteger(count) || count < 1 || count > 50) return fail('bad_pack'); payload = { packId, count }; }
-        else if (kind === 'card') { const c = cleanJson(card); if (!c || typeof c !== 'object' || Array.isArray(c) || JSON.stringify(c).length > 4000) return fail('bad_card'); payload = { card: c }; }
+        else if (kind === 'card') { const c = cleanGiftCardOut(card); if (!c) return fail('bad_card'); payload = { card: c }; }
         else return fail('bad_kind');
         const r = await ownerCall('admin_gift', {
           p_to: all ? null : to, p_all: all, p_kind: kind, p_coins: kind === 'coins' ? coins : null, p_payload: payload, p_message: cleanStr(message, 200, '') || null, p_key: key,
+          ...(minutes != null ? { p_minutes: minutes } : {}),
         }, true);
-        return r.ok ? { ok: true, giftId: typeof r.giftId === 'string' ? r.giftId : null } : r;
+        return r.ok ? { ok: true, giftId: typeof r.giftId === 'string' ? r.giftId : null, until: isoOr(r.until) } : r;
+      },
+      /** Pending (unclaimed, unexpired) gifts. -> { ok, items:[{ id, kind, coins, packId, count, card:{id,name,ovr}, message, all, to:{id,username,name}, claims, at, until }] } */
+      async gifts() {
+        const r = await ownerCall('admin_gifts', { p_limit: 200 });
+        if (!r.ok) return r;
+        return { ok: true, items: sanitizeList(r.items, (g) => {
+          if (!g || typeof g.id !== 'string' || !UUID_RE.test(g.id) || !['coins', 'pack', 'card'].includes(g.kind)) return null;
+          const to = g.to && typeof g.to === 'object' && typeof g.to.id === 'string' && UUID_RE.test(g.to.id) ? { id: g.to.id, username: typeof g.to.username === 'string' ? cleanStr(g.to.username, 16, '') || null : null, name: cleanStr(g.to.name, 16, 'Player') } : null;
+          const card = g.card && typeof g.card === 'object' ? { id: cleanStr(g.card.id, 40, '?'), name: cleanStr(g.card.name, 32, 'Player'), ovr: Number.isInteger(g.card.ovr) ? g.card.ovr : 0 } : null;
+          return { id: g.id, kind: g.kind, coins: nonNeg(g.coins), packId: typeof g.packId === 'string' ? cleanStr(g.packId, 32, '') : null, count: Number.isInteger(g.count) ? g.count : 0, card, message: typeof g.message === 'string' ? cleanStr(g.message, 200, '') : '', all: g.all === true, to, claims: nonNeg(g.claims), at: isoOr(g.at), until: isoOr(g.until) };
+        }, 200) };
+      },
+      /** Cancel one pending gift (it can no longer be claimed). */
+      async cancelGift(id) {
+        if (typeof id !== 'string' || !UUID_RE.test(id)) return fail('not_found');
+        const r = await ownerCall('admin_cancel_gift', { p_gift: id });
+        if (r.ok) presenceTick(true);
+        return r.ok ? { ok: true } : r;
+      },
+      /** Cancel every pending gift. -> { ok, cancelled } */
+      async clearGifts() {
+        const r = await ownerCall('admin_clear_gifts', {});
+        if (r.ok) presenceTick(true);
+        return r.ok ? { ok: true, cancelled: nonNeg(r.cancelled) } : r;
       },
       /** what: 'coins' | 'progress' | 'club' | 'all' -> { ok, player, resets } */
       async reset(playerId, what) {
@@ -992,6 +1018,19 @@ export function createOnline(deps) {
         if (q.length < 2) return fail('bad_query');
         const r = dataOr(await rpc('find_player', { p_query: q }));
         return r.ok === true ? { ok: true, items: sanitizeList(r.items, sanitizePublicPlayer, 10) } : fail(r.error || 'bad_response');
+      },
+      /** One player from a username, friend code or id (exact match; a single search hit also counts).
+       * -> { ok, id, username, name } | { ok:false, error:'player_not_found' } */
+      async resolve(query) {
+        const q = cleanStr(query, 40, '').replace(/^@/, '');
+        if (UUID_RE.test(q)) return { ok: true, id: q.toLowerCase(), username: null, name: null };
+        if (q.length < 2) return fail('player_not_found');
+        const r = await online.players.find(q);
+        if (!r.ok) return r.error === 'bad_query' ? fail('player_not_found') : r;
+        const k = usernameKey(q), code = q.toUpperCase().replace(/-/g, '');
+        const hit = r.items.find((x) => x.username && usernameKey(x.username) === k) || r.items.find((x) => x.friendCode === code)
+          || (r.items.length === 1 ? r.items[0] : null);
+        return hit ? { ok: true, id: hit.id, username: hit.username, name: hit.name } : fail('player_not_found');
       },
     },
     messages: {
@@ -1226,13 +1265,13 @@ const unavailable = () => {
       onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
-    owner: { giveCoins: f, gift: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
+    owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },
     rewards: { match: f },
-    players: { find: f },
+    players: { find: f, resolve: f },
     messages: { send: f, conversations: f, thread: f, unread: () => 0, compressImage: async () => ({ ok: false, error: 'bad_image' }), MAX_TEXT: 300, MAX_IMAGE_BYTES: 150 * 1024 },
     squads: { publish: f, view: f },
     rivals: { status: f, claimWeekly: f },

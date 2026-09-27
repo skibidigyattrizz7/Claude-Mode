@@ -34,7 +34,10 @@ export function isTradeable(state, pid) {
 /** Plain JSON copy of a card (what we send to the server). */
 export function cardPayload(pid) {
   const p = getPlayer(pid);
-  return p ? JSON.parse(JSON.stringify(p)) : null;
+  if (!p) return null;
+  const out = JSON.parse(JSON.stringify(p));
+  if (out.photo && JSON.stringify(out).length > 4000) delete out.photo; // Card Creator photo: too big for a listing
+  return out;
 }
 
 /** Put a received card into the club (registers cards our local DB does not know). Returns pid or null. */

@@ -5,7 +5,8 @@ import { h, clear, add, fmtNum, confirmBox, select, modal } from './dom.js';
 import { icon } from './icons.js';
 import { playerCard } from './card.js';
 import { safeCall } from './app.js';
-import { createCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, importCustomCard, POSITIONS_ALL } from './customcards.js';
+import { createCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, POSITIONS_ALL } from './customcards.js';
+import { giftPayloadCard } from '../core/customreg.js';
 import { getDB } from '../core/players.js';
 import { NATIONS } from '../core/data.js';
 import { sendLocalGift } from './giftsview.js';
@@ -31,7 +32,11 @@ function cropToCard(file) {
       const w = img.width * s, hh = img.height * s;
       ctx.drawImage(img, (targetW - w) / 2, (targetH - hh) / 2, w, hh);
       URL.revokeObjectURL(url);
-      resolve(c.toDataURL('image/png'));
+      // Small enough to travel inside a gift (server bound 200 000 chars): WebP keeps transparency; JPEG fallback.
+      let out = c.toDataURL('image/webp', 0.86);
+      if (!/^data:image\/webp/.test(out) || out.length > 150000) out = c.toDataURL('image/jpeg', 0.86);
+      if (out.length > 150000) out = c.toDataURL('image/jpeg', 0.6);
+      resolve(out);
     };
     img.onerror = reject;
     img.src = url;
@@ -104,7 +109,14 @@ export function cardCreatorPanel(app, { level }) {
     for (const c of cards) {
       gallery.appendChild(h('div', { class: 'pm-cc-item' }, playerCard(c, { size: 'sm' }),
         h('div', { class: 'pm-btnrow' },
-          h('button', { class: 'pm-btn pm-btn--sm', onclick: () => { const r = grantCustomCard(app.ut, c); app.saveUT(); app.toast(r.integrated ? `${c.name} granted to your club.` : `${c.name} saved (gallery-only — full club integration awaits a core update).`, 'good'); } }, 'Grant to my club'),
+          h('button', { class: 'pm-btn pm-btn--sm', onclick: () => {
+            if (!app.ut) { app.toast('Create an Ultimate Team club first.', 'warn'); return; }
+            const r = grantCustomCard(app.ut, c);
+            if (!r.ok) { app.toast(`Could not grant ${c.name} (${r.error || 'invalid card'}).`, 'bad'); return; }
+            app.saveUT();
+            app.toast(r.duplicate ? `${c.name} is already in your club.` : `${c.name} added to your club (tradable).`, 'good');
+          } }, 'Grant to my club'),
+          h('button', { class: 'pm-btn pm-btn--sm pm-btn--accent', onclick: () => openSendCardModal(app, { card: c }) }, icon('gifts'), ' Send'),
           h('button', { class: 'pm-btn pm-btn--danger pm-btn--sm', onclick: () => { deleteCustomCard(c.id); drawGallery(); } }, 'Delete'))));
     }
   };
@@ -116,7 +128,7 @@ export function cardCreatorPanel(app, { level }) {
   drawPreview(); drawGallery(); drawAlt(); drawPs();
   return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
     h('h3', null, icon('cardcreator'), ' Card Creator', h('span', { class: 'pm-chip on' }, 'Owner Access')),
-    h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat, any promo design, unlimited PlayStyles and alt positions. Grants are untradeable by default (toggle tradable when gifting); without a core registry hook, a granted card stays visible in this gallery and on your club summary but core screens that read the generated player database (e.g. Squad) will show it as unavailable until that hook lands.`),
+    h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat, any promo design, unlimited PlayStyles and alt positions. Saved cards can be granted to your own club or sent to any player (they arrive in the Gifts inbox and land in the club, tradable).`),
     h('div', { class: 'pm-cc-grid' },
       h('div', { class: 'pm-cc-form' },
         nameInp,
@@ -175,7 +187,7 @@ export function moderationPanel(app, { level }) {
           row(banned ? 'Unban' : 'Ban', 'ban', !banned, () => runAction(banned ? 'unban' : 'ban', banned ? 'Unban' : 'Ban', u.id, 'Admin action')),
           row('Adjust coins', 'coins', false, async () => { const v = Number(prompt(`Coin delta for ${u.username || u.name} (e.g. -500 or 500):`, '0')); if (!v) return; runAction('adjustCoins', 'Adjust coins', u.id, v, 'admin'); }),
           row('Make mod', 'admin', false, () => runAction('setRole', 'Make mod', u.id, 'mod')),
-          h('button', { class: 'pm-btn pm-btn--sm pm-btn--accent', onclick: () => openSendCardModal(app, { toUsername: u.username || '' }) }, icon('gifts'), ' Send card'),
+          h('button', { class: 'pm-btn pm-btn--sm pm-btn--accent', onclick: () => openSendCardModal(app, { toUsername: u.username || u.id || '' }) }, icon('gifts'), ' Send card'),
           ownerLevel ? row('Reset coins', 'coins', true, () => runOwnerReset(u.id, 'coins')) : null,
           ownerLevel ? row('Reset progress', 'reset', true, () => runOwnerReset(u.id, 'progress')) : null,
           ownerLevel ? row('Reset club', 'squad', true, () => runOwnerReset(u.id, 'club')) : null)));
@@ -216,17 +228,26 @@ export function broadcastPanel(app) {
     !svc || typeof svc.broadcast !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service — not connected in this session.') : null);
 }
 
-/** Send a coins/pack/card gift via `online.owner.gift` (real API) with a local Gifts-inbox fallback. */
-async function sendGift(app, { to, kind, coins, packId, card, count = 1 }, label) {
+/** Send a coins/pack/card gift via `online.owner.gift` (real API) with a local Gifts-inbox fallback.
+ * `to`: 'all', a player id, a username or a friend code (resolved to the player id first). */
+export async function sendGift(app, { to, kind, coins, packId, card, count = 1, minutes = null }, label) {
   const owner = app.online && app.online.owner;
-  const gift = { to, kind, coins, packId, card, count };
-  if (owner && typeof owner.gift === 'function') {
-    const r = await safeCall(() => owner.gift(gift), { ok: false });
-    if (r && r.ok !== false) app.toast(`${label} sent${to === 'all' ? ' to everyone' : ` to ${to}`}.`, 'good');
+  const payloadCard = kind === 'card' ? giftPayloadCard(card) : null;
+  if (kind === 'card' && !payloadCard) { app.toast(`${label} failed: that card cannot be sent.`, 'bad'); return { ok: false, error: 'bad_card' }; }
+  if (owner && typeof owner.gift === 'function' && (await app.onlineAvailable())) {
+    let target = to, shown = to;
+    if (to !== 'all') {
+      const players = app.online.players;
+      const r0 = players && typeof players.resolve === 'function' ? await safeCall(() => players.resolve(to), { ok: false, error: 'offline' }) : { ok: true, id: to };
+      if (!r0 || r0.ok === false) { const e = (r0 && r0.error) || 'player_not_found'; app.toast(`${label} failed: ${e === 'player_not_found' ? `no player "${to}"` : e}.`, 'bad'); return { ok: false, error: e }; }
+      target = r0.id; shown = r0.username || to;
+    }
+    const r = await safeCall(() => owner.gift({ to: target, kind, coins, packId, card: payloadCard, count, ...(minutes ? { minutes } : {}) }), { ok: false });
+    if (r && r.ok !== false) app.toast(`${label} sent${to === 'all' ? ' to everyone' : ` to ${shown}`} — it waits in their Gifts inbox.`, 'good');
     else app.toast(`${label} failed${r && r.error ? `: ${r.error}` : ''}.`, 'bad');
     return r;
   }
-  sendLocalGift({ kind: kind === 'card' ? 'player' : kind, amount: coins, packId, pid: card && card.id, card, note: to === 'all' ? `${label} (local device only — no online service connected)` : `${label} for ${to || 'you'} (local device only)` });
+  sendLocalGift({ kind: kind === 'card' ? 'player' : kind, amount: coins, packId, count, pid: payloadCard && payloadCard.id, card: payloadCard, note: to === 'all' ? `${label} (local device only — no online service connected)` : `${label} for ${to || 'you'} (local device only)` });
   app.toast('Online gifting is not connected — queued to this device’s Gifts inbox instead.', 'good');
   return { ok: true, local: true };
 }
@@ -262,7 +283,7 @@ export function giveawayPanel(app) {
   async function give(everyone) {
     if (!everyone && !st.target.trim()) { status.textContent = 'Enter a username, or use "Send to everyone".'; return; }
     let card = null;
-    if (st.kind === 'card') { card = findCard(st.cardQuery); if (!card) { status.textContent = 'No card matches that name.'; return; } card = { ...card, tradable: true }; }
+    if (st.kind === 'card') { card = findCard(st.cardQuery); if (!card) { status.textContent = 'No card matches that name.'; return; } }
     const r = await sendGift(app, { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: card || undefined }, 'Giveaway');
     status.textContent = r && r.ok !== false ? 'Sent.' : `Failed${r && r.error ? `: ${r.error}` : ''}.`;
   }
@@ -280,14 +301,12 @@ export function giveawayPanel(app) {
  * Prominent "Send card" modal: username/friend code + a searchable card picker (DB players + Admin Cards).
  * Exported so the Admin panel's top-level button and Moderation's per-row "Send card" both reuse it.
  */
-export function openSendCardModal(app, { toUsername = '' } = {}) {
-  const st = { target: toUsername, q: '', tradable: true };
+export function openSendCardModal(app, { toUsername = '', card = null } = {}) {
+  const st = { target: toUsername, q: card ? card.name : '', tradable: true };
   const target = h('input', { class: 'pm-input', value: st.target, placeholder: 'Username or friend code', 'aria-label': 'Recipient' });
   target.addEventListener('input', () => { st.target = target.value; });
-  const q = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search any player or Admin Card…', 'aria-label': 'Card search' });
+  const q = h('input', { class: 'pm-input', type: 'search', value: st.q, placeholder: 'Search any player or Admin Card…', 'aria-label': 'Card search' });
   const results = h('div', { class: 'pm-admin-results pm-cc-sendresults' });
-  const tradableChk = h('input', { type: 'checkbox', checked: true });
-  tradableChk.addEventListener('change', () => { st.tradable = tradableChk.checked; });
   function draw() {
     clear(results);
     const query = st.q.trim().toLowerCase();
@@ -304,7 +323,7 @@ export function openSendCardModal(app, { toUsername = '' } = {}) {
           class: 'pm-btn pm-btn--primary pm-btn--sm',
           onclick: async () => {
             if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
-            const r = await sendGift(app, { to: st.target.trim(), kind: 'card', card: { ...c, tradable: st.tradable } }, 'Card');
+            const r = await sendGift(app, { to: st.target.trim(), kind: 'card', card: c }, 'Card');
             if (r && r.ok !== false) close();
           },
         }, 'Send')));
@@ -316,7 +335,7 @@ export function openSendCardModal(app, { toUsername = '' } = {}) {
     title: 'Send / Gift a card', wide: true,
     body: h('div', { class: 'pm-cc-send' },
       h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'To'), target),
-      h('label', { class: 'pm-toggle' }, tradableChk, h('span', null, 'Tradable')),
+      h('p', { class: 'pm-dim' }, 'The card arrives in their Gifts inbox and lands in their club, tradable.'),
       q, results),
     actions: [{ label: 'Close' }],
   });
