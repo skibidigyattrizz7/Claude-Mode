@@ -63,6 +63,19 @@ Receiver free-roam; weak passes; AI defending/marking + interceptions for user t
 - **Pack opening redo** (like owner's reference videos): pack **rips from the top**, card slides out hidden, FUT walkout sequence (flag → position → club → card) for high rated; no random 3D model right after opening; any 3D model must be realistic + smooth. Keep the old version revertible (setting/flag). [D]
 - **Receiving passes (FIFA)**: after you pass, the receiver is mostly AI-driven to meet the ball, user input only nudges slightly, until he receives it. 3D [G] and 2D [F].
 
+## Owner bug reports (Sep 26 night #2) — ALL REQUIRED
+- [A2] Names still don't load (other players' names/usernames show wrong/blank in lists, market, friends, admin).
+- [A2] Card creator: granting a created card doesn't work; sending/gifting cards doesn't work (must land in receiver's club, tradable). Stat sliders reset when you let go (touch/pointerup) — must keep value.
+- [A2] Admin commands: give admin / revoke admin (per player), revoke ALL admin, change any player's username.
+- [A2] Friends: add-friend must be in Settings and inside UT (no need to leave UT); friends list must work inside UT (invite/play/view squad).
+- [A2] Test gifts: unclaimed global gifts could still be redeemed (coordinator expired them on the server Sep 27 00:45). Add admin "Cancel gift"/"Clear all pending gifts" + gift expiry picker.
+- [A2] Coin counter count-up animation must run on EVERY coin change (match rewards, sales, gifts, SBCs, admin), not only in the admin panel.
+- [A2] Switching local money <-> infinite glitches the game → one robust balance model; toggling must never corrupt/NaN/lose coins.
+- [B2] Add LEAGUES to every player (real-style league names, fictional-safe) — SBCs/tournaments that ask for same league must be satisfiable; chemistry uses league.
+- [B2] Ratings are bad: Neymar at 82 is wrong (should be ~91–93 peak/legend tier, top-3 of his generation). Re-check ALL top players. Bellingham must have LM + CDM alts (and CAM/CM). Generally sensible alt positions for all.
+- [B2] PlayStyles: use the owner's "best PlayStyles+ per position" image (scratchpad/promorefs/playstyles_plus_by_position.jpg) — assign PlayStyles+ per position accordingly; card creator offers them too.
+- [PROMO] Promo designs must apply to cards made in the card creator (choose promo → card renders in that promo design).
+
 ## Work order (owner allows 3 long agents + any number of small ones)
 Done + live (Sep 26): A (login UI, reset-on-join fix, config/broadcast/gift propagation, migration 004), B (vault, promo gating, 3 new promos, dedupe, coin model), C round 1 (admin/card creator/Owner Access/chemistry styles/squad UI).
 Running: C round 2 (menus, landing, 2D menus, account screens), D (pack opening redo), B2 (ratings, +500 players, admin cards, secret card, managers), small: 3D + 2D receive-pass assist.
