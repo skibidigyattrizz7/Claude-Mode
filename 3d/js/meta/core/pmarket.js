@@ -58,14 +58,20 @@ async function call(fn) {
 }
 
 /** List a club card. The card leaves the club (and squad) until the listing is cancelled. */
-export async function listCard(state, online, pid, price) {
+export async function listCard(state, online, pid, price, { anyPrice = false } = {}) {
   if (!avail(online)) return fail('Online market unavailable');
   const p = getPlayer(pid);
   if (!p || !state.club.includes(pid)) return fail('Card is not in your club');
   if (!isTradeable(state, pid)) return fail('This card is untradeable');
-  const r = priceRange(p);
-  const v = snapPrice(Number(price) || 0);
-  if (!(v >= r.min && v <= r.max)) return fail(`Price must be between ${r.min} and ${r.max}`);
+  let v;
+  if (anyPrice) { // admins: any whole price (the server verifies the admin)
+    v = Math.round(Number(price) || 0);
+    if (!Number.isSafeInteger(v) || v < 1 || v > 9e15) return fail('Price must be a whole number of coins');
+  } else {
+    const r = priceRange(p);
+    v = snapPrice(Number(price) || 0);
+    if (!(v >= r.min && v <= r.max)) return fail(`Price must be between ${r.min} and ${r.max}`);
+  }
   const res = await call(() => online.market.list(cardPayload(pid), v));
   if (!res.ok) return fail(res.error || 'Listing failed');
   removeFromClub(state, pid);

@@ -395,6 +395,7 @@ export function oddsModal(app, pack) {
 }
 
 export function openPackFlow(app, packType, onDone) {
+  if (typeof app.restricted === 'function' && app.restricted('packs')) { app.toast('The owner has restricted packs on your account.', 'warn'); return; }
   const s = app.ut;
   const pack = UT.PACK_BY_ID[packType];
   const items = UT.openPack(packType, UT.ownedSet(s), new Rng());

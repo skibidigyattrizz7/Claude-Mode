@@ -273,8 +273,48 @@ function findCard(query) {
     || db.all.find((p) => p.name.toLowerCase().includes(q)) || listCustomCards().find((c) => c.name.toLowerCase().includes(q)) || null;
 }
 
+const EXPIRY = [['', 'Expires in 14 days'], ['60', '1 hour'], ['360', '6 hours'], ['1440', '1 day'], ['4320', '3 days'], ['10080', '7 days'], ['43200', '30 days'], ['129600', '90 days']];
+
+/** Pending (unclaimed, unexpired) gifts with Cancel per gift + "Clear all pending gifts". */
+export function pendingGiftsPanel(app) {
+  const svc = app.online && app.online.owner;
+  const list = h('div', { class: 'pm-admin-results' });
+  const wrap = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('gifts'), ' Pending gifts'));
+  if (!svc || typeof svc.gifts !== 'function') { wrap.appendChild(h('p', { class: 'pm-dim' }, 'Needs the online service.')); return wrap; }
+  const label = (g) => (g.kind === 'coins' ? `${fmtNum(g.coins)} coins` : g.kind === 'pack' ? `${g.count}× ${g.packId} pack` : g.card ? `${g.card.name} (${g.card.ovr})` : 'Card');
+  async function draw() {
+    clear(list); list.appendChild(h('p', { class: 'pm-dim' }, 'Loading…'));
+    const r = await safeCall(() => svc.gifts(), { ok: false, error: 'offline' });
+    clear(list);
+    if (!r || r.ok === false) { list.appendChild(h('p', { class: 'pm-warnline' }, `Could not load gifts: ${(r && (r.message || r.error)) || 'offline'}.`)); return; }
+    if (!r.items.length) { list.appendChild(h('p', { class: 'pm-dim' }, 'No pending gifts.')); return; }
+    for (const g of r.items) {
+      list.appendChild(h('div', { class: 'pm-mktrow', 'data-gift': g.id },
+        h('div', { class: 'pm-mkt-info' }, h('b', null, label(g)),
+          h('span', { class: 'pm-dim' }, `${g.all ? `Everyone (${g.claims} claimed)` : `To ${g.to ? g.to.username || g.to.name : '?'}`} · sent ${g.at ? new Date(g.at).toLocaleString() : '—'} · expires ${g.until ? new Date(g.until).toLocaleString() : '—'}`)),
+        h('button', {
+          class: 'pm-btn pm-btn--danger pm-btn--sm',
+          onclick: async () => { const x = await safeCall(() => svc.cancelGift(g.id), { ok: false }); app.toast(x && x.ok ? 'Gift cancelled.' : `Cancel failed: ${(x && x.error) || 'offline'}.`, x && x.ok ? 'good' : 'bad'); draw(); },
+        }, 'Cancel gift')));
+    }
+  }
+  draw();
+  add(wrap, h('div', { class: 'pm-btnrow' },
+    h('button', { class: 'pm-btn', onclick: draw }, 'Refresh'),
+    h('button', {
+      class: 'pm-btn pm-btn--danger',
+      onclick: async () => {
+        if (!(await confirmBox(app.root, 'Clear all pending gifts', 'Cancel every gift that has not been claimed yet?', 'Clear all', true))) return;
+        const x = await safeCall(() => svc.clearGifts(), { ok: false });
+        app.toast(x && x.ok ? `${x.cancelled} pending gift${x.cancelled === 1 ? '' : 's'} cancelled.` : `Failed: ${(x && x.error) || 'offline'}.`, x && x.ok ? 'good' : 'bad');
+        draw();
+      },
+    }, 'Clear all pending gifts')), list);
+  return wrap;
+}
+
 export function giveawayPanel(app) {
-  const st = { target: '', kind: 'coins', amount: 5000, packId: 'gold', cardQuery: '' };
+  const st = { target: '', kind: 'coins', amount: 5000, packId: 'gold', cardQuery: '', minutes: '' };
   const targetInp = h('input', { class: 'pm-input', placeholder: 'Username (leave blank + "Everyone" for all)', 'aria-label': 'Giveaway target' });
   targetInp.addEventListener('input', () => { st.target = targetInp.value; });
   const kindSel = select([['coins', 'Coins'], ['pack', 'Pack'], ['card', 'Card (any player or Admin Card)']], st.kind, (v) => { st.kind = v; redrawExtra(); }, { 'aria-label': 'Giveaway type' });
@@ -296,13 +336,14 @@ export function giveawayPanel(app) {
     if (!everyone && !st.target.trim()) { status.textContent = 'Enter a username, or use "Send to everyone".'; return; }
     let card = null;
     if (st.kind === 'card') { card = findCard(st.cardQuery); if (!card) { status.textContent = 'No card matches that name.'; return; } }
-    const r = await sendGift(app, { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: card || undefined }, 'Giveaway');
+    const r = await sendGift(app, { to: everyone ? 'all' : st.target.trim(), kind: st.kind, coins: st.kind === 'coins' ? st.amount : undefined, packId: st.kind === 'pack' ? st.packId : undefined, card: card || undefined, minutes: st.minutes ? Number(st.minutes) : null }, 'Giveaway');
     status.textContent = r && r.ok !== false ? 'Sent.' : `Failed${r && r.error ? `: ${r.error}` : ''}.`;
   }
   return h('section', { class: 'pm-panel pm-admin-sec' },
     h('h3', null, icon('giveaway'), ' Giveaways'),
     h('p', { class: 'pm-dim' }, 'Send coins, a pack, or any card (including Admin Cards) to one user or to everyone. Gifted cards are always tradable.'),
     targetInp, h('div', { class: 'pm-btnrow' }, kindSel, extra), cardMatch,
+    h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'Expiry'), select(EXPIRY, st.minutes, (v) => { st.minutes = v; }, { 'aria-label': 'Gift expiry' })),
     h('div', { class: 'pm-btnrow' },
       h('button', { class: 'pm-btn pm-btn--primary', onclick: () => give(false) }, 'Send to user'),
       h('button', { class: 'pm-btn pm-btn--accent', onclick: () => give(true) }, 'Send to everyone')),
