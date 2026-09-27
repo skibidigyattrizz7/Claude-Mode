@@ -617,6 +617,8 @@ button.picker-card:hover { border-color: rgba(255,255,255,.3); transform: transl
 .gp-wrap > .gp-who, .gp-wrap > .row { grid-column: 1 / -1; }
 .tabs--sm { max-width: 520px; }
 @media (max-width: 800px) { .settings, .gp-wrap { grid-template-columns: minmax(0, 1fr); } .settings-tabs .tab { flex: 1; padding: 0 8px; } }
+.settings-shell { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 480px) { .settings-tabs .tab { font-size: 15px; letter-spacing: .05em; padding: 0 4px; } }
 
 /* Account chip + online badge: sized here too so a stale/late account.css can never blow the icon up. */
 .acc-chip .ico { width: 16px; height: 16px; flex: none; }
