@@ -43,10 +43,19 @@ function cropToCard(file) {
   });
 }
 
+// The creator's draft lives outside the panel: the admin view re-renders on account / config / presence
+// events (and a touch release can land right after one), which used to rebuild the panel from defaults and
+// snap every slider back. Now a re-render shows exactly what was being edited.
+const newDraft = () => ({ name: '', pos: 'ST', alt: [], nat: 'ENG', tier: 'gold', special: '', photo: null, playstyles: [], stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } });
+let ccDraft = newDraft();
+/** Test hook: the Card Creator draft (values survive re-renders). */
+export function cardCreatorDraft() { return ccDraft; }
+
 export function cardCreatorPanel(app, { level }) {
   const isSuper = level === 'super';
   const cap = isSuper ? 999 : 99;
-  const st = { name: '', pos: 'ST', alt: [], nat: 'ENG', tier: 'gold', special: '', photo: null, playstyles: [], stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } };
+  const st = ccDraft;
+  for (const k of Object.keys(st.stats)) st.stats[k] = Math.max(1, Math.min(cap, Math.round(Number(st.stats[k]) || 1)));
   if (!isSuper) return h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('cardcreator'), ' Card Creator'), h('p', { class: 'pm-dim' }, 'Card creation is restricted to Owner Access.'));
   const preview = h('div', { class: 'pm-cc-preview' });
   const drawPreview = () => {
@@ -84,13 +93,16 @@ export function cardCreatorPanel(app, { level }) {
       })));
   };
   const statRow = (key, label) => {
-    const row = h('label', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: String(cap), value: st.stats[key] }), h('b', null, String(st.stats[key])));
+    const row = h('div', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: String(cap), step: '1', 'aria-label': label }), h('b', null, String(st.stats[key])));
     const range = row.querySelector('input'), out = row.querySelector('b');
-    range.addEventListener('input', () => { st.stats[key] = Number(range.value); out.textContent = range.value; drawPreview(); });
+    range.value = String(st.stats[key]); // property (not only the attribute) so the thumb starts where the draft is
+    const commit = () => { const v = Math.max(1, Math.min(cap, Math.round(Number(range.value) || 1))); st.stats[key] = v; out.textContent = String(v); };
+    range.addEventListener('input', () => { commit(); drawPreview(); });
+    range.addEventListener('change', commit);
     return row;
   };
-  const nameInp = h('input', { class: 'pm-input', placeholder: 'Player name', maxlength: '26' });
-  const saveBtn = h('button', { class: 'pm-btn pm-btn--primary', disabled: true }, 'Save to gallery');
+  const nameInp = h('input', { class: 'pm-input', placeholder: 'Player name', maxlength: '26', value: st.name });
+  const saveBtn = h('button', { class: 'pm-btn pm-btn--primary', disabled: !st.name.trim() }, 'Save to gallery');
   nameInp.addEventListener('input', () => { st.name = nameInp.value; saveBtn.disabled = !nameInp.value.trim(); drawPreview(); });
   const upload = h('input', { type: 'file', accept: 'image/png,image/jpeg', class: 'pm-cc-upload' });
   const uploadMsg = h('small', { class: 'pm-dim' }, 'PNG/JPG — auto-cropped to the card portrait.');
@@ -123,7 +135,7 @@ export function cardCreatorPanel(app, { level }) {
   saveBtn.addEventListener('click', () => {
     const card = createCustomCard({ name: st.name, pos: st.pos, alt: st.alt, nat: st.nat, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper, playstyles: st.playstyles });
     app.toast(`${card.name} (${card.ovr} OVR) saved to the Admin Cards gallery.`, 'good');
-    nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; drawPs(); drawAlt(); drawPreview(); drawGallery();
+    nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; uploadMsg.textContent = 'PNG/JPG — auto-cropped to the card portrait.'; drawPs(); drawAlt(); drawPreview(); drawGallery();
   });
   drawPreview(); drawGallery(); drawAlt(); drawPs();
   return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
