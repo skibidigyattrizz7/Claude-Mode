@@ -274,7 +274,8 @@ export function createOnline(deps) {
       const r = dataOr(await authed('get_profile'));
       const p = sanitizeProfile(r);
       // Until accounts are used, name the profile after the local UT club so the owner can tell players apart.
-      if (p && p.name === 'Player' && deps.getName) {
+      if (p && p.username && p.name !== p.username) p.name = p.username; // accounts are shown by username everywhere
+      if (p && !p.username && p.name === 'Player' && deps.getName) {
         const want = cleanStr(deps.getName(), 16, '');
         if (want && want !== 'Player' && !nameSyncTried) {
           nameSyncTried = true;
@@ -286,6 +287,8 @@ export function createOnline(deps) {
     },
 
     async setName(name) {
+      const acc = readAcc();
+      if (acc && acc.username) return { ok: true, name: acc.username }; // accounts: display name = username (change it in Account)
       const n = cleanStr(name, 16, '');
       if (!n) return fail('bad_name');
       const r = dataOr(await authed('set_name', { p_name: n }));
