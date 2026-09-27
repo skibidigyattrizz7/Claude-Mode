@@ -656,7 +656,7 @@ async function metaScreen(which) {
 
 // ------------------------------------------------------------------ Online
 let currentOnline = null; // the mounted online screen (for accepting friend invites into it)
-async function onlineScreen({ autoQuick = null, onResult = null, onClose = null, onAutoEnd = null, autoInvite = null } = {}) {
+async function onlineScreen({ autoQuick = null, onResult = null, onClose = null, onAutoEnd = null, autoInvite = null, autoChallenge = null } = {}) {
   const body = h('div', { class: 'online-root' }, h('div', { class: 'loading' }, h('div', { class: 'spinner' }), 'Loading online play…'));
   const el = screenShell('online', 'Online Match', autoQuick ? 'Quick Search' : 'Quick Search · play with a code', body);
   let mounted = null;
@@ -667,7 +667,7 @@ async function onlineScreen({ autoQuick = null, onResult = null, onClose = null,
     const mod = await import('./net/online.js');
     mounted = mod.mountOnline(body, {
       h, nav, toast, getTeams, getSavedUT, openMatch, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
-      online, autoQuick, onResult, onAutoEnd, autoInvite,
+      online, autoQuick, onResult, onAutoEnd, autoInvite, autoChallenge,
       transportKind: ['bc', 'loopback'].includes(Q.get('net')) ? Q.get('net') : 'peer',
       dcTimeoutMs: Math.max(2000, Number(Q.get('dcTimeout')) * 1000 || 15000),
       autoAction: Q.get('online'), // 'host' | 'join:CODE' (tests / share links)
@@ -689,8 +689,16 @@ async function onlineScreen({ autoQuick = null, onResult = null, onClose = null,
  * If the search finds nobody / fails / is cancelled, the online screen closes by itself so meta can
  * offer an AI opponent (e.g. an AI rival for reason 'no_opponent').
  */
-export async function startOnlineMatch({ mode = 'ut', team = null } = {}) {
+export async function startOnlineMatch({ mode = 'ut', team = null, friend = null } = {}) {
   const m = ['friendly', 'ut', 'rivals'].includes(mode) ? mode : 'ut';
+  if (friend && friend.id) { // friend challenge from inside UT (friends panel): we host, they join on accept
+    const sv0 = await online.status();
+    if (!sv0.online) return { ok: false, abandoned: true, reason: 'offline', message: sv0.message };
+    return new Promise((resolve) => {
+      let last = null;
+      onlineScreen({ autoChallenge: { friend, mode: m === 'ut' ? 'ut' : 'friendly' }, onResult: (r, info) => { last = { ok: true, ...r, ...info }; }, onClose: () => resolve(last || { ok: false, abandoned: true, reason: 'cancelled' }) });
+    });
+  }
   const t = team || (m !== 'friendly' ? await getSavedUT() : null);
   if (!t) return { ok: false, abandoned: true, reason: 'no_team' };
   const sv = await online.status();

@@ -20,6 +20,7 @@ import { playstyleList } from './card.js';
 import { adminCodesPanel, adminBadge } from './adminview.js';
 import { tileIcon } from './icons.js';
 import { giftsButton } from './giftsview.js';
+import { friendsButton } from './friendsview.js';
 import { swapsView } from './swapsview.js';
 import { getConfig, effPrice } from './config.js';
 import { promoHubView, promoTileSub } from './promoview.js';
@@ -215,7 +216,7 @@ export function utHomeView() {
             h('div', { class: 'pm-chiprow' },
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`)),
               h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
-          h('div', { class: 'pm-clubhead-btns' }, giftsButton(app), adminBadge(app))),
+          h('div', { class: 'pm-clubhead-btns' }, friendsButton(app), giftsButton(app), adminBadge(app))),
         h('div', { class: 'pm-uthub' },
           squadTile, storeTile, sbcTile, battlesTile, objTile, rivals, marketTile, promoTile,
           h('div', { class: 'pm-hxminis' }, mini('Club', `${s.club.length} players`, () => app.push(clubView()), 'club'),

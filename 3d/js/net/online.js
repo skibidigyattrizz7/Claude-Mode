@@ -32,6 +32,7 @@ function saveNetPrefs(p) { try { localStorage.setItem(NET_KEY, JSON.stringify(p)
  *                      onAutoEnd(res) (autoQuick search failed/cancelled), autoInvite (accepted friend invite, see acceptPreconnected)
  * @returns {{ destroy(), isBusy(): boolean, acceptPreconnected(res) }}
  */
+const INVITE_MODES_OK = ['friendly', 'ut'];
 export function mountOnline(root, ctx) {
   const { h } = ctx;
   const prefs = loadNetPrefs();
@@ -994,6 +995,7 @@ export function mountOnline(root, ctx) {
 
   renderHome();
   if (ctx.autoInvite) acceptPreconnected(ctx.autoInvite);
+  else if (ctx.autoChallenge && ctx.autoChallenge.friend) doChallenge(ctx.autoChallenge.friend, INVITE_MODES_OK.includes(ctx.autoChallenge.mode) ? ctx.autoChallenge.mode : 'friendly');
   else if (ctx.autoQuick && ctx.autoQuick.team) doQuickSearch(['ut', 'rivals'].includes(ctx.autoQuick.mode) ? ctx.autoQuick.mode : 'friendly', ctx.autoQuick.team);
   else if (ctx.autoAction === 'host') doHost();
   else if (ctx.autoAction && ctx.autoAction.startsWith('join:')) doJoin(ctx.autoAction.slice(5));
