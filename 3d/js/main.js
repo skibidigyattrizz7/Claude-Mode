@@ -1018,7 +1018,7 @@ const ICONS = {
   user: 'M50 50a18 18 0 1 0 .01 0ZM16 88c2-24 15-36 34-36s32 12 34 36',
 };
 function icon(name) {
-  return h('svg', { viewBox: '0 0 100 100', class: 'ico', 'aria-hidden': 'true' },
+  return h('svg', { viewBox: '0 0 100 100', class: 'ico', width: '18', height: '18', 'aria-hidden': 'true' },
     h('path', { d: ICONS[name], fill: 'none', stroke: 'currentColor', 'stroke-width': '6', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
 }
 
