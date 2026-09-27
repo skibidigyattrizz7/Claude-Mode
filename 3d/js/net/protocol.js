@@ -152,6 +152,7 @@ export function sanitizeConfig(c) {
   return {
     halfMinutes: int(src.halfMinutes, 1, 10, 3),
     stadium: src.stadium === 'night' ? 'night' : 'day',
+    weather: ['rain', 'snow'].includes(src.weather) ? src.weather : 'clear', // host resolves 'random' before sending
   };
 }
 

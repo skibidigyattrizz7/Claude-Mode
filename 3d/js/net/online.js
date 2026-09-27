@@ -782,7 +782,9 @@ export function mountOnline(root, ctx) {
     st.wantRematch = false;
     st.peerRematch = false;
     view(h('div', { class: 'panel center-panel' }, h('div', { class: 'spinner' }), h('p', null, 'Starting match…')));
-    const cfg = { ...st.cfg };
+    // weather: the host's setting; 'random' is rolled here so both sides see the same sky
+    const wx = ctx.loadSettings().weather;
+    const cfg = { ...st.cfg, weather: wx === 'random' ? (() => { const r = Math.random(); return r < 0.6 ? 'clear' : r < 0.85 ? 'rain' : 'snow'; })() : ['rain', 'snow'].includes(wx) ? wx : 'clear' };
     // each human keeps their own assists: host = home, guest = away
     const gp = { home: st.myGp, away: st.peerGp || sanitizeGameplay(null) };
     st.session.send('start', { mid, home, away, cfg, gp });
@@ -824,7 +826,7 @@ export function mountOnline(root, ctx) {
     let m;
     try {
       m = await ctx.openMatch({
-        home, away, halfMinutes: cfg.halfMinutes, stadium: cfg.stadium, difficulty: 'pro',
+        home, away, halfMinutes: cfg.halfMinutes, stadium: cfg.stadium, weather: cfg.weather || 'clear', difficulty: 'pro',
         controllers: role === 'host' ? { home: 'p1', away: 'remote' } : { home: 'remote', away: 'p1' },
         netRole: role,
         gameplay,
