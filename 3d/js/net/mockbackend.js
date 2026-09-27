@@ -238,7 +238,10 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
   const blocked = (db, x, y) => { const f = findF(db, x, y); return !!f && f.status === 'blocked'; };
   const epochs = (p) => ({ coins: p.resetCoins || 0, progress: p.resetProgress || 0, club: p.resetClub || 0 });
   function giftCard(c, sup) {
-    if (!isObj(c) || JSON.stringify(c).length > 4000) return null;
+    if (!isObj(c)) return null;
+    if ('photo' in c && c.photo !== null && (typeof c.photo !== 'string' || c.photo.length > 200000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(c.photo))) return null;
+    const { photo: _ph, ...noPhoto } = c; // eslint-disable-line no-unused-vars
+    if (JSON.stringify(noPhoto).length > 4000) return null;
     if (typeof c.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(c.id) || typeof c.name !== 'string' || c.name.length < 1 || c.name.length > 32) return null;
     if (!Number.isInteger(c.ovr) || c.ovr < 1 || c.ovr > (sup ? 999 : 99)) return null;
     if ('pos' in c && (typeof c.pos !== 'string' || !/^[A-Z]{2,4}$/.test(c.pos))) return null;
@@ -1002,13 +1005,14 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       };
     },
     // ---------------------------------------------------------------- 003: gifts
-    admin_gift({ p_code, p_to = null, p_all = false, p_kind, p_coins = null, p_payload = null, p_message = null, p_key = null, p_id = null, p_secret = null }) {
+    admin_gift({ p_code, p_to = null, p_all = false, p_kind, p_coins = null, p_payload = null, p_message = null, p_key = null, p_id = null, p_secret = null, p_minutes = null }) {
       const db = load();
       if (!keyOk(p_key)) return err('bad_key');
       if (p_key && db.adminOps[`gift:${p_key}`]) return { ...db.adminOps[`gift:${p_key}`], replay: true };
       const a = actor(db, p_code, p_id, p_secret);
       if (!ownerPower(a)) { store.save(db); return powerErr(a); }
       if (!!p_all === (p_to != null)) return err('bad_target');
+      if (p_minutes != null && (!Number.isInteger(p_minutes) || p_minutes < 1 || p_minutes > 129600)) return err('bad_value');
       if (p_to != null && !db.profiles[p_to]) return err('not_found');
       let payload = {};
       if (p_kind === 'coins') { if (!Number.isInteger(p_coins) || p_coins < 1 || p_coins > 1e9) return err('bad_amount'); }
@@ -1022,13 +1026,45 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         payload = { card: c };
       } else return err('bad_kind');
       if (!hit(db, `gift:${a}:${p_id || 'ip'}`, 3600000, 300)) { store.save(db); return err('rate_limited'); }
-      const g = { id: uuid(rand), toId: p_to, kind: p_kind, coins: p_kind === 'coins' ? p_coins : 0, payload, message: cleanText(p_message, 200) || null, by: a, at: now(), until: now() + 14 * DAY };
+      const g = { id: uuid(rand), toId: p_to, kind: p_kind, coins: p_kind === 'coins' ? p_coins : 0, payload, message: cleanText(p_message, 200) || null, by: a, at: now(), until: now() + (p_minutes != null ? p_minutes * 60000 : 14 * DAY) };
       db.gifts.push(g);
-      const res = { ok: true, giftId: g.id };
+      const res = { ok: true, giftId: g.id, until: new Date(g.until).toISOString() };
       if (p_key) db.adminOps[`gift:${p_key}`] = res;
       audit(db, p_to, 'admin_gift', { gift: g.id, kind: p_kind, all: p_to == null, by: a });
       store.save(db);
       return res;
+    },
+    // ---------------------------------------------------------------- 005: owner gift list / cancel / clear
+    admin_gifts({ p_code, p_id = null, p_secret = null, p_limit = 100 }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const items = db.gifts.filter((g) => g.until > now() && !g.cancelled && (g.toId == null || !db.giftClaims.some((c) => c.giftId === g.id)))
+        .sort((x, y) => y.at - x.at).slice(0, Math.max(1, Math.min(200, p_limit || 100)))
+        .map((g) => { const t = g.toId ? db.profiles[g.toId] : null; const c = g.payload.card; return { ...giftJson(g), card: c ? { id: c.id, name: c.name, ovr: c.ovr } : null, to: t ? { id: t.id, username: t.username || null, name: t.username || t.name } : null, claims: db.giftClaims.filter((x) => x.giftId === g.id).length }; });
+      store.save(db);
+      return { ok: true, items };
+    },
+    admin_cancel_gift({ p_code, p_gift, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const g = db.gifts.find((x) => x.id === p_gift && !x.cancelled);
+      if (!g) return err('not_found');
+      g.cancelled = true; g.until = Math.min(g.until, now());
+      audit(db, g.toId, 'admin_gift_cancel', { gift: g.id, by: a });
+      store.save(db);
+      return { ok: true };
+    },
+    admin_clear_gifts({ p_code, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      let n = 0;
+      for (const g of db.gifts) if (g.until > now() && !g.cancelled) { g.cancelled = true; g.until = now(); n++; }
+      audit(db, p_id, 'admin_gift_clear', { cancelled: n, by: a });
+      store.save(db);
+      return { ok: true, cancelled: n };
     },
     gifts_inbox({ p_id, p_secret }) {
       const db = load();

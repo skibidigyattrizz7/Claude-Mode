@@ -305,5 +305,7 @@ export function errorText(code) {
     bad_squad: 'That squad cannot be shared.',
     already_claimed_gift: 'This gift was already claimed.',
     nothing_pending: 'Nothing to retry.',
+    player_not_found: 'No player with that username or friend code.',
+    bad_card_gift: 'That card cannot be sent.',
   })[code] || 'Something went wrong. Please try again.';
 }
