@@ -269,6 +269,8 @@ export function createOnline(deps) {
 
     /** true once this device has an online profile (no network; used to avoid creating profiles just by browsing). */
     hasIdentity() { if (readAcc()) return true; const v = readIdent(); return !!(v && v.id); },
+    /** This device's profile id (account or guest), without network; null when none yet. */
+    identityId() { const a = readAcc(); if (a) return a.id; const v = readIdent(); return v && v.id ? v.id : null; },
 
     async profile() {
       const r = dataOr(await authed('get_profile'));
@@ -297,9 +299,11 @@ export function createOnline(deps) {
 
     market: {
       async list(card, price) {
-        const v = validateListingInput(card, price);
+        if (restrictedNow('market')) return fail('restricted');
+        const staff = isStaffNow();
+        const v = validateListingInput(card, price, { staff });
         if (!v.ok) return fail(v.error);
-        const r = dataOr(await authed('list_card', { p_card: v.card, p_price: v.price }));
+        const r = dataOr(await authed('list_card', { p_card: v.card, p_price: v.price, ...(staff && adminSecret() ? { p_code: adminSecret() } : {}) }));
         if (r.ok !== true || typeof r.listingId !== 'string' || !UUID_RE.test(r.listingId)) return fail(r.error || 'bad_response');
         return { ok: true, listingId: r.listingId };
       },
@@ -310,9 +314,10 @@ export function createOnline(deps) {
       },
       async buy(listingId) {
         if (typeof listingId !== 'string' || !UUID_RE.test(listingId)) return fail('not_found');
+        if (restrictedNow('market')) return fail('restricted');
         const r = dataOr(await authed('buy', { p_listing: listingId }));
         if (r.ok !== true) return fail(r.error || 'bad_response');
-        const card = sanitizeCard(r.card);
+        const card = sanitizeCard(r.card, { maxOvr: 999 });
         if (!card) return fail('bad_response');
         emitCoins(nonNeg(r.coins));
         return { ok: true, card, price: Number(r.price) || 0, coins: Number(r.coins) || 0 };
@@ -536,6 +541,7 @@ export function createOnline(deps) {
       /** -> { ok, level:'super'|'full' } (server only; stores a 12 h admin token for owner RPCs). */
       async verifyLevel(code) {
         if (typeof code !== 'string' || !code || code.length > 128) return fail('invalid');
+        if (restrictedNow('codes') || restrictedNow('admin')) return fail('restricted');
         const r = await rpc('admin_login', { p_code: code });
         if (r.ok && r.data && r.data.ok === true && typeof r.data.token === 'string' && ADM_RE.test(r.data.token)) {
           const level = r.data.level === 'super' ? 'super' : 'full';
@@ -563,7 +569,10 @@ export function createOnline(deps) {
       /** 'super' | 'full' (server-verified code) | 'owner' | 'mod' (account role) | null */
       get level() { return adminLevelNow() || staffRole(); },
       /** true when owner powers will be accepted (code token or owner account). */
-      canOwner() { return !!adminSecret() || staffRole() === 'owner'; },
+      canOwner() { return !restrictedNow('admin') && !restrictedNow('codes') && (!!adminSecret() || staffRole() === 'owner'); },
+      /** Owner restrictions currently on this profile: { codes, admin, market, packs, messages } (true | until ISO). */
+      restrictions() { return { ...((pres.last && pres.last.restrictions) || {}) }; },
+      restricted(key) { return restrictedNow(key); },
       /**
        * Short-lived (15 min) signed token proving this account is owner/mod, bound to the host's room
        * code / peer id (`bind`) so it cannot be replayed in another match. -> { ok, token, role, exp }
@@ -773,7 +782,7 @@ export function createOnline(deps) {
       },
       async adjustCoins(id, delta, reason = '', code) {
         { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
-        if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1e8) return fail('bad_amount');
+        if (!Number.isSafeInteger(delta) || delta === 0 || Math.abs(delta) > 9e15) return fail('bad_amount');
         const r = await modCall('mod_adjust_coins', { p_player: id, p_delta: delta, p_reason: cleanStr(reason, 120, '') }, code);
         return r.ok ? { ok: true, coins: Number(r.coins) || 0 } : r;
       },
@@ -791,7 +800,7 @@ export function createOnline(deps) {
       /** Coins for one player (null = yourself). Idempotent + retried on network errors. -> { ok, coins, player } */
       async giveCoins(playerId, amount, { reason = '', key = opKey() } = {}) {
         if (playerId != null) { const t = await resolveId(playerId); if (!t.ok) return t; playerId = t.id; }
-        if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 1e9) return fail('bad_amount');
+        if (!Number.isSafeInteger(amount) || amount === 0 || Math.abs(amount) > 9e15) return fail('bad_amount');
         const r = await ownerCall('admin_coins', { p_player: playerId || null, p_delta: amount, p_reason: cleanStr(reason, 120, '') || null, p_key: key }, true);
         return r.ok ? { ok: true, coins: nonNeg(r.coins), player: typeof r.player === 'string' ? r.player : null } : r;
       },
@@ -874,8 +883,84 @@ export function createOnline(deps) {
       players(query) { return online.moderation.search(query); },
       /** Paged list of every player (query optional: name / username / club / friend code). -> { ok, total, items } */
       async listPlayers({ query = '', limit = 50, offset = 0 } = {}) {
-        const r = await ownerCall('admin_players', { p_query: cleanStr(query, 40, '') || null, p_limit: Math.min(200, Math.max(1, limit | 0)), p_offset: Math.max(0, offset | 0) }, false, true);
-        return r.ok ? { ok: true, total: Number.isInteger(r.total) ? r.total : 0, items: sanitizeList(r.items, sanitizeAdminPlayer, 200) } : r;
+        const r = await ownerCall('admin_players', { p_query: cleanStr(query, 40, '') || null, p_limit: Math.min(1000, Math.max(1, limit | 0)), p_offset: Math.max(0, offset | 0) }, false, true);
+        return r.ok ? { ok: true, total: Number.isInteger(r.total) ? r.total : 0, items: sanitizeList(r.items, sanitizeAdminPlayer, 1000) } : r;
+      },
+      /** Every player (accounts + device guests), all pages. -> { ok, total, items } */
+      async allPlayers({ max = 5000 } = {}) {
+        const items = [];
+        let total = 0;
+        for (let off = 0; off < max; off += 1000) {
+          const r = await online.owner.listPlayers({ limit: 1000, offset: off });
+          if (!r.ok) return items.length ? { ok: true, total, items, partial: true } : r;
+          total = r.total; items.push(...r.items);
+          if (r.items.length < 1000 || items.length >= total) break;
+        }
+        return { ok: true, total, items };
+      },
+      /** One player in full: { ok, player, save:{ exists, rev, updatedAt, data }, squad, patches, audit, listings } */
+      async playerDetail(player) {
+        const t = await resolveId(player); if (!t.ok) return t;
+        const r = await ownerCall('admin_player_detail', { p_player: t.id });
+        if (!r.ok) return r;
+        const pl = sanitizeAdminPlayer(r.player);
+        if (!pl) return fail('bad_response');
+        const sv = r.save && typeof r.save === 'object' ? r.save : {};
+        return {
+          ok: true, player: pl,
+          save: sv.exists === true && sv.data && typeof sv.data === 'object' && !Array.isArray(sv.data) ? { exists: true, rev: Number(sv.rev) || 0, updatedAt: isoOr(sv.updatedAt), data: sv.data } : { exists: false },
+          squad: r.squad && typeof r.squad === 'object' ? cleanSquad(r.squad) : null,
+          patches: sanitizeList(r.patches, (x) => (x && Number.isSafeInteger(x.id) && Array.isArray(x.ops) ? { id: x.id, ops: x.ops, at: isoOr(x.at) } : null), 100),
+          audit: sanitizeList(r.audit, (x) => (x && typeof x.action === 'string' ? { action: cleanStr(x.action, 32, '?'), detail: cleanJson(x.detail) || {}, at: isoOr(x.at) } : null), 60),
+          listings: sanitizeList(r.listings, (x) => (x && typeof x.listingId === 'string' ? { listingId: x.listingId, name: cleanStr(x.name, 32, '?'), ovr: Number(x.ovr) || 0, price: Number(x.price) || 0, status: cleanStr(x.status, 12, '?'), listedAt: isoOr(x.listedAt) } : null), 40),
+        };
+      },
+      /** Queue edits to a player's club (applied by their client, see meta/core/ownerpatch.js). -> { ok, patchId } */
+      async patchPlayer(player, ops) {
+        if (!Array.isArray(ops) || !ops.length || ops.length > 100) return fail('bad_value');
+        let size = 0;
+        try { size = JSON.stringify(ops).length; } catch { return fail('bad_value'); }
+        if (size > 262144) return fail('too_large');
+        const t = await resolveId(player); if (!t.ok) return t;
+        const r = await ownerCall('admin_patch_player', { p_player: t.id, p_ops: ops });
+        return r.ok ? { ok: true, patchId: Number(r.patchId) || 0 } : r;
+      },
+      /** Change any player's username (accounts only). */
+      async setUsername(player, username) {
+        const u = trimUsername(username);
+        const e = usernameError(u);
+        if (e) return fail(e);
+        const t = await resolveId(player); if (!t.ok) return t;
+        const r = await ownerCall('admin_set_username', { p_player: t.id, p_username: u });
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : r;
+      },
+      /** Give admin (role mod) / revoke it (role player) — same as moderation.setRole. */
+      giveAdmin(player) { return online.moderation.setRole(player, 'mod'); },
+      revokeAdmin(player) { return online.moderation.setRole(player, 'player'); },
+      /** Revoke ALL admin: every mod/owner role -> player (except the reserved owner account and you) and every
+       * admin token issued before now stops working (a code caller gets a fresh token). -> { ok, revoked } */
+      async revokeAllAdmin() {
+        const r = await ownerCall('admin_revoke_all', {});
+        if (!r.ok) return r;
+        if (typeof r.token === 'string' && ADM_RE.test(r.token)) sset(volatile, ADM_KEY, JSON.stringify({ token: r.token, level: r.level === 'super' ? 'super' : 'full', exp: Number(r.exp) || 0 }));
+        await online.config.get(true);
+        return { ok: true, revoked: nonNeg(r.revoked), revokeAt: Number(r.revokeAt) || 0 };
+      },
+      /** Restrict a player from a feature ('codes'|'admin'|'market'|'packs'|'messages'); minutes null = permanent. */
+      async restrict(player, key, { on = true, minutes = null } = {}) {
+        if (!['codes', 'admin', 'market', 'packs', 'messages'].includes(key)) return fail('bad_key');
+        if (minutes != null && (!Number.isInteger(minutes) || minutes < 1 || minutes > 5256000)) return fail('bad_value');
+        const t = await resolveId(player); if (!t.ok) return t;
+        const r = await ownerCall('admin_restrict', { p_player: t.id, p_key: key, p_on: !!on, p_minutes: minutes });
+        return r.ok ? { ok: true, restrictions: sanitizeRestrictions(r.restrictions) } : r;
+      },
+      /** Direct message from the owner (works for owner guests too). */
+      async message(player, text) {
+        const body = cleanStr(text, 300, '');
+        if (!body) return fail('empty');
+        const t = await resolveId(player); if (!t.ok) return t;
+        const r = await ownerCall('admin_message', { p_player: t.id, p_body: body });
+        return r.ok ? { ok: true, id: Number(r.id) || 0 } : r;
       },
       /** "Reset everyone": new server epoch; every existing profile -> 5 000 coins, infinite off (new accounts untouched). */
       async resetEveryone() {
@@ -886,18 +971,37 @@ export function createOnline(deps) {
       resetAllEconomy() { return online.owner.resetEveryone(); },
     },
 
-    // ---------------------------------------------------------------- cloud save of the UT club (accounts only)
+    // ---------------------------------------------------------------- owner patches (edits to this player's club)
+    patches: {
+      /** -> { ok, items:[{ id, ops, at }] } (oldest first) */
+      async pending() {
+        if (!online.hasIdentity()) return { ok: true, items: [] };
+        const r = dataOr(await authed('patches_pending'));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        return { ok: true, items: sanitizeList(r.items, (x) => (x && Number.isSafeInteger(x.id) && Array.isArray(x.ops) ? { id: x.id, ops: x.ops.slice(0, 100), at: isoOr(x.at) } : null), 50) };
+      },
+      /** The listed patches were applied to the local UT save. -> { ok, acked } */
+      async ack(ids) {
+        const list = (Array.isArray(ids) ? ids : []).filter((x) => Number.isSafeInteger(x)).slice(0, 100);
+        if (!list.length) return { ok: true, acked: 0 };
+        const r = dataOr(await authed('patches_ack', { p_ids: list }));
+        if (r.ok === true && pres.last) { pres.last = { ...pres.last, patches: Math.max(0, (pres.last.patches || 0) - (Number(r.acked) || 0)) }; }
+        return r.ok === true ? { ok: true, acked: Number(r.acked) || 0 } : fail(r.error || 'bad_response');
+      },
+    },
+
+    // ---------------------------------------------------------------- cloud save of the UT club (accounts + guests)
     cloud: {
       /** -> { ok, exists, rev, updatedAt, data } */
       async get() {
-        if (!readAcc()) return fail('no_account');
+        if (!online.hasIdentity()) return fail('no_account'); // accounts, and device guests since 007
         const r = dataOr(await authed('save_get'));
         if (r.ok !== true) return fail(r.error || 'bad_response');
         return { ok: true, exists: r.exists === true, rev: Number.isInteger(r.rev) ? r.rev : 0, updatedAt: isoOr(r.updatedAt), data: r.data && typeof r.data === 'object' && !Array.isArray(r.data) ? r.data : null };
       },
       /** Optimistic write (rev = the revision you last saw). -> { ok, rev } | { ok:false, error:'conflict', rev } */
       async put(data, rev) {
-        if (!readAcc()) return fail('no_account');
+        if (!online.hasIdentity()) return fail('no_account');
         if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('bad_value');
         let json;
         try { json = JSON.stringify(data); } catch { return fail('bad_value'); }
@@ -1183,7 +1287,14 @@ export function createOnline(deps) {
       return u;
     } finally { pres.busy = false; }
   }
-  function staffRole() { const a = readAcc(); return a && !banActive(a.ban) && (a.role === 'owner' || a.role === 'mod') ? a.role : null; }
+  function staffRole() { const a = readAcc(); return a && !banActive(a.ban) && !restrictedNow('admin') && (a.role === 'owner' || a.role === 'mod') ? a.role : null; }
+  /** Owner restrictions on this profile (server presence; enforced server-side too). */
+  function restrictedNow(key) {
+    const r = pres && pres.last && pres.last.restrictions;
+    const v = r && r[key];
+    return v === true || (typeof v === 'string' && Date.parse(v) > Date.now());
+  }
+  const isStaffNow = () => !!(adminSecret() || staffRole());
   async function modCall(fn, args, code) {
     const c = typeof code === 'string' && code ? code.slice(0, 160) : adminSecret();
     const a = staffRole() ? readAcc() : null;
@@ -1199,8 +1310,23 @@ export function createOnline(deps) {
 function sanitizeAdminPlayer(p) {
   const base = sanitizePublicPlayer(p);
   if (!base) return null;
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : 0);
   return { ...base, clubName: typeof p.clubName === 'string' ? cleanStr(p.clubName, 32, '') || null : null, coins: nonNeg(p.coins), role: roleOf(p.role) || 'player',
-    banned: p.banned === true, createdAt: isoOr(p.createdAt), lastSeenAt: isoOr(p.lastSeenAt) };
+    banned: p.banned === true, banReason: typeof p.banReason === 'string' ? cleanStr(p.banReason, 200, '') : null, bannedUntil: isoOr(p.bannedUntil),
+    createdAt: isoOr(p.createdAt), lastSeenAt: isoOr(p.lastSeenAt), lastLoginAt: isoOr(p.lastLoginAt),
+    account: p.account === true || !!base.username, infinite: p.infinite === true, restrictions: sanitizeRestrictions(p.restrictions),
+    rating: n(p.rating), division: n(p.division), rivalsDivision: n(p.rivalsDivision), wins: n(p.wins), draws: n(p.draws), losses: n(p.losses),
+    hasSave: p.hasSave === true, saveAt: isoOr(p.saveAt), squadRating: typeof p.squadRating === 'number' ? n(p.squadRating) : null };
+}
+/** { key: true | ISO } for the known restriction keys only. */
+export function sanitizeRestrictions(r) {
+  const out = {};
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return out;
+  for (const k of ['codes', 'admin', 'market', 'packs', 'messages']) {
+    if (r[k] === true) out[k] = true;
+    else if (typeof r[k] === 'string' && Number.isFinite(Date.parse(r[k]))) out[k] = new Date(Date.parse(r[k])).toISOString();
+  }
+  return out;
 }
 const isoOr = (v) => (typeof v === 'string' && Number.isFinite(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : null);
 /** Moderation player row from the server -> bounded plain object. */
@@ -1285,11 +1411,12 @@ const unavailable = () => {
       onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
-    owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
+    owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },
+    patches: { pending: async () => ({ ok: true, items: [] }), ack: f },
     rewards: { match: f },
     players: { find: f, resolve: f },
     messages: { send: f, conversations: f, thread: f, unread: () => 0, compressImage: async () => ({ ok: false, error: 'bad_image' }), MAX_TEXT: 300, MAX_IMAGE_BYTES: 150 * 1024 },

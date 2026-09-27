@@ -18,6 +18,7 @@ import { receiveCard, giftPayloadCard, registerCustomCard } from '../../meta/cor
 import * as UT from '../../meta/core/ut.js';
 import { getPlayer, getDB } from '../../meta/core/players.js';
 import { isTradeable } from '../../meta/core/pmarket.js';
+import { applyOwnerPatches } from '../../meta/core/ownerpatch.js';
 
 let passed = 0, failed = 0;
 const queue = [];
@@ -95,7 +96,8 @@ test('result / profile / listing sanitisers clamp server data', () => {
   assert.deepEqual(normalizeReport({ mode: 'ut', won: true, drawn: true, goalsFor: 99, goalsAgainst: -1 }).args, { p_mode: 'ut', p_won: true, p_drawn: false, p_gf: 50, p_ga: 0 });
   assert.equal(sanitizeProfile({ ok: true, id: 'x' }), null);
   assert.equal(sanitizeProfile({ ok: true, id: UUID, coins: -5 }).coins, 0);
-  assert.equal(sanitizeListingItem({ listingId: UUID, card: card(), price: 10 }), null);
+  assert.equal(sanitizeListingItem({ listingId: UUID, card: card(), price: 0 }), null);
+  assert.equal(sanitizeListingItem({ listingId: UUID, card: card(), price: 10 }).price, 10); // staff may list at any price (007)
   assert.equal(sanitizeListingItem({ listingId: UUID, card: card(), price: 500 }).price, 500);
   assert.equal(sanitizeMyListing({ listingId: UUID, card: card(), price: 500, status: 'hacked' }), null);
 });
@@ -1105,6 +1107,132 @@ test('cloud save: sign up uploads the local club, login elsewhere downloads it, 
   const r = await c1.syncNow();
   assert.deepEqual([r.action, r.conflict], ['downloaded', true]);
   assert.deepEqual(JSON.parse(d1.getItem('pitchside.ut')).club, ['p1', 'p2', 'p3']);
+});
+
+// ------------------------------------------------------------------ 007: owner control panel
+test('owner panel: every player (guests too) with full info; coins beyond 1e9; username; admin give/revoke/revoke-all', async () => {
+  const { be, A, B, O, a, b, o } = await world3();
+  const G = mk3(be);
+  assert.equal((await G.profile()).ok, true); // a device guest
+  const all = await O.owner.allPlayers();
+  assert.equal(all.total, 4);
+  const guest = all.items.find((x) => !x.account);
+  assert.ok(guest && guest.username === null && guest.coins === 5000 && guest.rating === 1000);
+  assert.equal(all.items.find((x) => x.id === b.id).username, 'Bob Jones');
+  assert.equal((await A.owner.allPlayers()).error, 'not_admin');
+  // coins: huge grants land exactly (safe integers), over the bound is refused, never NaN
+  assert.equal((await O.owner.giveCoins(b.id, 5e15)).coins, 5e15 + 5000);
+  assert.equal((await O.owner.giveCoins(b.id, 9e15 + 2)).error, 'bad_amount');
+  assert.equal((await O.owner.giveCoins(b.id, 5e15)).coins, 9e15); // clamped at the safe max
+  assert.equal((await O.owner.giveCoins(b.id, -9e15)).coins, 0);
+  // username + roles
+  assert.equal((await O.owner.setUsername('bob jones', 'Robert J')).player.username, 'Robert J');
+  assert.equal((await O.owner.setUsername(b.id, 'Alice Smith')).error, 'username_taken');
+  assert.equal((await O.owner.setUsername(guest.id, 'Guesty')).error, 'no_account');
+  assert.equal((await O.owner.giveAdmin(a.id)).player.role, 'mod');
+  assert.equal((await O.owner.revokeAdmin(a.id)).player.role, 'player');
+  await O.owner.giveAdmin(a.id);
+  const X = mk3(be);
+  await X.admin.verifyLevel('full-code-1'); // an admin code session (token)
+  assert.equal((await X.owner.listPlayers()).ok, true);
+  const rv = await O.owner.revokeAllAdmin();
+  assert.deepEqual([rv.ok, rv.revoked], [true, 1]); // Alice's mod role (the owner account keeps its role)
+  be.call('noop');
+  assert.equal((await X.owner.listPlayers()).error, 'not_admin'); // old token revoked...
+  const Y = mk3(be);
+  assert.equal((await Y.admin.verifyLevel('full-code-1')).ok, true); // ...the code still works for a new session
+  const rv2 = await Y.owner.revokeAllAdmin();
+  assert.equal((await Y.owner.listPlayers()).ok, true); // the caller got a fresh token back
+  assert.equal(rv2.ok, true);
+  void o;
+});
+
+test('owner panel: restrictions (market, messages, codes, admin) are enforced server- and client-side; timeouts; DMs; admins list at any price', async () => {
+  const { be, A, B, O, a, b } = await world3();
+  assert.equal((await O.owner.restrict(b.id, 'market', { minutes: 60 })).restrictions.market.length > 10, true);
+  assert.equal((await B.market.list(card({ id: 'r1' }), 1000)).error, 'restricted'); // server (client did not know yet)
+  await B.presence.tick();
+  assert.equal(B.admin.restricted('market'), true);
+  assert.equal((await B.market.buy(UUID)).error, 'restricted'); // client-side now
+  assert.equal((await O.owner.restrict(b.id, 'market', { on: false })).restrictions.market, undefined);
+  await B.presence.tick();
+  assert.equal((await B.market.list(card({ id: 'r1' }), 1000)).ok, true);
+  await O.owner.restrict(b.id, 'messages');
+  assert.equal((await B.messages.send(a.id, 'hi')).error, 'restricted');
+  assert.equal((await O.owner.message(b.id, 'Please behave')).ok, true); // owner DM still reaches them
+  const conv = await B.messages.conversations();
+  assert.equal(conv.items[0].with.id, (await O.profile()).id);
+  // codes / admin
+  be.setRole(a.id, 'mod');
+  await O.owner.restrict(a.id, 'admin');
+  assert.equal((await A.moderation.search('bob')).error, 'not_admin'); // staff powers gone server-side
+  await A.presence.tick();
+  assert.equal(A.admin.canOwner(), false);
+  assert.equal((await A.admin.verifyLevel('full-code-1')).error, 'restricted');
+  assert.equal((await O.owner.restrict(o_id(await O.profile()), 'market')).error, 'not_allowed'); // never yourself
+  // timeout = timed ban
+  const t = await O.moderation.ban(b.id, 'cool down', new Date(Date.now() + 3600000));
+  assert.equal(t.ok, true);
+  assert.equal((await B.coins.get()).error, 'banned');
+  await O.moderation.unban(b.id);
+  // admins may list at ANY price (and players may not)
+  const ownerList = await O.market.list(card({ id: 'cheap1' }), 1);
+  assert.equal(ownerList.ok, true);
+  assert.equal((await B.market.list(card({ id: 'cheap2' }), 1)).error, 'bad_price');
+  const big = await O.market.list(card({ id: 'dear1' }), 5e12);
+  assert.equal(big.ok, true);
+  const found = (await B.market.search({})).items.map((x) => x.price);
+  assert.ok(found.includes(1) && found.includes(5e12));
+});
+const o_id = (p) => p.id;
+
+test('owner panel: club edits go through owner patches the player applies + acks (add, edit any field, tradable, remove, reset objectives); guests have cloud saves', async () => {
+  const { be, B, O, b } = await world3();
+  const { createCloudSync } = await import('../cloudsave.js');
+  // a guest's club is uploaded too (owner can see it)
+  const gDisk = memStorage();
+  const G = mk3(be, { storage: gDisk });
+  await G.profile();
+  gDisk.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2'], coins: 700 }));
+  const gs = createCloudSync(G, { storage: gDisk });
+  assert.equal((await gs.syncNow()).action, 'uploaded');
+  gDisk.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2', 'p3'], coins: 700 }));
+  assert.equal((await gs.syncNow()).action, 'uploaded');
+  const gd = await O.owner.playerDetail((await G.profile()).id);
+  assert.deepEqual(gd.save.data.club, ['p1', 'p2', 'p3']);
+  // B's club: owner queues edits
+  const state = UT.createUTState();
+  const dbCard = getDB().all.find((x) => x.ovr < 80 && !state.club.includes(x.id));
+  const victim = state.club.find((id) => !state.squad.slots.includes(id));
+  const keep = state.club.find((id) => id !== victim);
+  const custom = { id: 'admin_77_1', name: 'Gift Guy', pos: 'CM', ovr: 88, customAdmin: true, stats: { pac: 88, sho: 88, pas: 88, dri: 88, def: 88, phy: 88 } };
+  const ops = [
+    { op: 'addCard', card: giftPayloadCard(dbCard) },
+    { op: 'addCard', card: giftPayloadCard(custom), untradeable: true },
+    { op: 'editCard', id: keep, fields: { name: 'Edited Name', ovr: 99, stats: { pac: 99 }, special: 'hero', tradable: false } },
+    { op: 'removeCard', id: victim },
+    { op: 'resetObjectives' },
+    { op: 'setClubName', name: 'Owner FC' },
+  ];
+  assert.equal((await O.owner.patchPlayer(b.id, [{ op: 'hack' }])).error, 'bad_value');
+  assert.equal((await O.owner.patchPlayer('bob jones', ops)).ok, true);
+  assert.equal((await B.presence.tick()).patches, 1);
+  state.obj = { x: 1 };
+  const pend = await B.patches.pending();
+  const res = applyOwnerPatches(state, pend.items);
+  assert.equal(res.applied.length, 1);
+  assert.ok(state.club.includes(dbCard.id) && state.club.includes(custom.id) && !state.club.includes(victim));
+  assert.equal(isTradeable(state, custom.id), false);
+  assert.equal(isTradeable(state, dbCard.id), true);
+  assert.deepEqual([getPlayer(keep).name, getPlayer(keep).ovr, getPlayer(keep).stats.pac, getPlayer(keep).special, isTradeable(state, keep)], ['Edited Name', 99, 99, 'hero', false]);
+  assert.deepEqual([state.obj, state.clubName], [{}, 'Owner FC']);
+  assert.equal((await B.patches.ack(res.applied)).acked, 1);
+  assert.equal((await B.patches.pending()).items.length, 0);
+  assert.equal((await O.owner.playerDetail(b.id)).patches.length, 0);
+  // the edit survives a reload (state.cardEdits re-applied on load)
+  const again = UT.migrateUT(JSON.parse(JSON.stringify(state)));
+  assert.equal(getPlayer(keep).name, 'Edited Name');
+  assert.ok(again.club.includes(custom.id));
 });
 
 // ------------------------------------------------------------------ run

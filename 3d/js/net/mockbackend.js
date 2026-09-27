@@ -58,7 +58,7 @@ export function memoryStore() {
 export function createMockBackend(store, { now = () => Date.now(), rand = Math.random, latencyMs = 0, down = false } = {}) {
   // Dev-only default codes so ?mockOnline=1 has a working admin without any setup (docs/ONLINE_API.md: "mock
   // admin codes are mock-full / mock-super"). Real deployments set their own via setAdminCode(s) (server-side).
-  const extraDefaults = () => ({ saves: {}, adminHashSuper: fnv('admin:mock-super'), config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {} });
+  const extraDefaults = () => ({ saves: {}, adminHashSuper: fnv('admin:mock-super'), config: {}, configAt: 0, coinOps: {}, adminOps: {}, broadcasts: [], bcastSeq: 0, gifts: [], giftClaims: [], messages: [], msgSeq: 0, squads: {}, throttle: {}, patches: [], patchSeq: 0, admTokens: {} });
   const fresh = () => ({ profiles: {}, listings: [], queue: [], friends: [], invites: [], adminHash: fnv('admin:mock-full'), adminFails: {}, sessions: [], audit: [], loginFails: {}, serverKey: hex(32, rand), ...extraDefaults() });
   const load = () => {
     const d = store.load();
@@ -89,7 +89,11 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     if ((db.adminFails[minute] || 0) >= 20 || typeof code !== 'string' || !code || code.length > 160) return null;
     const m = /^adm\.(full|super)\.(\d{9,11})\.([0-9a-f]{64})$/.exec(code);
     let lv = null;
-    if (m) { if (Number(m[2]) > now() / 1000 && admSig(db, m[1], m[2]) === m[3]) lv = m[1]; }
+    if (m) {
+      const rv = db.config.features && db.config.features.value && db.config.features.value.adminRevokeAt;
+      const rec = db.admTokens[m[3]];
+      if (Number(m[2]) > now() / 1000 && admSig(db, m[1], m[2]) === m[3] && ((rec && !rec.revoked) || (!rec && !Number.isFinite(rv)))) lv = m[1];
+    }
     else if (code.length <= 128) {
       const h = fnv(`admin:${code}`);
       lv = db.adminHashSuper && h === db.adminHashSuper ? 'super' : db.adminHash && h === db.adminHash ? 'full' : null;
@@ -98,14 +102,19 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     return lv;
   };
   const adminOk = (db, code) => !!adminLevel(db, code);
+  // 007: feature restrictions { key: true | ISO until }
+  const restricted = (p, k) => { const v = p && p.restrictions && p.restrictions[k]; return v === true || (typeof v === 'string' && Date.parse(v) > now()); };
+  const activeRestrictions = (p) => Object.fromEntries(Object.entries((p && p.restrictions) || {}).filter(([k]) => restricted(p, k)));
   const RANK = { admin: 3, owner: 2, mod: 1 };
   const rank = (r) => RANK[r] || 0;
   function modActor(db, p_code, p_id, p_secret) {
+    let a = null;
     if (p_id && p_secret) {
-      const a = auth(db, p_id, p_secret);
+      a = auth(db, p_id, p_secret);
+      if (a && restricted(a, 'admin')) return null;
       if (a && (a.role === 'owner' || a.role === 'mod')) return a.role;
     }
-    if (p_code && adminOk(db, p_code)) return 'admin';
+    if (p_code && !(a && restricted(a, 'codes')) && adminOk(db, p_code)) return 'admin';
     return null;
   }
   const modRow = (p) => ({
@@ -194,9 +203,9 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
   const cfgNum = (db, key, field, dflt) => { const v = db.config && db.config[key] && db.config[key].value; return v && typeof v[field] === 'number' ? v[field] : dflt; };
   const cfgVersion = (db) => db.configAt || 0;
   function actor(db, p_code, p_id, p_secret) {
-    let role = null;
-    if (p_id && p_secret) { const a = auth(db, p_id, p_secret); if (a && (a.role === 'owner' || a.role === 'mod')) role = a.role; }
-    const lv = p_code ? adminLevel(db, p_code) : null;
+    let role = null, a = null;
+    if (p_id && p_secret) { a = auth(db, p_id, p_secret); if (a && restricted(a, 'admin')) return null; if (a && (a.role === 'owner' || a.role === 'mod')) role = a.role; }
+    const lv = p_code && !(a && restricted(a, 'codes')) ? adminLevel(db, p_code) : null;
     return lv || role;
   }
   const ownerPower = (a) => a === 'super' || a === 'full' || a === 'owner';
@@ -352,15 +361,17 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       store.save(db);
       return { ok: true, coins: p.coins };
     },
-    list_card({ p_id, p_secret, p_card, p_price }) {
+    list_card({ p_id, p_secret, p_card, p_price, p_code = null }) {
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
-      if (!Number.isInteger(p_price) || p_price < 150 || p_price > 15000000) return err('bad_price');
+      if (restricted(p, 'market')) return err('restricted');
+      const staff = !!actor(db, p_code, p_id, p_secret);
+      if (!Number.isInteger(p_price) || (staff ? p_price < 1 || p_price > 9e15 : p_price < 150 || p_price > 15000000)) return err('bad_price');
       const c = p_card;
       if (!c || typeof c !== 'object' || Array.isArray(c)) return err('bad_card');
       if (JSON.stringify(c).length > 4096) return err('card_too_large');
-      if (typeof c.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(c.id) || typeof c.name !== 'string' || !POS.includes(c.pos) || !Number.isInteger(c.ovr) || c.ovr < 1 || c.ovr > 99) return err('bad_card');
+      if (typeof c.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(c.id) || typeof c.name !== 'string' || !POS.includes(c.pos) || !Number.isInteger(c.ovr) || c.ovr < 1 || c.ovr > (staff ? 999 : 99)) return err('bad_card');
       if (db.listings.filter((l) => l.sellerId === p.id && l.status === 'active').length >= 30) return err('too_many_listings');
       if (db.listings.some((l) => l.sellerId === p.id && l.status === 'active' && l.card.id === c.id)) return err('already_listed');
       const rarity = ['legend', 'hero', 'inform', 'icon'].includes(c.special) ? c.special
@@ -386,6 +397,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
+      if (restricted(p, 'market')) return err('restricted');
       const l = db.listings.find((x) => x.id === p_listing);
       if (!l) return err('not_found');
       if (l.status !== 'active') return err('unavailable');
@@ -397,7 +409,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const credit = l.price - Math.ceil(l.price * tax);
       Object.assign(l, { status: 'sold', buyerId: p.id, soldAt: now(), credit, claimed: true });
       const seller = db.profiles[l.sellerId];
-      if (seller) seller.coins += credit;
+      if (seller) seller.coins = Math.min(seller.coins + credit, 9e15);
       store.save(db);
       return { ok: true, card: l.card, price: l.price, coins: p.coins };
     },
@@ -745,7 +757,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const page = Math.max(0, Math.trunc(Number(p_page) || 0));
       let list;
       if (!q) {
-        list = Object.values(db.profiles).filter((p) => p.username).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        list = Object.values(db.profiles).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // 007: everyone (guests too)
       } else {
         const k = usernameKey(q);
         list = Object.values(db.profiles).filter((p) => (k && p.username && usernameKey(p.username).startsWith(k)) || p.friendCode === q.toUpperCase().replace(/-/g, '')
@@ -754,7 +766,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       }
       const page_size = 25;
       const items = list.slice(page * page_size, page * page_size + page_size).map(modRow);
-      return { ok: true, items, more: list.length > (page + 1) * page_size };
+      return { ok: true, items, more: list.length > (page + 1) * page_size, total: list.length };
     },
     mod_player({ p_code, p_player, p_id = null, p_secret = null }) {
       const db = load();
@@ -805,11 +817,11 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const actor = modActor(db, p_code, p_id, p_secret);
       if (!actor) { store.save(db); return err('not_admin'); }
       if (actor === 'mod') return err('not_allowed');
-      if (!Number.isInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 1e8) return err('bad_amount');
+      if (!Number.isSafeInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 9e15) return err('bad_amount');
       const p = db.profiles[p_player];
       if (!p) return err('not_found');
       const before = p.coins;
-      p.coins = Math.max(0, p.coins + p_delta);
+      p.coins = Math.max(0, Math.min(p.coins + p_delta, 9e15));
       audit(db, p.id, 'admin_coins', { delta: p_delta, before, balance: p.coins, reason: p_reason || '', by: actor });
       store.save(db);
       return { ok: true, coins: p.coins };
@@ -860,7 +872,10 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       store.save(db);
       if (!lv) return err('invalid');
       const exp = Math.floor(now() / 1000) + 12 * 3600;
-      return { ok: true, level: lv, exp, token: `adm.${lv}.${exp}.${admSig(db, lv, String(exp))}` };
+      const sig = admSig(db, lv, String(exp));
+      db.admTokens[sig] = { revoked: false }; // 007: recorded so "revoke ALL admin" can end it
+      store.save(db);
+      return { ok: true, level: lv, exp, token: `adm.${lv}.${exp}.${sig}` };
     },
     get_config() {
       const db = load();
@@ -916,12 +931,12 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (p_key && db.adminOps[`coins:${p_key}`]) return { ...db.adminOps[`coins:${p_key}`], replay: true };
       const a = actor(db, p_code, p_id, p_secret);
       if (!ownerPower(a)) { store.save(db); return powerErr(a); }
-      if (!Number.isInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 1e9) return err('bad_amount');
+      if (!Number.isSafeInteger(p_delta) || p_delta === 0 || Math.abs(p_delta) > 9e15) return err('bad_amount');
       const v = db.profiles[p_player || p_id];
       if (!v) return err('not_found');
       if (!mayActOn(a, p_id, v)) return err('not_allowed');
       const before = v.coins;
-      v.coins = Math.max(0, Math.min(v.coins + p_delta, 1e12));
+      v.coins = Math.max(0, Math.min(v.coins + p_delta, 9e15));
       const res = { ok: true, coins: v.coins, player: v.id };
       if (p_key) db.adminOps[`coins:${p_key}`] = res;
       audit(db, v.id, 'admin_coins', { delta: p_delta, before, balance: v.coins, reason: p_reason || '', by: a });
@@ -1004,6 +1019,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         resets: epochs(p), configVersion: cfgVersion(db), role: p.role || 'player',
         resetEpoch: resetEpoch(db), resetDue: resetEpoch(db) > (p.resetAck || 0) && (p.createdAt || 0) < resetAt(db) ? resetEpoch(db) : null,
         createdAt: new Date(p.createdAt || 0).toISOString(),
+        restrictions: activeRestrictions(p), patches: db.patches.filter((x) => x.profileId === p.id && !x.appliedAt).length,
       };
     },
     // ---------------------------------------------------------------- 003: gifts
@@ -1104,6 +1120,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
       if (!p.username) return err('no_account');
+      if (restricted(p, 'messages')) return err('restricted');
       const o = db.profiles[p_to];
       if (!o || o.id === p.id || blocked(db, p.id, o.id)) return err('not_found');
       const body = cleanText(p_body, 300);
@@ -1249,12 +1266,129 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const rows = Object.values(db.profiles).filter((p) => !q || p.name.toLowerCase().includes(q) || (p.username && k && usernameKey(p.username).includes(k))
         || p.friendCode === q.toUpperCase().replace(/-/g, '') || p.id === q || (club(p) || '').toLowerCase().includes(q))
         .sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
-      const lim = Math.min(Math.max(p_limit | 0, 1), 200), off = Math.max(p_offset | 0, 0);
+      const lim = Math.min(Math.max(p_limit | 0, 1), 1000), off = Math.max(p_offset | 0, 0);
       return {
         ok: true, total: rows.length,
-        items: rows.slice(off, off + lim).map((p) => ({ id: p.id, username: p.username || null, name: p.name, clubName: club(p), coins: p.coins, role: p.role || 'player', banned: isBanned(p),
-          friendCode: p.friendCode, createdAt: new Date(p.createdAt || 0).toISOString(), lastSeenAt: p.lastSeen ? new Date(p.lastSeen).toISOString() : null, online: (p.lastSeen || 0) > now() - 60000 })),
+        items: rows.slice(off, off + lim).map((p) => ({ ...modRow(p), clubName: club(p), infinite: !!p.infinite, restrictions: activeRestrictions(p), account: !!p.username,
+          online: (p.lastSeen || 0) > now() - 60000, division: p.division, hasSave: !!db.saves[p.id], saveAt: db.saves[p.id] ? new Date(db.saves[p.id].at).toISOString() : null,
+          squadRating: db.squads[p.id] && typeof db.squads[p.id].squad.rating === 'number' ? db.squads[p.id].squad.rating : null })),
       };
+    },
+    // ---------------------------------------------------------------- 007: owner panel
+    admin_player_detail({ p_code, p_player, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const v = db.profiles[p_player];
+      if (!v) return err('not_found');
+      const sv = db.saves[v.id];
+      return {
+        ok: true, player: { ...modRow(v), infinite: !!v.infinite, account: !!v.username, restrictions: activeRestrictions(v), online: (v.lastSeen || 0) > now() - 60000 },
+        save: sv ? { exists: true, rev: sv.rev, updatedAt: new Date(sv.at).toISOString(), data: JSON.parse(JSON.stringify(sv.data)) } : { exists: false },
+        squad: db.squads[v.id] ? db.squads[v.id].squad : null,
+        patches: db.patches.filter((x) => x.profileId === v.id && !x.appliedAt).map((x) => ({ id: x.id, ops: x.ops, at: new Date(x.at).toISOString(), by: x.by })),
+        audit: db.audit.filter((x) => x.profileId === v.id).slice(-60).reverse().map((x) => ({ action: x.action, detail: x.detail, at: new Date(x.at).toISOString() })),
+        listings: db.listings.filter((l) => l.sellerId === v.id).slice(-40).reverse().map((l) => ({ listingId: l.id, name: l.name, ovr: l.ovr, price: l.price, status: l.status, listedAt: new Date(l.createdAt).toISOString(), soldAt: l.soldAt ? new Date(l.soldAt).toISOString() : null })),
+      };
+    },
+    admin_set_username({ p_code, p_player, p_username, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const v = db.profiles[p_player];
+      if (!v) return err('not_found');
+      if (!v.username) return err('no_account');
+      if (!mayActOn(a, p_id, v)) return err('not_allowed');
+      const u = String(p_username ?? '').trim();
+      const e = usernameError(u);
+      if (e) return err(e);
+      if (isReservedName(u) && v.role !== 'owner') return err('reserved_username');
+      if (Object.values(db.profiles).some((x) => x.id !== v.id && x.username && usernameKey(x.username) === usernameKey(u))) return err('username_taken');
+      const from = v.username;
+      v.username = u; v.name = u.slice(0, 16);
+      audit(db, v.id, 'admin_rename', { from, to: u, by: a });
+      store.save(db);
+      return { ok: true, player: modRow(v) };
+    },
+    admin_revoke_all({ p_code, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      let n = 0;
+      for (const v of Object.values(db.profiles)) if ((v.role === 'mod' || v.role === 'owner') && v.id !== p_id && !isReservedName(v.username || '')) { v.role = 'player'; n++; }
+      const at = Math.floor(now() / 1000);
+      for (const t of Object.values(db.admTokens)) t.revoked = true;
+      db.configAt = Math.max(now(), (db.configAt || 0) + 1);
+      db.config.features = { value: { ...features(db), adminRevokeAt: at }, at: db.configAt, by: a };
+      audit(db, p_id, 'admin_revoke_all', { revoked: n, by: a });
+      const res = { ok: true, revoked: n, revokeAt: at };
+      if (a === 'full' || a === 'super') { const exp = at + 12 * 3600; const sig = admSig(db, a, String(exp)); db.admTokens[sig] = { revoked: false }; Object.assign(res, { level: a, exp, token: `adm.${a}.${exp}.${sig}` }); }
+      store.save(db);
+      return res;
+    },
+    admin_restrict({ p_code, p_player, p_key, p_on = true, p_minutes = null, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      if (!['codes', 'admin', 'market', 'packs', 'messages'].includes(p_key)) return err('bad_key');
+      if (p_minutes != null && (!Number.isInteger(p_minutes) || p_minutes < 1 || p_minutes > 5256000)) return err('bad_value');
+      const v = db.profiles[p_player];
+      if (!v) return err('not_found');
+      const on = p_on !== false;
+      if (!mayActOn(a, p_id, v) || (v.id === p_id && on)) return err('not_allowed');
+      v.restrictions = activeRestrictions(v);
+      if (on) v.restrictions[p_key] = p_minutes == null ? true : new Date(now() + p_minutes * 60000).toISOString();
+      else delete v.restrictions[p_key];
+      audit(db, v.id, 'admin_restrict', { key: p_key, on, minutes: p_minutes, by: a });
+      store.save(db);
+      return { ok: true, restrictions: activeRestrictions(v) };
+    },
+    admin_message({ p_code, p_player, p_body, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const me = auth(db, p_id, p_secret);
+      if (!me) return err('auth');
+      const o = db.profiles[p_player];
+      if (!o || o.id === me.id) return err('not_found');
+      const body = cleanText(p_body, 300);
+      if (!body) return err('empty');
+      const id = ++db.msgSeq;
+      db.messages.push({ id, fromId: me.id, toId: o.id, body, image: null, at: now(), readAt: null });
+      audit(db, o.id, 'admin_message', { id, by: a });
+      store.save(db);
+      return { ok: true, id };
+    },
+    admin_patch_player({ p_code, p_player, p_ops, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (!ownerPower(a)) { store.save(db); return powerErr(a); }
+      const v = db.profiles[p_player];
+      if (!v) return err('not_found');
+      if (!mayActOn(a, p_id, v)) return err('not_allowed');
+      const OPS = ['addCard', 'removeCard', 'editCard', 'setTradable', 'resetClub', 'resetObjectives', 'resetSbcs', 'setClubName'];
+      if (!Array.isArray(p_ops) || p_ops.length < 1 || p_ops.length > 100 || JSON.stringify(p_ops).length > 262144 || !p_ops.every((o) => isObj(o) && OPS.includes(o.op))) return err('bad_value');
+      const x = { id: ++db.patchSeq, profileId: v.id, ops: JSON.parse(JSON.stringify(p_ops)), by: a, at: now(), appliedAt: null };
+      db.patches.push(x);
+      audit(db, v.id, 'admin_patch', { patch: x.id, ops: p_ops.map((o) => o.op), by: a });
+      store.save(db);
+      return { ok: true, patchId: x.id };
+    },
+    patches_pending({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      return { ok: true, items: db.patches.filter((x) => x.profileId === p.id && !x.appliedAt).slice(0, 50).map((x) => ({ id: x.id, ops: x.ops, at: new Date(x.at).toISOString() })) };
+    },
+    patches_ack({ p_id, p_secret, p_ids }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!Array.isArray(p_ids) || p_ids.length > 100) return err('bad_value');
+      let n = 0;
+      for (const x of db.patches) if (x.profileId === p.id && !x.appliedAt && p_ids.includes(x.id)) { x.appliedAt = now(); n++; }
+      store.save(db);
+      return { ok: true, acked: n };
     },
     save_get({ p_id, p_secret }) {
       const db = load();
@@ -1267,7 +1401,6 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
-      if (!p.username) return err('no_account');
       if (!isObj(p_data)) return err('bad_value');
       if (JSON.stringify(p_data).length > 1572864) return err('too_large');
       if (!hit(db, `save:${p.id}`, 3600000, 240)) { store.save(db); return err('rate_limited'); }

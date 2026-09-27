@@ -9,7 +9,7 @@ export const TOKEN_RE = /^[0-9a-f]{16,64}$/;
 export const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
 export const RARITIES = ['bronze', 'bronze_rare', 'silver', 'silver_rare', 'gold', 'gold_rare', 'inform', 'hero', 'legend', 'icon', 'common'];
 export const SORTS = ['newest', 'price_asc', 'price_desc', 'ovr_desc'];
-export const MARKET = { minPrice: 150, maxPrice: 15000000, maxCardBytes: 4096, maxPage: 49, taxPct: 5 };
+export const MARKET = { minPrice: 150, maxPrice: 15000000, staffMaxPrice: 9e15, maxCardBytes: 4096, maxPage: 49, taxPct: 5 };
 export const MODES = ['friendly', 'ut', 'rivals'];      // matchmaking queues
 export const INVITE_MODES = ['friendly', 'ut'];          // friend challenges
 export const PACK_IDS = ['bronze', 'silver', 'gold', 'premium', 'rare', 'stars', 'legend', 'icon'];
@@ -54,12 +54,12 @@ export function cleanJson(v, depth = 0) {
 }
 
 /** A UT card object from the market/peer: must have id, name, pos, ovr. Returns a clean copy or null. */
-export function sanitizeCard(c) {
+export function sanitizeCard(c, { maxOvr = 99 } = {}) {
   if (!isObj(c)) return null;
   if (typeof c.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,40}$/.test(c.id)) return null;
   if (typeof c.name !== 'string' || !cleanStr(c.name, 32, '')) return null;
   if (!POSITIONS.includes(c.pos)) return null;
-  if (!intStrict(c.ovr, 1, 99)) return null;
+  if (!intStrict(c.ovr, 1, maxOvr)) return null;
   const out = cleanJson(c);
   out.id = c.id;
   out.name = cleanStr(c.name, 32, 'Player');
@@ -69,14 +69,15 @@ export function sanitizeCard(c) {
 }
 
 /** Validate a market listing before it is sent. -> { ok, card, price } | { ok:false, error } */
-export function validateListingInput(card, price) {
+export function validateListingInput(card, price, { staff = false } = {}) {
   const p = typeof price === 'string' && /^\d+$/.test(price.trim()) ? Number(price.trim()) : price;
-  if (!intStrict(p, MARKET.minPrice, MARKET.maxPrice)) return { ok: false, error: 'bad_price' };
+  // staff (owner/mod/admin code) may list at ANY price and admin cards up to 999 OVR (the server checks it too)
+  if (staff ? !(Number.isSafeInteger(p) && p >= 1 && p <= MARKET.staffMaxPrice) : !intStrict(p, MARKET.minPrice, MARKET.maxPrice)) return { ok: false, error: 'bad_price' };
   let raw;
   try { raw = JSON.stringify(card); } catch { return { ok: false, error: 'bad_card' }; }
   if (typeof raw !== 'string') return { ok: false, error: 'bad_card' };
   if (byteLength(raw) > MARKET.maxCardBytes) return { ok: false, error: 'card_too_large' };
-  const c = sanitizeCard(card);
+  const c = sanitizeCard(card, { maxOvr: staff ? 999 : 99 });
   if (!c) return { ok: false, error: 'bad_card' };
   return { ok: true, card: c, price: p };
 }
@@ -100,8 +101,8 @@ const isoOrNull = (v) => (typeof v === 'string' && v.length < 40 && !Number.isNa
 
 export function sanitizeListingItem(r) {
   if (!isObj(r) || typeof r.listingId !== 'string' || !UUID_RE.test(r.listingId)) return null;
-  const card = sanitizeCard(r.card);
-  if (!card || !intStrict(r.price, MARKET.minPrice, MARKET.maxPrice)) return null;
+  const card = sanitizeCard(r.card, { maxOvr: 999 });
+  if (!card || !(Number.isSafeInteger(r.price) && r.price >= 1 && r.price <= MARKET.staffMaxPrice)) return null;
   return { listingId: r.listingId, card, price: r.price, seller: cleanStr(r.seller, 16, 'Player'), listedAt: isoOrNull(r.listedAt) };
 }
 
@@ -309,5 +310,7 @@ export function errorText(code) {
     nothing_pending: 'Nothing to retry.',
     player_not_found: 'No player with that username or friend code.',
     bad_card_gift: 'That card cannot be sent.',
+    restricted: 'The owner has restricted this feature for your account.',
+    no_save: 'This player has no club saved on the server yet.',
   })[code] || 'Something went wrong. Please try again.';
 }

@@ -77,7 +77,19 @@ export function sanitizePresence(d) {
     resetEpoch: Number.isInteger(d.resetEpoch) && d.resetEpoch > 0 ? d.resetEpoch : 0,
     resetDue: Number.isInteger(d.resetDue) && d.resetDue > 0 ? d.resetDue : null,
     createdAt: iso(d.createdAt),
+    restrictions: sanitizeRestrictionMap(d.restrictions),
+    patches: n(d.patches),
   };
+}
+/** Owner restrictions { codes|admin|market|packs|messages: true | ISO until } (active only, from the server). */
+export function sanitizeRestrictionMap(r) {
+  const out = {};
+  if (!isObj(r)) return out;
+  for (const k of ['codes', 'admin', 'market', 'packs', 'messages']) {
+    if (r[k] === true) out[k] = true;
+    else if (typeof r[k] === 'string' && Number.isFinite(Date.parse(r[k]))) out[k] = new Date(Date.parse(r[k])).toISOString();
+  }
+  return out;
 }
 export const CARD_PHOTO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 export const MAX_CARD_PHOTO_CHARS = 200000; // Card Creator photo (data URL); the server uses the same bound

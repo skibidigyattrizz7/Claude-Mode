@@ -55,15 +55,74 @@ export function registerCustomCard(state, card) {
   return registerLocalCard(p);
 }
 
-/** UT load hook (migrateUT): make every saved custom card resolvable before the club is validated. */
+/** UT load hook (migrateUT): make every saved custom card resolvable before the club is validated, and
+ * re-apply owner edits of database cards (state.cardEdits). */
 export function restoreCustomCards(state) {
   if (!state || typeof state !== 'object') return;
   const map = state.customCards;
-  if (!map || typeof map !== 'object' || Array.isArray(map)) { state.customCards = {}; return; }
-  for (const [id, card] of Object.entries(map)) {
-    const p = sanitizeCustomCard(card);
-    if (p && p.id === id) { map[id] = p; registerLocalCard(p); } else delete map[id];
+  if (!map || typeof map !== 'object' || Array.isArray(map)) state.customCards = {};
+  else {
+    for (const [id, card] of Object.entries(map)) {
+      const p = sanitizeCustomCard(card);
+      if (p && p.id === id) { map[id] = p; registerLocalCard(p); } else delete map[id];
+    }
   }
+  const edits = state.cardEdits;
+  if (!edits || typeof edits !== 'object' || Array.isArray(edits)) { state.cardEdits = {}; return; }
+  for (const [id, fields] of Object.entries(edits)) { if (!applyCardEdit(state, id, fields, { store: false })) delete edits[id]; }
+}
+
+// ---------- owner edits of any card (database, foreign or custom) ----------
+const POS = new Set(['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']);
+const _orig = new Map(); // pristine database card per id (before any owner edit)
+/** Validate owner-edited card fields. -> clean partial card (only known fields). */
+export function cleanEditFields(f) {
+  const out = {};
+  if (!f || typeof f !== 'object') return out;
+  const str = (v, max) => String(v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
+  if (typeof f.name === 'string' && str(f.name, 32)) { out.name = str(f.name, 32); out.last = out.name.split(' ').slice(-1)[0].slice(0, 30); }
+  if (f.ovr != null && Number.isFinite(Number(f.ovr))) out.ovr = int(f.ovr, 1, 999, 50);
+  if (POS.has(f.pos)) out.pos = f.pos;
+  if (Array.isArray(f.alt)) out.alt = f.alt.filter((x) => POS.has(x)).slice(0, 4);
+  for (const [k, keys] of [['stats', FACE], ['gk', GKFACE]]) {
+    if (f[k] && typeof f[k] === 'object') { const o = {}; for (const x of keys) if (f[k][x] != null && Number.isFinite(Number(f[k][x]))) o[x] = int(f[k][x], 1, 999, 50); if (Object.keys(o).length) out[k] = o; }
+  }
+  if (f.special === null || f.special === '') out.special = null;
+  else if (typeof f.special === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(f.special)) out.special = f.special;
+  if (TIERS.has(f.tier)) out.tier = f.tier;
+  if (typeof f.rare === 'boolean') out.rare = f.rare;
+  if (Array.isArray(f.playstyles)) out.playstyles = f.playstyles.filter((x) => x && typeof x.id === 'string').slice(0, 40).map((x) => ({ id: String(x.id).slice(0, 20), plus: !!x.plus }));
+  if (typeof f.nat === 'string' && /^[A-Za-z]{2,3}$/.test(f.nat)) out.nat = f.nat.toUpperCase();
+  if (typeof f.club === 'string' && str(f.club, 12)) out.club = str(f.club, 12);
+  if (typeof f.league === 'string' && str(f.league, 12)) out.league = str(f.league, 12);
+  if (f.age != null && Number.isFinite(Number(f.age))) out.age = int(f.age, 15, 50, 27);
+  if (f.foot === 'L' || f.foot === 'R') out.foot = f.foot;
+  if (f.wf != null && Number.isFinite(Number(f.wf))) out.wf = int(f.wf, 1, 5, 3);
+  if (f.sm != null && Number.isFinite(Number(f.sm))) out.sm = int(f.sm, 1, 5, 2);
+  if (f.photo === null) out.photo = null; else { const ph = cleanPhoto(f.photo); if (ph) out.photo = ph; }
+  return out;
+}
+/**
+ * Apply owner edits to one card. Custom cards are edited in place (state.customCards); any other card keeps
+ * its database data plus the edited fields (state.cardEdits[id] = merged fields, re-applied on every load).
+ * -> the edited player or null.
+ */
+export function applyCardEdit(state, id, fields, { store = true } = {}) {
+  if (!state || typeof id !== 'string' || !ID_RE.test(id)) return null;
+  const clean = cleanEditFields(fields);
+  const cur = state.customCards && state.customCards[id];
+  if (cur) {
+    const p = registerCustomCard(state, { ...cur, ...clean, photo: 'photo' in clean ? clean.photo : cur.photo });
+    return p;
+  }
+  if (!_orig.has(id)) { const base = getPlayer(id); if (!base) return null; _orig.set(id, base); }
+  const base = _orig.get(id);
+  const prev = store && state.cardEdits && state.cardEdits[id] ? cleanEditFields(state.cardEdits[id]) : {};
+  const merged = store ? { ...prev, ...clean } : clean;
+  const p = { ...base, ...merged, stats: { ...(base.stats || {}), ...(merged.stats || {}) }, gk: { ...(base.gk || {}), ...(merged.gk || {}) }, ownerEdited: true };
+  if (merged.photo === null) delete p.photo;
+  if (store) { state.cardEdits = state.cardEdits && typeof state.cardEdits === 'object' ? state.cardEdits : {}; state.cardEdits[id] = merged; }
+  return registerLocalCard(p);
 }
 
 /** Remove the untradeable flag (gifted / granted cards are tradable). */
