@@ -37,6 +37,8 @@ export function mountOnline(root, ctx) {
   const prefs = loadNetPrefs();
   const qprefs = loadQuickPrefs();
   const services = ctx.online;
+  /** Signed-in username (shown as the player's name everywhere), else null. */
+  const accountName = () => { try { const c = services && services.account && typeof services.account.current === 'function' ? services.account.current() : null; return c && c.username ? c.username : null; } catch { return null; } };
   const st = {
     quick: null, qmode: ['ut', 'rivals'].includes(qprefs.mode) ? qprefs.mode : 'friendly', qTeam: null, searchTimer: null,
     friendMatch: null, challengeMode: 'friendly', friends: null, rivals: null,
@@ -64,7 +66,9 @@ export function mountOnline(root, ctx) {
     st.quick = null;
     st.friendMatch = null;
     setPhase('home');
-    const nameIn = h('input', { class: 'input', id: 'net-name', maxlength: '16', placeholder: 'Your name', value: prefs.name || '', autocomplete: 'nickname' });
+    const accName = accountName();
+    const nameIn = h('input', { class: 'input', id: 'net-name', maxlength: '16', placeholder: 'Your name', value: accName || prefs.name || '', autocomplete: 'nickname',
+      disabled: !!accName, title: accName ? 'Signed in: your username is your name everywhere (change it in Settings → Account).' : null });
     const codeIn = h('input', { class: 'input code-input', id: 'net-code', maxlength: '5', placeholder: 'CODE', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', inputmode: 'text', 'aria-label': 'Room code' });
     codeIn.addEventListener('input', () => { const v = normalizeRoomCode(codeIn.value); if (v !== codeIn.value) codeIn.value = v; });
     const adv = {
@@ -74,6 +78,7 @@ export function mountOnline(root, ctx) {
       secure: h('input', { type: 'checkbox', id: 'net-secure', checked: prefs.secure !== false || null }),
     };
     const saveName = () => {
+      if (accountName()) return; // accounts always play under their username
       const before = prefs.name;
       prefs.name = cleanStr(nameIn.value, 16, '');
       saveNetPrefs(prefs);
@@ -413,7 +418,7 @@ export function mountOnline(root, ctx) {
 
   function newSession(transport = null, { matchToken = null } = {}) {
     const t = transport || createTransport(ctx.transportKind, ctx.transportKind === 'peer' ? peerCfg() : undefined);
-    const s = new NetSession(t, { name: prefs.name || (st.role === 'host' ? 'Host' : 'Guest'), matchToken });
+    const s = new NetSession(t, { name: accountName() || prefs.name || (st.role === 'host' ? 'Host' : 'Guest'), matchToken });
     st.session = s;
     s.on('ping', (ms) => { st.ping = ms; for (const e of root.querySelectorAll('.ping-val')) e.textContent = `${ms} ms`; });
     s.on('link', onLink);

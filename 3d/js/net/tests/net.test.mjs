@@ -526,7 +526,7 @@ test('accounts: failed-login throttle, reserved owner name needs the admin code'
   assert.equal(ok.role, 'owner');
   assert.equal(O.account.current().role, 'owner');
   assert.equal((await O.profile()).role, 'owner');
-  assert.equal((await A.setName('ShawkyFC')).error, 'name_not_allowed');
+  assert.deepEqual(await A.setName('ShawkyFC'), { ok: true, name: 'Target' }); // accounts: the display name is always the username
 });
 
 test('accounts: claim an existing anonymous device profile keeps its coins and id', async () => {
@@ -835,6 +835,23 @@ test('owner/mod actions take a username or friend code (resolved to the id), nev
   assert.equal((await O.moderation.player('alice smith')).player.id, a.id);
   assert.equal((await O.moderation.ban('nobody at all', 'x')).error, 'player_not_found');
   assert.equal((await O.owner.giveCoins(b.id, 1)).ok, true); // ids still work
+});
+
+test('names: accounts are shown by username everywhere (friends, market seller, queue, players), set_name cannot hide it', async () => {
+  const { be, A, B, a, b } = await world3();
+  assert.equal((await A.setName('Totally Else')).name, 'Alice Smith');
+  const fc = (await A.players.find('bob jones')).items[0].friendCode;
+  const add = await A.friends.add(fc);
+  assert.equal(add.ok, true);
+  await B.friends.respond(a.id, 'accept');
+  const fl = await A.friends.list();
+  const bob = fl.items.find((f) => f.id === b.id);
+  assert.deepEqual([bob.name, bob.username], ['Bob Jones', 'Bob Jones']);
+  const l = await B.market.list(card({ id: 'nm1' }), 1000);
+  assert.equal(l.ok, true);
+  const s = await A.market.search({});
+  assert.equal(s.items.find((x) => x.listingId === l.listingId).seller, 'Bob Jones');
+  assert.equal((await B.profile()).name, 'Bob Jones');
 });
 
 test('gifts: owner lists pending gifts, cancels one, clears all; expiry picker bounds', async () => {

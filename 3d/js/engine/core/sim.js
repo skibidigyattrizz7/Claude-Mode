@@ -327,7 +327,8 @@ export class MatchSim {
     }
     if (t >= this.nextTeamThink) {
       AI.teamThink(this, 0); AI.teamThink(this, 1);
-      this.nextTeamThink = t + 0.1;
+      // re-think early when a defender finishes reading an opposition pass (see ai.js readDelay)
+      this.nextTeamThink = Math.min(t + 0.1, this.info[0].wake || Infinity, this.info[1].wake || Infinity);
       for (let team = 0; team < 2; team++) {
         if (!this.human[team]) continue;
         this._autoSwitch(team);

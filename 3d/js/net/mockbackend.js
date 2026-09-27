@@ -66,6 +66,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     d.friends = d.friends || []; d.invites = d.invites || [];
     d.sessions = d.sessions || []; d.audit = d.audit || []; d.loginFails = d.loginFails || {}; d.serverKey = d.serverKey || hex(32, rand);
     for (const [k, v] of Object.entries(extraDefaults())) if (d[k] == null) d[k] = v;
+    for (const p of Object.values(d.profiles)) if (p && p.username && p.name !== p.username) p.name = p.username; // 006: name follows username
     return d;
   };
   const SESSION_TTL = 60 * DAY;
@@ -276,6 +277,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
+      if (p.username) { p.name = p.username; store.save(db); return { ok: true, name: p.name }; } // accounts: name = username (006)
       const nm = safeName(p_name, p.role);
       if (!nm) return err('name_not_allowed');
       p.name = nm;
@@ -588,7 +590,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         const o = db.profiles[f.a === p.id ? f.b : f.a];
         const acc = f.status === 'accepted';
         return {
-          id: o.id, name: o.name, role: o.role || 'player',
+          id: o.id, username: o.username || null, name: o.username || o.name, friendCode: o.friendCode, role: o.role || 'player',
           status: acc ? 'friend' : f.status === 'blocked' ? 'blocked' : f.requestedBy === p.id ? 'outgoing' : 'incoming',
           online: acc && o.lastSeen > now() - 60000, rating: acc ? o.rating : null, division: acc ? o.division : null, rivalsDivision: acc ? (o.rivalsDivision ?? 10) : null,
         };

@@ -199,7 +199,9 @@ export function sanitizeFriend(f) {
   const status = ['friend', 'incoming', 'outgoing', 'blocked'].includes(f.status) ? f.status : null;
   if (!status) return null;
   return {
-    id: f.id, name: cleanStr(f.name, 16, 'Player'), status, online: status === 'friend' && f.online === true,
+    id: f.id, username: typeof f.username === 'string' ? cleanStr(f.username, 16, '') || null : null,
+    name: cleanStr(typeof f.username === 'string' && f.username ? f.username : f.name, 16, 'Player'), status, online: status === 'friend' && f.online === true,
+    friendCode: typeof f.friendCode === 'string' && FRIEND_CODE_RE.test(f.friendCode) ? f.friendCode : null,
     rating: status === 'friend' ? int(f.rating, 0, 5000, 1000) : null,
     division: status === 'friend' ? int(f.division, 1, 10, 10) : null,
     rivalsDivision: status === 'friend' ? int(f.rivalsDivision, 0, 10, 10) : null,
