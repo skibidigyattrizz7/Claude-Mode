@@ -7,6 +7,7 @@ import { predictBall, behindLine } from '../core/physics.js';
 import { rateStats, computeRatings, playerOfMatch } from '../core/ratings.js';
 import { decided } from '../core/knockout.js';
 import { humanShot } from '../core/assist.js';
+import { readDelay } from '../core/ai.js';
 import { BRAZIL, FRANCE } from './sampleTeams.mjs';
 import { colorDist, kitTone, kitsClash, resolveMatchKits, pickPattern, PATTERNS, CLASH_THRESHOLD } from '../core/kits.js';
 
@@ -402,7 +403,7 @@ export function runGameplayTests(test) {
     const m = sim.players[7], d = sim.players[17];
     sim._teleport(m, c.x + 22, c.z);
     sim._teleport(d, c.x + 11, c.z + off);
-    d.a = { ...d.a, def }; d.ps = pls;
+    d.a = { ...d.a, def }; d.ps = pls; d.vmax = 8.3; d.acc = 8.5; // same legs for every trial: only reading differs
     d.fooledUntil = 1e9; // stands still until the pass is struck
     sim.step(DT, [inp({}), null]);
     sim._release(c, { x: speed, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { kind: 'ground', pass: true, target: m.idx });
@@ -412,7 +413,7 @@ export function runGameplayTests(test) {
   };
   const laneRate = (def, pls, diff = null) => {
     let k = 0;
-    for (let s = 0; s < 32; s++) if (laneTrial(500 + s, (1 + (s % 8) * 0.5) * (s % 2 ? 1 : -1), 14 + (Math.floor(s / 8) % 4) * 1.2, def, pls, diff)) k++;
+    for (let s = 0; s < 32; s++) if (laneTrial(500 + s, (1.5 + (s % 8) * 0.3) * (s % 2 ? 1 : -1), 16 + (Math.floor(s / 8) % 4) * 0.2, def, pls, diff)) k++;
     return k / 32;
   };
   test('an AI defender steps into the lane and intercepts a slow pass', () => {
@@ -420,13 +421,25 @@ export function runGameplayTests(test) {
     for (let s = 0; s < 8; s++) if (laneTrial(600 + s, s % 2 ? 2 : -2, 11, 70, {})) k++;
     assert.ok(k >= 7, `intercepted ${k}/8`);
   });
-  test('interception rate is bounded (no psychic 100%) and rises with defending, Anticipate/Intercept and difficulty', () => {
+  test('interception rate is bounded (no psychic 100%) and rises with defending + Anticipate/Intercept', () => {
     const poor = laneRate(40, {}), elite = laneRate(92, { intercept: 1.6, anticipate: 1.6 });
     assert.ok(poor > 0.1 && poor < 0.8, 'poor ' + poor);
     assert.ok(elite < 0.97, 'elite ' + elite);
     assert.ok(elite > poor + 0.15, `elite ${elite} vs poor ${poor}`);
-    const ama = laneRate(70, {}, DIFFICULTY.amateur), leg = laneRate(70, {}, DIFFICULTY.legendary);
-    assert.ok(leg > ama, `legendary ${leg} vs amateur ${ama}`);
+  });
+  test('reading a pass: higher difficulty, defending and PlayStyles all react sooner', () => {
+    const { sim } = scenario({}, { seed: 3 });
+    const d = sim.players[17];
+    const avg = (diff, def, pls = {}) => {
+      sim.diff = diff; d.a = { ...d.a, def }; d.ps = pls;
+      let s = 0;
+      for (let i = 0; i < 400; i++) s += readDelay(sim, d);
+      return s / 400;
+    };
+    const ama = avg(DIFFICULTY.amateur, 70), pro = avg(DIFFICULTY.pro, 70), leg = avg(DIFFICULTY.legendary, 70);
+    assert.ok(ama > pro + 0.04 && pro > leg + 0.03, `amateur ${ama} pro ${pro} legendary ${leg}`);
+    assert.ok(avg(DIFFICULTY.pro, 40) > avg(DIFFICULTY.pro, 90) + 0.05);
+    assert.ok(avg(DIFFICULTY.pro, 80, { anticipate: 1.6, intercept: 1.6 }) < avg(DIFFICULTY.pro, 80) - 0.1);
   });
   test('an opposition pass must be read first: nobody commits to it on the frame it is struck', () => {
     const { sim, c } = scenario({}, { seed: 7 });
@@ -439,6 +452,109 @@ export function runGameplayTests(test) {
     sim.step(DT, [inp({}), null]);
     for (const p of sim.teamList[1]) if (!p.isGK) assert.ok(p.readAt > sim.t - DT, 'read delay for ' + p.idx);
     assert.equal(sim.info[1].chaser, -1);
+  });
+
+  console.log('attribute feel and admin cards');
+  // one home player (idx 9) with the given attrs / ovr, everything else from the sample team
+  const mkSim = (attrs = {}, ovr = null, seed = 1, extra = {}) => {
+    const home = structuredClone(BRAZIL);
+    const pd = home.players[9];
+    pd.attrs = { ...(pd.attrs || {}), ...attrs };
+    if (ovr != null) pd.ovr = ovr;
+    Object.assign(pd, extra);
+    const sim = new MatchSim({ home, away: FRANCE, halfMinutes: 3, controllers: { home: 'ai', away: 'ai' }, seed });
+    sim.step(DT, [null, null]);
+    sim.phase = PHASE.PLAY; sim.sp.done = true; sim.dir = [1, -1];
+    return { sim, p: sim.players[9] };
+  };
+  const shotAt = (sim, p, x, z, kind = 'shot', o = {}) => {
+    sim.players.forEach((q, k) => sim._teleport(q, q.team === 0 ? -45 : 0, -25 + (k % 11) * 5));
+    sim._teleport(sim.gk(1), 51, 0);
+    sim._teleport(p, x, z); p.face = 0;
+    const b = sim.ball;
+    b.owner = p.idx; b.inHands = false; b.p.x = x + 0.45; b.p.z = z; b.p.y = BALL_R; b.v.x = b.v.y = b.v.z = 0; b.lastTeam = 0;
+    sim.aiKick(p, kind, { tz: 0, ty: 1, power: 0.9, ...o });
+    return { ...b.v };
+  };
+  test('pace / acceleration: a 95-pace winger is far quicker than a 60-pace centre-back', () => {
+    const f = mkSim({ pac: 95 }).p, s = mkSim({ pac: 60 }).p;
+    assert.ok(f.vmax - s.vmax > 1.8, `${f.vmax} vs ${s.vmax}`);
+    assert.ok(f.acc - s.acc > 2.5, `${f.acc} vs ${s.acc}`);
+  });
+  test('shot power and accuracy scale with shooting', () => {
+    const spd = (sho) => { const { sim, p } = mkSim({ sho }); const v = shotAt(sim, p, 30, 0); return Math.hypot(v.x, v.y, v.z); };
+    assert.ok(spd(95) - spd(60) > 4, `95: ${spd(95)} 60: ${spd(60)}`);
+    const spread = (sho) => {
+      let e = 0;
+      for (let s = 0; s < 40; s++) { const { sim, p } = mkSim({ sho }, null, s); const v = shotAt(sim, p, 30, 0); e += Math.abs(Math.atan2(v.z, v.x)); }
+      return e / 40;
+    };
+    assert.ok(spread(40) > spread(95) * 1.8, `40: ${spread(40)} 95: ${spread(95)}`);
+  });
+  test('passing accuracy, dribbling speed, strength and stamina all separate good from poor', () => {
+    const passErr = (pas) => {
+      let e = 0;
+      for (let s = 0; s < 40; s++) {
+        const { sim, p } = mkSim({ pas }, null, s);
+        const m = sim.players[7];
+        shotAt(sim, p, 0, 0, 'ground', { point: { x: 25, z: 0 } });
+        void m;
+        e += Math.abs(Math.atan2(sim.ball.v.z, sim.ball.v.x));
+      }
+      return e / 40;
+    };
+    assert.ok(passErr(45) > passErr(95) * 1.8, `45: ${passErr(45)} 95: ${passErr(95)}`);
+    const a = mkSim({ dri: 95 }), b = mkSim({ dri: 55 });
+    assert.ok(a.sim.dribbleFactor(a.p, true) - b.sim.dribbleFactor(b.p, true) > 0.07);
+    assert.ok(mkSim({ phy: 92 }).p.str - mkSim({ phy: 55 }).p.str > 30);
+    const drain = (phy) => { const { sim, p } = mkSim({ phy }); p.sprint = true; for (let i = 0; i < 600; i++) sim._stamina(p, DT, p.vmax); return 1 - p.stam; };
+    assert.ok(drain(45) > drain(95) * 1.6, `45: ${drain(45)} 95: ${drain(95)}`);
+  });
+  test('a normal 99 stays a normal player; only ratings above 99 unlock the admin boost', () => {
+    const n = mkSim({ pac: 99, sho: 99, pas: 99, dri: 99, def: 99, phy: 99 }, 99).p;
+    assert.equal(n.boost, null);
+    assert.ok(n.vmax < 10.5, 'normal 99 top speed ' + n.vmax);
+    const adm = mkSim({ pac: 99, sho: 99, pas: 99, dri: 99, def: 99, phy: 99 }, null, 1, { rawOvr: 999 }).p;
+    assert.ok(adm.boost && adm.boost.pac > 0.9);
+    assert.ok(adm.vmax > n.vmax * 1.6 && adm.acc > n.acc * 2, `admin ${adm.vmax}/${adm.acc} vs ${n.vmax}/${n.acc}`);
+    const mid = mkSim({}, 150).p;
+    assert.ok(mid.vmax > n.vmax * 1.2 && mid.vmax < adm.vmax);
+  });
+  test('admin cards score from anywhere and never miss a pass; a 90 cannot', () => {
+    const rate = (extra, dist) => {
+      let g = 0;
+      for (let s = 0; s < 10; s++) {
+        const { sim, p } = mkSim({ sho: 90 }, null, 40 + s, extra);
+        shotAt(sim, p, 52.5 - dist, (s % 5 - 2) * 4, 'shot', { tz: (s % 2 ? 1 : -1) * 2.5 });
+        for (let t = 0; t < 4 && sim.phase === PHASE.PLAY; t += DT) sim.step(DT, [null, null]);
+        if (sim.phase === PHASE.GOAL) g++;
+      }
+      return g / 10;
+    };
+    assert.ok(rate({ rawOvr: 999 }, 45) >= 0.8, 'admin from 45 m');
+    assert.ok(rate({}, 45) <= 0.3, 'normal 90 from 45 m');
+    let e = 0;
+    for (let s = 0; s < 20; s++) {
+      const { sim, p } = mkSim({ pas: 99 }, null, s, { rawOvr: 999 });
+      shotAt(sim, p, 0, 0, 'ground', { point: { x: 30, z: 0 } });
+      e = Math.max(e, Math.abs(Math.atan2(sim.ball.v.z, sim.ball.v.x)));
+    }
+    assert.ok(e < 1e-6, 'admin pass error ' + e);
+  });
+  test('admin defenders win the ball from anywhere near the carrier', () => {
+    let won = 0;
+    for (let s = 0; s < 10; s++) {
+      const { sim, p } = mkSim({ def: 99 }, null, 70 + s, { rawOvr: 999 });
+      const car = sim.players[18];
+      sim._teleport(car, 0, 0); car.face = Math.PI;
+      const b = sim.ball;
+      b.owner = car.idx; b.inHands = false; b.p.x = -0.45; b.p.z = 0; b.p.y = BALL_R; b.v.x = b.v.y = b.v.z = 0; b.lastTeam = 1;
+      sim._teleport(p, -2.2, 0.6); p.face = 0;
+      sim.startTackle(p);
+      for (let t = 0; t < 0.3; t += DT) sim.step(DT, [null, null]);
+      if (sim.ball.owner === p.idx || sim.ball.lastTeam === 0) won++;
+    }
+    assert.ok(won >= 8, `won ${won}/10`);
   });
 
   console.log('tactics');

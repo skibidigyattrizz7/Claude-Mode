@@ -3,7 +3,7 @@ import { PITCH, GOAL, BOX, SIX, PEN_SPOT, CIRCLE_R, BALL_R, ANIM, PHASE, SP, DIF
 import { AdminFx } from './admin.js';
 import { GAMEPLAY_DEFAULTS } from '../../shared/gameplay.js';
 import { humanGround, humanThrough, humanLob, humanShot, passArrive, throughLead } from './assist.js';
-import { parsePlaystyles, ps } from './playstyles.js';
+import { parsePlaystyles, ps, bst } from './playstyles.js';
 import { computeRatings, playerOfMatch } from './ratings.js';
 import * as KO from './knockout.js';
 import * as HSP from './humansp.js';
@@ -48,6 +48,9 @@ export function mergeGameplay(g) {
 const SKILL_KINDS = ['stepover', 'roulette', 'ballroll', 'heel'];
 
 const faceVec = (p) => ({ x: Math.cos(p.face), z: Math.sin(p.face) });
+// Over-99 "power" of admin / Owner-Access cards (see _applyData): 0 for every normal card, rising to
+// 1 for a 300+ rating. Only this multiplies the absurd effects, so a 99 stays a (great) normal player.
+const OVER = (v) => (v > 99 ? Math.min(1, Math.sqrt((v - 99) / 200)) : 0);
 const newStats = () => ({ goals: 0, assists: 0, kp: 0, shots: 0, sot: 0, passes: 0, passAtt: 0, tackles: 0, int: 0, saves: 0, fouls: 0, conceded: 0, touches: 0, yellow: 0, red: 0, og: 0, err: 0, mins: 0 });
 
 function strHash(s) {
@@ -165,6 +168,16 @@ export class MatchSim {
   _applyData(p, pd, chem) {
     p.data = pd;
     const a = { pac: 60, sho: 55, pas: 60, dri: 60, def: 55, phy: 65, div: 50, han: 50, kic: 50, ref: 50, spd: 50, pos: 50, ...(pd.attrs || {}) };
+    // admin / Owner-Access cards: a rating (or attribute) above 99 unlocks `boost` (0..1 per area);
+    // the ordinary attribute maths below stays clamped to 1-99 so normal cards remain balanced
+    const g0 = OVER(Math.max(+pd.rawOvr || 0, +pd.ovr || 0));
+    p.boost = null;
+    const bo = {};
+    for (const key of ['pac', 'sho', 'pas', 'dri', 'def', 'phy', 'gk']) {
+      const raw = key === 'gk' ? Math.max(+a.div || 0, +a.ref || 0, +a.han || 0) : +a[key] || 0;
+      bo[key] = Math.max(g0, OVER(raw));
+      if (bo[key] > 0) p.boost = bo;
+    }
     const k = 1 + clamp(((chem ?? 50) - 50) / 1000, -0.05, 0.05);
     for (const key in a) a[key] = clamp((+a[key] || 50) * k, 1, 99);
     p.a = a;
@@ -174,11 +187,12 @@ export class MatchSim {
     p.ps = parsePlaystyles(pd.playstyles);
     const pace = p.isGK ? a.spd * 0.6 + a.pac * 0.4 : a.pac;
     // attributes must be felt: top speed and acceleration spread widely with pace
-    p.vmax = 4.95 + pace * 0.046 - Math.max(0, p.w - 85) * 0.012;
-    p.acc = 3.6 + pace * 0.072 + ps(p, 'quickstep') * 0.9 - (p.w - 75) * 0.025 - (p.h - 1.8) * 2.5;
+    // (40 pace ~6.5 m/s, 60 ~7.7, 80 ~8.8, 95 ~9.6 m/s; acceleration 6.2 .. 11.2 m/s^2)
+    p.vmax = (4.3 + pace * 0.056 - Math.max(0, p.w - 85) * 0.012) * (1 + bst(p, 'pac') * 0.85);
+    p.acc = (2.6 + pace * 0.09 + ps(p, 'quickstep') * 0.9 - (p.w - 75) * 0.025 - (p.h - 1.8) * 2.5) * (1 + bst(p, 'pac') * 1.6);
     // agility (turning) from dribbling/pace, strength from physical + body mass
-    p.agil = clamp((a.dri * 0.6 + a.pac * 0.4) / 100 - (p.h - 1.8) * 0.4 - Math.max(0, p.w - 80) * 0.004, 0.3, 1.05);
-    p.str = a.phy * 0.75 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10;
+    p.agil = clamp((a.dri * 0.7 + a.pac * 0.3) / 100 - 0.08 - (p.h - 1.8) * 0.4 - Math.max(0, p.w - 80) * 0.004, 0.25, 1.05) + bst(p, 'dri') * 0.9;
+    p.str = a.phy * 0.9 - 10 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10 + bst(p, 'phy') * 250;
     // standing reach / jump used for headers and keeper handling
     p.jump = 0.28 + a.phy * 0.0025 + (p.isGK ? a.div * 0.002 : 0) + ps(p, 'aerial') * 0.08;
     p.hash = strHash(String(pd.id ?? pd.name ?? p.idx));
@@ -195,7 +209,8 @@ export class MatchSim {
   diffFor(team) { return this.human[team] ? HUMAN_AI : this.diff; }
   isHumanCtrl(p) { return this.human[p.team] && this.ctrl[p.team] === p.idx; }
   stamFactor(p) { return (0.8 + 0.2 * p.stam) * (p.burst > this.t ? 1.1 : 1); }
-  dribbleFactor(p, sprint) { return Math.min(1, (sprint ? 0.84 : 0.93) * (0.9 + p.a.dri * 0.0012) + ps(p, 'rapid') * 0.035); }
+  // speed kept with the ball at the feet: 60 dribbling loses ~20% of top speed, 95 only ~13%
+  dribbleFactor(p, sprint) { return Math.min(1, (sprint ? 0.84 : 0.93) * (0.8 + p.a.dri * 0.0024) + ps(p, 'rapid') * 0.035) + bst(p, 'dri') * 0.15; }
   fromBehind(tackler, victim) { return isFromBehind(tackler, victim, victim.face); }
   minute() { return Math.floor((halfBase(this.half) + this.clock) / 60) + 1; }
   // minute a goal is credited to (capped at the end of the period + added time)
@@ -1042,9 +1057,10 @@ export class MatchSim {
         else if (kind === 'chip') speed = clamp(9 + power * 5 + D * 0.22, 10, 19);
         else if (kind === 'lowdriven') speed = 16 + power * (12 + a.sho * 0.1) + ps(p, 'lowdriven') * 1.2;
         else if (kind === 'powershot') speed = 18 + power * (14 + a.sho * 0.12);
-        else speed = 14 + power * (13 + a.sho * 0.11);
+        else speed = 12 + power * (11 + a.sho * 0.16); // 60 SHO ~31 m/s at full power, 95 ~37 m/s
         if (kind === 'shot' || kind === 'powershot' || kind === 'lowdriven') speed *= 1 + ps(p, 'power') * 0.06;
         speed *= o.speedMul || 1;
+        if (kind !== 'header' && kind !== 'chip') speed *= 1 + bst(p, 'sho') * 0.45; // admin cards: rockets
         const dist = Math.hypot(tx - from.x, tz - from.z) || 1;
         const fx = (tx - from.x) / dist, fz = (tz - from.z) / dist;
         const topW = kind === 'fk' ? 22 : kind === 'header' ? 0 : kind === 'chip' ? -12 : kind === 'lowdriven' ? 14 : 8;
@@ -1080,7 +1096,10 @@ export class MatchSim {
   _execute(p, plan) {
     const { info } = plan;
     let vel = plan.vel;
-    const a = p.a, em = this._errMul(p);
+    const a = p.a, em0 = this._errMul(p);
+    // admin cards: passes / shots are (near) perfect
+    const emP = em0 * (1 - bst(p, 'pas')), emS = em0 * (1 - 0.97 * bst(p, 'sho'));
+    const em = ['ground', 'through', 'gkthrow', 'lob', 'cross', 'throw', 'punt'].includes(info.kind) ? emP : emS;
     const fatigue = 1 - p.stam;
     const human = this.human[p.team];
     const gp = this.gp[p.team];
@@ -1339,10 +1358,11 @@ export class MatchSim {
   _stamina(p, dt, sp) {
     const sprinting = p.sprint && sp > p.vmax * 0.8;
     const phy = p.a.phy;
-    if (sprinting) p.stam -= dt * (0.05 + (100 - phy) * 0.0004) * (1 - ps(p, 'relentless') * 0.3);
+    const tireless = 1 - bst(p, 'phy');
+    if (sprinting) p.stam -= dt * (0.04 + (100 - phy) * 0.0006) * (1 - ps(p, 'relentless') * 0.3) * tireless;
     else p.stam += dt * (sp < 2 ? 0.05 : 0.025);
     const gm = (dt * this.gameRate) / 60;
-    if (this.phase === PHASE.PLAY) p.stamMax -= (gm * (0.0026 + (100 - phy) * 0.00003) + (sprinting ? dt * 0.0015 : 0)) * (1 - ps(p, 'relentless') * 0.3);
+    if (this.phase === PHASE.PLAY) p.stamMax -= (gm * (0.0018 + (100 - phy) * 0.00005) + (sprinting ? dt * 0.0015 : 0)) * (1 - ps(p, 'relentless') * 0.3) * tireless;
     p.stamMax = clamp(p.stamMax, 0.35, 1);
     p.stam = clamp(p.stam, 0, p.stamMax);
   }
@@ -1531,12 +1551,12 @@ export class MatchSim {
       if (p.act && ['fall', 'down', 'dive', 'slide', 'sentoff', 'throw'].includes(p.act.type)) continue;
       const dx = b.p.x - p.x, dz = b.p.z - p.z;
       const hd = Math.hypot(dx, dz);
-      if (hd > 1.5) continue;
+      if (hd > 1.5 + bst(p, 'def')) continue;
       const y = b.p.y, jump = this._jumpH(p);
       const oppBall = b.lastTeam !== p.team;
       let zone = null, reach = 0;
       const chestTop = p.h * 0.8 + jump, headTop = p.h + 0.25 + jump;
-      if (y < 0.7) { zone = 'feet'; reach = 0.55 + (bs < 3 ? (3 - bs) * 0.13 : 0) + (oppBall ? ps(p, 'intercept') * 0.18 + ps(p, 'block') * 0.1 : 0); }
+      if (y < 0.7) { zone = 'feet'; reach = 0.55 + (bs < 3 ? (3 - bs) * 0.13 : 0) + (oppBall ? ps(p, 'intercept') * 0.18 + ps(p, 'block') * 0.1 + bst(p, 'def') * 0.9 : 0); }
       else if (y < chestTop) { zone = 'chest'; reach = 0.45 + (oppBall ? ps(p, 'block') * 0.1 : 0); }
       else if (y < headTop) { zone = 'head'; reach = 0.42 + ps(p, 'aerial') * 0.06 + (p.h - 1.8) * 0.2; }
       if (!zone || hd > reach) continue;
@@ -1584,7 +1604,7 @@ export class MatchSim {
     const team = p.team, gp = this.gp[team];
     // blocks: an opponent stepping into a hard kick often only deflects it
     if (b.lastTeam !== team && t - b.kickT < 2.5 && !p.isGK && rel > 9) {
-      const pb = clamp((rel - 9) / 14, 0, 0.65) * (1.25 - p.a.def / 100) * (1 - ps(p, 'intercept') * 0.25);
+      const pb = clamp((rel - 9) / 14, 0, 0.65) * (1.25 - p.a.def / 100) * (1 - ps(p, 'intercept') * 0.25) * (1 - bst(p, 'def'));
       if (this.rng() < pb) { if (this.pendingPass && this.pendingPass.team !== team) this.lastLoss[this.pendingPass.team] = { idx: this.pendingPass.from, t }; return this._deflect(p, zone); }
     }
     if (human) {
@@ -1621,7 +1641,7 @@ export class MatchSim {
       if ((!this.human[team] || gp.autoClearances) && this._autoClear(p)) return;
       if (this._aiFirstTime(p, zone, rel)) return;
     }
-    const ctrlMax = (zone === 'feet' ? 13 + p.a.dri * 0.11 : 12 + p.a.dri * 0.07) + ps(p, 'firsttouch') * 3 + (b.intended === p.idx ? 3 : 0);
+    const ctrlMax = (zone === 'feet' ? 13 + p.a.dri * 0.11 : 12 + p.a.dri * 0.07) + ps(p, 'firsttouch') * 3 + (b.intended === p.idx ? 3 : 0) + Math.max(bst(p, 'dri'), bst(p, 'def')) * 40;
     if (rel > ctrlMax) return this._deflect(p, zone);
     // contextual first touch: fast balls, pressure, sprinting and bouncing balls make it harder
     const comfort = 8 + p.a.dri * 0.06 + ps(p, 'firsttouch') * 2.5;
@@ -1629,7 +1649,7 @@ export class MatchSim {
     if (this.pressureOn(p) < 1.5) heavy += 0.05 * (1 - ps(p, 'pressproven') * 0.5);
     if (p.sprint && p.speed > p.vmax * 0.8) heavy += 0.06;
     if (zone === 'chest' || b.p.y > 0.35) heavy += 0.05;
-    heavy *= 1 - Math.min(0.9, ps(p, 'firsttouch') * 0.5);
+    heavy *= (1 - Math.min(0.9, ps(p, 'firsttouch') * 0.5)) * (1 - bst(p, 'dri'));
     if (this.human[team]) heavy *= gp.gameplayStyle === 'authentic' ? 1.3 : 0.8;
     if (human) heavy *= 0.7;
     if (this.rng() < clamp(heavy, 0, 0.5)) {
@@ -1833,8 +1853,15 @@ export class MatchSim {
       hit = hd < reach && b.p.y < g.h + 0.55 + this._jumpH(g) + ps(g, 'crossclaimer') * 0.1;
     } else return false;
     if (!hit) return false;
+    // an admin card's shot beats the keeper (unless he's an admin keeper himself); decided once per shot
+    const sk = b.kicker >= 0 ? this.players[b.kicker] : null;
+    if (sk && sk.team !== g.team && bst(sk, 'sho') > 0 && b.beatKick !== b.kickT) {
+      b.beatKick = b.kickT;
+      b.beat = this.rng() < bst(sk, 'sho') * 0.92 * (1 - bst(g, 'gk') * 0.7);
+    }
+    if (b.beat && b.beatKick === b.kickT && b.lastTeam !== g.team) return false;
     const speed = Math.hypot(b.v.x, b.v.y, b.v.z);
-    const catchV = (13 + g.a.han * 0.13) * (stretched ? 0.7 : 1) * this.diffFor(g.team).gk;
+    const catchV = (13 + g.a.han * 0.13) * (stretched ? 0.7 : 1) * this.diffFor(g.team).gk * (1 + bst(g, 'gk') * 2);
     const shot = this.shotTracker.shot;
     const valid = shot && shot.team !== g.team ? this.shotTracker.onKeeperTouch(t, false) : false;
     // high ball into a crowded box: punch it clear (cross-claimers catch far more often)
@@ -1901,7 +1928,9 @@ export class MatchSim {
     }
     if (!cross) return null;
     // reaction time from reflexes (and the quick-reflexes PlayStyle)
-    const react = Math.max(0.05, 0.06 + this.diffFor(team).react * 0.18 + (100 - g.a.ref) * 0.0035 - ps(g, 'quickreflexes') * 0.03);
+    const shooter = this.players[this.ball.kicker];
+    const beat = shooter && shooter.team !== team ? bst(shooter, 'sho') : 0;
+    const react = Math.max(0.05, 0.06 + this.diffFor(team).react * 0.18 + (100 - g.a.ref) * 0.0035 - ps(g, 'quickreflexes') * 0.03) * (1 - bst(g, 'gk') * 0.8) + beat * 0.35;
     return { tReact: t + react, tc: t + cross.t, x: cross.x, y: cross.y, z: cross.z, gz: goal ? goal.z : cross.z, gy: goal ? goal.y : cross.y };
   }
 
@@ -1911,7 +1940,10 @@ export class MatchSim {
     const arm = 0.85 + (g.h - 1.85) * 0.5;
     const need = Math.abs(plan.z - g.z) - arm;
     // diving: reach from diving + height (+ far reach), speed from diving / GK speed
-    const maxBody = (0.7 + g.a.div * 0.012 + (g.h - 1.85) * 1.5 + ps(g, 'farreach') * 0.25) * this.diffFor(g.team).gk * (plan.pen ? 0.75 : 1);
+    const shooter = this.players[this.ball.kicker];
+    const beat = shooter && shooter.team !== g.team ? bst(shooter, 'sho') : 0;
+    const maxBody = (0.7 + g.a.div * 0.012 + (g.h - 1.85) * 1.5 + ps(g, 'farreach') * 0.25) * this.diffFor(g.team).gk * (plan.pen ? 0.75 : 1)
+      * (1 + bst(g, 'gk') * 2.5) * (1 - beat * 0.85);
     const timeLeft = Math.max(0.2, plan.tc - t);
     const flight = clamp(timeLeft, 0.24, 0.5);
     const vmax = 3.6 + g.a.div * 0.03 + g.a.spd * 0.012 + ps(g, 'farreach') * 0.3;
@@ -1965,7 +1997,7 @@ export class MatchSim {
     const prev = this.owner();
     if (prev) { prev.cool.touch = t + 0.4; this.lastLoss[prev.team] = { idx: prev.idx, t }; }
     b.owner = -1; b.inHands = false;
-    if (!slide && this.rng() < 0.4 + p.a.def / 400) { this._gain(p, 'feet'); return; }
+    if (!slide && this.rng() < 0.4 + p.a.def / 400 + bst(p, 'def')) { this._gain(p, 'feet'); return; }
     const f = faceVec(p);
     const s = slide ? 5 + this.rng() * 3 : 3 + this.rng() * 2;
     b.v.x = f.x * s + (this.rng() - 0.5) * 2.5; b.v.z = f.z * s + (this.rng() - 0.5) * 2.5; b.v.y = slide ? 0.5 : 0;
@@ -1994,7 +2026,7 @@ export class MatchSim {
     if ((owner && owner.team === p.team) || b.inHands) return;
     const victim = owner;
     const bd = Math.hypot(b.p.x - foot.x, b.p.z - foot.z);
-    const reach = bd < 0.85 && b.p.y < 0.6;
+    const reach = bd < 0.85 + bst(p, 'def') * 1.6 && b.p.y < 0.6 + bst(p, 'def');
     const behind = victim ? (p.act && p.act.behind != null ? p.act.behind && this.fromBehind(p, victim) : this.fromBehind(p, victim)) : false;
     let won = false;
     if (reach) {
@@ -2002,7 +2034,8 @@ export class MatchSim {
       else {
         const pr = clamp(0.5 + (p.a.def - victim.a.dri) * 0.012 + (behind ? -0.2 : 0.12) + (victim.act && victim.act.type === 'skill' ? -0.15 : 0)
           + ps(p, 'anticipate') * 0.1 + (p.jockeyT > this.t - 0.4 ? 0.06 : 0) - ps(victim, 'pressproven') * 0.05, 0.1, 0.93);
-        won = this.rng() < pr;
+        // admin defenders win it from anywhere; admin dribblers are nearly impossible to dispossess
+        won = this.rng() < (pr + (1 - pr) * bst(p, 'def')) * (1 - 0.92 * bst(victim, 'dri') * (1 - bst(p, 'def')));
       }
     }
     const contact = victim ? Math.hypot(victim.x - p.x, victim.z - p.z) < 1.25 && (!won && this.rng() < 0.45 * (1 - ps(p, 'anticipate') * 0.3)) : false;
@@ -2047,14 +2080,15 @@ export class MatchSim {
       const bd = Math.hypot(b.p.x - d.x, b.p.z - d.z);
       const pd = Math.hypot(o.x - d.x, o.z - d.z);
       const shielding = o.shieldT > t - 0.1;
-      if (bd < 0.8) {
-        d.cool.steal = t + 0.35;
+      if (bd < 0.8 + bst(d, 'def') * 1.4) {
+        d.cool.steal = t + 0.35 * (1 - bst(d, 'def') * 0.7);
         let pr = clamp(0.2 + (d.a.def - o.a.dri) * 0.007 + (this.fromBehind(d, o) ? -0.12 : 0) + (d.jockeyT > t - 0.3 ? 0.06 : 0) + ps(d, 'jockey') * 0.03, 0.03, 0.45);
         if (this.isHumanCtrl(d)) pr *= 0.6;
         if (this.isHumanCtrl(o)) pr *= 0.8;
         pr *= 1 - ps(o, 'pressproven') * 0.25;
         // shielding: strong players keep the ball away from a defender
         if (shielding) pr *= clamp(1.25 - (o.str - d.str * 0.5) / 80, 0.2, 0.9);
+        pr = (pr + (0.97 - pr) * bst(d, 'def')) * (1 - 0.92 * bst(o, 'dri') * (1 - bst(d, 'def')));
         if (this.rng() < pr) { this._winBall(d, false); d.st.tackles++; return; }
       } else if (pd < 0.85 && o.speed > 2.5 && d.speed > 2.5) {
         d.cool.steal = t + 0.3;
