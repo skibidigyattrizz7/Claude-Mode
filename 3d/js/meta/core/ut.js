@@ -12,6 +12,9 @@ import { weekNumber } from './calendar.js';
 import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 import { restoreCustomCards } from './customreg.js';
+import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, secretCard } from './secretcard.js';
+import { MANAGERS, getManager } from './managers.js';
+export { MANAGERS, getManager } from './managers.js';
 
 export const UT_KEY = 'ut';
 
@@ -30,6 +33,9 @@ export const CATEGORIES = {
   legend: { label: 'Legend', test: (p) => p.special === 'legend' },
   totw: { label: 'Team of the Week', test: () => false },
   lotg: { label: 'Legend of the Game', test: (p) => p.special === 'lotg' },
+  // Secret card: never in db.all (see secretcard.js), so `test` always misses — its pool is filled in
+  // categoryPools() below, exactly like `totw`, and only `SECRET_PACK_ID` ever references this category.
+  secret: { label: 'Secret', test: () => false },
 };
 // V3 promo categories (one per campaign)
 for (const pr of PROMOS) CATEGORIES[`promo_${pr.id}`] = { label: pr.name, test: (p) => p.special === pr.id };
@@ -41,6 +47,7 @@ export function categoryPools() {
   _pools = {};
   for (const [k, c] of Object.entries(CATEGORIES)) _pools[k] = db.all.filter(c.test);
   _pools.totw = totwCards(weekNumber());
+  _pools.secret = [secretCard()];
   _pools._week = weekNumber();
   return _pools;
 }
@@ -80,6 +87,14 @@ export const PACKS = [
   {
     id: 'lotg', name: 'Legend of the Game Pack', price: 200000, look: 'lotg', desc: '1 guaranteed Legend of the Game (real player) + 4 rare golds',
     slots: [{ n: 1, odds: { lotg: 1 } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
+  },
+  // Secret card (owner request): the ONLY pack that can ever contain it, at SECRET_ODDS (0.0005) — every
+  // other pull from that slot is a guaranteed Legend of the Game instead, so the pack is worth opening on
+  // its own merits and the Secret card is a true bonus, not the sole reason to buy it.
+  {
+    id: SECRET_PACK_ID, name: 'The Vault Pack', price: 300000, look: 'secret',
+    desc: `1 guaranteed Legend of the Game (real player) + 4 rare golds — plus a ${SECRET_ODDS * 100}% chance of the Secret card instead`,
+    slots: [{ n: 1, odds: { secret: SECRET_ODDS, lotg: 1 - SECRET_ODDS } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
   },
 ];
 // V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)
@@ -131,7 +146,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   return items;
 }
 export function itemScore(p) {
-  return p.ovr + ({ lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || (PROMO_BY_ID[p.special] ? 35 : 0)) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
+  return p.ovr + ({ secret: 50, lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || (PROMO_BY_ID[p.special] ? 35 : 0)) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
 }
 /** 'bronze' | 'silver' | 'gold' | 'walkout' */
 export function packFlare(items) {
@@ -143,7 +158,14 @@ export function isWalkout(p) { return !!p.special || p.ovr >= 84; }
 
 // ---------- state ----------
 export function defaultSquad() {
-  return { formation: '4-3-3', slots: new Array(11).fill(null), bench: new Array(7).fill(null) };
+  return { formation: '4-3-3', slots: new Array(11).fill(null), bench: new Array(7).fill(null), manager: null };
+}
+
+/** Set (or clear with a falsy id) the squad's Manager (core/managers.js) — validated so `state.squad.manager`
+ * is always either a real manager id or null. Contributes chemistry in both styles (see chemistry.js). */
+export function setManager(state, id) {
+  state.squad.manager = (id && getManager(id)) ? id : null;
+  return state.squad.manager;
 }
 
 export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primary = '#19F5A4', secondary = '#0B0F1A' } = {}, rng = new Rng()) {
@@ -214,6 +236,7 @@ export function migrateUT(state) {
   const valid = (id) => (id && state.club.includes(id) ? id : null);
   state.squad.slots = Array.from({ length: 11 }, (_, i) => valid((state.squad.slots || [])[i]));
   state.squad.bench = Array.from({ length: 7 }, (_, i) => valid((state.squad.bench || [])[i]));
+  setManager(state, state.squad.manager); // sanitise (old/foreign save, or a manager id that no longer exists)
   dedupeSquad(state); // squad rules: no two cards of the same base player (also fixes pre-existing saves)
   state.v = UT_VERSION;
   return state;
@@ -231,6 +254,7 @@ export function autoSquad(state, formation = state.squad.formation) {
     formation,
     slots: res.slots.map((p) => (p ? p.id : null)),
     bench: Array.from({ length: 7 }, (_, i) => (res.bench[i] ? res.bench[i].id : null)),
+    manager: (state.squad && state.squad.manager) || null,
   };
   return state.squad;
 }
@@ -262,6 +286,7 @@ export function setSquad(state, { formation, slots, bench } = {}) {
     formation,
     slots: Array.from({ length: 11 }, (_, i) => owned((slots || [])[i])),
     bench: Array.from({ length: 7 }, (_, i) => owned((bench || [])[i])),
+    manager: (state.squad && state.squad.manager) || null,
   };
   dedupeSquad(state);
   return state.squad;
@@ -270,7 +295,7 @@ export function squadSlots(state) { dedupeSquad(state); return state.squad.slots
 export function squadInfo(state) {
   const slots = squadSlots(state);
   // Owner-selectable chemistry style (squad screen setting): 'classic' (links) or 'fc26' (whole-XI counts).
-  const chem = calcChemistryStyled(state.squad.formation, slots, state.squad.chemStyle);
+  const chem = calcChemistryStyled(state.squad.formation, slots, state.squad.chemStyle, getManager(state.squad.manager));
   return { slots, chem, rating: teamRating(slots), complete: slots.every(Boolean) };
 }
 

@@ -5,6 +5,7 @@ import { getPlayer, computeOvr, POS_WEIGHTS, FACE, GKFACE, marketValue, weeklyWa
 import { SBCS, OBJECTIVES, grantReward, addToClub, addCoins } from './ut.js';
 import { userPlayers } from './career.js';
 import { COIN_CAP, getAdminLevel } from './admincode.js';
+import { isSecretCardId } from './secretcard.js';
 
 export {
   getAdminLevel, adminInfo, adminCan, matchAdminLevel, redeemAdminCode, lockRemainingMs, clearAdminSession, setSessionLevel,
@@ -22,8 +23,11 @@ export function addLocalCoins(state, amount, level = getAdminLevel()) {
   return v;
 }
 
-/** Grant any DB card (incl. Icons) to the UT club. Admin grants are untradeable (keeps the real market fair). */
+/** Grant any DB card (incl. Icons) to the UT club. Admin grants are untradeable (keeps the real market fair).
+ * The Secret card (secretcard.js) is the one card no admin level can ever grant this way — owner request:
+ * the only way into (or out of) a club is actually pulling it from its one pack. */
 export function grantPlayer(state, pid) {
+  if (isSecretCardId(pid)) return { ok: false, error: 'The Secret card cannot be admin-granted' };
   const p = getPlayer(pid);
   if (!p) return { ok: false, error: 'Unknown player' };
   if (state.club.includes(pid)) return { ok: false, error: 'Already in your club' };

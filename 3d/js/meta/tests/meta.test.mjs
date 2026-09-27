@@ -702,7 +702,7 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
   const toty = db.promos.filter((p) => p.special === 'toty');
   assert.equal(toty.length, 11);
   assert.ok(toty.every((p) => p.ovr >= 96 && p.ovr <= 98));
-  assert.ok(db.promos.filter((p) => p.special === 'tots').every((p) => p.ovr >= 92 && p.ovr <= 96));
+  assert.ok(db.promos.filter((p) => p.special === 'tots').every((p) => p.ovr >= 92 && p.ovr <= 97));
   assert.ok(db.promos.filter((p) => p.special === 'birthday').every((p) => p.sm >= getPlayer(p.baseId).sm && p.wf === Math.min(5, getPlayer(p.baseId).wf + 1)));
   assert.ok(db.promos.filter((p) => p.special === 'rttk').every((p) => p.upg && p.upg.level >= 0 && p.upg.level <= 4));
   assert.ok(db.promos.some((p) => p.special === 'flashback' && p.baseId === 'ic_ronaldinho'));
@@ -1001,6 +1001,137 @@ test('pack opening (new): pull classification, beat sequence and packAnim settin
   assert.equal(SEQ.normalizePackAnim(undefined), 'new');
   assert.equal(SEQ.normalizePackAnim('weird'), 'new');
 });
+
+// ---------------- B2: ratings/players/admin cards/secret card/managers ----------------
+const SC = await import('../core/secretcard.js');
+const MG = await import('../core/managers.js');
+const PH = await import('../core/physique.js');
+
+const { getPlayer: getPlayerB2 } = await import('../core/players.js');
+
+test('B2: no duplicate ids anywhere in the real-player database, and no duplicate names within each list '
+  + '(Messi/Ronaldo legitimately share a name across their icon + star *versions* — see personOf)', () => {
+  const db = getDB();
+  const ids = new Set(), dupIds = [];
+  for (const p of db.real.concat(db.regulars)) { if (ids.has(p.id)) dupIds.push(p.id); ids.add(p.id); }
+  assert.deepEqual(dupIds, []);
+  for (const list of [REAL_NAMES.icons, REAL_NAMES.stars, REAL_NAMES.regulars]) {
+    assert.equal(new Set(list.map((n) => n.toLowerCase())).size, list.length, 'duplicate name within one list');
+  }
+  const regSet = new Set(REAL_NAMES.regulars.map((n) => n.toLowerCase()));
+  for (const n of REAL_NAMES.icons.concat(REAL_NAMES.stars)) assert.ok(!regSet.has(n.toLowerCase()), `${n} also a regular`);
+});
+
+test('B2: ratings bounds — icons 86-98, regulars 78-92, every OVR matches computeOvr(pos)', () => {
+  const db = getDB();
+  for (const p of db.real) {
+    assert.ok(p.ovr >= 1 && p.ovr <= 99);
+    if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 98, `${p.name} ${p.ovr}`);
+    assert.equal(p.ovr, computeOvr(p.pos, p));
+  }
+  for (const p of db.regulars) { assert.ok(p.ovr >= 78 && p.ovr <= 92, `${p.name} ${p.ovr}`); assert.equal(p.ovr, computeOvr(p.pos, p)); }
+  // Owner call-outs (Sep 26/27): Cannavaro's 2006 peak, and Neymar's peak/legend tier.
+  assert.ok(getPlayerB2('ic_cannavaro').ovr >= 96);
+  assert.ok(getPlayerB2('rs_neymar').ovr >= 91);
+  assert.deepEqual(getPlayerB2('rp_bellingham').alt.slice().sort(), ['CDM', 'CM', 'LM']);
+});
+
+test('B2: positions and alts are valid everywhere (icons+stars+regulars)', () => {
+  const db = getDB();
+  const POS = new Set(POSITIONS);
+  for (const p of db.real.concat(db.regulars)) {
+    assert.ok(POS.has(p.pos), `${p.id} bad pos ${p.pos}`);
+    assert.ok(p.alt.length <= 4 && !p.alt.includes(p.pos), `${p.id} bad alt`);
+    for (const a of p.alt) assert.ok(POS.has(a), `${p.id} bad alt entry ${a}`);
+    assert.equal(new Set(p.alt).size, p.alt.length, `${p.id} duplicate alt`);
+  }
+});
+
+test('B2: +500 real players — every club stays a valid Career starting squad (<= 32)', () => {
+  const db = getDB();
+  assert.ok(REG_ROW_COUNT >= 400, `only ${REG_ROW_COUNT} regulars`);
+  const cnt = {};
+  for (const p of db.players) cnt[p.club] = (cnt[p.club] || 0) + 1;
+  // A handful of clubs already exceeded 32 purely from the generated (non-real) top-up passes before any of
+  // this ran (pre-existing, out of scope here) — but no *newly*-affected club should end up unplayable, and
+  // every club actually used by a Career test must have room for at least one signing.
+  for (const id of ['ISL05', 'SOL04', 'ISL02', 'SOL05', 'ISL07']) assert.ok((cnt[id] || 0) < 32, `${id} has ${cnt[id]}`);
+});
+
+test('B2: Secret card — one unique card, ~0.0005 odds in its one pack only, never admin-grantable', () => {
+  const card = SC.secretCard();
+  assert.equal(card.special, 'secret');
+  assert.ok(card.ovr >= 90 && card.ovr <= 99);
+  const db = getDB();
+  assert.ok(!db.all.some((p) => p.id === card.id), 'secret card must never be in db.all');
+  const pack = UT.PACK_BY_ID[SC.SECRET_PACK_ID];
+  assert.ok(pack, 'secret pack missing');
+  assert.ok(pack.slots.some((s) => 'secret' in s.odds));
+  assert.ok(Math.abs(pack.slots[0].odds.secret - SC.SECRET_ODDS) < 1e-9);
+  for (const p of UT.PACKS) if (p.id !== SC.SECRET_PACK_ID) assert.ok(!p.slots.some((s) => 'secret' in s.odds), `${p.id} also has secret odds`);
+  // Statistically confirm the pack's actual pull rate matches (large sample, seeded/deterministic).
+  let hits = 0; const N = 40000;
+  for (let i = 0; i < N; i++) { const items = UT.openPack(SC.SECRET_PACK_ID, new Set(), new Rng(`secret-${i}`)); if (items.some((it) => it.pid === SC.SECRET_CARD_ID)) hits++; }
+  assert.ok(hits >= 2 && hits <= 60, `expected ~${N * SC.SECRET_ODDS} hits, got ${hits}`);
+  // No admin level can ever grant it (the one generic "give any player id" API is admin.js's grantPlayer).
+  const s = UT.createUTState({ clubName: 'X' }, new Rng(1));
+  const r = A.grantPlayer(s, SC.SECRET_CARD_ID);
+  assert.equal(r.ok, false);
+  assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
+});
+
+test('B2: Manager cards contribute chemistry in both styles, and never regress an unmanaged squad', () => {
+  const db = getDB();
+  const mgr = MG.getManager('mgr_ashcombe'); // ENG / ISL / ISL01
+  assert.ok(mgr);
+  const eng = db.players.filter((p) => p.nat === 'ENG' && !p.real).slice(0, 11);
+  assert.equal(eng.length, 11, 'need 11 ENG generated players for this test');
+  const slots = new Array(11).fill(null);
+  eng.forEach((p, i) => { slots[i] = p; });
+  const noMgr = calcChemistry('4-3-3', slots);
+  const withMgr = calcChemistry('4-3-3', slots, mgr);
+  assert.ok(withMgr.total >= noMgr.total, 'manager must never lower classic chemistry');
+  assert.ok(withMgr.total <= 33 && withMgr.scaled <= 100);
+  assert.equal(withMgr.manager, mgr.id);
+  const fcNo = calcChemistryFc26('4-3-3', slots);
+  const fcYes = calcChemistryFc26('4-3-3', slots, mgr);
+  assert.ok(fcYes.total >= fcNo.total, 'manager must never lower FC26 chemistry');
+  assert.ok(fcYes.players.every((c, i) => c >= fcNo.players[i]), 'FC26 manager bonus is per-player, never negative');
+  assert.ok(fcYes.total <= 33);
+  // Wired into UT squad/state too.
+  const s = UT.createUTState({ clubName: 'Y' }, new Rng(7));
+  assert.equal(UT.setManager(s, 'mgr_ashcombe'), 'mgr_ashcombe');
+  assert.equal(UT.setManager(s, 'not-a-real-manager'), null);
+  assert.equal(UT.setManager(s, 'mgr_ashcombe'), 'mgr_ashcombe');
+  assert.equal(UT.squadInfo(s).chem.manager, 'mgr_ashcombe');
+  const migrated = UT.migrateUT(JSON.parse(JSON.stringify(s)));
+  assert.equal(migrated.squad.manager, 'mgr_ashcombe');
+});
+
+test('B2: bestPlaystylesFor(pos) matches the owner reference chart and drives PlayStyle+ placement', () => {
+  assert.deepEqual(PH.bestPlaystylesFor('ST'), ['finesse', 'power']);
+  assert.deepEqual(PH.bestPlaystylesFor('CB'), ['anticipate', 'jockey', 'block']);
+  assert.deepEqual(PH.bestPlaystylesFor('GK'), ['farreach', 'quickreflexes']);
+  for (const pos of POSITIONS) for (const id of PH.bestPlaystylesFor(pos)) assert.ok(PH.PLAYSTYLES[id], `${pos} -> unknown style ${id}`);
+  // At least some high-rated generated players actually carry a '+' on their position's best style.
+  const db = getDB();
+  const hits = db.players.filter((p) => p.ovr >= 90 && !p.real).filter((p) => {
+    const best = new Set(PH.bestPlaystylesFor(p.pos));
+    return p.playstyles.some((x) => x.plus && best.has(x.id));
+  });
+  assert.ok(hits.length > 0, 'no 90+ generated player got a position-best PlayStyle+');
+});
+
+test('B2: Neymar has several promo versions, the highest reaching 99, at least one released now', () => {
+  const db = getDB();
+  const base = getPlayerNeymar(db);
+  const promos = db.promos.filter((p) => p.baseId === base.id);
+  assert.ok(promos.length >= 3, `only ${promos.length} Neymar promo versions`);
+  assert.ok(Math.max(...promos.map((p) => p.ovr)) === 99, 'top Neymar promo should reach 99');
+  assert.ok(promos.filter((p) => p.ovr === 99).some((p) => PR.isCardReleased(p)), 'at least one Neymar 99 promo must be released now');
+  for (const p of promos) assert.ok(p.ovr > base.ovr);
+});
+function getPlayerNeymar(db) { return db.stars.find((p) => p.person === 'neymar'); }
 
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);

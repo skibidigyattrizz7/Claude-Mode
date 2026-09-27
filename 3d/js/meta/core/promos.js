@@ -323,6 +323,28 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
   campaign('cuphero', icons.filter((p) => p.ovr <= 90), 8, 2, 3);
   campaign('phenoms', src.regulars.filter((p) => p.age <= 23 && p.ovr >= 76).concat(src.generated.filter((p) => p.age <= 21 && p.ovr >= 76 && !p.special)), 10, 4, 6);
 
+  // Owner request (Sep 27): several guaranteed Neymar promo versions on top of his boosted base card
+  // (realplayers.js STAR_ROWS, now 91), reaching up to 99 for at least one already-released campaign —
+  // picked from ids that already exist above rather than inventing new ones, with a safe fallback per slot
+  // in case a future edit ever renames/removes one. Placed directly (not through the seeded `campaign()`
+  // pools) so they are guaranteed regardless of who else qualifies that week.
+  const neymarBase = actives.find((p) => p.person === 'neymar');
+  if (neymarBase) {
+    const firstOf = (...ids) => ids.find((id) => PROMO_BY_ID[id]);
+    const pick = (ids, lo, hi, extra) => {
+      const id = firstOf(...ids);
+      if (!id || out.some((p) => p.special === id && p.baseId === neymarBase.id)) return;
+      const rmax = PROMO_BY_ID[id].range[1];
+      const target = Math.min(rmax, Math.max(neymarBase.ovr + lo, neymarBase.ovr + hi));
+      if (target > neymarBase.ovr) make(neymarBase, id, target, extra);
+    };
+    pick(['tots'], 5, 6); // season-best, ~97
+    pick(['moments', 'cupstories', 'showdown'], 8, 8, { moment: 'Barcelona treble masterclass' }); // always-released, guaranteed 99
+    pick(['fiesta', 'yuletide', 'birthday'], 8, 8); // summer-party style, 99 (future release)
+    pick(['flashback'], 4, 5, { moment: '2015 treble season' }); // legend/icon-style prime
+    pick(['halo', 'cupicon'], 6, 6); // extra "hall of heroes" style 99
+  }
+
   for (const p of out) p.tier = 'gold';
   return out;
 }
