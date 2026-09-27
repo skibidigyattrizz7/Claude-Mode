@@ -102,6 +102,43 @@ UI keyed off `CATEGORIES[cat].label` keeps working unmodified.
   squad (`career.js` caps a user's squad at 32; `makeBid` refuses once you're at the cap), so raising it
   without checking every club's total stays comfortably below 32 will break Career transfers.
 
+## Real players (`core/realplayers.js`, `core/realregulars.js`) — B2 update (Sep 26/27)
+- Icon ratings re-evaluated to realistic peak/legend tiers (e.g. `ic_cannavaro` 97, `ic_buffon` 96); regulars
+  stay in the 78-92 gold/rare-gold band. `rs_neymar` bumped to 91 (peak/legend tier) per owner request, with
+  several guaranteed promo versions (see below) reaching 99.
+- `realregulars.js` adds ~390 more real players (compact rows expanded deterministically — see the file's own
+  header) on top of the existing ~165, weighted heavily toward real **defenders and goalkeepers** across eras
+  and leagues. The regulars-placement algorithm in `realplayers.js` (`REG_CAP`/`HARD_CEIL`) now spreads
+  players across **all** 108 fictional clubs (tier 1 + 2, not just tier 1) with a strict least-loaded
+  fallback once a club is full, so every club — including ones a fresh Career always keeps under
+  32 — stays a valid Career starting squad. This ceiling (not raw list length) is what actually bounds how
+  many more real players this file can safely hold; see the comments in `realplayers.js` before adding more.
+- `bestPlaystylesFor(pos)` (`core/physique.js`) — the PlayStyles that best suit a position (owner's reference
+  chart), best first; also biases which of a generated player's drawn styles gets the `+`. Card creator (or
+  anything else offering a manual PlayStyle+ pick) should default to these.
+
+## Secret card (`core/secretcard.js`)
+A single, wholly fictional ultra-rare card (`SECRET_CARD_ID`), kept out of `db.all`/`db.players` exactly like
+admin cards (resolved lazily via `addResolver`) so no ordinary pool can ever surface it.
+- `secretCard()` → the card (always the same object).
+- `SECRET_PACK_ID` (`'secret'`) — the **only** pack it can ever come from, at `SECRET_ODDS` (0.0005); every
+  other pull from that slot is a guaranteed Legend of the Game instead. `UT.PACK_BY_ID[SECRET_PACK_ID]`.
+- No admin level can grant it — `admin.js#grantPlayer` refuses `SECRET_CARD_ID` outright.
+
+## Manager cards (`core/managers.js`)
+Fictional manager identities that contribute chemistry when assigned to a squad — no stats/positions, just
+`{ id, name, nat, league, club }` (`league`/`club` may be `null` = "any").
+- `MANAGERS`, `getManager(id)`.
+- `managerMatches(manager, p)` — true if nat/league/club lines up.
+- Wired into `core/chemistry.js`: `calcChemistry`/`calcChemistryFc26`/`calcChemistryStyled` all take an
+  optional trailing `manager` argument (default `null`, so every existing caller is unaffected). FC26 gives a
+  matching player +1 chemistry (capped at 3, same as any other count); classic adds one small flat team bonus
+  (+1..+3) scaled to how many starters match, since classic has no per-player "manager" slot.
+- `UT`: `state.squad.manager` (a manager id or `null`, sanitised by `migrateUT`/preserved by `autoSquad`/
+  `setSquad`), `UT.setManager(state, id)`, and `UT.squadInfo(state).chem` already includes the manager's
+  effect. `UT.MANAGERS`/`UT.getManager` are re-exported for convenience. No UI hook yet (meta/ui is out of
+  scope here) — the squad screen just needs a picker calling `UT.setManager`.
+
 ## Admin cards (`core/admincards.js` — owned by agent C)
 Not documented here beyond: it exists, resolves `ad_<baseId>` ids via `getPlayer`, and is intentionally kept
 out of `db.all`/`db.players` so no pool that iterates those (packs, AI market, AI-opponent squads) can ever

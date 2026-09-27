@@ -1,6 +1,17 @@
 // Chemistry + team rating. DOM-free.
 import { FORMATIONS, positionFit } from './formations.js';
 import { SPECIAL_CLUB_IDS } from './data.js';
+import { managerMatches } from './managers.js';
+
+/** Owner request: a Manager (core/managers.js) assigned to the squad contributes chemistry too, in both
+ * styles. Classic has no per-player "manager" concept, so it gets one small flat team-level boost, scaled
+ * to how many starters the manager actually matches; FC26 already scores per player, so the manager just
+ * adds its own +1 there, capped by the usual 0-3 per player ceiling — see calcChemistry/calcChemistryFc26. */
+function managerTeamBoost(manager, slots) {
+  if (!manager) return 0;
+  const matches = slots.filter((p) => p && managerMatches(manager, p)).length;
+  return matches >= 7 ? 3 : matches >= 4 ? 2 : matches >= 1 ? 1 : 0;
+}
 
 /** Legends of the Game (and classic Legends) link to every league; LOTG are always green with their nation. */
 const linksAll = (p) => p.special === 'legend' || p.special === 'lotg' || !!p.linkAll;
@@ -22,7 +33,7 @@ export const LINK_COLORS = ['red', 'orange', 'green'];
  * @param slots array[11] of player objects (or null)
  * @returns {{ players:number[], links:{a,b,strength,color}[], total:number, scaled:number, fits:number[] }}
  */
-export function calcChemistry(formation, slots) {
+export function calcChemistry(formation, slots, manager = null) {
   const f = FORMATIONS[formation];
   const links = [];
   const sum = new Array(11).fill(0), cnt = new Array(11).fill(0);
@@ -50,7 +61,8 @@ export function calcChemistry(formation, slots) {
     players.push(chem);
     total += chem;
   }
-  return { players, links, total, scaled: Math.round((total / 33) * 100), fits };
+  total = Math.min(33, total + managerTeamBoost(manager, slots));
+  return { players, links, total, scaled: Math.round((total / 33) * 100), fits, manager: manager ? manager.id : null };
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -64,7 +76,7 @@ const FC26_LEAGUE_T = [3, 5, 8];
 const FC26_NATION_T = [2, 4, 7];
 const tierFor = (count, thresholds) => Math.min(3, thresholds.filter((t) => count >= t).length);
 
-export function calcChemistryFc26(formation, slots) {
+export function calcChemistryFc26(formation, slots, manager = null) {
   const f = FORMATIONS[formation];
   const present = slots.map((p, i) => (p ? { p, i } : null)).filter(Boolean);
   const players = [], fits = [];
@@ -84,18 +96,20 @@ export function calcChemistryFc26(formation, slots) {
     let base = Math.max(tierFor(clubC, FC26_CLUB_T), tierFor(leagueC, FC26_LEAGUE_T), tierFor(natC, FC26_NATION_T));
     if (p.special === 'legend' || p.special === 'hero') base = Math.min(3, base + 1);
     if (p.special === 'lotg' || p.linkAll) base = 3;
+    if (managerMatches(manager, p)) base = Math.min(3, base + 1); // owner request: manager nation/league/club match = +1
     const chem = fit >= 1 ? base : 0;
     players.push(chem);
     total += chem;
   }
-  return { players, links: [], total, scaled: Math.round((total / 33) * 100), fits, style: 'fc26' };
+  return { players, links: [], total, scaled: Math.round((total / 33) * 100), fits, style: 'fc26', manager: manager ? manager.id : null };
 }
 
 export const CHEM_STYLES = ['classic', 'fc26'];
 /** Pick the chemistry calculation by style ('classic' link-based, or 'fc26' whole-XI counts). Unknown/missing
- * style falls back to 'classic' so every existing caller keeps its current behaviour. */
-export function calcChemistryStyled(formation, slots, style = 'classic') {
-  return style === 'fc26' ? calcChemistryFc26(formation, slots) : calcChemistry(formation, slots);
+ * style falls back to 'classic' so every existing caller keeps its current behaviour. `manager` (a Manager
+ * object from core/managers.js, or null) is optional and backward-compatible for every existing caller. */
+export function calcChemistryStyled(formation, slots, style = 'classic', manager = null) {
+  return style === 'fc26' ? calcChemistryFc26(formation, slots, manager) : calcChemistry(formation, slots, manager);
 }
 
 /** FIFA-style team rating: average plus over-average bonus. Missing players count as 0. */

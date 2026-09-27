@@ -57,6 +57,25 @@ export function maxPlus(ovr) { return ovr >= 90 ? 2 : ovr >= 85 ? 1 : 0; }
 const DEF = new Set(['CB', 'LB', 'RB', 'LWB', 'RWB']);
 const WIDE = new Set(['LW', 'RW', 'LM', 'RM']);
 
+// Owner reference ("best PlayStyles+ per position" chart, scratchpad/promorefs/playstyles_plus_by_position.jpg):
+// which PlayStyles a position's '+' upgrades should land on first. Never changes which styles a player draws
+// or the OVR-band count/plus rules (styleCountRange/maxPlus) — only which of the drawn styles gets the '+'.
+const BEST_BY_POS = {
+  ST: ['finesse', 'power'], CF: ['finesse', 'power'],
+  LW: ['rapid', 'quickstep', 'technical'], RW: ['rapid', 'quickstep', 'technical'],
+  LM: ['rapid', 'quickstep', 'technical'], RM: ['rapid', 'quickstep', 'technical'],
+  CAM: ['incisive', 'finesse'],
+  CM: ['tikitaka', 'incisive', 'intercept'],
+  CDM: ['intercept', 'anticipate', 'bruiser'],
+  CB: ['anticipate', 'jockey', 'block'],
+  LB: ['quickstep', 'whipped', 'jockey'], RB: ['quickstep', 'whipped', 'jockey'],
+  LWB: ['quickstep', 'whipped', 'jockey'], RWB: ['quickstep', 'whipped', 'jockey'],
+  GK: ['farreach', 'quickreflexes'],
+};
+/** The PlayStyles that best suit a position (owner's reference chart), best first. Card creator (and
+ * anything else offering a manual PlayStyle+ pick) should default to these. */
+export function bestPlaystylesFor(pos) { return (BEST_BY_POS[pos] || BEST_BY_POS.CM).slice(); }
+
 function candidates(p, height) {
   const s = p.stats, g = p.gk, pos = p.pos;
   const c = [];
@@ -108,6 +127,8 @@ function pickStyles(p, rng, height) {
     out.push(id);
     entries.splice(entries.findIndex((e) => e[0] === id), 1);
   }
+  const best = new Set(bestPlaystylesFor(p.pos));
+  out.sort((a, b) => (best.has(b) ? 1 : 0) - (best.has(a) ? 1 : 0)); // position-best styles claim the '+' first
   const mp = maxPlus(p.ovr);
   const plusN = mp === 0 ? 0 : mp === 1 ? (rng.chance(0.65) ? 1 : 0) : (rng.chance(0.5) ? 2 : 1);
   return out.map((id, i) => ({ id, plus: i < Math.min(plusN, out.length) }));

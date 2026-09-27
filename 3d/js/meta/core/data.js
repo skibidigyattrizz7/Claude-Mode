@@ -319,6 +319,9 @@ export const SPECIAL_CLUBS = {
   LEG: { id: 'LEG', name: 'Pitchside Legends', short: 'LEG', league: 'LEG', tier: 0, rep: 5, colors: { primary: '#F4E8C1', secondary: '#B8860B' } },
   HER: { id: 'HER', name: 'Pitchside Heroes', short: 'HER', league: 'HER', tier: 0, rep: 5, colors: { primary: '#3A1C71', secondary: '#27E1C1' } },
   ICN: { id: 'ICN', name: 'Legends of the Game', short: 'LOG', league: 'ICN', tier: 0, rep: 5, colors: { primary: '#111111', secondary: '#D4AF37' } },
+  // The one-of-none home club for the Secret card (core/secretcard.js) — a pseudo-club so it never grants
+  // real club/league chemistry to anyone, matching the colours already reserved for it in pack opening.
+  SEC: { id: 'SEC', name: 'The Vault', short: 'VLT', league: 'SEC', tier: 0, rep: 5, colors: { primary: '#141414', secondary: '#ff2d55' } },
 };
 /** Pseudo clubs that never give club chemistry. */
 export const SPECIAL_CLUB_IDS = new Set(Object.keys(SPECIAL_CLUBS));
@@ -327,6 +330,7 @@ export function leagueName(id) {
   if (id === 'LEG') return 'Legends';
   if (id === 'HER') return 'Heroes';
   if (id === 'ICN') return 'Legends of the Game';
+  if (id === 'SEC') return 'The Vault';
   return LEAGUE_BY_ID[id] ? LEAGUE_BY_ID[id].name : id;
 }
 

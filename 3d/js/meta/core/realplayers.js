@@ -105,7 +105,7 @@ const ICON_ROWS = [
 const STAR_ROWS = [
   ['messi', 'Lionel Messi', 'Messi', 'ARG', 'RW', ['RM', 'CAM', 'CF', 'ST'], 'L', 4, 4, 86, [72, 86, 89, 89, 33, 64], 39, 170, 1, { lg: 'CON' }],
   ['ronaldo', 'Cristiano Ronaldo', 'C. Ronaldo', 'POR', 'ST', ['LW'], 'R', 4, 5, 85, [78, 90, 76, 80, 34, 77], 41, 187, 2, { lg: 'CON' }],
-  ['neymar', 'Neymar Jr.', 'Neymar Jr', 'BRA', 'LW', ['CAM'], 'R', 5, 5, 82, [80, 82, 84, 88, 35, 60], 34, 175, 3, { lg: 'CON' }],
+  ['neymar', 'Neymar Jr.', 'Neymar Jr', 'BRA', 'LW', ['CAM', 'RW', 'ST'], 'R', 5, 5, 91, [88, 88, 88, 93, 38, 66], 34, 175, 3, { lg: 'CON' }],
   ['mbappe', 'Kylian Mbappé', 'Mbappé', 'FRA', 'ST', ['LW'], 'R', 4, 5, 91, [97, 90, 81, 92, 37, 77], 27, 178, 4, { lg: 'SOL', hs: 2 }],
   ['salah', 'Mohamed Salah', 'Salah', 'EGY', 'RW', ['RM'], 'L', 3, 4, 89, [89, 88, 86, 89, 45, 76], 34, 175, 3, { lg: 'ISL' }],
   ['debruyne', 'Kevin De Bruyne', 'De Bruyne', 'BEL', 'CM', ['CAM'], 'R', 5, 4, 87, [70, 86, 93, 86, 63, 74], 35, 181, 0, { lg: 'AUR' }],
@@ -209,7 +209,7 @@ const PHYS = {
   // Stars
   messi: [72, ['finesse+', 'tikitaka', 'technical']],
   ronaldo: [85, ['power+', 'powerheader', 'acrobatic']],
-  neymar: [68, ['trickster', 'flair', 'technical']],
+  neymar: [68, ['trickster+', 'finesse+', 'flair', 'technical']],
   mbappe: [75, ['rapid+', 'quickstep+', 'finesse', 'lowdriven']],
   salah: [71, ['finesse+', 'rapid', 'technical', 'quickstep']],
   debruyne: [76, ['incisive+', 'pinged', 'whipped', 'power']],
@@ -342,18 +342,35 @@ export function buildRealPlayers(helpers) {
   // starting squad (see career.js userPlayers/makeBid), which is capped at 32 — never raise this without
   // checking every club stays comfortably below that cap.
   const REG_CAP = 29;
+  // HARD_CEIL is the absolute ceiling this loop will ever place a regular past — 1 clear of Career's
+  // `>= 32` signing block, so every club still has room for at least one live signing. A club's *baseline*
+  // generated count (from the SQUAD_TEMPLATE + national-stars/top-up passes above, `clubCounts`) already
+  // varies club to club (22-35!) independently of anything here, so this loop cannot assume 22 headroom
+  // per club — it must track and respect each club's real current total throughout.
+  const HARD_CEIL = 31;
   const order = REG_ROWS.map((r, i) => [r, i]).sort((a, b) => b[0][9] - a[0][9] || (a[0][0] < b[0][0] ? -1 : 1));
   const placed = new Map();
-  // V5 (+500 players): tier-1 clubs alone (60 across 6 leagues) run out of REG_CAP headroom well before
-  // ~665 regulars are placed, so tier-2 clubs (also capped at REG_CAP, also under the Career 32-squad limit)
-  // share the load too — lower-rated regulars naturally land there since `score` still favours rep.
+  // V5 (+300ish players): tier-1 clubs alone (60 across 6 leagues) run out of REG_CAP headroom well before
+  // every regular is placed, so tier-2 clubs (also under the Career 32-squad limit) share the load too.
   const top = CLUBS.filter((c) => c.tier === 1 || c.tier === 2);
   for (const [row] of order) {
     const lg = row[15];
     const score = (c) => c.rep * 10 - (count.get(c.id) || 0) * 3 + (c.league === lg ? 100 : c.league === 'CON' ? 50 : 0) + (hashStr(`${row[0]}-${c.id}`) % 7) / 10;
     const open = top.filter((c) => (count.get(c.id) || 0) < REG_CAP);
-    const list = open.length ? open : top;
-    const club = list.reduce((a, c) => (score(c) > score(a) ? c : a), list[0]);
+    let club;
+    if (open.length) {
+      club = open.reduce((a, c) => (score(c) > score(a) ? c : a), open[0]);
+    } else {
+      // Every club has spilled past REG_CAP: from here on, ignore rep/league entirely and always fill
+      // whichever club is currently least loaded (ties broken by a stable per-row hash) — never the same
+      // already-crowded "famous" club again — and never past HARD_CEIL while any club still has room under it.
+      const underHard = top.filter((c) => (count.get(c.id) || 0) < HARD_CEIL);
+      const pool = underHard.length ? underHard : top;
+      club = pool.reduce((a, c) => {
+        const [na, nc] = [count.get(a.id) || 0, count.get(c.id) || 0];
+        return nc < na || (nc === na && hashStr(`${row[0]}-${c.id}`) < hashStr(`${row[0]}-${a.id}`)) ? c : a;
+      }, pool[0]);
+    }
     placed.set(row[0], club);
     count.set(club.id, (count.get(club.id) || 0) + 1);
   }
