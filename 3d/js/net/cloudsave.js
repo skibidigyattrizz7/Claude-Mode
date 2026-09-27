@@ -25,13 +25,34 @@ export function createCloudSync(online, { storage = globalThis.localStorage, key
     return 'downloaded';
   }
 
-  async function run() {
+  // Device guests (migration 007) keep a server copy too, so the owner can see / edit every club; their
+  // local club always wins (owner edits arrive as owner patches, never as a server download).
+  function identity() {
     const acc = online.account.current();
-    if (!acc || acc.state !== 'account' || !acc.id) return { ok: false, error: 'no_account' };
+    if (acc && acc.state === 'account' && acc.id) return { id: acc.id, guest: false };
+    const gid = typeof online.identityId === 'function' && typeof online.hasIdentity === 'function' && online.hasIdentity() ? online.identityId() : null;
+    return gid && !(acc && acc.state === 'banned') ? { id: gid, guest: true } : null;
+  }
+  async function run() {
+    const who = identity();
+    if (!who) return { ok: false, error: 'no_account' };
+    const acc = { id: who.id };
     const local = get(key);
     const meta = readMeta();
     const linked = meta && meta.id === acc.id;
-    if (!linked || meta.rev === 0 || meta.fresh) {
+    if (who.guest) {
+      if (!local) return { ok: true, action: 'none' };
+      if (linked && meta.hash === fnv(local)) return { ok: true, action: 'unchanged' };
+      let rev = linked ? meta.rev : null;
+      if (rev == null) { const g = await online.cloud.get(); if (!g.ok) return g; rev = g.rev; }
+      let data;
+      try { data = JSON.parse(local); } catch { return { ok: false, error: 'bad_value' }; }
+      let r = await online.cloud.put(data, rev);
+      if (!r.ok && r.error === 'conflict' && Number.isInteger(r.rev)) r = await online.cloud.put(data, r.rev);
+      if (r.ok) { writeMeta({ id: acc.id, rev: r.rev, hash: fnv(local), guest: true }); return { ok: true, action: 'uploaded', rev: r.rev }; }
+      return r;
+    }
+    if (!linked || meta.rev === 0 || meta.fresh || meta.guest) {
       const r = await online.cloud.get();
       if (!r.ok) return r;
       if (r.exists && r.data) return { ok: true, action: replaceLocal(r.data, r.rev, acc.id) };
