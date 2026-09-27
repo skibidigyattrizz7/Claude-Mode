@@ -52,12 +52,13 @@ function lsGet(key, fallback) {
 function lsSet(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } }
 
 const SETTINGS_KEY = 'pitchside.settings';
-const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day' };
+const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear' };
 const DIFFICULTIES = [['amateur', 'Amateur'], ['pro', 'Pro'], ['world', 'World Class'], ['legendary', 'Legendary']];
 const HALF_LENGTHS = [2, 3, 4, 6, 8];
 const CAMERAS = [['broadcast', 'Broadcast'], ['pro', 'Pro (player lock)']];
 const QUALITIES = [['low', 'Low'], ['med', 'Medium'], ['high', 'High']];
 const STADIUMS = [['day', 'Day'], ['night', 'Night']];
+const WEATHERS = [['clear', 'Clear'], ['rain', 'Rain'], ['snow', 'Snow'], ['random', 'Random']];
 
 export function loadSettings() {
   const s = { ...DEFAULT_SETTINGS, ...lsGet(SETTINGS_KEY, {}) };
@@ -68,6 +69,7 @@ export function loadSettings() {
   if (!Number.isFinite(s.volume)) s.volume = 70;
   s.volume = Math.max(0, Math.min(100, Math.round(s.volume)));
   if (s.stadium !== 'night') s.stadium = 'day';
+  if (!WEATHERS.some(([k]) => k === s.weather)) s.weather = DEFAULT_SETTINGS.weather;
   return s;
 }
 function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
@@ -364,7 +366,7 @@ export async function openMatch(opts) {
   const userOnEnd = opts.onEnd;
   const userOnEvent = opts.onEvent;
   const full = {
-    halfMinutes: s.halfMinutes, difficulty: s.difficulty, stadium: s.stadium, netRole: 'local',
+    halfMinutes: s.halfMinutes, difficulty: s.difficulty, stadium: s.stadium, weather: s.weather, netRole: 'local',
     camera: s.camera, quality: s.quality, volume: s.volume / 100,
     ...opts,
     controllers,
@@ -564,7 +566,7 @@ async function teamSelectScreen(mode) {
   const last = lsGet(LAST_KEY, {});
   const idx = (id, dflt) => { const i = teams.findIndex((t) => t.id === id); return i >= 0 ? i : dflt; };
   const opts = teams.map((t) => ({ team: t }));
-  const cfg = { difficulty: s.difficulty, halfMinutes: s.halfMinutes, stadium: last.stadium || s.stadium, userSide: 'home' };
+  const cfg = { difficulty: s.difficulty, halfMinutes: s.halfMinutes, stadium: last.stadium || s.stadium, weather: s.weather, userSide: 'home' };
   const homeP = teamPicker({ title: 'Home', options: opts, index: idx(last.home, 0), sideClass: 'home' });
   const awayP = teamPicker({ title: 'Away', options: opts, index: idx(last.away, Math.min(1, teams.length - 1)), sideClass: 'away' });
   const ctrlLine = h('div', { class: 'ctrl-line' });
@@ -590,7 +592,8 @@ async function teamSelectScreen(mode) {
     h('div', { class: 'opts' },
       local2p ? null : segmented('Difficulty', DIFFICULTIES, cfg.difficulty, (v) => { cfg.difficulty = v; }, `${mode}-diff`),
       segmented('Half length', HALF_LENGTHS.map((m) => [m, `${m} min`]), cfg.halfMinutes, (v) => { cfg.halfMinutes = v; }, `${mode}-half`),
-      segmented('Stadium', STADIUMS, cfg.stadium, (v) => { cfg.stadium = v; }, `${mode}-stadium`)),
+      segmented('Stadium', STADIUMS, cfg.stadium, (v) => { cfg.stadium = v; }, `${mode}-stadium`),
+      segmented('Weather', WEATHERS, cfg.weather, (v) => { cfg.weather = v; }, `${mode}-weather`)),
     h('div', { class: 'row center' }, kickBtn));
   body.replaceWith(content);
   kickBtn.focus({ preventScroll: true });
@@ -601,7 +604,7 @@ async function teamSelectScreen(mode) {
     const controllers = local2p ? { home: 'p1', away: 'p2' } : cfg.userSide === 'home' ? { home: 'p1', away: 'ai' } : { home: 'ai', away: 'p1' };
     playFromMenu({
       home, away, kicker: title,
-      opts: { controllers, difficulty: local2p ? s.difficulty : cfg.difficulty, halfMinutes: cfg.halfMinutes, stadium: cfg.stadium, netRole: 'local' },
+      opts: { controllers, difficulty: local2p ? s.difficulty : cfg.difficulty, halfMinutes: cfg.halfMinutes, stadium: cfg.stadium, weather: cfg.weather, netRole: 'local' },
     });
   });
 }
@@ -624,7 +627,7 @@ async function practice() {
     kit: { primary: '#ff7a1a', secondary: '#1b1b1b', number: '#1b1b1b', shorts: '#1b1b1b', socks: '#ff7a1a' },
     players: base.players.map(weak), bench: [], chemistry: 0,
   };
-  playFromMenu({ home, away, kicker: 'Practice', opts: { controllers: { home: 'p1', away: 'ai' }, difficulty: 'amateur', halfMinutes: 2, netRole: 'local' } });
+  playFromMenu({ home, away, kicker: 'Practice', opts: { controllers: { home: 'p1', away: 'ai' }, difficulty: 'amateur', halfMinutes: 2, weather: loadSettings().weather, netRole: 'local' } });
 }
 
 // ------------------------------------------------------------------ Career / Ultimate Team (meta)
@@ -803,6 +806,7 @@ function settingsScreen(tab = 'general') {
     segmented('Default difficulty', DIFFICULTIES, s.difficulty, upd('difficulty'), 'set-diff'),
     segmented('Default half length', HALF_LENGTHS.map((m) => [m, `${m} min`]), s.halfMinutes, upd('halfMinutes'), 'set-half'),
     segmented('Default stadium', STADIUMS, s.stadium, upd('stadium'), 'set-stadium'),
+    segmented('Weather', WEATHERS, s.weather, upd('weather'), 'set-weather'),
     segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
     segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),

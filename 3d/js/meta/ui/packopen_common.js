@@ -96,27 +96,40 @@ export function makeGrid(stage, pack, players, opts, destroy) {
     const dupValue = players.filter((x) => x.dup && x.state === 'new').reduce((a, x) => a + opts.sellValue(x.p), 0);
     const allValue = players.filter((x) => x.state === 'new').reduce((a, x) => a + opts.sellValue(x.p), 0);
     const grid = h('div', { class: 'pm-po-grid' });
-    for (const x of players) {
-      const tile = h('div', { class: `pm-po-item ${x.dup ? 'is-dup' : ''} is-${x.state}` },
+    // best card first (and larger), like FC's pack summary; the rest keep their pack order
+    const bestIdx = players.reduce((bi, x, i) => ((x.p.ovr || 0) > (players[bi].p.ovr || 0) ? i : bi), 0);
+    const order = players.length ? [players[bestIdx], ...players.filter((_, i) => i !== bestIdx)] : [];
+    const coin = () => h('i', { class: 'pm-coin', 'aria-hidden': 'true' });
+    for (const x of order) {
+      const best = x === players[bestIdx] && players.length > 2;
+      const tile = h('div', { class: `pm-po-item ${x.dup ? 'is-dup' : ''} is-${x.state} ${best ? 'is-best' : ''}` },
         x.dup ? h('div', { class: 'pm-po-badge dup' }, 'Duplicate') : h('div', { class: 'pm-po-badge new' }, 'New'),
         playerCard(x.p, { size: 'sm' }),
         x.state === 'new' ? h('div', { class: 'pm-po-actions' },
-          !x.dup ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => send(x) }, 'Send to club') : null,
-          x.dup && opts.onVault ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => vault(x) }, 'Send to SBC storage') : null,
-          h('button', { class: 'pm-btn pm-btn--sm', onclick: () => sell(x) }, `Quick sell +${fmtNum(opts.sellValue(x.p))}`))
-          : h('div', { class: 'pm-po-done' }, x.state === 'sent' ? '✓ Sent to club' : x.state === 'vault' ? '✓ In SBC storage' : `Sold +${fmtNum(x.sold)}`));
+          !x.dup ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => send(x) }, 'To club') : null,
+          x.dup && opts.onVault ? h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', title: 'Send to SBC storage', onclick: () => vault(x) }, 'To SBC storage') : null,
+          h('button', { class: 'pm-btn pm-btn--sm pm-po-sell', 'aria-label': `Quick sell for ${fmtNum(opts.sellValue(x.p))} coins`, onclick: () => sell(x) },
+            h('span', null, 'Quick sell'), h('b', null, coin(), fmtNum(opts.sellValue(x.p)))))
+          : h('div', { class: 'pm-po-done' }, x.state === 'sent' ? '✓ In your club' : x.state === 'vault' ? '✓ In SBC storage' : h('span', null, 'Sold ', coin(), ` ${fmtNum(x.sold)}`)));
       grid.appendChild(tile);
     }
     const pending = players.some((x) => x.state === 'new');
+    const chip = (cls, text) => h('span', { class: `pm-po-chip ${cls}` }, text);
     stage.appendChild(h('div', { class: 'pm-po-gridwrap' },
       h('div', { class: 'pm-po-gridhead' },
-        h('div', null, h('div', { class: 'pm-kicker' }, pack.name), h('h2', null, `${players.length} items`), h('p', { class: 'pm-dim' }, `${newCount} new · ${dupCount} duplicate${dupCount === 1 ? '' : 's'}${coinsGained ? ` · +${fmtNum(coinsGained)} coins` : ''}`)),
+        h('div', { class: 'pm-po-title' },
+          h('div', { class: 'pm-kicker' }, pack.name),
+          h('div', { class: 'pm-po-titlerow' }, h('h2', null, `${players.length} item${players.length === 1 ? '' : 's'}`),
+            h('div', { class: 'pm-po-chips' },
+              newCount ? chip('new', `${newCount} new`) : null,
+              dupCount ? chip('dup', `${dupCount} duplicate${dupCount === 1 ? '' : 's'}`) : null,
+              coinsGained ? chip('coins', h('span', null, coin(), ` +${fmtNum(coinsGained)}`)) : null))),
         h('div', { class: 'pm-po-bulk' },
           pending && players.some((x) => !x.dup && x.state === 'new') ? h('button', { class: 'pm-btn pm-btn--primary', onclick: () => { players.filter((x) => !x.dup && x.state === 'new').forEach((x) => send(x, true)); renderGrid(); } }, 'Send all to club') : null,
           dupValue ? h('button', { class: 'pm-btn', onclick: () => { players.filter((x) => x.dup && x.state === 'new').forEach((x) => sell(x, true)); renderGrid(); } }, `Quick sell duplicates +${fmtNum(dupValue)}`) : null,
           pending ? h('button', { class: 'pm-btn', onclick: () => { players.filter((x) => x.state === 'new').forEach((x) => sell(x, true)); renderGrid(); } }, `Quick sell all +${fmtNum(allValue)}`) : null,
           h('button', { class: 'pm-btn pm-btn--accent pm-po-finish', onclick: finish }, pending ? 'Done' : 'Close'))),
-      pending ? h('p', { class: 'pm-hint' }, 'Unassigned items are sent to your club on Done; duplicates are quick sold.') : null,
+      pending ? h('p', { class: 'pm-hint pm-po-hint' }, 'On Done, unassigned players go to your club and duplicates are quick sold.') : null,
       grid));
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }

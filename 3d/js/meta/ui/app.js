@@ -238,8 +238,10 @@ export class MetaApp {
     const online = this.wallet.mode === 'online';
     const val = cleanCoins(this.ut.coins, 0);
     const num = h('span', { class: 'pm-coins-n', 'data-coins': inf ? 'inf' : String(val) }, inf ? '∞' : fmtNum(val));
-    const chip = h('div', { class: `pm-coins ${online ? 'is-online' : ''}`, title: online ? 'Online coin balance (server)' : 'Local coin balance (this device)' },
-      h('i', { 'aria-hidden': 'true' }), num, h('small', { class: 'pm-coins-src' }, online ? 'Online' : 'Local'));
+    // FC-style currency readout: coin + number (count-up), with a small status dot on the coin (online = server wallet)
+    const chip = h('div', { class: `pm-coins ${online ? 'is-online' : 'is-local'} ${inf ? 'is-inf' : ''}`, title: online ? 'Coins: online balance (server)' : 'Coins: local balance (this device)' },
+      h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-coin' }), h('i', { class: 'pm-coins-dot' })),
+      num, h('span', { class: 'pm-sr' }, online ? ' coins, online balance' : ' coins, local balance'));
     if (inf) this.coinAnim = null; else this.animateCoins(num, val);
     return chip;
   }

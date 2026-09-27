@@ -21,7 +21,6 @@ export function friendsView() {
       if (!app.online || !app.online.friends) { add(main, h('p', { class: 'pm-dim' }, 'Friends need the online service.')); return; }
       const canInvite = typeof app.startOnlineMatchFn === 'function';
       add(main,
-        h('p', { class: 'pm-lead' }, 'Add friends by username or friend code, see who is online, view their squad and invite them to a match.'),
         h('section', { class: 'pm-panel' }, panel || (panel = mountFriends(app.online, {
           toast: (t) => app.toast(t, 'good'),
           onInvite: canInvite ? async (f, mode) => {
