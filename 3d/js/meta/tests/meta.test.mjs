@@ -7,6 +7,7 @@ import { FORMATIONS, FORMATION_NAMES } from '../core/formations.js';
 import { validateTeam, bestLineup, buildTeam, gkKitFor } from '../core/teams.js';
 import { simulateMatch } from '../core/sim.js';
 import * as UT from '../core/ut.js';
+import * as SW from '../core/swaps.js';
 import * as C from '../core/career.js';
 import { getNationalTeams, getSavedUltimateTeam, mountMeta } from '../index.js';
 import { POSITIONS, NATIONS, LEAGUE_BY_ID, SPECIAL_CLUBS, clubById } from '../core/data.js';
@@ -1233,6 +1234,130 @@ test('custom cards: granted Card Creator card is in the club, tradable, and surv
   assert.ok(back.club.includes(card.id) && again.club.includes(card.id));
   assert.equal(getPlayer(card.id).photo, card.photo);
   assert.equal(getPlayer(card.id).ovr, 97);
+});
+
+// ---------------- Swaps (owner request Sep 27): cards -> coins/tokens, swap sets, Token Store ----------------
+test('swap for coins: removes the card and credits exactly swapCoinValue(p)', () => {
+  const s = UT.createUTState({ clubName: 'Swap FC' }, new Rng(51));
+  UT.migrateUT(s);
+  const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
+  const pid = s.club.find((x) => !inSquad.has(x));
+  const p = getPlayer(pid);
+  const expected = SW.swapCoinValue(p);
+  const before = s.coins;
+  const r = SW.swapForCoins(s, pid);
+  assert.equal(r.ok, true);
+  assert.equal(r.coins, expected);
+  assert.equal(s.coins, before + expected);
+  assert.ok(!s.club.includes(pid));
+});
+
+test('swap for tokens: removes the card and credits exactly swapTokenValue(p)', () => {
+  const s = UT.createUTState({ clubName: 'Token FC' }, new Rng(52));
+  UT.migrateUT(s);
+  // ic_pele (98 ovr, LOTG) is not in the generated starter club/squad — an easy, unambiguous 3-token case.
+  const pid = 'ic_pele';
+  assert.ok(!s.club.includes(pid));
+  s.club.push(pid);
+  const p = getPlayer(pid);
+  const expected = SW.swapTokenValue(p);
+  assert.equal(expected, 3);
+  const before = s.tokens;
+  const r = SW.swapForTokens(s, pid);
+  assert.equal(r.ok, true);
+  assert.equal(r.tokens, expected);
+  assert.equal(s.tokens, before + expected);
+  assert.ok(!s.club.includes(pid));
+  // a low-rated card is worth 0 tokens and is refused (coins are still fine for it)
+  const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
+  const low = s.club.map(getPlayer).find((c) => c && c.ovr < 80 && !inSquad.has(c.id));
+  if (low) {
+    assert.equal(SW.swapTokenValue(low), 0);
+    const bad = SW.swapForTokens(s, low.id);
+    assert.equal(bad.ok, false);
+    assert.ok(s.club.includes(low.id));
+  }
+});
+
+test("swap: a card in the starting XI can't be swapped (for coins or tokens), bench needs confirm", () => {
+  const s = UT.createUTState({ clubName: 'XI FC' }, new Rng(53));
+  UT.migrateUT(s);
+  const starter = s.squad.slots.find(Boolean);
+  assert.ok(starter);
+  const r1 = SW.swapForCoins(s, starter);
+  assert.equal(r1.ok, false);
+  const r2 = SW.swapForTokens(s, starter);
+  assert.equal(r2.ok, false);
+  assert.ok(s.club.includes(starter), 'starting XI card must survive a rejected swap');
+  const benchPid = s.squad.bench.find(Boolean);
+  if (benchPid) {
+    const noConfirm = SW.swapForCoins(s, benchPid);
+    assert.equal(noConfirm.ok, false);
+    assert.ok(s.club.includes(benchPid));
+    const withConfirm = SW.swapForCoins(s, benchPid, { confirm: true });
+    assert.equal(withConfirm.ok, true);
+    assert.ok(!s.club.includes(benchPid));
+  }
+});
+
+test('swap sets: hand in N players meeting requirements -> exact tokens, consumed from the club', () => {
+  const s = UT.createUTState({ clubName: 'Set FC' }, new Rng(54));
+  UT.migrateUT(s);
+  const set = SW.SWAP_SET_BY_ID['fc-gold'];
+  const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
+  const pool = s.club.map(getPlayer).filter((p) => p && p.ovr >= set.minOvr && !inSquad.has(p.id));
+  if (pool.length >= set.count) {
+    const pids = pool.slice(0, set.count).map((p) => p.id);
+    const ev = SW.evaluateSwapSet(set.id, pids);
+    assert.equal(ev.ok, true);
+    const before = s.tokens;
+    const r = SW.submitSwapSet(s, set.id, pids);
+    assert.equal(r.ok, true);
+    assert.equal(r.tokens, set.tokens);
+    assert.equal(s.tokens, before + set.tokens);
+    for (const pid of pids) assert.ok(!s.club.includes(pid));
+  }
+  // wrong count is rejected without touching the club
+  const before2 = s.club.length;
+  const bad = SW.submitSwapSet(s, 'fc-elite', []);
+  assert.equal(bad.ok, false);
+  assert.equal(s.club.length, before2);
+});
+
+test('token store: tokens buy a pack (deducted exactly, gated the same way as the coin Store)', async () => {
+  const s = UT.createUTState({ clubName: 'Store FC' }, new Rng(55));
+  UT.migrateUT(s);
+  const price = SW.tokenPriceFor(UT.PACK_BY_ID.gold);
+  assert.ok(price > 0);
+  const poor = SW.buyPackWithTokens(s, 'gold');
+  assert.equal(poor.ok, false, 'no tokens yet');
+  SW.addTokens(s, price + 5);
+  const before = s.tokens;
+  const r = SW.buyPackWithTokens(s, 'gold');
+  assert.equal(r.ok, true);
+  assert.equal(r.tokens, price);
+  assert.equal(s.tokens, before - price);
+  // config-disabled packs are respected, same as the coin Store
+  const cfgOff = { ...(await import('../core/config.js')).CONFIG_DEFAULTS, disabledPacks: ['gold'] };
+  assert.equal(SW.buyPackWithTokens(s, 'gold', cfgOff).ok, false);
+});
+
+test('tokens: never NaN, always integer, clamped >= 0; old saves (pre-Swaps) migrate to tokens:0', () => {
+  const s = UT.createUTState({ clubName: 'Mig FC' }, new Rng(56));
+  const v1 = JSON.parse(JSON.stringify(s));
+  delete v1.tokens; // pre-Swaps save shape
+  const m = UT.migrateUT(v1);
+  assert.equal(m.tokens, 0);
+  SW.addTokens(m, NaN);
+  assert.equal(m.tokens, 0);
+  SW.addTokens(m, -50);
+  assert.equal(m.tokens, 0);
+  SW.addTokens(m, 4.6);
+  assert.equal(m.tokens, 5);
+  m.tokens = 'abc';
+  assert.equal(UT.migrateUT(m).tokens, 0);
+  m.tokens = -7;
+  assert.equal(UT.migrateUT(m).tokens, 0);
 });
 
 await runAll();
