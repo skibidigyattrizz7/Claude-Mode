@@ -10,6 +10,7 @@ import { Hud } from './ui/hud.js';
 import { MatchAudio } from './ui/audio.js';
 import { Commentary } from './ui/commentary.js';
 import { resolveMatchKits } from './core/kits.js';
+import { webglStatus, isModuleLoadError, lowGraphics, setLowGraphics, showLoadError, WEBGL_HELP } from './ui/loading.js';
 
 const SIDES = ['home', 'away'];
 const SP_TOAST = { [SP.THROW]: 'THROW-IN', [SP.CORNER]: 'CORNER', [SP.GOALKICK]: 'GOAL KICK', [SP.FREEKICK]: 'FREE KICK' };
@@ -54,7 +55,9 @@ export function createMatch(container, opts = {}) {
   // of what the caller asked for, so the match has the best chance of starting at all.
   let safeMode = false;
   try { safeMode = typeof location !== 'undefined' && new URLSearchParams(location.search).get('safe') === '1'; } catch { /* no location (tests) */ }
-  const quality = safeMode ? 'low' : (opts.quality || (touch ? 'med' : 'high'));
+  // a device that needed the "low graphics" retry once starts there next time (persisted)
+  let quality = safeMode ? 'low' : (opts.quality || (touch ? 'med' : 'high'));
+  if (lowGraphics() && quality !== 'potato') quality = 'potato';
   const local = SIDES.map((s) => (controllers[s] === 'p1' || controllers[s] === 'p2' ? controllers[s] : null));
   const localCount = local.filter(Boolean).length;
   const timeScale = Math.max(1, Math.min(20, +opts.timeScale || 1)); // dev/testing only
@@ -149,49 +152,100 @@ export function createMatch(container, opts = {}) {
   // requested quality, or lose the context mid-match — none of that should leave a blank page, so
   // each rung below is tried in turn and any failure (import, construction, or a lost context)
   // drops to the next one instead of just logging to a console nobody on a school machine will see.
-  const rendererAttempts = [{ path: './render/index.js', quality }];
-  if (quality !== 'low') rendererAttempts.push({ path: './render/index.js', quality: 'low' });
-  rendererAttempts.push({ path: './fallback/index.js', quality: 'low' });
+  let rendererAttempts = [];
+  const setRungs = (qual) => {
+    rendererAttempts = [{ path: './render/index.js', quality: qual }];
+    if (qual === 'high' || qual === 'med') rendererAttempts.push({ path: './render/index.js', quality: 'low' });
+    if (qual !== 'potato') rendererAttempts.push({ path: './render/index.js', quality: 'potato' });
+    rendererAttempts.push({ path: './fallback/index.js', quality: 'low' });
+  };
+  setRungs(quality);
   let rendererRung = -1;
+  let gfxReady = false; // the local sim holds at kick-off until the pitch is actually on screen
+  let fatalEl = null;
+  let startGen = 0;
 
-  function showFatalError(msg) {
+  function retryRenderer(low) {
+    if (destroyed) return;
+    if (fatalEl) { fatalEl.remove(); fatalEl = null; }
+    if (low) { setLowGraphics(true); setRungs('potato'); }
+    hud.setLoading(0, low ? 'LOW GRAPHICS…' : 'LOADING STADIUM…');
+    startRenderer(0);
+  }
+  function showFatalError(kind, detail) {
     if (destroyed) return;
     hud.setLoaded();
-    const el = document.createElement('div');
-    el.className = 'ps3d-fatal-error';
-    el.style.cssText = 'position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;'
-      + 'text-align:center;padding:24px;color:#cfd8ea;background:#05070d;font:14px/1.5 system-ui,sans-serif;';
-    el.textContent = msg;
-    root.appendChild(el);
+    if (fatalEl) fatalEl.remove();
+    const blocked = kind === 'blocked';
+    const title = blocked ? "Couldn't download the 3D files" : kind === 'nowebgl' ? '3D graphics are blocked on this device' : "The 3D pitch couldn't start";
+    const text = blocked
+      ? 'A school web filter, proxy or ad-blocker may be blocking the game\'s script files. Reload the page; if it keeps happening, ask your network admin to allow this site, or try another network.'
+      : WEBGL_HELP;
+    fatalEl = showLoadError(root, {
+      title, text, detail,
+      actions: [
+        { label: 'Retry with low graphics', primary: true, onClick: () => retryRenderer(true) },
+        { label: 'Try again', onClick: () => retryRenderer(false) },
+        { label: 'Quit match', onClick: () => quit() },
+      ],
+    });
   }
 
-  async function attemptRenderer(fromRung) {
+  async function attemptRenderer(fromRung, gen) {
+    let lastErr = null, blocked = false;
     for (let i = fromRung; i < rendererAttempts.length; i++) {
       const a = rendererAttempts[i];
+      hud.setLoading(0.05, i > fromRung ? 'RETRYING WITH LOWER GRAPHICS…' : 'LOADING 3D ENGINE…');
       try {
         const m = await import(a.path);
+        if (gen !== startGen) return { r: null, stale: true };
+        hud.setLoading(0.1, 'BUILDING STADIUM…');
+        await new Promise((res) => setTimeout(res, 0)); // let the progress text paint
         const r = m.createRenderer(stage, { home: rHome, away: rAway, stadium, quality: a.quality, weather, safe: safeMode });
         rendererRung = i;
-        return r;
+        return { r };
       } catch (err) {
+        lastErr = err;
+        if (isModuleLoadError(err)) blocked = true;
         console.warn(`[pitchside-engine] renderer attempt ${i} (${a.path}, quality=${a.quality}) failed:`, err && err.message);
       }
     }
-    return null;
+    return { r: null, err: lastErr, blocked };
   }
 
   async function startRenderer(fromRung = 0) {
-    const r = await attemptRenderer(fromRung);
-    if (destroyed) { if (r && r.destroy) { try { r.destroy(); } catch { /* ignore */ } } return; }
-    if (!r) {
-      showFatalError('This device or browser could not start the 3D pitch (no working WebGL renderer). '
-        + 'Try reloading, updating your browser, or a different network/device.');
+    const gen = ++startGen;
+    gfxReady = false;
+    // no WebGL at all (disabled / blocklisted GPU): say so straight away instead of trying rungs
+    if (webglStatus() !== 'ok') {
+      showFatalError('nowebgl', 'WebGL context could not be created');
       return;
     }
+    const { r, err, blocked, stale } = await attemptRenderer(fromRung, gen);
+    if (stale) return;
+    if (destroyed || gen !== startGen) { if (r && r.destroy) { try { r.destroy(); } catch { /* ignore */ } } return; }
+    if (!r) {
+      showFatalError(blocked ? 'blocked' : 'nowebgl', err && err.message);
+      return;
+    }
+    if (r.domElement && r.domElement.parentNode !== stage && !stage.contains(r.domElement)) stage.appendChild(r.domElement);
+    r.setCamera(camMode);
+    r.resize();
+    // crowd, boards, shader compile and texture upload happen here, behind the progress bar,
+    // instead of as a frozen first frame / hitches right after kick-off
+    if (typeof r.warmup === 'function') {
+      try {
+        const labels = { stadium: 'BUILDING STADIUM…', crowd: 'FILLING THE STANDS…', shaders: 'PREPARING GRAPHICS…', textures: 'PREPARING GRAPHICS…', ready: 'KICK-OFF' };
+        await Promise.race([
+          r.warmup((f, stage2) => hud.setLoading(0.1 + f * 0.9, labels[stage2] || 'LOADING…')),
+          new Promise((res) => setTimeout(res, 15000)),
+        ]);
+      } catch (e) { console.warn('[pitchside-engine] warm-up failed', e && e.message); }
+    }
+    if (destroyed || gen !== startGen) { try { r.destroy(); } catch { /* ignore */ } return; }
     R = r;
-    if (R.domElement && R.domElement.parentNode !== stage && !stage.contains(R.domElement)) stage.appendChild(R.domElement);
-    R.setCamera(camMode);
     hud.setLoaded();
+    gfxReady = true;
     R.resize();
     // GPU driver resets / low-memory kills surface as a 'lost context' event, not a thrown error —
     // catch it and drop to the next rung (lower quality, then the plain fallback renderer).
@@ -203,6 +257,7 @@ export function createMatch(container, opts = {}) {
         try { R.destroy(); } catch { /* ignore */ }
         R = null;
         stage.innerHTML = '';
+        hud.setLoading(0, 'RETRYING WITH LOWER GRAPHICS…');
         startRenderer(rendererRung + 1);
       }, { once: true });
     }
@@ -489,7 +544,7 @@ export function createMatch(container, opts = {}) {
     const canon = { p1: toCanonical(raw.p1, yaw), p2: toCanonical(raw.p2, yaw) };
     let view;
     if (sim) {
-      if (!paused && !ended) {
+      if (!paused && !ended && gfxReady) {
         acc += dt * timeScale;
         const ins = [sideInput(0, canon), sideInput(1, canon)];
         let n = 0;

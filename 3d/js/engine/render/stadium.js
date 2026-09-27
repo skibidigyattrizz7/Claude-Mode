@@ -18,6 +18,72 @@ const END_LEN = 2 * (SIDE_Z + ROOF.back); // ends also run into the corners (mit
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
+// Team-independent canvas textures (crowd atlas, LED strips, sky) are painted once per page and
+// shared by every later match: each renderer gets a cheap clone that re-uses the painted canvas.
+const texCache = new Map();
+function cachedTex(key, make) {
+  let base = texCache.get(key);
+  if (!base) { base = make(); texCache.set(key, base); }
+  const t = base.clone();
+  t.needsUpdate = true;
+  return t;
+}
+
+// Merge static meshes under `root` that share a material (and shadow flags / attribute layout)
+// into one mesh per group: the stadium shell alone is ~100 separate boxes/planes, which on a
+// Chromebook-class GPU costs more in draw calls than in triangles. Returns the draw calls saved.
+export function mergeStatic(root, track, skip = null) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const groups = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || (skip && skip.has(o))) return;
+    const m = o.material, g = o.geometry;
+    if (Array.isArray(m) || m.transparent || !g.index || g.morphAttributes.position) return;
+    if (Object.values(g.attributes).some((a) => a.isInterleavedBufferAttribute || !(a.array instanceof Float32Array))) return;
+    const names = Object.keys(g.attributes).sort().join(',');
+    const key = `${m.uuid}|${names}|${o.castShadow ? 1 : 0}${o.receiveShadow ? 1 : 0}|${o.renderOrder}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  });
+  let saved = 0;
+  const mtx = new THREE.Matrix4();
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const names = Object.keys(list[0].geometry.attributes);
+    let nv = 0, ni = 0;
+    for (const o of list) { nv += o.geometry.attributes.position.count; ni += o.geometry.index.count; }
+    const out = {};
+    for (const n of names) out[n] = new Float32Array(nv * list[0].geometry.attributes[n].itemSize);
+    const index = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+    let vo = 0, io = 0;
+    for (const o of list) {
+      const g = o.geometry.clone();
+      mtx.multiplyMatrices(inv, o.matrixWorld);
+      g.applyMatrix4(mtx);
+      for (const n of names) {
+        const a = g.attributes[n];
+        out[n].set(a.array.subarray(0, a.count * a.itemSize), vo * a.itemSize);
+      }
+      const idx = g.index;
+      for (let i = 0; i < idx.count; i++) index[io + i] = idx.getX(i) + vo;
+      vo += g.attributes.position.count; io += idx.count;
+      g.dispose();
+      o.parent.remove(o);
+    }
+    const mg = track(new THREE.BufferGeometry());
+    for (const n of names) mg.setAttribute(n, new THREE.BufferAttribute(out[n], list[0].geometry.attributes[n].itemSize));
+    mg.setIndex(new THREE.BufferAttribute(index, 1));
+    mg.computeBoundingSphere();
+    const mesh = new THREE.Mesh(mg, list[0].material);
+    mesh.castShadow = list[0].castShadow; mesh.receiveShadow = list[0].receiveShadow; mesh.renderOrder = list[0].renderOrder;
+    mesh.matrixAutoUpdate = false;
+    root.add(mesh);
+    saved += list.length - 1;
+  }
+  return saved;
+}
+
 // stepped seating deck with vertex colours
 function stepsGeometry(len, prof, cTread, cRiser) {
   const pos = [], col = [], nor = [], idx = [];
@@ -179,7 +245,7 @@ export function buildStadium(scene, opts, q, track, schedule) {
     { name: 'endR', pos: [END_X, 0, 0], rot: Math.PI / 2, len: END_LEN },
     { name: 'endL', pos: [-END_X, 0, 0], rot: -Math.PI / 2, len: END_LEN },
   ];
-  const fasciaTex = track(adStripTexture(3, 512, 64, 8));
+  const fasciaTex = track(cachedTex('fascia', () => adStripTexture(3, 512, 64, 8)));
   const fasciaMat = track(new THREE.MeshBasicMaterial({ map: fasciaTex, toneMapped: false, color: night ? 0xffffff : 0xdddddd }));
   const roofLightMat = track(new THREE.MeshBasicMaterial({ color: night ? 0xfff6e0 : 0x9aa0a8, toneMapped: !night }));
   const tread = [seatBase.r, seatBase.g, seatBase.b];
@@ -227,9 +293,11 @@ export function buildStadium(scene, opts, q, track, schedule) {
   // ---------------- crowd (built lazily — see buildCrowd() below; this is the priciest part of
   // the stadium: a texture atlas plus thousands of instanced billboards across the four stands)
   const crowds = [];
-  let cmat = null;
-  function buildCrowd() {
-  const atlas = track(crowdAtlas());
+  let cmat = null, cgeo = null;
+  const neutral = ['#1b1b1b', '#e9e9e9', '#26324a', '#5a5a5a', '#7a6a55', '#2f4f2f', '#8b1a1a', '#d8c9a8'].map((c) => new THREE.Color(c));
+  const tmpC = new THREE.Color();
+  function crowdSetup() {
+  const atlas = track(cachedTex('crowd', crowdAtlas));
   cmat = track(new THREE.ShaderMaterial({
     vertexShader: crowdVS, fragmentShader: crowdFS,
     uniforms: {
@@ -237,11 +305,12 @@ export function buildStadium(scene, opts, q, track, schedule) {
       uLight: { value: night ? 0.34 : 0.95 }, uTint: { value: night ? new THREE.Color(0.95, 0.97, 1.05) : new THREE.Color(1.0, 0.98, 0.94) },
     },
   }));
-  const cgeo = track(new THREE.PlaneGeometry(0.62, 1.24));
+  cgeo = track(new THREE.PlaneGeometry(0.62, 1.24));
   cgeo.translate(0, 0.62, 0);
-  const neutral = ['#1b1b1b', '#e9e9e9', '#26324a', '#5a5a5a', '#7a6a55', '#2f4f2f', '#8b1a1a', '#d8c9a8'].map((c) => new THREE.Color(c));
-  const tmpC = new THREE.Color();
-  for (const st of stands) {
+  }
+  // one stand per call, so the deferred build is spread over several short slices
+  function crowdStand(st) {
+    if (!q.crowdFill) return;
     const L = st.len;
     const items = [];
     for (const prof of [LOW, UP]) {
@@ -296,14 +365,15 @@ export function buildStadium(scene, opts, q, track, schedule) {
     group.add(inst);
     crowds.push(inst);
   }
-  } // buildCrowd()
 
   // ---------------- LED boards (also built lazily — see buildBoards() below)
   let boardTex = null, boardTex2 = null;
   const boards = [];
   function buildBoards() {
-  boardTex = track(adStripTexture(0, 512, 64, 8));
-  boardTex2 = track(adStripTexture(5, 512, 64, 8));
+  boardTex = track(cachedTex('board0', () => adStripTexture(0, 512, 64, 8)));
+  boardTex2 = track(cachedTex('board5', () => adStripTexture(5, 512, 64, 8)));
+  const boardsG = new THREE.Group();
+  group.add(boardsG);
   const boardMat = track(new THREE.MeshBasicMaterial({ map: boardTex, toneMapped: false, color: night ? 0xffffff : 0xe8e8e8 }));
   const boardMat2 = track(new THREE.MeshBasicMaterial({ map: boardTex2, toneMapped: false, color: night ? 0xffffff : 0xe8e8e8 }));
   const boardBack = stdMat(0x15181e);
@@ -327,7 +397,7 @@ export function buildStadium(scene, opts, q, track, schedule) {
     const br = new THREE.Mesh(track(new THREE.BoxGeometry(len, 0.08, 0.7)), boardBack); br.position.set(0, 0.04, -0.5); g.add(br);
     g.position.set((a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2);
     g.rotation.y = Math.atan2(-dz, dx); // local +x along a->b, local +z (LED face) toward the pitch
-    group.add(g);
+    boardsG.add(g);
     boards.push(g);
   };
   const BZ = HW + 4.2, BX = HL + 5.2, C1 = HL + 1;
@@ -348,6 +418,7 @@ export function buildStadium(scene, opts, q, track, schedule) {
     per += Math.hypot(b[0] - a[0], b[1] - a[1]);
     prev = b;
   }
+  mergeStatic(boardsG, track); // ~39 meshes -> 3 draw calls
   } // buildBoards()
 
   // ---------------- dugouts & tunnel
@@ -373,18 +444,20 @@ export function buildStadium(scene, opts, q, track, schedule) {
   const tunnel = new THREE.Mesh(track(new THREE.BoxGeometry(5, 2.8, 3)), darkM); tunnel.position.set(0, 1.4, SIDE_Z - 1.2); group.add(tunnel);
 
   // ---------------- floodlight towers
-  const lampCv = makeCanvas(128, 64), lg = lampCv.getContext('2d');
-  lg.fillStyle = '#222'; lg.fillRect(0, 0, 128, 64);
-  for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) {
-    const gr = lg.createRadialGradient(8 + i * 16, 8 + j * 16, 1, 8 + i * 16, 8 + j * 16, 7);
-    gr.addColorStop(0, night ? '#ffffff' : '#d8dde2'); gr.addColorStop(1, night ? '#b8c8ff' : '#6d737b');
-    lg.fillStyle = gr; lg.beginPath(); lg.arc(8 + i * 16, 8 + j * 16, 6.5, 0, 7); lg.fill();
-  }
-  const lampTex = track(canvasTex(lampCv, {}));
+  const lampTex = track(cachedTex('lamp' + night, () => {
+    const lampCv = makeCanvas(128, 64), lg = lampCv.getContext('2d');
+    lg.fillStyle = '#222'; lg.fillRect(0, 0, 128, 64);
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) {
+      const gr = lg.createRadialGradient(8 + i * 16, 8 + j * 16, 1, 8 + i * 16, 8 + j * 16, 7);
+      gr.addColorStop(0, night ? '#ffffff' : '#d8dde2'); gr.addColorStop(1, night ? '#b8c8ff' : '#6d737b');
+      lg.fillStyle = gr; lg.beginPath(); lg.arc(8 + i * 16, 8 + j * 16, 6.5, 0, 7); lg.fill();
+    }
+    return canvasTex(lampCv, {});
+  }));
   const lampMat = track(new THREE.MeshBasicMaterial({ map: lampTex, toneMapped: !night, color: night ? 0xffffff : 0xcccccc }));
   const towerMat = stdMat(0x7d838c, { metalness: 0.5, roughness: 0.5 });
   const towers = [];
-  const glowTex = track(radialTexture('rgba(255,250,235,0.95)', 'rgba(255,240,210,0)', 128));
+  const glowTex = track(cachedTex('glow', () => radialTexture('rgba(255,250,235,0.95)', 'rgba(255,240,210,0)', 128)));
   const glowMat = track(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, opacity: night ? 0.9 : 0 }));
   for (const xs of [-1, 1]) for (const zs of [-1, 1]) {
     const x = xs * (END_X + 22), z = zs * (SIDE_Z + 22);
@@ -404,7 +477,7 @@ export function buildStadium(scene, opts, q, track, schedule) {
   }
 
   // ---------------- sky
-  const skyT = track(skyTexture(night));
+  const skyT = track(cachedTex('sky' + night, () => skyTexture(night)));
   const sky = new THREE.Mesh(track(new THREE.SphereGeometry(1400, 32, 16)), track(new THREE.MeshBasicMaterial({ map: skyT, side: THREE.BackSide, depthWrite: false, fog: false })));
   sky.renderOrder = -10;
   group.add(sky);
@@ -450,7 +523,10 @@ export function buildStadium(scene, opts, q, track, schedule) {
   // straight away. The crowd (a texture atlas + thousands of instanced billboards) and the LED ad
   // boards are comparatively expensive to build, so — unless the caller wants them built inline —
   // they're deferred to run one per idle callback, spread across the frames right after kickoff.
-  if (schedule) { schedule(buildCrowd); schedule(buildBoards); } else { buildCrowd(); buildBoards(); }
+  // the static shell (stands, roofs, dugouts, towers) collapses into a handful of draw calls
+  api.merged = mergeStatic(group, track);
+  const tasks = [crowdSetup, ...stands.map((st) => () => crowdStand(st)), buildBoards];
+  if (schedule) for (const t of tasks) schedule(t); else for (const t of tasks) t();
   return api;
 }
 

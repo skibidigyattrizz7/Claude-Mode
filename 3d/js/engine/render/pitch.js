@@ -4,11 +4,18 @@ import { PITCH, GOAL } from '../core/constants.js';
 import { pitchTexture, apronTexture, netTexture, PITCH_MARGIN } from './textures.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
+const PITCH_CACHE = new Map();
 
 export function buildPitch(scene, q, maxAniso, track) {
   const group = new THREE.Group();
   scene.add(group);
-  const tex = track(pitchTexture(q.pitchTex, Math.min(maxAniso, q.aniso)));
+  // the painted pitch canvas (the single most expensive texture: up to 4096 px) is team- and
+  // match-independent, so it is painted once per page and re-used by every later match
+  let base = PITCH_CACHE.get(q.pitchTex);
+  if (!base) { base = pitchTexture(q.pitchTex, 1); PITCH_CACHE.set(q.pitchTex, base); }
+  const tex = track(base.clone());
+  tex.anisotropy = Math.min(maxAniso, q.aniso);
+  tex.needsUpdate = true;
   const { LW, LH } = tex.userData;
   const geo = track(new THREE.PlaneGeometry(LW, LH, 1, 1));
   geo.rotateX(-Math.PI / 2);
