@@ -4,12 +4,23 @@ import { flagSVG, crestSVG, avatarSVG } from './art.js';
 import { cardName } from '../core/players.js';
 import { clubById } from '../core/data.js';
 import { PLAYSTYLES } from '../core/physique.js';
-import { PROMOS } from '../core/promos.js';
+import { PROMOS, PROMO_BY_ID } from '../core/promos.js';
 
 const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
 const GK_LABELS = ['DIV', 'HAN', 'KIC', 'REF', 'SPD', 'POS'];
 const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'CLASSIC', lotg: 'LEGEND OF THE GAME', objective: 'PATHFINDER' };
 for (const pr of PROMOS) SPECIAL_LABEL[pr.id] = pr.tag;
+
+// Promo colours live in ONE place (core/promos.js `colors`): expose them as CSS custom properties for the card
+// (`.sp-<id>`), its packs (`.pm-pack--promo-<id>`) and promo hub sections, via one shared stylesheet. The
+// per-campaign art (pattern, trim, name bar) is the `.sp-<id>` block in meta.css.
+if (typeof document !== 'undefined' && !document.getElementById('pm-promo-vars')) {
+  const css = PROMOS.map((pr) => `.pm-card.sp-${pr.id},.pm-pack--promo-${pr.id},.pm-promo--${pr.id}{--pa:${pr.colors[0]};--pb:${pr.colors[1]};--pc:${pr.colors[2]}}`).join('\n');
+  const el = document.createElement('style');
+  el.id = 'pm-promo-vars';
+  el.textContent = css;
+  document.head.appendChild(el);
+}
 
 /** Small round PlayStyle badge (gold ring = PlayStyle+). */
 export function psBadgeHtml(ps) {
@@ -37,7 +48,10 @@ export function cardClasses(p) {
   if (p.evo) c.push('is-evo');
   if (p.totw) c.push('is-totw');
   if (p.headliner) c.push('is-headliner');
-  if (p.promo) c.push('is-promo');
+  // Promo design: real promo cards carry `promo`; Admin card-creator cards only store the chosen design in
+  // `special`, so any special that names a promo campaign renders in that campaign's design too.
+  if (p.promo || PROMO_BY_ID[p.special]) c.push('is-promo');
+  else if (p.club === 'ICN') c.push('is-icon');
   return c;
 }
 
@@ -53,31 +67,32 @@ export function playerCard(p, opts = {}) {
   const club = opts.club || clubById(p.club) || { id: p.club, name: p.club, short: String(p.club).slice(0, 3), colors: { primary: '#445', secondary: '#99a' } };
   const vals = p.pos === 'GK' ? [p.gk.div, p.gk.han, p.gk.kic, p.gk.ref, p.gk.spd, p.gk.pos] : [p.stats.pac, p.stats.sho, p.stats.pas, p.stats.dri, p.stats.def, p.stats.phy];
   const labels = p.pos === 'GK' ? GK_LABELS : STAT_LABELS;
+  // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
   const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : (p.playstyles || []).slice(0, 4).map(psBadgeHtml).join('');
   const others = [p.pos, ...(p.alt || [])].filter((x) => x !== posLabel).slice(0, 3);
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(others.join(', '))}">+${esc(others.join(' '))}</div>`;
+  // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
+  // above it unclipped, so special cards can let the player break out of the top edge of the frame.
+  const tag = p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? SPECIAL_LABEL[p.special] || '' : 'EVOLUTION') : '';
   const html = `<div class="${cls.join(' ')}" data-pid="${esc(p.id)}">
-    <div class="pc-in">
-      <div class="pc-shine"></div>
-      <div class="pc-side">
-        <div class="pc-ovr">${p.ovr}</div>
-        <div class="pc-pos">${esc(posLabel)}</div>
-        ${altHtml}
-        ${flagSVG(p.nat, 'pc-flag')}
-        ${crestSVG(club, 'pc-crest')}
-      </div>
-      ${p.photo ? `<img class="pc-avatar pc-photo" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
-      ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
-      ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}
-      <div class="pc-name">${esc(cardName(p))}</div>
-      ${statsHtml}
-      ${p.special || p.evo ? `<div class="pc-tag">${p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? SPECIAL_LABEL[p.special] || '' : 'EVOLUTION'}</div>` : ''}
-      ${p.upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${p.upg.level}/${p.upg.max}">${Array.from({ length: p.upg.max }, (_, i) => `<i class="${i < p.upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}
-      ${p.era === 'prime' ? '<div class="pc-era">PRIME</div>' : ''}
-      ${p.evo ? `<div class="pc-evo" title="Evolved ×${p.evo}">EVO${p.evo > 1 ? ` ${p.evo}` : ''}</div>` : ''}
+    <div class="pc-in"><div class="pc-shine"></div></div>
+    ${p.photo ? `<img class="pc-avatar pc-photo" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
+    <div class="pc-side">
+      <div class="pc-ovr">${p.ovr}</div>
+      <div class="pc-pos">${esc(posLabel)}</div>
+      ${altHtml}
+      <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${crestSVG(club, 'pc-crest')}</div>
     </div>
+    ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
+    ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}
+    <div class="pc-name">${esc(cardName(p))}</div>
+    ${statsHtml}
+    ${tag ? `<div class="pc-tag">${tag}</div>` : ''}
+    ${p.upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${p.upg.level}/${p.upg.max}">${Array.from({ length: p.upg.max }, (_, i) => `<i class="${i < p.upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}
+    ${p.era === 'prime' ? '<div class="pc-era">PRIME</div>' : ''}
+    ${p.evo ? `<div class="pc-evo" title="Evolved ×${p.evo}">EVO${p.evo > 1 ? ` ${p.evo}` : ''}</div>` : ''}
   </div>`;
   const el = frag(html);
   el.setAttribute('aria-label', `${p.name}, ${p.ovr} ${posLabel}`);

@@ -10,27 +10,75 @@ import { genPhysique } from './physique.js';
 // per campaign (see docs/META_API.md). `releaseWeek` (absolute calendar week, from calendar.js) is the first
 // week a campaign may ever appear anywhere — omitted/1 means "already released" (the original 7 campaigns).
 export const PROMOS = [
-  { id: 'toty', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#06123a', '#2f6bff', '#dfe9ff'], range: [97, 99], price: 180000, theme: 'toty',
-    desc: 'The best XI of the year: real stars boosted to 97–99.' },
-  { id: 'tots', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#032b3a', '#19c3e6', '#d9fbff'], range: [93, 97], price: 120000, theme: 'tots',
-    desc: 'Season standouts across every league, rated 93–97.' },
-  { id: 'futurestars', name: 'Future Stars', short: 'FUTURE STARS', tag: 'FUTURE STARS', colors: ['#1c0636', '#b44dff', '#ffd9fb'], range: [83, 95], price: 70000, theme: 'futurestars',
-    desc: 'The brightest young talents, boosted +5 to +8.' },
-  { id: 'flashback', name: 'Heroes Flashback', short: 'FLASHBACK', tag: 'FLASHBACK', colors: ['#2a1405', '#e0892b', '#ffe8c7'], range: [90, 99], price: 160000, theme: 'flashback',
+  { id: 'toty', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#040a26', '#2f6bff', '#dfe9ff'], range: [96, 98], price: 180000, theme: 'toty',
+    desc: 'The best XI of the year: real stars boosted to 96–98.' },
+  { id: 'tots', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#061a5c', '#1f4fd6', '#ffd66b'], range: [92, 97], price: 120000, theme: 'tots',
+    desc: 'Season standouts across every league, rated 92–96.' },
+  { id: 'futurestars', name: 'Future Stars', short: 'FUTURE STARS', tag: 'FUTURE STARS', colors: ['#050a2e', '#3d5afe', '#8ff3ff'], range: [82, 93], price: 70000, theme: 'futurestars',
+    desc: 'The brightest young talents, boosted +4 to +7.' },
+  { id: 'flashback', name: 'Heroes Flashback', short: 'FLASHBACK', tag: 'FLASHBACK', colors: ['#2b1f14', '#c9975a', '#fff1dc'], range: [88, 99], price: 160000, theme: 'flashback',
     desc: 'Legends relive their most famous season.' },
-  { id: 'birthday', name: 'Ultimate Birthday', short: 'BIRTHDAY', tag: 'ULTIMATE BIRTHDAY', colors: ['#3a0620', '#ff4f9a', '#ffe0ef'], range: [84, 97], price: 90000, theme: 'birthday',
-    desc: 'Party cards: +3 to +5 overall, +1 skill moves and +1 weak foot.' },
-  { id: 'rttk', name: 'Road to the Knockouts', short: 'RTTK', tag: 'ROAD TO THE KNOCKOUTS', colors: ['#021a12', '#18d17b', '#d7ffe9'], range: [83, 95], price: 80000, theme: 'rttk',
+  { id: 'birthday', name: 'Ultimate Birthday', short: 'BIRTHDAY', tag: 'ULTIMATE BIRTHDAY', colors: ['#3a0620', '#ff4f9a', '#ffe0ef'], range: [84, 96], price: 90000, theme: 'birthday',
+    desc: 'Party cards: +2 to +4 overall, +1 skill moves and +1 weak foot.' },
+  { id: 'rttk', name: 'Road to the Knockouts', short: 'RTTK', tag: 'ROAD TO THE KNOCKOUTS', colors: ['#040b22', '#19d3a4', '#e2fff6'], range: [83, 94], price: 80000, theme: 'rttk',
     desc: 'Upgradable cards: +1 overall for every knockout round reached (max +4).' },
-  { id: 'moments', name: 'Moments', short: 'MOMENTS', tag: 'MOMENTS', colors: ['#1d1d1d', '#f2f2f2', '#ffffff'], range: [86, 96], price: 110000, theme: 'moments',
+  { id: 'moments', name: 'Moments', short: 'MOMENTS', tag: 'MOMENTS', colors: ['#1d1d1d', '#f2f2f2', '#ffffff'], range: [86, 99], price: 110000, theme: 'moments',
     desc: 'Iconic moments turned into boosted cards.' },
   // V4 (owner request Sep 26): new campaigns, each with a genuine future release date and its own pack theme.
-  { id: 'showdown', name: 'Rivals Showdown', short: 'SHOWDOWN', tag: 'RIVALS SHOWDOWN', colors: ['#3a0a0a', '#ff3b3b', '#ffd9d9'], range: [88, 97], price: 130000, theme: 'showdown',
-    releaseWeek: 41, desc: 'Head-to-head rivals get matching boosted cards, +4 to +7.' },
-  { id: 'oty', name: "One to Watch", short: 'OTW', tag: 'ONE TO WATCH', colors: ['#062017', '#12c48b', '#daffee'], range: [82, 92], price: 60000, theme: 'oty',
+  { id: 'showdown', name: 'Rivals Showdown', short: 'SHOWDOWN', tag: 'RIVALS SHOWDOWN', colors: ['#3a0a0a', '#ff3b3b', '#ffd9d9'], range: [87, 96], price: 130000, theme: 'showdown',
+    releaseWeek: 41, desc: 'Head-to-head rivals get matching boosted cards, +3 to +6.' },
+  { id: 'oty', name: 'One to Watch', short: 'OTW', tag: 'ONE TO WATCH', colors: ['#062017', '#12c48b', '#daffee'], range: [82, 91], price: 60000, theme: 'oty',
     releaseWeek: 44, desc: 'A dynamic card that grows with the real player’s current form.' },
-  { id: 'centurions', name: 'Centurions', short: 'CENT', tag: 'CENTURIONS', colors: ['#241100', '#e8a33d', '#fff2da'], range: [91, 98], price: 150000, theme: 'centurions',
+  { id: 'centurions', name: 'Centurions', short: 'CENT', tag: 'CENTURIONS', colors: ['#241100', '#e8a33d', '#fff2da'], range: [90, 97], price: 150000, theme: 'centurions',
     releaseWeek: 47, desc: 'Career milestone cards for real players closing in on a big number.' },
+  // V5 (promo cards job): the wider FC-style calendar, generic names. Each has its own card design (CSS class
+  // `sp-<id>` in meta.css), pack theme and a unique launch week — a campaign headlines the week it launches.
+  { id: 'storm', name: 'Storm Surge', short: 'STORM', tag: 'STORM SURGE', colors: ['#05070d', '#7fd7ff', '#ffffff'], range: [84, 94], price: 100000, theme: 'storm',
+    releaseWeek: 39, desc: 'Lightning-charged dynamic cards: +3 to +5 for players on a hot streak.' },
+  { id: 'rulebenders', name: 'Rule Benders', short: 'BENDERS', tag: 'RULE BENDERS', colors: ['#43050f', '#ff2447', '#ffffff'], range: [82, 93], price: 90000, theme: 'rulebenders',
+    releaseWeek: 40, desc: 'Cards that break the mould: +2 to +4, extra pace and +1 skill moves.' },
+  { id: 'potm', name: 'Player of the Month', short: 'POTM', tag: 'PLAYER OF THE MONTH', colors: ['#0e1a2b', '#4f8fd9', '#f2f7ff'], range: [84, 94], price: 80000, theme: 'potm',
+    releaseWeek: 42, desc: 'The month’s standout in each league, +2 to +4.' },
+  { id: 'fright', name: 'Fright Night', short: 'FRIGHT', tag: 'FRIGHT NIGHT', colors: ['#0a0604', '#ff7a00', '#ffe0b8'], range: [83, 94], price: 95000, theme: 'fright',
+    releaseWeek: 43, desc: 'Halloween scares: +3 to +5 cards that haunt the opposition.' },
+  { id: 'roleswap', name: 'Role Swap', short: 'SWAP', tag: 'ROLE SWAP', colors: ['#061c33', '#16c7c7', '#e0ffff'], range: [80, 93], price: 90000, theme: 'roleswap',
+    releaseWeek: 45, desc: 'Players reinvented in a brand-new position, +2 to +4.' },
+  { id: 'halo', name: 'Hall of Heroes', short: 'HEROES', tag: 'HALL OF HEROES', colors: ['#0c0a14', '#e8c35a', '#fff5d6'], range: [88, 96], price: 140000, theme: 'halo',
+    releaseWeek: 46, desc: 'Cult legends crowned with a golden halo, +2 to +3.' },
+  { id: 'blackout', name: 'Blackout', short: 'BLACKOUT', tag: 'BLACKOUT', colors: ['#050505', '#ff1e56', '#ffffff'], range: [80, 92], price: 60000, theme: 'blackout',
+    releaseWeek: 48, desc: 'Flash-sale week: cheap packs and +2 to +4 cards in black and neon.' },
+  { id: 'champions', name: 'Champions Night', short: 'CHAMPIONS', tag: 'CHAMPIONS NIGHT', colors: ['#1a0838', '#7a36ff', '#ffd76a'], range: [88, 96], price: 130000, theme: 'champions',
+    releaseWeek: 49, desc: 'Continental club-cup heroes, +3 to +5.' },
+  { id: 'frost', name: 'Frost Wildcards', short: 'FROST', tag: 'FROST WILDCARDS', colors: ['#0d2a4a', '#8fd4ff', '#ffffff'], range: [81, 93], price: 90000, theme: 'frost',
+    releaseWeek: 50, desc: 'Winter wildcards: +3 to +5 and a new secondary position.' },
+  { id: 'yuletide', name: 'Yuletide Stars', short: 'YULETIDE', tag: 'YULETIDE STARS', colors: ['#07301b', '#d6202f', '#fff4e6'], range: [84, 95], price: 100000, theme: 'yuletide',
+    releaseWeek: 51, desc: 'Festive gifts under the tree: actives and Icons, +2 to +4.' },
+  { id: 'fantasy', name: 'Fantasy XI', short: 'FANTASY', tag: 'FANTASY XI', colors: ['#0d1400', '#c8ff00', '#f4ffd0'], range: [82, 93], price: 85000, theme: 'fantasy',
+    releaseWeek: 52, desc: 'Fantasy-league favourites in radioactive neon, +2 to +4.' },
+  { id: 'wildfire', name: 'Wildfire', short: 'WILDFIRE', tag: 'WILDFIRE', colors: ['#2a0600', '#ff5a1f', '#ffd27a'], range: [81, 93], price: 85000, theme: 'wildfire',
+    releaseWeek: 54, desc: 'Young players spreading like wildfire, +3 to +5.' },
+  { id: 'finalchapter', name: 'Final Chapter', short: 'FINAL', tag: 'FINAL CHAPTER', colors: ['#141414', '#a8977a', '#f3e6c9'], range: [83, 95], price: 110000, theme: 'finalchapter',
+    releaseWeek: 72, desc: 'A farewell to veterans writing the last pages of their careers, +3 to +5.' },
+  { id: 'fiesta', name: 'Summer Fiesta', short: 'FIESTA', tag: 'SUMMER FIESTA', colors: ['#2a0a4a', '#ff2d95', '#ffd1ec'], range: [85, 99], price: 120000, theme: 'fiesta',
+    releaseWeek: 75, desc: 'The end-of-season party: favourites and Icons, +2 to +4 and +1 weak foot.' },
+  // V5 — the Global Cup: a World-Cup-like tournament set, one campaign a week (maroon player / red path /
+  // teal star / gold hero / purple road / yellow stories / holographic phenoms / white-gold Icons).
+  { id: 'cupplayer', name: 'Global Cup', short: 'GLOBAL CUP', tag: 'GLOBAL CUP', colors: ['#3a0716', '#9c1d3f', '#ffe3ea'], range: [80, 94], price: 70000, theme: 'cupplayer', set: 'cup',
+    releaseWeek: 57, desc: 'The tournament kicks off: national-team favourites, +2 to +3.' },
+  { id: 'roadtocup', name: 'Road to the Cup', short: 'ROAD TO CUP', tag: 'ROAD TO THE CUP', colors: ['#1d0845', '#7b2ff7', '#ffd76a'], range: [80, 93], price: 75000, theme: 'roadtocup', set: 'cup',
+    releaseWeek: 58, desc: 'Players who carried their nation through qualifying, +2 to +4.' },
+  { id: 'cupstories', name: 'Cup Stories', short: 'STORIES', tag: 'CUP STORIES', colors: ['#3a2a00', '#ffc21a', '#fff6d1'], range: [82, 94], price: 85000, theme: 'cupstories', set: 'cup',
+    releaseWeek: 59, desc: 'Remarkable tournament tales retold, +2 to +4.' },
+  { id: 'cupstar', name: 'Cup Stars', short: 'CUP STARS', tag: 'CUP STARS', colors: ['#032a2c', '#10b5a8', '#dcfffb'], range: [82, 94], price: 90000, theme: 'cupstar', set: 'cup',
+    releaseWeek: 60, desc: 'The breakout stars of the group stage, +3 to +5.' },
+  { id: 'gloryroad', name: 'Path of Glory', short: 'GLORY', tag: 'PATH OF GLORY', colors: ['#3a0508', '#e11d2e', '#ffe1e3'], range: [80, 94], price: 90000, theme: 'gloryroad', set: 'cup',
+    releaseWeek: 61, desc: 'Upgradable: +1 overall for every round the nation survives (max +4).' },
+  { id: 'cupicon', name: 'Global Cup Icons', short: 'CUP ICONS', tag: 'GLOBAL CUP ICON', colors: ['#5a4108', '#e9dcc0', '#fffaf0'], range: [87, 96], price: 170000, theme: 'cupicon', set: 'cup',
+    releaseWeek: 62, desc: 'Icons in their tournament prime, +1 to +2.' },
+  { id: 'cuphero', name: 'Global Cup Heroes', short: 'CUP HEROES', tag: 'GLOBAL CUP HERO', colors: ['#2e1a02', '#e0a526', '#fff1c9'], range: [86, 93], price: 120000, theme: 'cuphero', set: 'cup',
+    releaseWeek: 63, desc: 'Cult tournament heroes in copper and gold, +2 to +3.' },
+  { id: 'phenoms', name: 'Cup Phenoms', short: 'PHENOMS', tag: 'CUP PHENOMS', colors: ['#2a2350', '#9ea8ff', '#ffffff'], range: [80, 93], price: 80000, theme: 'phenoms', set: 'cup',
+    releaseWeek: 64, desc: 'Holographic cards for the tournament’s teenage sensations, +4 to +6.' },
 ];
 export const PROMO_BY_ID = Object.fromEntries(PROMOS.map((p) => [p.id, p]));
 export const PROMO_IDS = PROMOS.map((p) => p.id);
@@ -45,11 +93,29 @@ export function isPromoReleased(id, week = weekNumber()) {
 export function isCardReleased(p, week = weekNumber()) { return !isPromoSpecial(p && p.special) || isPromoReleased(p.special, week); }
 
 // ---------- calendar ----------
-/** The headline promo of a week: a seeded shuffle of all campaigns per cycle (cycle length = campaign count). */
+// Weeks before ROTATION_V5 keep the headline they historically had (saved weekly objectives stay valid): a
+// seeded shuffle of the original 10 campaigns per cycle.
+const LEGACY_IDS = ['toty', 'tots', 'futurestars', 'flashback', 'birthday', 'rttk', 'moments', 'showdown', 'oty', 'centurions'];
+const ROTATION_V5 = 39;
+const launchOf = (week) => { const p = PROMOS.find((x) => x.releaseWeek === week); return p ? p.id : null; };
+/**
+ * The headline promo of a week. A campaign always headlines the week it launches (its `releaseWeek`);
+ * every other week rotates through the campaigns already released by then (seeded shuffle per cycle), so a
+ * week is never left without a live, released campaign.
+ */
 export function promoOfWeek(week = weekNumber()) {
-  const cycle = Math.floor((week - 1) / PROMOS.length);
-  const order = new Rng(`promo-cycle-${cycle}`).shuffle(PROMO_IDS.slice());
-  return order[(week - 1) % PROMOS.length];
+  if (week < ROTATION_V5) {
+    const cycle = Math.floor((week - 1) / LEGACY_IDS.length);
+    return new Rng(`promo-cycle-${cycle}`).shuffle(LEGACY_IDS.slice())[(week - 1) % LEGACY_IDS.length];
+  }
+  const launch = launchOf(week);
+  if (launch) return launch;
+  const pool = PROMO_IDS.filter((id) => isPromoReleased(id, week));
+  const n = pool.length, cycle = Math.floor((week - 1) / n);
+  const order = new Rng(`promo-cycle5-${n}-${cycle}`).shuffle(pool.slice());
+  let id = order[(week - 1) % n];
+  if (id === launchOf(week - 1) && n > 1) id = order[week % n]; // don't re-headline last week's launch
+  return id;
 }
 /** Promos live this week: the new headline campaign plus last week's (each runs two weeks). Does not itself
  * account for `releaseWeek` — callers that must hide an unreleased campaign use `isPromoLive`/`isPromoReleased`. */
@@ -113,9 +179,9 @@ const GROUP = (pos) => (pos === 'GK' ? 'GK' : ['CB'].includes(pos) ? 'CB' : ['LB
 const byOvr = (a, b) => b.ovr - a.ovr || (a.id < b.id ? -1 : 1);
 
 /** Road to the Knockouts upgrade level (0..4) for a card this week — deterministic "results" per week. */
-export function rttkLevel(baseId, week = weekNumber()) {
+export function rttkLevel(baseId, week = weekNumber(), key = 'rttk') {
   let lv = 0;
-  for (let w = Math.max(1, week - 7); w <= week; w++) if (hashStr(`rttk-${baseId}-${w}`) % 10 < 4) lv++;
+  for (let w = Math.max(1, week - 7); w <= week; w++) if (hashStr(`${key}-${baseId}-${w}`) % 10 < 4) lv++;
   return Math.min(4, lv);
 }
 
@@ -128,11 +194,13 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
   const actives = src.stars.concat(src.regulars).slice().sort(byOvr);
   const icons = src.icons.slice().sort(byOvr);
   const out = [];
-  const make = (base, promo, target, extra = {}) => {
+  const make = (base, promo, target, extra = {}, pre = null) => {
     const p = structuredClone(base);
     p.id = `pr_${promo}_${base.id}`;
     p.baseId = base.id;
     delete p.intended; delete p.era; delete p.totw;
+    if (pre) pre(p);
+    p.ovr = helpers.computeOvr(p.pos, p);
     setOvr(p, clamp(target, 1, 99), helpers);
     p.special = promo; p.promo = promo; p.rare = true; p.tier = 'gold';
     p.pot = Math.max(p.pot || p.ovr, p.ovr);
@@ -151,63 +219,115 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
     }
     return res;
   };
+  /** Target overall for a +lo..+hi boost, capped by the campaign's range; null when it can't be a real boost. */
+  const boostTo = (id, b, lo, hi) => {
+    const [rmin, rmax] = PROMO_BY_ID[id].range;
+    const t = Math.min(rmax, b.ovr + scaled(b.ovr, lo, hi));
+    return t > b.ovr && t >= rmin ? t : null;
+  };
+  /** Generic campaign: n distinct people from `pool` (seeded per campaign), boosted +lo..+hi. */
+  const campaign = (id, pool, n, lo, hi, extra = null, pre = null) => {
+    const rng = new Rng(`promo-${id}`);
+    const seen = new Set();
+    const picks = rng.shuffle(pool.filter((b) => boostTo(id, b, lo, hi) !== null)).filter((b) => {
+      const k = b.person || b.id;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    }).slice(0, n);
+    picks.forEach((b, i) => make(b, id, boostTo(id, b, lo, hi), typeof extra === 'function' ? extra(b, i) : extra || {}, pre));
+  };
 
-  // Team of the Year: best real actives, 1-2-2-3-3
+  // Team of the Year: best real actives, 1-2-2-3-3 (nerfed: 98 / 97 / 96)
   const toty = take(actives, { GK: 1, CB: 2, FB: 2, MID: 3, ATT: 3 }, new Set()).sort(byOvr);
-  toty.forEach((b, i) => make(b, 'toty', i < 4 ? 99 : i < 8 ? 98 : 97));
+  toty.forEach((b, i) => make(b, 'toty', Math.max(b.ovr + 1, i < 4 ? 98 : i < 8 ? 97 : 96)));
 
-  // Team of the Season: 15 from the top 60 actives (seeded), 93–97
+  // Team of the Season: 15 from the top 60 actives (seeded), 92–96
   const trng = new Rng('promo-tots');
   const totsPool = trng.shuffle(actives.slice(0, 60)).sort((a, b) => (GROUP(a.pos) < GROUP(b.pos) ? -1 : 1));
-  for (const b of take(totsPool, { GK: 1, CB: 3, FB: 2, MID: 5, ATT: 4 }, new Set())) make(b, 'tots', clamp(93 + Math.round((b.ovr - 83) / 2), 93, 97));
+  for (const b of take(totsPool.filter((x) => x.ovr < 96), { GK: 1, CB: 3, FB: 2, MID: 5, ATT: 4 }, new Set())) make(b, 'tots', clamp(92 + Math.round((b.ovr - 83) / 2), Math.max(92, b.ovr + 1), 96));
 
-  // Future Stars: youngest standouts (real first), +5..+8
+  // Future Stars: youngest standouts (real first), +4..+7
   const young = src.regulars.filter((p) => p.age <= 22 && p.ovr >= 80).sort(byOvr)
-    .concat(src.generated.filter((p) => p.age <= 21 && p.ovr >= 76 && !p.special).sort(byOvr).slice(0, 6));
-  for (const b of young.slice(0, 14)) make(b, 'futurestars', Math.min(95, b.ovr + scaled(b.ovr, 5, 8)), { pot: Math.min(99, b.ovr + 12) });
+    .concat(src.generated.filter((p) => p.age <= 21 && p.ovr >= 78 && !p.special).sort(byOvr).slice(0, 6));
+  for (const b of young.filter((x) => boostTo('futurestars', x, 4, 7)).slice(0, 14)) make(b, 'futurestars', boostTo('futurestars', b, 4, 7), { pot: Math.min(99, b.ovr + 12) });
 
-  // Heroes Flashback: a legend's famous season (+2, max 99)
-  for (const b of icons.filter((p) => FLASHBACK[p.id.replace(/^ic_/, '')] || FLASHBACK[`${p.person}_icon`])) {
+  // Heroes Flashback: a legend's famous season (+2, max 98 — +1 for the very top)
+  for (const b of icons.filter((p) => (FLASHBACK[p.id.replace(/^ic_/, '')] || FLASHBACK[`${p.person}_icon`]) && p.ovr < 99)) {
     const key = FLASHBACK[`${b.person}_icon`] ? `${b.person}_icon` : b.person;
-    make(b, 'flashback', Math.min(99, b.ovr + 2), { moment: FLASHBACK[key] });
+    make(b, 'flashback', Math.max(b.ovr + 1, Math.min(98, b.ovr + 2)), { moment: FLASHBACK[key] });
   }
 
-  // Ultimate Birthday: 6 Icons + 8 actives, +3..+5 with +1 SM / +1 WF
+  // Ultimate Birthday: 6 Icons + 8 actives, +2..+4 with +1 SM / +1 WF
   const brng = new Rng('promo-birthday');
-  const bday = brng.shuffle(icons.slice()).slice(0, 6).concat(brng.shuffle(actives.slice(0, 80)).slice(0, 8));
+  const bday = brng.shuffle(icons.filter((p) => boostTo('birthday', p, 2, 4))).slice(0, 6).concat(brng.shuffle(actives.slice(0, 80).filter((p) => boostTo('birthday', p, 2, 4))).slice(0, 8));
   for (const b of bday) {
-    make(b, 'birthday', Math.min(97, b.ovr + scaled(b.ovr, 3, 5)), { sm: b.pos === 'GK' ? 1 : Math.min(5, b.sm + 1), wf: Math.min(5, b.wf + 1) });
+    make(b, 'birthday', boostTo('birthday', b, 2, 4), { sm: b.pos === 'GK' ? 1 : Math.min(5, b.sm + 1), wf: Math.min(5, b.wf + 1) });
   }
 
-  // Road to the Knockouts: 12 regulars rated 80–87, +3 base, +1 per knockout round reached (max +4)
+  // Road to the Knockouts: 12 regulars rated 80–87, +2 base, +1 per knockout round reached (max +4)
   const rrng = new Rng('promo-rttk');
   for (const b of rrng.shuffle(src.regulars.filter((p) => p.ovr >= 80 && p.ovr <= 87)).slice(0, 12)) {
     const lv = rttkLevel(b.id, week);
-    make(b, 'rttk', Math.min(95, b.ovr + 3 + lv), { upg: { level: lv, max: 4 } });
+    make(b, 'rttk', Math.min(94, b.ovr + 2 + lv), { upg: { level: lv, max: 4 } });
   }
 
-  // Moments: 8 actives + 3 Icons, +4..+6 (max 96)
+  // Moments: 8 actives + 3 Icons, +3..+5 (max 95)
   const mrng = new Rng('promo-moments');
-  const mom = mrng.shuffle(actives.slice(0, 50)).slice(0, 8).concat(mrng.shuffle(icons.filter((p) => p.ovr <= 92)).slice(0, 3));
-  mom.forEach((b, i) => make(b, 'moments', Math.min(96, b.ovr + scaled(b.ovr, 4, 6)), { moment: MOMENTS[i % MOMENTS.length] }));
+  const mom = mrng.shuffle(actives.slice(0, 50).filter((p) => boostTo('moments', p, 3, 5))).slice(0, 8)
+    .concat(mrng.shuffle(icons.filter((p) => p.ovr <= 91 && boostTo('moments', p, 3, 5))).slice(0, 3));
+  mom.forEach((b, i) => make(b, 'moments', boostTo('moments', b, 3, 5), { moment: MOMENTS[i % MOMENTS.length] }));
 
-  // V4 — Rivals Showdown: 10 actives from famous rivalries, +4..+7
-  const srng = new Rng('promo-showdown');
-  for (const b of srng.shuffle(actives.slice(0, 70)).slice(0, 10)) make(b, 'showdown', Math.min(97, b.ovr + scaled(b.ovr, 4, 7)));
-
+  // V4 — Rivals Showdown: 10 actives from famous rivalries, +3..+6
+  campaign('showdown', actives.slice(0, 70), 10, 3, 6);
   // V4 — One to Watch: 10 in-form actives aged <= 27, +3..+6 (dynamic-flavoured, but a normal static card here)
-  const orng = new Rng('promo-oty');
-  const otyPool = src.regulars.filter((p) => p.age <= 27 && p.ovr >= 78).concat(src.stars.filter((p) => p.age <= 27));
-  for (const b of orng.shuffle(otyPool).slice(0, 10)) make(b, 'oty', Math.min(92, b.ovr + scaled(b.ovr, 3, 6)));
+  campaign('oty', src.regulars.filter((p) => p.age <= 27 && p.ovr >= 78).concat(src.stars.filter((p) => p.age <= 27)), 10, 3, 6);
+  // V4 — Centurions: 8 veteran actives/Icons closing in on a milestone, +3..+5
+  campaign('centurions', actives.filter((p) => p.age >= 28).concat(icons.filter((p) => p.ovr <= 95)).sort(byOvr).slice(0, 40), 8, 3, 5, { milestone: '100 club/international caps' });
 
-  // V4 — Centurions: 8 veteran actives/Icons closing in on a milestone, +3..+6 (max 98)
-  const crng = new Rng('promo-centurions');
-  const centPool = actives.filter((p) => p.age >= 28).concat(icons.filter((p) => p.ovr <= 95)).sort(byOvr);
-  for (const b of crng.shuffle(centPool.slice(0, 40)).slice(0, 8)) make(b, 'centurions', Math.min(98, b.ovr + scaled(b.ovr, 3, 6)), { milestone: '100 club/international caps' });
+  // V5 — the wider calendar (see PROMOS). All seeded per campaign, never touching a shared RNG.
+  const outfield = actives.filter((p) => p.pos !== 'GK');
+  campaign('storm', actives.slice(0, 90), 10, 3, 5);
+  campaign('rulebenders', outfield.slice(0, 100), 10, 2, 4, (b) => ({ sm: Math.min(5, (b.sm || 2) + 1) }),
+    (p) => { p.stats.pac = Math.min(99, p.stats.pac + 6); p.stats.dri = Math.min(99, p.stats.dri + 3); });
+  const leagueBest = []; const lgSeen = new Set();
+  for (const b of actives) { const lg = b.league || b.club; if (!lgSeen.has(lg)) { lgSeen.add(lg); leagueBest.push(b); } }
+  campaign('potm', leagueBest.concat(actives.slice(0, 40)), 10, 2, 4);
+  campaign('fright', actives.slice(0, 100), 10, 3, 5);
+  campaign('roleswap', outfield.filter((p) => ROLE_SWAP[p.pos]).slice(0, 100), 10, 2, 4, null, (p) => {
+    const from = p.pos;
+    p.pos = ROLE_SWAP[from];
+    p.alt = [from].concat((p.alt || []).filter((x) => x !== p.pos && x !== from)).slice(0, 3);
+  });
+  campaign('halo', icons.filter((p) => p.ovr <= 93), 8, 2, 3);
+  campaign('blackout', actives.slice(0, 140), 12, 2, 4);
+  campaign('champions', actives.slice(0, 45), 10, 3, 5);
+  campaign('frost', actives.slice(0, 110), 10, 3, 5, (b) => ({ alt: [...new Set([...(b.alt || []), FROST_ALT[b.pos] || b.pos])].filter((x) => x !== b.pos).slice(0, 3) }));
+  campaign('yuletide', actives.slice(0, 80).concat(icons.filter((p) => p.ovr <= 92).slice(-12)), 10, 2, 4);
+  campaign('fantasy', outfield.slice(0, 110), 10, 2, 4);
+  campaign('wildfire', src.regulars.filter((p) => p.age <= 25 && p.ovr >= 78).concat(src.stars.filter((p) => p.age <= 25)), 10, 3, 5);
+  const vets = actives.filter((p) => p.age >= 33);
+  campaign('finalchapter', vets.length >= 8 ? vets : actives.filter((p) => p.age >= 31), 8, 3, 5);
+  campaign('fiesta', actives.slice(0, 70).concat(icons.filter((p) => p.ovr <= 93)), 12, 2, 4, (b) => ({ wf: Math.min(5, (b.wf || 3) + 1) }));
+
+  // V5 — Global Cup tournament set
+  campaign('cupplayer', actives.slice(0, 120), 14, 2, 3);
+  campaign('roadtocup', actives.slice(0, 120), 10, 2, 4);
+  campaign('cupstories', actives.slice(0, 90), 10, 2, 4);
+  campaign('cupstar', actives.filter((p) => p.age <= 26).slice(0, 80), 10, 3, 5);
+  campaign('gloryroad', src.regulars.filter((p) => p.ovr >= 78 && p.ovr <= 88), 10, 2, 2, (b) => {
+    const lv = rttkLevel(b.id, week, 'glory');
+    return { upg: { level: lv, max: 4 } };
+  });
+  for (const p of out) if (p.special === 'gloryroad' && p.upg.level) setOvr(p, Math.min(PROMO_BY_ID.gloryroad.range[1], p.ovr + p.upg.level), helpers);
+  campaign('cupicon', icons.filter((p) => p.ovr <= 94), 8, 1, 2);
+  campaign('cuphero', icons.filter((p) => p.ovr <= 90), 8, 2, 3);
+  campaign('phenoms', src.regulars.filter((p) => p.age <= 23 && p.ovr >= 76).concat(src.generated.filter((p) => p.age <= 21 && p.ovr >= 76 && !p.special)), 10, 4, 6);
 
   for (const p of out) p.tier = 'gold';
   return out;
 }
+const ROLE_SWAP = { CB: 'CDM', CDM: 'CB', CM: 'CAM', CAM: 'ST', ST: 'CAM', CF: 'CAM', LW: 'ST', RW: 'ST', LM: 'LW', RM: 'RW', LB: 'LM', RB: 'RM', LWB: 'LM', RWB: 'RM' };
+const FROST_ALT = { CB: 'CDM', CDM: 'CM', CM: 'CAM', CAM: 'CF', ST: 'CF', CF: 'ST', LW: 'LM', RW: 'RM', LM: 'LW', RM: 'RW', LB: 'LWB', RB: 'RWB', GK: 'GK' };
 
 // ---------- store packs, SBCs and objectives per promo ----------
 /** Pack definition for a promo (1 guaranteed promo card + rare golds). */
