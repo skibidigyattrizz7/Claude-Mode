@@ -1,52 +1,56 @@
 /* ==================================================================
-   Claude-Mode / Pitchside 3D — design tokens
-   Single source of truth for colour, type, spacing, radius, shadow and
-   motion. Other stylesheets (meta.css, packs.css, account.css, 2d/style.css)
-   should read these variables rather than redefining their own copies.
-   Loaded before main.css. Values are additive — nothing here removes a
-   name another agent's CSS already relies on.
+   Claude-Mode / Pitchside — design tokens (FC-style menus)
+   Charcoal surfaces + ONE electric-lime accent used sparingly (focus,
+   active tab, primary action, live status). Everything else is white /
+   grey text on charcoal; imagery (cards, packs, kits, stadium) carries
+   the colour. Promo colours live on promo content only.
+   Headings: Barlow Condensed, upright. Body: Inter. Both via Google
+   Fonts with system fallbacks.
+   Loaded before main.css / the landing page / 2D. Token NAMES are kept
+   so older rules keep resolving.
    ================================================================== */
 :root {
   color-scheme: dark;
 
-  /* ---- surface ---- */
-  --bg: #05070d;
-  --bg2: #0a0f1c;
-  --panel: rgba(16, 24, 42, .82);
-  --panel-solid: #101a2d;
-  --panel2: #16213a;
-  --line: #1f2c47;
-  --line2: #2e3f63;
+  /* ---- surface: near-black charcoal ramp ---- */
+  --bg: #0b0d10;
+  --bg2: #101317;
+  --panel: rgba(21, 24, 29, .92);
+  --panel-solid: #15181d;
+  --panel2: #1c2027;
+  --panel3: #242933;
+  --line: #262b33;
+  --line2: #353b46;
 
   /* ---- text ---- */
-  --txt: #eef3ff;
-  --mut: #8d9bbd;
-  --dim: #5d6b8c;
+  --txt: #f3f5f7;
+  --mut: #a3abb8;   /* 7.5:1 on --panel-solid */
+  --dim: #7b8390;   /* 4.5:1 on --bg — meta info only */
 
-  /* ---- one restrained accent (pitch green) + a small, purposeful
-     categorical set used only to tell game modes apart, never as
-     decorative background gradients ---- */
-  --acc: #19f5a4;
-  --acc-ink: #02140c;
-  --acc2: #7b5cff;   /* career / progression only */
-  --acc3: #22d3ee;   /* online / connectivity only */
-  --gold: #f5c542;   /* ultimate team / rewards only */
-  --hot: #ff3d7f;    /* local multiplayer only */
-  --orange: #ff8a1f; /* practice only */
-  --ok: #2be38b;
-  --warn: #ffb020;
-  --bad: #ff4d6d;
+  /* ---- the one accent ---- */
+  --acc: #cdfb3c;
+  --acc-ink: #0b0d10;
+  --acc-soft: rgba(205, 251, 60, .14);
+  /* legacy categorical names: kept, but mapped onto the same restrained system */
+  --acc2: #9fb4c9;   /* secondary / neutral-cool (progress, secondary buttons) */
+  --acc3: #7cc8ff;   /* info (connection states) */
+  --gold: #f2c94c;   /* coins & rewards only */
+  --hot: #ff4d5e;    /* notification badges */
+  --orange: #ff9b3d;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #ff5a6a;
 
   /* ---- type ---- */
-  --font-display: "Oswald", "Bahnschrift", "DIN Alternate", "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --step--1: clamp(.8rem, .78rem + .1vw, .85rem);
-  --step-0:  clamp(.9rem, .88rem + .1vw, .95rem);
-  --step-1:  clamp(1.05rem, 1rem + .3vw, 1.15rem);
-  --step-2:  clamp(1.3rem, 1.15rem + .6vw, 1.6rem);
-  --step-3:  clamp(1.7rem, 1.4rem + 1.2vw, 2.3rem);
-  --step-4:  clamp(2.3rem, 1.7rem + 2.4vw, 3.4rem);
-  --step-5:  clamp(3rem, 2rem + 4vw, 4.6rem);
+  --font-display: "Barlow Condensed", "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --step--1: .8125rem;  /* 13px meta */
+  --step-0:  .9375rem;  /* 15px body */
+  --step-1:  1.0625rem;
+  --step-2:  1.375rem;
+  --step-3:  1.875rem;
+  --step-4:  clamp(2.25rem, 1.8rem + 1.8vw, 3.25rem);
+  --step-5:  clamp(2.75rem, 2rem + 3vw, 4.5rem);
 
   /* ---- spacing (4px base) ---- */
   --sp-1: 4px;
@@ -58,27 +62,32 @@
   --sp-7: 48px;
   --sp-8: 64px;
 
-  /* ---- radius: deliberately uneven, not one pill-shape for everything ---- */
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  /* ---- radius: tight, like a console UI ---- */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
   --radius-pill: 999px;
-  --r: var(--radius-md);       /* legacy alias some styles still read */
+  --r: var(--radius-md);
   --r-sm: var(--radius-sm);
 
   /* ---- shadow ---- */
   --shadow-sm: 0 2px 8px -2px rgba(0,0,0,.5);
-  --shadow-md: 0 10px 30px -14px rgba(0,0,0,.8);
-  --shadow-lg: 0 24px 64px -20px rgba(0,0,0,.85);
-  --shadow-glow: 0 0 0 1px var(--acc), 0 10px 28px -10px var(--acc);
+  --shadow-md: 0 12px 28px -14px rgba(0,0,0,.85);
+  --shadow-lg: 0 24px 60px -20px rgba(0,0,0,.9);
+  --shadow-glow: 0 0 0 2px var(--acc);
 
-  /* ---- motion: hover lift/underline/glow live in this 150-200ms band ---- */
-  --dur-fast: 150ms;
-  --dur-base: 190ms;
-  --dur-slow: 320ms;
-  --ease-out: cubic-bezier(.2, .8, .2, 1);
-  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  /* ---- z scale ---- */
+  --z-bar: 20;
+  --z-modal: 2000;
+  --z-toast: 3000;
+
+  /* ---- motion: 120-220ms, ease-out-quart ---- */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+  --ease-out: cubic-bezier(.25, 1, .5, 1);
+  --ease-spring: cubic-bezier(.25, 1, .5, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -11,6 +11,7 @@ import { maybeShowAccountGate, accountSettingsPane, mountBroadcastBanner, online
 import { createCloudSync } from './net/cloudsave.js';
 import { setConfigProvider } from './meta/core/config.js';
 import { setConfig as setOwnerToggles } from './meta/ui/config.js';
+import { mountStadium } from './ui/stadium.js';
 
 const Q = new URLSearchParams(location.search);
 const STUB_ENGINE = Q.get('stubEngine') === '1';
@@ -1011,30 +1012,61 @@ function icon(name) {
     h('path', { d: ICONS[name], fill: 'none', stroke: 'currentColor', 'stroke-width': '6', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
 }
 
+const TRAINING_KIT = { primary: '#ff7a1a', secondary: '#1b1b1b', number: '#1b1b1b', shorts: '#1b1b1b', socks: '#ff7a1a' };
+const NEUTRAL_KITS = [{ primary: '#e9edf2', secondary: '#1b1f26', number: '#1b1f26' }, { primary: '#2a3140', secondary: '#e9edf2', number: '#e9edf2' }];
+const DIFF_NAME = Object.fromEntries(DIFFICULTIES);
+const keycaps = (codes) => h('span', { class: 'mm-keys' }, codes.map((c) => h('kbd', null, keyLabel(c))));
+
 function mainMenu() {
+  const s = loadSettings();
+  const kb = loadBinds();
+  const openSettings = () => settingsScreen(lsGet('pitchside.settingsTab', 'general'));
+  // Each tile: media (real content: kits, cards, crest, key layout) + title + one plain line of copy.
   const tiles = [
-    { id: 'kickoff', cls: 'hero', title: 'Kick-Off', sub: 'Quick match against the CPU', go: () => teamSelectScreen('kickoff') },
-    { id: 'career', cls: 'big career', title: 'Career Mode', sub: 'Manage a club through the seasons', go: () => metaScreen('career') },
-    { id: 'ut', cls: 'big ut', title: 'Ultimate Team', sub: 'Packs, squads & Squad Battles', go: () => metaScreen('ut') },
-    { id: 'online', cls: 'online', title: 'Online Match', sub: 'Quick Search or play a friend', go: () => onlineScreen() },
-    { id: 'local', cls: 'local', title: 'Local 2-Player', sub: 'Same keyboard or gamepads', go: () => teamSelectScreen('local2p') },
-    { id: 'practice', cls: 'practice', title: 'Practice', sub: 'Warm up vs a training XI', go: practice },
-    { id: 'settings', cls: 'small', title: 'Settings', sub: 'Difficulty, camera, gameplay assists', go: () => settingsScreen(lsGet('pitchside.settingsTab', 'general')) },
-    { id: 'controls', cls: 'small', title: 'Controls', sub: 'Rebind every key', go: controlsScreen },
+    { id: 'kickoff', title: 'Kick-Off', sub: 'Quick match against the CPU', go: () => teamSelectScreen('kickoff'),
+      media: h('div', { class: 'ko-art' }, h('div', { class: 'ko-pitch' }), h('div', { class: 'ko-fixture' },
+        h('div', { class: 'ko-side' }, shirtSVG(NEUTRAL_KITS[0], 10, 150)), h('div', { class: 'ko-v' }, 'v'), h('div', { class: 'ko-side' }, shirtSVG(NEUTRAL_KITS[1], 9, 150)))),
+      cta: 'Play match' },
+    { id: 'ut', title: 'Ultimate Team', sub: 'Packs, squads & Squad Battles', go: () => metaScreen('ut'),
+      media: h('div', { class: 'ut-art' }, h('div', { class: 'ut-card' })) },
+    { id: 'career', title: 'Career Mode', sub: 'Manage a club through the seasons', go: () => metaScreen('career'),
+      media: h('div', { class: 'car-art' }) },
+    { id: 'online', title: 'Online Match', sub: 'Quick Search or play a friend', go: () => onlineScreen(),
+      media: h('div', { class: 'on-art' }, h('div', { class: 'on-count' }), h('div', { class: 'on-vs' }, shirtSVG(NEUTRAL_KITS[0], '', 64), shirtSVG({ primary: '#2a3140', secondary: '#4a5363', number: '#9aa3b2' }, '?', 64))) },
+    { id: 'local', title: 'Local 2-Player', sub: 'Same keyboard or two gamepads', go: () => teamSelectScreen('local2p'),
+      media: h('div', { class: 'lp-art' },
+        h('div', null, h('small', null, 'P1'), keycaps([kb.p1.up, kb.p1.left, kb.p1.down, kb.p1.right])),
+        h('div', null, h('small', null, 'P2'), keycaps([kb.p2.up, kb.p2.left, kb.p2.down, kb.p2.right]))) },
+    { id: 'practice', title: 'Practice', sub: 'Warm up against a Training XI', go: practice,
+      media: h('div', { class: 'pr-art' }, shirtSVG(TRAINING_KIT, '', 76)) },
+    { id: 'settings', title: 'Settings', sub: `${DIFF_NAME[s.difficulty]} · ${s.halfMinutes} min halves · ${s.camera === 'pro' ? 'Pro camera' : 'Broadcast'}`, go: openSettings, small: true },
+    { id: 'controls', title: 'Controls', sub: 'Keys & gamepad', go: controlsScreen, small: true },
+  ];
+  const tabs = [
+    ['home', 'Home', null], ['play', 'Play', () => teamSelectScreen('kickoff')], ['ut', 'Ultimate Team', () => metaScreen('ut')],
+    ['career', 'Career', () => metaScreen('career')], ['online', 'Online', () => onlineScreen()], ['settings', 'Settings', openSettings],
   ];
   const el = h('section', { class: 'screen screen--menu', 'aria-label': 'Main menu' },
-    h('header', { class: 'menu-head' },
-      h('a', { class: 'menu-home', href: '../index.html', 'aria-label': 'All games' }, '‹ Games'),
-      h('div', { class: 'brand' },
-        h('div', { class: 'brand-mark', 'aria-hidden': 'true' }, 'P'),
-        h('div', null, h('h1', { class: 'brand-name' }, 'PITCHSIDE', h('span', null, '3D')), h('div', { class: 'brand-tag' }, 'The beautiful game, in your browser'))),
-      h('button', { class: 'online-pill', type: 'button', id: 'online-pill', 'data-state': 'checking', 'aria-live': 'polite', title: 'Online services status', onclick: () => onlineScreen() },
-        h('i', { class: 'dot', 'aria-hidden': 'true' }), h('span', { class: 'online-pill-t' }, 'Online: checking…')),
-      h('div', { class: 'menu-season', 'aria-hidden': 'true' }, 'SEASON 26')),
+    h('header', { class: 'mm-bar' },
+      h('a', { class: 'mm-games', href: '../index.html', 'aria-label': 'All games', title: 'All games' }, h('span', { 'aria-hidden': 'true' }, '‹')),
+      h('h1', { class: 'mm-brand' }, 'Pitchside', h('span', null, '3D')),
+      h('nav', { class: 'mm-tabs', 'aria-label': 'Sections' }, tabs.map(([id, label, go]) => h('button', {
+        type: 'button', class: `mm-tab ${go ? '' : 'on'}`, 'data-tab': id, 'aria-current': go ? null : 'page', onclick: go || null,
+      }, label))),
+      h('div', { class: 'mm-status' },
+        h('button', { class: 'online-pill', type: 'button', id: 'online-pill', 'data-state': 'checking', 'aria-live': 'polite', title: 'Online services status', onclick: () => onlineScreen() },
+          h('i', { class: 'dot', 'aria-hidden': 'true' }), h('span', { class: 'online-pill-t' }, 'Checking…')))),
     h('nav', { class: 'tiles', 'aria-label': 'Game modes' }, tiles.map((t, i) => h('button', {
-      type: 'button', class: `tile ${t.cls.split(' ').map((c) => `tile--${c}`).join(' ')}`, 'data-tile': t.id, 'data-autofocus': i === 0 ? '1' : null, style: { '--i': i }, onclick: t.go,
-    }, h('span', { class: 'tile-glow', 'aria-hidden': 'true' }), t.cls === 'small' ? null : h('span', { class: 'tile-mark', 'aria-hidden': 'true' }, icon(t.id)), icon(t.id), h('span', { class: 'tile-text' }, h('span', { class: 'tile-title' }, t.title), h('span', { class: 'tile-sub' }, t.sub)), h('span', { class: 'tile-arrow', 'aria-hidden': 'true' }, '›')))),
-    h('footer', { class: 'menu-foot' }, h('span', null, 'Arrow keys + Enter to navigate'), h('span', null, 'All players are fictional')));
+      type: 'button', class: `tile tile--${t.id}${t.small ? ' tile--small' : ''}`, 'data-tile': t.id, 'data-autofocus': i === 0 ? '1' : null, style: { '--i': i }, onclick: t.go,
+    },
+    t.media ? h('span', { class: 'tile-media', 'aria-hidden': 'true' }, t.media) : h('span', { class: 'tile-ico', 'aria-hidden': 'true' }, icon(t.id)),
+    h('span', { class: 'tile-text' }, h('span', { class: 'tile-title' }, t.title), h('span', { class: 'tile-sub' }, t.sub),
+      t.cta ? h('span', { class: 'tile-cta' }, t.cta, h('span', { 'aria-hidden': 'true' }, '›')) : null)))),
+    h('footer', { class: 'mm-hints' },
+      h('span', null, h('kbd', null, '←'), h('kbd', null, '↑'), h('kbd', null, '↓'), h('kbd', null, '→'), ' Navigate'),
+      h('span', null, h('kbd', null, 'Enter'), ' Select'),
+      h('span', null, h('kbd', null, 'Esc'), ' Back'),
+      h('span', { class: 'mm-hints-r' }, 'All players are fictional')));
   // arrow-key navigation between tiles
   el.querySelector('.tiles').addEventListener('keydown', (e) => {
     const list = [...el.querySelectorAll('.tile')];
@@ -1066,23 +1098,75 @@ function mainMenu() {
   const drawChip = () => {
     const c = online.account.current();
     const signedIn = c.state === 'account' || c.state === 'banned';
-    accChip.replaceChildren(icon('user'), h('span', null, signedIn ? c.username : 'Log in / Sign up'));
+    accChip.replaceChildren(icon('user'), h('span', null, signedIn ? c.username : 'Log in'));
     accChip.dataset.state = c.state;
   };
   drawChip();
   online.account.onChange(drawChip);
-  pill.after(onlineCountBadge(online), accChip);
+  pill.after(onlineCountBadge(online));
+  el.querySelector('.mm-bar').append(accChip);
   const onlineTile = el.querySelector('[data-tile="online"]');
   if (onlineTile) onlineTile.append(h('span', { class: 'tile-badge', hidden: true, 'aria-label': 'Pending invites and friend requests' }));
+  const onCount = el.querySelector('.on-count');
+  if (onCount) onCount.append(onlineCountBadge(online));
   const refreshPill = async () => {
     let sv;
     try { sv = await online.status(); } catch { sv = { online: false, message: '' }; }
     pill.dataset.state = sv.online ? 'on' : 'off';
     pill.title = sv.online ? 'Online services connected' : `${sv.message} Play with a Code still works.`;
-    pill.querySelector('.online-pill-t').textContent = sv.online ? 'Online: connected' : 'Online: offline';
+    pill.querySelector('.online-pill-t').textContent = sv.online ? 'Online' : 'Offline';
   };
   refreshPill();
-  nav.push({ el, name: 'menu', onReturn: refreshPill });
+  nav.push({ el, name: 'menu', onReturn: () => { refreshPill(); fillMenuArt(el); } });
+  // real content for the tiles (last fixture, best UT card, career club) once the browser is idle
+  setTimeout(() => fillMenuArt(el), 250);
+}
+
+/** Fill the main-menu tiles with the player's own content. Never throws; tiles keep their neutral art on failure. */
+async function fillMenuArt(el) {
+  try {
+    const teams = await getTeams();
+    const last = lsGet(LAST_KEY, {});
+    const home = teams.find((t) => t.id === last.home) || teams[0];
+    const away = dedupeTeams(home, teams.find((t) => t.id === last.away) || teams[1] || teams[0]);
+    const fx = el.querySelector('.ko-fixture');
+    if (fx) fx.replaceChildren(
+      h('div', { class: 'ko-side' }, shirtSVG(home.kit, 10, 150), h('b', null, home.short || home.name), h('small', null, `${teamOvr(home)} OVR`)),
+      h('div', { class: 'ko-v' }, 'v'),
+      h('div', { class: 'ko-side' }, shirtSVG(away.kit, 9, 150), h('b', null, away.short || away.name), h('small', null, `${teamOvr(away)} OVR`)));
+    const sub = el.querySelector('[data-tile="kickoff"] .tile-sub');
+    if (sub) sub.textContent = `${home.name} v ${away.name}`;
+    const you = el.querySelector('.on-vs .shirt');
+    if (you) you.replaceWith(shirtSVG(home.kit, '', 64));
+  } catch { /* keep neutral kits */ }
+  try {
+    const [cardMod, ut, players, art] = await Promise.all([import('./meta/ui/card.js'), import('./meta/core/ut.js'), import('./meta/core/players.js'), import('./meta/ui/art.js')]);
+    const box = el.querySelector('.ut-card');
+    const sub = el.querySelector('[data-tile="ut"] .tile-sub');
+    const st = ut.loadUT();
+    let best = null;
+    if (st) {
+      best = ut.clubPlayers(st).sort((a, b) => b.ovr - a.ovr)[0] || null;
+      const info = ut.squadInfo(st);
+      if (sub) sub.textContent = `${st.clubName} · Rating ${info.rating || '–'} · ${Math.round(st.coins).toLocaleString('en-US')} coins`;
+    } else {
+      const db = players.getDB();
+      best = db.players.filter((p) => p.special && p.ovr >= 88).sort((a, b) => b.ovr - a.ovr)[0] || null;
+      if (sub) sub.textContent = 'Start a club · 10,000 coins + 2 packs';
+    }
+    if (box && best) box.replaceChildren(cardMod.playerCard(best, { size: 'md' }));
+    const car = await import('./meta/core/career.js');
+    const slots = car.listSlots().filter((x) => !x.empty).sort((a, b) => (b.saved || 0) - (a.saved || 0));
+    const cbox = el.querySelector('.car-art');
+    const csub = el.querySelector('[data-tile="career"] .tile-sub');
+    if (slots.length && cbox) {
+      const sl = slots[0];
+      cbox.innerHTML = art.crestSVG(sl.clubId, 'car-crest');
+      if (csub) csub.textContent = `${sl.club} · ${sl.year}/${String((sl.year + 1) % 100).padStart(2, '0')}`;
+    } else if (cbox && !cbox.firstChild) {
+      cbox.innerHTML = art.crestSVG({ id: 'NEW', name: 'Your club', short: 'NEW', colors: { primary: '#2a3140', secondary: '#e9edf2' } }, 'car-crest');
+    }
+  } catch (e) { console.warn('[pitchside] menu art', e); }
 }
 
 // Escape = back (not during a match, not inside meta which handles its own Escape, not over a modal)
@@ -1144,6 +1228,7 @@ function startOnlineServices() {
 }
 
 // ------------------------------------------------------------------ boot
+mountStadium(document.querySelector('.bg'));
 mainMenu();
 document.documentElement.classList.add('ready');
 const start = Q.get('screen');

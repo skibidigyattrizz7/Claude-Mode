@@ -76,6 +76,27 @@ Receiver free-roam; weak passes; AI defending/marking + interceptions for user t
 - [B2] PlayStyles: use the owner's "best PlayStyles+ per position" image (scratchpad/promorefs/playstyles_plus_by_position.jpg) — assign PlayStyles+ per position accordingly; card creator offers them too.
 - [PROMO] Promo designs must apply to cards made in the card creator (choose promo → card renders in that promo design).
 
+## Owner requests (Sep 27 morning) — ALL REQUIRED
+### Owner/admin control panel [A2]
+- Full list of EVERY player who ever signed in / played / made a team (no search needed), with all in-game info (username, club name, coins, rating/division, created, last seen, online, role, bans, device vs account).
+- Open a player → see their team (squad + club + stats), control it: add/remove/delete their players/cards, edit any of their cards (tradability, rating, stats, promo, everything), add/remove coins (NO upper limit as long as nothing breaks), reset account / objectives / club.
+- Ban completely, timeout (duration), ban from: using codes, activating admin, transfer market, packs; revoke access to features; message them directly (DM).
+- Admins can list on the transfer market at ANY price (no min/max price rules for admins).
+- Adding a big amount of coins glitches and doesn't credit → fix (safe integer handling, server limit raised, no NaN).
+### UT UI [UI agent]
+- PlayStyles (with PlayStyle+ icons) and alt positions must be visible in squad / club / card views.
+- Card detail view: age, date of birth, nationality, club, league, height, weight, foot, PlayStyles, alt positions (goals for your club: later).
+- SBC storage vault UI + "Send to transfer list" pile UI (core exists in meta/core — add screens/buttons).
+- Real UI redo per docs/UI_DIRECTION.md (owner still says UI is not fixed).
+### Players [small data agent]
+- Flashback Neymar = 99.
+- Add Egypt's full 2026 World Cup squad + best Egyptian players ever (icons/heroes), realistic ratings, leagues, PlayStyles.
+### Economy [small agent]
+- Swap system: swap players for coins, and swap players for TOKENS; tokens can be used to open packs (token pack store).
+### 3D engine [G]
+- Attributes must feel different (pace/acceleration/shot power/accuracy/dribbling/defending clearly change play).
+- Admin cards must be absurdly OP: extremely fast, score from anywhere, win the ball from anywhere, never miss.
+
 ## Work order (owner allows 3 long agents + any number of small ones)
 Done + live (Sep 26): A (login UI, reset-on-join fix, config/broadcast/gift propagation, migration 004), B (vault, promo gating, 3 new promos, dedupe, coin model), C round 1 (admin/card creator/Owner Access/chemistry styles/squad UI).
 Running: C round 2 (menus, landing, 2D menus, account screens), D (pack opening redo), B2 (ratings, +500 players, admin cards, secret card, managers), small: 3D + 2D receive-pass assist.
