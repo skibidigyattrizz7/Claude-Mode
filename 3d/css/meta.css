@@ -1373,3 +1373,9 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-slot-full .pm-crest--lg { position: absolute; left: 50%; top: -170px; width: 100px; height: 120px; transform: translateX(-50%); }
 .pm-slot-full b { font: 700 28px/1.05 var(--font-display); text-transform: uppercase; }
 .pm-careermode { min-height: 200px !important; }
+@media (max-width: 700px) {
+  .pm-hub { grid-template-columns: minmax(0, 1fr); }
+  .pm-hub .pm-tile--hero { min-height: 300px; }
+  .pm-hub .pm-tile--ut::before { width: 110px; height: 154px; }
+  .pm-slotcard { min-height: 210px; }
+}
