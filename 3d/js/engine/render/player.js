@@ -401,7 +401,8 @@ export class PlayerRig {
   // ------------------------------------------------------------ per-frame update
   // x,z world; face = sim heading (radians; dir = (cos,sin)); anim/animT/animP; speed; ctx: {dt, t, ballX, ballY, ballZ, scorer}
   update(x, z, face, anim, animT, animP, speed, ctx) {
-    const dt = ctx.dt;
+    const dt = clamp(Number.isFinite(ctx.dt) ? ctx.dt : 0, 0, 0.05);
+    speed = clamp(Number.isFinite(speed) ? speed : 0, 0, 14);
     // velocity estimate from positions (for backpedal / strafe)
     if (!this.faceInit || Math.hypot(x - this.px, z - this.pz) > 3) {
       this.faceInit = true; this.face = face; this.px = x; this.pz = z; this.vx = 0; this.vz = 0;
@@ -429,7 +430,7 @@ export class PlayerRig {
     const vmag = Math.hypot(this.vx, this.vz);
     let fwd = 1, side = 0;
     if (vmag > 0.5) { fwd = (this.vx * fx + this.vz * fz) / vmag; side = (this.vx * -fz + this.vz * fx) / vmag; }
-    const freq = 0.72 + 0.17 * s;
+    const freq = lerp(0.85, 2.15, sstep(0, 9, s));
     this.cyc += dt * freq * Math.PI * 2 * (fwd < -0.35 ? -1 : 1) * (s > 0.15 ? 1 : 0.0);
     // head tracking the ball
     const bx = ctx.ballX - x, bz = ctx.ballZ - z;
@@ -440,13 +441,25 @@ export class PlayerRig {
     // target pose
     const T = this.target;
     this._locomotion(T, s, fwd, side, ctx.t);
+    // Visual first touch: only on a new close approach, never alter ball physics.
+    const ballDist = Math.hypot(bx, bz);
+    if (ballDist > 1.5) this.receiveArmed = true;
+    if (anim === ANIM.RUN && !this.isGK && ctx.ballY < 0.8 && ballDist < 0.95 && this.receiveArmed) { this.receiveT = 0.28; this.receiveArmed = false; }
+    this.lastBallDist = ballDist;
+    this.receiveT = Math.max(0, (this.receiveT || 0) - dt);
+    if (anim === ANIM.RUN && this.receiveT > 0) {
+      const weight = Math.sin(Math.PI * (1 - this.receiveT / 0.28));
+      const hip = this.leftFoot ? P.lhX : P.rhX, knee = this.leftFoot ? P.lkX : P.rkX;
+      T[hip] = lerp(T[hip], -0.38, weight); T[knee] = lerp(T[knee], 0.48, weight);
+      T[P.spX] += 0.1 * weight; T[P.lsZ] += 0.2 * weight; T[P.rsZ] -= 0.2 * weight;
+    }
     if (anim !== ANIM.RUN) this._oneShot(T, anim, animT, animP, s, ctx);
 
     // crossfade on anim change
     if (anim !== this.curAnim) {
       this.from.set(this.pose);
       const low = this.pose[P.bodyY] < 0.7 && this.pose[P.gl] < 0.5;
-      this.blendDur = low ? 0.42 : anim === ANIM.DIVE || anim === ANIM.SLIDE || anim === ANIM.FALL ? 0.08 : 0.12;
+      this.blendDur = low ? 0.42 : anim === ANIM.DIVE || anim === ANIM.SLIDE || anim === ANIM.FALL ? 0.08 : anim === ANIM.CELEB ? 0.24 : 0.14;
       this.blendT = 0;
       this.curAnim = anim;
     }
@@ -484,6 +497,7 @@ export class PlayerRig {
     T[P.reX] = elb - 0.15 * run * Math.max(0, Math.sin(ph));
     const breath = Math.sin(t * 1.9 + (this.seed % 100)) * 0.012 * (1 - run);
     T[P.spX] = 0.03 + 0.025 * s * (back ? -0.6 : 1) + breath;
+    T[P.pitch] = (back ? -0.04 : 0.12) * sprint;
     T[P.spY] = -0.14 * run * Math.sin(ph);
     T[P.spZ] = 0;
     T[P.nkX] = -0.02 - 0.02 * s * (back ? 0 : 1);
@@ -506,7 +520,7 @@ export class PlayerRig {
     const oz = R > 0 ? 1 : -1; // abduction sign for opposite (left) arm
     switch (anim) {
       case ANIM.KICK: {
-        const pw = clamp(pp || 0.6, 0.3, 1);
+        const pw = clamp(Number.isFinite(pp) ? pp : 0.6, 0, 1);
         const b = easeOut(seg(u, 0, 0.12)), st = easeIn(seg(u, 0.12, 0.21)), fo = seg(u, 0.21, 0.38);
         const back = 0.5 + 0.4 * pw, thru = -(0.75 + 0.85 * pw);
         let h = lerp(0, back, b); h = lerp(h, thru, st); h = lerp(h, thru * 0.55, smooth(fo));
@@ -553,7 +567,7 @@ export class PlayerRig {
         break;
       }
       case ANIM.HEAD: {
-        const jh = pp || 0.35;
+        const jh = clamp(Number.isFinite(pp) ? pp : 0.35, 0, 1.2);
         const v = clamp(u / 0.6, 0, 1);
         const j = Math.sin(Math.PI * v);
         T[P.lift] = jh * j; T[P.gl] = 1;
@@ -584,8 +598,9 @@ export class PlayerRig {
       case ANIM.DIVE: {
         const side = Math.sign(pp) || 1;
         const hgt = Math.max(0, Math.abs(pp) - 1);
+        const lateral = (ctx.ballX - this.px) * -Math.sin(this.face) + (ctx.ballZ - this.pz) * Math.cos(this.face);
         const cosF = Math.cos(this.face);
-        const dr = (Math.abs(cosF) > 0.2 ? Math.sign(side * cosF) : side) || 1; // +1 = player's right
+        const dr = Math.abs(lateral) > 0.05 ? Math.sign(lateral) : (Math.sign(side * cosF) || side);
         const F = 0.4;
         const load = seg(u, 0, 0.1);
         const fl = seg(u, 0.08, F + 0.05);
@@ -622,10 +637,12 @@ export class PlayerRig {
       }
       case ANIM.CELEB: {
         // sim variants: 0 arms up, 1 airplane, 2 knee slide. Non-scorers join in with arms up / clapping.
-        let kind = Math.round(pp) % 3;
+        let kind = Math.abs(Math.round(pp)) % 4;
         const isScorer = ctx.scorer < 0 || ctx.idx === ctx.scorer;
         if (!isScorer) kind = 3 + (this.seed % 2);
         else if (kind === 0 && (this.seed % 2)) kind = 5; // fist-pump variant of "arms up"
+        if (isScorer && kind === 0 && this.seed % 3 === 0) kind = 6;
+        if (isScorer && kind === 3) kind = 6;
         if (kind === 1) { // airplane
           T[P.lsZ] = 1.45; T[P.rsZ] = -1.45; T[P.lsX] = 0.1; T[P.rsX] = 0.1; T[P.leX] = -0.05; T[P.reX] = -0.05;
           T[P.roll] = 0.28 * Math.sin(u * 1.8); T[P.spX] = 0.05; T[P.nkX] = -0.25;
@@ -642,6 +659,12 @@ export class PlayerRig {
             T[P.lift] = 0;
           }
           if (u > 2.8) { T[P.lsZ] = 1.3; T[P.rsZ] = -1.3; }
+        } else if (kind === 6) { // badge kiss; hand draws the shirt toward the bowed head
+          const k = sstep(0.15, 0.65, u) * (1 - sstep(2.4, 2.9, u));
+          T[P.rsX] = lerp(T[P.rsX], -0.95, k); T[P.rsY] = -0.6 * k;
+          T[P.rsZ] = lerp(T[P.rsZ], 0.25, k); T[P.reX] = lerp(T[P.reX], -2.1, k);
+          T[P.nkX] = 0.45 * k; T[P.nkY] = 0.18 * k;
+          T[P.spX] = 0.12 * k; T[P.lift] = 0;
         } else if (kind === 5) { // jump + fist pump
           const cyc = (u % 0.9) / 0.9;
           const j = cyc < 0.5 ? Math.sin(Math.PI * cyc * 2) : 0;

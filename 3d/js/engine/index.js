@@ -9,6 +9,7 @@ import { InputManager, emptyInput, EXTRA_BINDS } from './ui/input.js';
 import { Hud } from './ui/hud.js';
 import { MatchAudio } from './ui/audio.js';
 import { Commentary } from './ui/commentary.js';
+import { createCommentary } from './audio/commentary.js';
 import { resolveMatchKits } from './core/kits.js';
 import { webglStatus, isModuleLoadError, lowGraphics, setLowGraphics, showLoadError, WEBGL_HELP } from './ui/loading.js';
 
@@ -49,7 +50,12 @@ export function createMatch(container, opts = {}) {
   const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : () => {};
   const onEnd = typeof opts.onEnd === 'function' ? opts.onEnd : () => {};
   const stadium = opts.stadium === 'night' ? 'night' : 'day';
-  const weather = ['rain', 'snow'].includes(opts.weather) ? opts.weather : 'clear';
+  // opts.weather: 'clear' (default) | 'rain' | 'snow' | 'random' (60% clear, 25% rain, 15% snow)
+  let weather = ['rain', 'snow'].includes(opts.weather) ? opts.weather : 'clear';
+  if (opts.weather === 'random') {
+    const r = Number.isFinite(+opts.seed) ? ((Math.imul(+opts.seed | 0, 2654435761) >>> 0) % 1000) / 1000 : Math.random();
+    weather = r < 0.6 ? 'clear' : r < 0.85 ? 'rain' : 'snow';
+  }
   const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
   // ?safe=1 (e.g. a locked-down school Chromebook/proxy): force the lightest settings regardless
   // of what the caller asked for, so the match has the best chance of starting at all.
@@ -108,8 +114,18 @@ export function createMatch(container, opts = {}) {
   });
 
   const audio = new MatchAudio();
-  audio.setVolume(Number.isFinite(+opts.volume) ? Math.max(0, Math.min(1, +opts.volume)) : 1);
-  const commentary = new Commentary(uiGp.commentary, home, away);
+  const volume = Number.isFinite(+opts.volume) ? Math.max(0, Math.min(1, +opts.volume)) : 1;
+  audio.setVolume(volume);
+  // 'voice' commentary: spoken lines + crowd swells (audio/commentary.js), the HUD ticker keeps the
+  // text lines; 'text' = ticker only; 'off' = nothing. Follows the match volume setting.
+  const voiceMode = uiGp.commentary === 'voice';
+  const commentary = new Commentary(voiceMode ? 'text' : uiGp.commentary, home, away);
+  let voice = null;
+  try { voice = voiceMode ? createCommentary({ volume }) : null; } catch (e) { console.warn('[pitchside-engine] commentary unavailable', e && e.message); }
+  if (voice && !volume) voice.setMuted(true);
+  const say = (evt) => { if (voice) { try { voice.onEvent(evt); } catch { /* speech is best-effort */ } } };
+  const unlockVoice = () => { if (voice) voice.unlock(); };
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(ev, unlockVoice, { passive: true });
   // Resolve the kits actually worn on the pitch once (perceptual clash check: away falls back
   // away -> third -> generated; GK kits nudged off both outfield kits), and hand the same
   // home/away down to the HUD and every renderer attempt so the scoreboard colours always
@@ -133,6 +149,7 @@ export function createMatch(container, opts = {}) {
     onCommand: (cmd, arg, slot) => {
       if (destroyed) return;
       audio.unlock();
+      unlockVoice();
       if (cmd === 'pause') { if (menuOpen) resume(); else openMenu(); }
       else if (cmd === 'camera') toggleCamera();
       else if (cmd === 'tac') {
@@ -367,6 +384,7 @@ export function createMatch(container, opts = {}) {
     replayDone.add(gt);
     if (fr.length < 20) { if (sim) sim.skipReplay(); return; }
     replay = { frames: fr, clock: 0, t0: fr[0].t, gt, seen: new Set() };
+    if (R && typeof R.setReplayPath === 'function') R.setReplayPath(fr.map((f) => ({ t: f.t, b: f.v.b, p: f.v.p })));
     if (R) R.setCamera('replay');
   }
   // instant replay of the last ~8 s from the pause menu
@@ -377,6 +395,7 @@ export function createMatch(container, opts = {}) {
     if (fr.length < 10) { hud.toast('NOTHING TO REPLAY', '#ff9f1a'); return; }
     hud.showMenu(false);
     replay = { frames: fr, clock: 0, t0: fr[0].t, gt: tEnd - 1.5, seen: new Set(), instant: true };
+    if (R && typeof R.setReplayPath === 'function') R.setReplayPath(fr.map((f) => ({ t: f.t, b: f.v.b, p: f.v.p })), 'broadcast');
     if (R) R.setCamera('replay');
   }
   function endReplay(skipped) {
@@ -402,6 +421,7 @@ export function createMatch(container, opts = {}) {
     const a = fr[i], b = fr[i + 1];
     const v = lerpView(a.v, b.v, (tt - a.t) / ((b.t - a.t) || 1));
     v.replay = true;
+    v.rt = tt; // replay clock (recording time) for the scripted replay cameras
     v.aim = [null, null]; v.traj = null; v.penAim = null; v.pw = [0, 0];
     v.local = local;
     for (const f of a.v.fx || []) {
@@ -427,10 +447,10 @@ export function createMatch(container, opts = {}) {
         case 'kick': audio.kick(f.s); break;
         case 'whistle': audio.whistle(f.n); break;
         case 'net': audio.net(f.s); break;
-        case 'post': audio.post(); hud.toast('WOODWORK!', '#ffe14d'); doShake(0.5); commentary.say('post', {}); break;
-        case 'save': audio.ooh(); hud.toast('SAVE!', '#46d17a'); commentary.say('save', { name: playerData(f.pi).name }); break;
+        case 'post': audio.post(); hud.toast('WOODWORK!', '#ffe14d'); doShake(0.5); commentary.say('post', {}); say({ type: 'post' }); break;
+        case 'save': audio.ooh(); hud.toast('SAVE!', '#46d17a'); commentary.say('save', { name: playerData(f.pi).name }); say({ type: 'save', playerName: playerData(f.pi).name }); break;
         case 'punch': audio.ooh(); hud.toast('PUNCHED CLEAR', '#46d17a', 1.2); break;
-        case 'rocket': doShake(0.25); break;
+        case 'rocket': doShake(0.25); say({ type: 'attack' }); break;
         case 'timed': hud.timed(f.q, f.pi); break;
         case 'goal': {
           audio.goal();
@@ -439,6 +459,7 @@ export function createMatch(container, opts = {}) {
           const cap = (halfBase(view.h) + (view.h <= 2 ? 2700 : 900)) / 60 + (view.ad || 0);
           hud.bannerMsg('GOAL!', `${pd.name || ''}${f.og ? ' (OG)' : ''}  ${Math.min(minute, cap)}'`, 'goal', 3.2);
           commentary.say('goal', { name: pd.name, og: !!f.og, score: view.sc, team: f.team });
+          say({ type: 'goal', playerName: f.og ? '' : pd.name });
           if (!sim) safe(onEvent, { type: 'goal', team: SIDES[f.team], playerId: pd.id, playerName: pd.name, minute, ownGoal: !!f.og, score: [...view.sc] });
           break;
         }
@@ -453,6 +474,7 @@ export function createMatch(container, opts = {}) {
           const red = f.c === 'r';
           hud.bannerMsg(red ? 'RED CARD' : 'YELLOW CARD', pd.name || '', red ? 'red' : 'yellow', 2.2, red ? '#e11d2a' : '#ffd400');
           commentary.say(red ? 'red' : 'yellow', { name: pd.name });
+          say({ type: 'card', card: red ? 'red' : 'yellow', playerName: pd.name });
           if (!sim) safe(onEvent, { type: 'card', card: red ? 'red' : 'yellow', team: SIDES[f.pi < 11 ? 0 : 1], playerId: pd.id, playerName: pd.name, minute });
           break;
         }
@@ -474,6 +496,7 @@ export function createMatch(container, opts = {}) {
           hud.bannerMsg(f.et ? 'EXTRA TIME · HALF TIME' : 'HALF TIME', `${home.short} ${view.sc[0]} - ${view.sc[1]} ${away.short}`, '', 3.2);
           hud.showStats(view, f.et ? 'EXTRA TIME · HALF TIME' : 'HALF TIME', 3.4);
           commentary.say('halftime', { score: view.sc });
+          say({ type: 'halftime' });
           if (!sim && !f.et) safe(onEvent, { type: 'halftime', score: [...view.sc], minute: 45 });
           break;
         case 'etbreak':
@@ -496,6 +519,7 @@ export function createMatch(container, opts = {}) {
           hud.bannerMsg('FULL TIME', `${home.short} ${view.sc[0]} - ${view.sc[1]} ${away.short}${pens ? `  (${pens[0]} - ${pens[1]} pens)` : ''}`, '', 4);
           hud.showStats(view, 'FULL TIME', 6);
           commentary.say('fulltime', { score: view.sc, pens });
+          say({ type: 'fulltime' });
           if (!sim) safe(onEvent, { type: 'fulltime', score: [...view.sc], minute: view.h <= 2 ? 90 : 120 });
           break;
         }
@@ -713,6 +737,8 @@ export function createMatch(container, opts = {}) {
       hud.dispose();
       audio.dispose();
       commentary.stop();
+      for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.removeEventListener(ev, unlockVoice);
+      if (voice) { try { voice.dispose(); } catch { /* ignore */ } voice = null; }
       if (R) { try { R.destroy(); } catch (e) { console.error(e); } R = null; }
       root.remove();
       if (restorePos != null) container.style.position = restorePos;
