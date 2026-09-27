@@ -1133,6 +1133,51 @@ test('B2: Neymar has several promo versions, the highest reaching 99, at least o
 });
 function getPlayerNeymar(db) { return db.stars.find((p) => p.person === 'neymar'); }
 
+// ---------- A2: one balance model (local coins <-> infinite) + custom card registry ----------
+test('wallet: toggling infinite on/off never loses, NaNs or corrupts the real balance; earnings while infinite count', async () => {
+  const W = await import('../core/wallet.js');
+  const s = { coins: 12345, admin: {} };
+  W.setInfinite(s, true);
+  assert.equal(s.coins, W.INFINITE_COINS);
+  assert.equal(W.realCoins(s), 12345);
+  s.coins -= 900000; // a pack bought while infinite: free
+  W.settleInfinite(s);
+  assert.equal(W.realCoins(s), 12345);
+  s.coins += 800; // a match reward while infinite: kept
+  assert.equal(W.settleInfinite(s), 800);
+  W.setInfinite(s, true); // double "on" is a no-op
+  W.setInfinite(s, false);
+  assert.deepEqual([s.coins, s.admin.infinite, 'stash' in s.admin], [13145, false, false]);
+  W.setInfinite(s, false); // double "off" is a no-op
+  assert.equal(s.coins, 13145);
+  for (let i = 0; i < 20; i++) W.setInfinite(s, i % 2 === 0); // rapid toggling
+  assert.equal(W.realCoins(s), 13145);
+  // corrupt saves are repaired: NaN / string / leftover INFINITE_COINS as a real balance
+  assert.equal(W.normalizeWallet({ coins: NaN, admin: {} }).coins, 0);
+  assert.equal(W.normalizeWallet({ coins: '700', admin: null }).coins, 700);
+  assert.equal(W.normalizeWallet({ coins: W.INFINITE_COINS, admin: { infinite: false, stash: 4200 } }).coins, 4200);
+  const inf = W.normalizeWallet({ coins: 5000, admin: { infinite: true } });
+  assert.deepEqual([inf.coins, inf.admin.stash], [W.INFINITE_COINS, 5000]);
+  assert.equal(W.setInfinite({ coins: 1, admin: { infinite: true, stash: 50 } }, false, { realBalance: 777 }).coins, 777); // online: server balance
+  assert.equal(W.setInfinite({ coins: W.INFINITE_COINS, admin: { infinite: true, stash: NaN } }, false).coins, 0);
+});
+
+test('custom cards: granted Card Creator card is in the club, tradable, and survives a save/load round trip', async () => {
+  const { receiveCard } = await import('../core/customreg.js');
+  const { getPlayer, getDB: db } = await import('../core/players.js');
+  const s = UT.createUTState();
+  const card = { id: 'admin_42_0', name: 'Test Hero', pos: 'CAM', ovr: 97, tier: 'gold', special: 'hero', customAdmin: true, stats: { pac: 97, sho: 96, pas: 99, dri: 99, def: 60, phy: 80 }, photo: 'data:image/jpeg;base64,AAAA' };
+  const r = receiveCard(s, card);
+  assert.equal(r.ok, true);
+  assert.ok(s.club.includes(card.id) && !s.untradeable.includes(card.id));
+  const back = UT.migrateUT(JSON.parse(JSON.stringify(s)));
+  db().byId.delete(card.id);
+  const again = UT.migrateUT(JSON.parse(JSON.stringify(s)));
+  assert.ok(back.club.includes(card.id) && again.club.includes(card.id));
+  assert.equal(getPlayer(card.id).photo, card.photo);
+  assert.equal(getPlayer(card.id).ovr, 97);
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -164,10 +164,9 @@ export function adminView() {
         h('label', { class: 'pm-toggle' }, h('input', {
           type: 'checkbox', checked: inf, disabled: !s,
           onchange: (e) => {
-            s.admin = s.admin || {};
-            if (e.target.checked) { s.admin.stash = app.wallet.mode === 'online' ? null : s.coins; s.admin.infinite = true; }
-            else { s.admin.infinite = false; s.coins = app.wallet.mode === 'online' ? app.wallet.synced : (s.admin.stash ?? 10000); delete s.admin.stash; }
-            done(e.target.checked ? 'Infinite coins on (nothing is charged or synced).' : 'Infinite coins off.');
+            app.setInfiniteCoins(e.target.checked); // one balance model: the real balance is stashed / restored, never lost
+            app.toast(e.target.checked ? 'Infinite coins on (spends are free; earnings still count).' : `Infinite coins off — balance back to ${fmtNum(s.coins)}.`, 'good');
+            app.refresh();
           },
         }), h('span', null, 'Infinite coins (UT)')));
 

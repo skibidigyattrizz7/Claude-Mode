@@ -5,7 +5,7 @@ import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
 import { loadUT, saveUT } from '../core/ut.js';
-import { INFINITE_COINS } from '../core/admin.js';
+import { normalizeWallet, settleInfinite, setInfinite as walletSetInfinite, realCoins, isInfinite, cleanCoins } from '../core/wallet.js';
 import { getAdminLevel, bindOnline as bindAdminOnline, clearAdminSession } from '../../shared/adminauth.js';
 import { adminButton, adminView } from './adminview.js';
 import { tileIcon } from './icons.js';
@@ -52,6 +52,7 @@ export class MetaApp {
     container.appendChild(this.root);
     this.stack = [];
     this.ut = loadUT();
+    if (this.ut) normalizeWallet(this.ut);
     this.career = null;
     this.settings = { halfMinutes: 3, difficulty: 'pro', ...load(SETTINGS_KEY, {}) };
     this.destroyed = false;
@@ -117,8 +118,7 @@ export class MetaApp {
       clearAdminSession();
       try { this.online.admin && typeof this.online.admin.forget === 'function' && this.online.admin.forget(); } catch { /* ignore */ }
       if (this.ut) {
-        this.ut.admin = this.ut.admin || {};
-        this.ut.admin.infinite = false; delete this.ut.admin.stash;
+        walletSetInfinite(this.ut, false, { realBalance: 5000 });
         this.ut.coins = 5000;
         this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 };
         this.saveUT();
@@ -177,10 +177,58 @@ export class MetaApp {
 
   // ---- UT coins (local vs online wallet) ----
   coinChip() {
-    const inf = this.ut.admin && this.ut.admin.infinite;
+    const inf = isInfinite(this.ut);
     const online = this.wallet.mode === 'online';
-    return h('div', { class: `pm-coins ${online ? 'is-online' : ''}`, title: online ? 'Online coin balance (server)' : 'Local coin balance (this device)' },
-      h('i', { 'aria-hidden': 'true' }), inf ? '∞' : fmtNum(this.ut.coins), h('small', { class: 'pm-coins-src' }, online ? 'Online' : 'Local'));
+    const val = cleanCoins(this.ut.coins, 0);
+    const num = h('span', { class: 'pm-coins-n', 'data-coins': inf ? 'inf' : String(val) }, inf ? '∞' : fmtNum(val));
+    const chip = h('div', { class: `pm-coins ${online ? 'is-online' : ''}`, title: online ? 'Online coin balance (server)' : 'Local coin balance (this device)' },
+      h('i', { 'aria-hidden': 'true' }), num, h('small', { class: 'pm-coins-src' }, online ? 'Online' : 'Local'));
+    if (inf) this.coinAnim = null; else this.animateCoins(num, val);
+    return chip;
+  }
+  /**
+   * The ONE animated coin display: every coin change (match rewards, market sales, gifts, SBCs, packs, admin)
+   * re-renders the top bar, and the chip counts up/down from the value it showed last — continuing smoothly
+   * when a new change lands mid-animation.
+   */
+  animateCoins(el, to, ms = 700) {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const a = this.coinAnim;
+    let from = to;
+    if (a) {
+      const p = Math.min(1, (now - a.t0) / a.ms);
+      from = p >= 1 ? a.to : Math.round(a.from + (a.to - a.from) * (1 - Math.pow(1 - p, 3)));
+    }
+    const anim = { from, to, t0: now, ms };
+    this.coinAnim = anim;
+    if (from === to || typeof requestAnimationFrame !== 'function') return;
+    el.textContent = fmtNum(from);
+    el.style.color = to > from ? '#7dffc4' : '#ff9a9a';
+    const step = (t) => {
+      if (this.coinAnim !== anim || !el.isConnected) return;
+      const p = Math.min(1, (t - anim.t0) / anim.ms);
+      el.textContent = fmtNum(Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(step); else { el.textContent = fmtNum(to); el.style.color = ''; }
+    };
+    requestAnimationFrame(step);
+  }
+  /** Infinite coins on/off without ever losing the real balance (local: stash; online: server balance). */
+  setInfiniteCoins(on) {
+    const s = this.ut;
+    if (!s) return;
+    const w = this.wallet;
+    if (on) walletSetInfinite(s, true);
+    else if (w.mode === 'online') {
+      this.saveUT(); // settles + sends any coins earned while infinite
+      walletSetInfinite(s, false, { realBalance: cleanCoins(w.synced, 0) });
+      w.synced = s.coins;
+      if (w.infiniteServer && this.online && this.online.owner && typeof this.online.owner.setInfinite === 'function') {
+        w.infiniteServer = false;
+        safeCall(() => this.online.owner.setInfinite(false), { ok: false }).then(() => this.refreshOnlineCoins());
+      } else this.refreshOnlineCoins();
+    } else walletSetInfinite(s, false);
+    this.saveUT();
+    this.topRefresh();
   }
   topRefresh() {
     const v = this.stack[this.stack.length - 1];
@@ -203,7 +251,7 @@ export class MetaApp {
     if (!this.online || !this.online.coins || !(await this.onlineAvailable())) return this.wallet.mode;
     const bal = coinNum(await safeCall(() => this.online.coins.get()));
     if (!Number.isFinite(bal) || this.destroyed || this.ut !== s) return this.wallet.mode;
-    if (this.wallet.mode !== 'online') this.wallet.local = s.coins;
+    if (this.wallet.mode !== 'online') this.wallet.local = realCoins(s);
     this.wallet.mode = 'online';
     this.wallet.synced = bal;
     if (!(s.admin && s.admin.infinite)) s.coins = bal;
@@ -241,14 +289,26 @@ export class MetaApp {
     const s = this.ut;
     if (!s) return false;
     const w = this.wallet;
-    if (s.admin && s.admin.infinite) {
-      s.coins = INFINITE_COINS;
+    if (isInfinite(s)) {
+      // spends are free; earnings are kept (local: in the stash; online: sent to the server wallet)
+      const earned = settleInfinite(s, { stash: w.mode !== 'online' });
+      if (w.mode === 'online' && earned > 0) {
+        w.inflight++;
+        w.pending = w.pending.then(async () => {
+          const r = await safeCall(() => this.online.coins.add(earned, 'ut-earn'), { ok: false });
+          w.inflight--;
+          const b = coinNum(r);
+          if (r && r.ok !== false && Number.isFinite(b)) w.synced = b;
+        });
+      }
       // online: make the server wallet infinite too, so real-market buys / spends succeed (owner powers needed)
       if (w.mode === 'online' && !w.infiniteServer && this.online.owner && this.online.admin && typeof this.online.admin.canOwner === 'function' && this.online.admin.canOwner()) {
         w.infiniteServer = true;
         safeCall(() => this.online.owner.setInfinite(true), { ok: false }).then((r) => { if (!r || !r.ok) w.infiniteServer = false; });
       }
     } else if (w.mode === 'online') {
+      if (!Number.isFinite(Number(s.coins))) s.coins = cleanCoins(w.synced, 0);
+      if (!Number.isFinite(Number(w.synced))) w.synced = cleanCoins(s.coins, 0);
       const delta = Math.round(s.coins - w.synced);
       if (delta) {
         w.synced = s.coins;
@@ -261,8 +321,11 @@ export class MetaApp {
           this.topRefresh();
         });
       }
-    }
-    return saveUT(w.mode === 'online' ? { ...s, coins: w.local ?? 0 } : s);
+    } else s.coins = cleanCoins(s.coins, 0);
+    if (w.mode !== 'online') return saveUT(s);
+    // online: the device file keeps the real LOCAL balance (never the server's, never INFINITE_COINS)
+    const local = cleanCoins(w.local, 0);
+    return saveUT(isInfinite(s) ? { ...s, coins: local, admin: { ...s.admin, stash: local } } : { ...s, coins: local });
   }
 
   // ---- matches ----
