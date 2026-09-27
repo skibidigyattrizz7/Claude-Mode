@@ -1,6 +1,6 @@
 // Pure-logic tests for the meta layer. Run: node 3d/js/meta/tests/meta.test.mjs
 import assert from 'node:assert/strict';
-import { getDB, _resetDB, computeOvr, tierOf } from '../core/players.js';
+import { getDB, _resetDB, computeOvr, tierOf, sanitizeCard } from '../core/players.js';
 import { Rng } from '../core/rng.js';
 import { calcChemistry, calcChemistryFc26, calcChemistryStyled, CHEM_STYLES, linkStrength, teamRating } from '../core/chemistry.js';
 import { FORMATIONS, FORMATION_NAMES } from '../core/formations.js';
@@ -9,7 +9,7 @@ import { simulateMatch } from '../core/sim.js';
 import * as UT from '../core/ut.js';
 import * as C from '../core/career.js';
 import { getNationalTeams, getSavedUltimateTeam, mountMeta } from '../index.js';
-import { POSITIONS, NATIONS } from '../core/data.js';
+import { POSITIONS, NATIONS, LEAGUE_BY_ID, SPECIAL_CLUBS, clubById } from '../core/data.js';
 
 let passed = 0, failed = 0;
 const queue = [];
@@ -37,7 +37,7 @@ test('database has >= 1500 players with required fields', () => {
   const ids = new Set();
   for (const p of db.all) {
     assert.ok(!ids.has(p.id), `duplicate id ${p.id}`); ids.add(p.id);
-    for (const k of ['id', 'name', 'age', 'nat', 'club', 'pos', 'alt', 'ovr', 'pot', 'wf', 'sm', 'foot', 'wr', 'height', 'value', 'wage', 'tier']) assert.ok(p[k] !== undefined, `${p.id} missing ${k}`);
+    for (const k of ['id', 'name', 'age', 'nat', 'club', 'league', 'pos', 'alt', 'ovr', 'pot', 'wf', 'sm', 'foot', 'wr', 'height', 'value', 'wage', 'tier']) assert.ok(p[k] !== undefined, `${p.id} missing ${k}`);
     assert.ok(POSITIONS.includes(p.pos));
     assert.ok(p.wf >= 1 && p.wf <= 5 && p.sm >= 1 && p.sm <= 5);
     assert.ok(p.pot >= p.ovr);
@@ -45,6 +45,63 @@ test('database has >= 1500 players with required fields', () => {
     if (!p.special) assert.equal(p.tier, tierOf(p.ovr));
   }
   for (const sp of ['legend', 'hero', 'inform']) assert.ok(db.specials.some((p) => p.special === sp), `no ${sp}`);
+});
+
+// Owner request (leagues): every card in the pool must carry a usable `league` — a real LEAGUE_BY_ID entry,
+// or one of the documented special-club pseudo-leagues (Icons/Legends/Heroes/Secret/Card Creator) — so
+// SBC/objective/tournament "same league" requirements and chemistry always have a real field to read.
+test('every card in the pool has a usable league (real league or a documented special-club pseudo-league)', () => {
+  const db = getDB();
+  const usable = (id) => typeof id === 'string' && id.length > 0 && (!!LEAGUE_BY_ID[id] || !!SPECIAL_CLUBS[id]);
+  const bad = db.all.filter((p) => !usable(p.league));
+  assert.deepEqual(bad.map((p) => `${p.id}:${p.league}`), [], `${bad.length}/${db.all.length} cards have no usable league`);
+  // Heroes are tied to a real league (their "home" league), not the HER pseudo-club/league.
+  for (const p of db.specials.filter((x) => x.special === 'hero')) assert.ok(LEAGUE_BY_ID[p.league], `hero ${p.id} should carry a real league, got ${p.league}`);
+  // Icons/Legends/classic Legends always link to every league in chemistry (linksAll in chemistry.js),
+  // so their own league value only needs to be a resolvable pseudo-league, never a real one.
+  for (const p of db.icons) assert.equal(p.league, 'ICN');
+  for (const p of db.specials.filter((x) => x.special === 'legend')) assert.equal(p.league, 'LEG');
+  // Real Stars/regulars sit at a fictional club, and must carry THAT club's actual league (not a guess).
+  for (const p of db.stars.concat(db.regulars)) {
+    const c = clubById(p.club);
+    assert.ok(c && c.league === p.league, `${p.id}: club ${p.club} is in ${c && c.league}, card says ${p.league}`);
+  }
+});
+
+// Custom / Card Creator cards (ui/customcards.js -> core/customreg.js -> sanitizeCard) have no real club of
+// their own; they must still resolve to a usable, self-consistent league (not an arbitrary Icons default).
+test('custom (Card Creator) cards without an explicit club/league resolve to the FUT pseudo-league', () => {
+  const created = sanitizeCard({ id: 'admin_1_1', name: 'Test Player', pos: 'ST', tier: 'gold', stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } });
+  assert.equal(created.club, 'FUT');
+  assert.equal(created.league, 'FUT');
+  assert.ok(SPECIAL_CLUBS.FUT && SPECIAL_CLUBS.FUT.league === 'FUT');
+  // A malformed network card with a real club but no league inherits that club's actual league.
+  const realClub = clubById(getDB().players[0].club);
+  const inherited = sanitizeCard({ id: 'net1', pos: 'ST', club: realClub.id, stats: {} });
+  assert.equal(inherited.league, realClub.league);
+});
+
+// Owner request: every SBC that checks league composition ('sameLeague') must be satisfiable from the
+// available card pool — i.e. at least one real league actually has enough eligible players, of varied
+// enough positions, to fill an 11-man XI (not just a raw headcount).
+test('every SBC league requirement (sameLeague) is satisfiable from the available pool', () => {
+  const db = getDB();
+  for (const sbc of UT.SBCS) {
+    const lgReq = sbc.reqs.find((r) => r.t === 'sameLeague');
+    const countReq = sbc.reqs.find((r) => r.t === 'count');
+    if (!lgReq) continue;
+    const need = Math.max(lgReq.v, countReq ? countReq.v : 11);
+    const byLeague = new Map();
+    for (const p of db.all) { const k = p.league; (byLeague.get(k) || byLeague.set(k, []).get(k)).push(p); }
+    // pick the league with the most eligible players and prove a real, duplicate-free 11-man XI comes out of it
+    const [bestLeague, pool] = [...byLeague.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    assert.ok(pool.length >= need, `${sbc.id}: needs ${need} from one league, ${bestLeague} only has ${pool.length}`);
+    const dedup = [...new Map(pool.map((p) => [p.person || p.id, p])).values()];
+    const { slots } = bestLineup(dedup, '4-3-3');
+    const filled = slots.filter(Boolean);
+    assert.ok(filled.length === 11, `${sbc.id}: could not fill an XI from ${bestLeague} alone (${filled.length}/11)`);
+    assert.ok(filled.every((p) => p.league === bestLeague));
+  }
 });
 
 test('>= 24 national teams, all valid contract Teams (11 starters, GK first)', () => {

@@ -1,6 +1,6 @@
 // Deterministic fictional player database. DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
-import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP } from './data.js';
+import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP, clubById } from './data.js';
 import { buildRealPlayers } from './realplayers.js';
 import { genPhysique, ensurePhysique, ensureAlts } from './physique.js';
 import { buildPromoCards, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID, setOvr } from './promos.js';
@@ -367,9 +367,15 @@ export function sanitizeCard(c) {
   const pos = POS_SET.has(c.pos) ? c.pos : null;
   if (!pos) return null;
   const s = c.stats || {}, g = c.gk || {};
+  // Every card must resolve to a real league (owner request: leagues drive chemistry and SBC/objective
+  // "same league" requirements everywhere). A card with no usable league of its own (a custom/Card Creator
+  // card, or a malformed network card) inherits its club's league instead of a hardcoded guess — falling
+  // back to the Icons pseudo-league only if the club itself is unrecognised.
+  const club = str(c.club, 12, 'FUT');
+  const clubLeague = (clubById(club) || {}).league || 'ICN';
   const p = {
     id, first: str(c.first, 30), last: str(c.last, 30, str(c.name, 30, 'Player')), name: str(c.name, 40, 'Player'),
-    age: num(c.age, 15, 50, 27), nat: str(c.nat, 3, 'ENG').toUpperCase(), club: str(c.club, 12, 'ICN'), league: str(c.league, 12, 'ICN'),
+    age: num(c.age, 15, 50, 27), nat: str(c.nat, 3, 'ENG').toUpperCase(), club, league: str(c.league, 12, clubLeague),
     pos, alt: Array.isArray(c.alt) ? c.alt.filter((x) => POS_SET.has(x)).slice(0, 3) : [],
     stats: {}, gk: {},
   };

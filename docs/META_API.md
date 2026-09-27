@@ -117,6 +117,50 @@ UI keyed off `CATEGORIES[cat].label` keeps working unmodified.
   chart), best first; also biases which of a generated player's drawn styles gets the `+`. Card creator (or
   anything else offering a manual PlayStyle+ pick) should default to these.
 
+## Every card has a usable `league` (owner request: chemistry + SBC/objective/tournament "same league")
+`p.league` is a real field on every card in `db.all` (generated, real players/icons/stars/regulars, promos,
+legends, heroes, admin cards, the secret card, TOTW, evolutions, custom/Card Creator cards) — never derived
+from `club` at read time, and always one consistent field for every "same league" check to read. Rules
+(FC-style):
+- **Generated players / real Stars / real regulars** (`genPlayer`, `realplayers.js` stars+regulars): `league`
+  = the *actual* `LEAGUE_BY_ID` league of the fictional club they play for (`club.league`). Always a real,
+  playable league — this is what SBC `sameLeague` / objectives / the market+club league filters mostly match
+  against.
+- **Icons** (`ic_*`): `league: 'ICN'`, same as their `club`. Never a real league — like FC, Icons instead
+  **link to every league for chemistry** (`chemistry.js`'s `linksAll`, keyed off `special === 'lotg'`), so they
+  never hurt a league-based squad and are always green with their nation.
+- **Legends** (`special: 'legend'`, classic retired greats): `league: 'LEG'` (own pseudo club+league), and
+  also covered by `linksAll` — full chemistry in any league, same idea as Icons.
+- **Heroes** (`special: 'hero'`): `club: 'HER'` (pseudo club — no real club chemistry) but `league` is a
+  **real** `LEAGUE_BY_ID` id, seeded once per hero and stable — "their hero league" per the owner's rule, so
+  Heroes *do* count for league SBCs/objectives/market filters, just never for club ones.
+- **Promo cards** (`core/promos.js`, TOTY/TOTS/Future Stars/RTTK/…/Global Cup): built with `structuredClone`
+  of their real base card (Icon/Star/regular), so `league` (and `club`) is always inherited unchanged from the
+  base — a promo Icon still links to every league via `linksAll`, a promo Star/regular still carries its real
+  league.
+- **In-Forms / TOTW / evolutions / position modifiers / Pathfinder objectives / admin cards**: all built by
+  cloning an existing base card (generated, real, or promo) and mutating stats — `league` is never touched,
+  so it's always whatever the base card already had.
+- **The Secret card** (`core/secretcard.js`): `club`/`league: 'SEC'` — its own pseudo club/league (`SPECIAL_CLUBS.SEC`),
+  so it can never grant real club/league chemistry or count toward a real-league SBC.
+- **Custom / Card Creator cards** (`ui/customcards.js` → `core/customreg.js` → `players.js#sanitizeCard`):
+  the Card Creator UI has no club/league picker, so these have no club/league of their own. `sanitizeCard`
+  now defaults an unspecified `club` to `'FUT'` (`SPECIAL_CLUBS.FUT`, "Ultimate Team Creations" — its own
+  pseudo club) and derives the default `league` **from the resolved club** (`clubById(club).league`) instead
+  of a hardcoded guess — so a custom card with a real club id still gets that club's real league, and one
+  with no club at all lands on the `FUT` pseudo-league (falls back further to `ICN` only if `club` itself
+  can't be resolved). This replaces the old behaviour where every card missing a `league` silently became
+  `'ICN'` (Icons) even though it had nothing to do with Icons.
+- **Foreign/network cards** (`sanitizeCard`, Player Market purchases) carry the seller's real `league` as-is;
+  the same club-derived default above only kicks in for a malformed/incomplete payload.
+- `leagueName(id)` (`core/data.js`) is the one label lookup for every pseudo-league too (`'FUT'` → "Card
+  Creator", plus the existing `ICN`/`LEG`/`HER`/`SEC`) — UI should always go through it rather than reading
+  `LEAGUE_BY_ID` directly, so a pseudo-league never renders as a raw id.
+- Tests: `meta.test.mjs` — "every card in the pool has a usable league…", "custom (Card Creator) cards
+  without an explicit club/league resolve to the FUT pseudo-league", and "every SBC league requirement
+  (sameLeague) is satisfiable from the available pool" (proves a real, duplicate-free 11-man XI can be built
+  from one single league for every SBC that checks `sameLeague`).
+
 ## Secret card (`core/secretcard.js`)
 A single, wholly fictional ultra-rare card (`SECRET_CARD_ID`), kept out of `db.all`/`db.players` exactly like
 admin cards (resolved lazily via `addResolver`) so no ordinary pool can ever surface it.

@@ -322,6 +322,10 @@ export const SPECIAL_CLUBS = {
   // The one-of-none home club for the Secret card (core/secretcard.js) — a pseudo-club so it never grants
   // real club/league chemistry to anyone, matching the colours already reserved for it in pack opening.
   SEC: { id: 'SEC', name: 'The Vault', short: 'VLT', league: 'SEC', tier: 0, rep: 5, colors: { primary: '#141414', secondary: '#ff2d55' } },
+  // Card Creator / admin-gifted custom cards (ui/customcards.js) are not tied to any real club, so — like
+  // Icons/Legends/Heroes above — they get their own pseudo club+league (FC's "no real league" treatment for
+  // one-off cards) instead of leaking into a real league's chemistry/SBC/objective counts.
+  FUT: { id: 'FUT', name: 'Ultimate Team Creations', short: 'FUT', league: 'FUT', tier: 0, rep: 3, colors: { primary: '#19F5A4', secondary: '#0B0F1A' } },
 };
 /** Pseudo clubs that never give club chemistry. */
 export const SPECIAL_CLUB_IDS = new Set(Object.keys(SPECIAL_CLUBS));
@@ -331,6 +335,7 @@ export function leagueName(id) {
   if (id === 'HER') return 'Heroes';
   if (id === 'ICN') return 'Legends of the Game';
   if (id === 'SEC') return 'The Vault';
+  if (id === 'FUT') return 'Card Creator';
   return LEAGUE_BY_ID[id] ? LEAGUE_BY_ID[id].name : id;
 }
 
