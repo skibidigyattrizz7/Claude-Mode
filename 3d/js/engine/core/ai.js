@@ -30,33 +30,70 @@ export function teamThink(sim, team) {
   if (!wasAtt && info.attacking) info.wonT = sim.t;
   const xs = opps.map((o) => sim.X(team, o.x)).sort((a, c) => c - a);
   info.offLine = Math.max(xs[1] ?? HL, HL, info.ballX);
-  info.chaser = -1; info.chaser2 = -1; info.chaseT = Infinity;
+  info.chaser = -1; info.chaser2 = -1; info.chaseT = Infinity; info.wake = Infinity;
+  const ctrlIdx = human ? sim.ctrl[team] : -1;
   if (!owner) {
-    let best = Infinity, second = Infinity;
+    // an opposition pass has to be READ before anyone commits to cutting it out (no psychic
+    // interceptions): each outfielder gets a reaction delay from difficulty, defending and the
+    // Anticipate / Intercept PlayStyles, with the odd misread. Until then he holds his position.
+    const pp = sim.pendingPass;
+    const oppPass = !!pp && pp.team !== team && b.kicker >= 0 && sim.players[b.kicker].team !== team && b.kickT === pp.t;
+    if (oppPass && info.readKick !== b.kickT) {
+      info.readKick = b.kickT;
+      for (const m of mates) m.readAt = b.kickT + readDelay(sim, m);
+    }
+    // wake the team brain the moment the next player reads it (not on the next 0.1 s tick)
+    info.wake = Infinity;
+    if (oppPass) for (const m of mates) if (m.readAt > sim.t && m.readAt < info.wake) info.wake = m.readAt;
+    // human teams: the controlled player is the user's call; the AI picks its own best chaser
+    // (a teammate still goes for a loose ball / cuts out a pass rather than leaving it to the user),
+    // except for our own pass, which the reception assist handles.
+    const ownPass = b.intended >= 0 && sim.players[b.intended].team === team;
+    const skipCtrl = human && !ownPass;
+    let best = Infinity, second = Infinity, ctrlT = Infinity;
     for (const m of mates) {
       m.ic = sim.intercept(m);
       if (m.isGK && !sim.gkMayChase(m)) continue;
+      if (oppPass && !m.isGK && sim.t < (m.readAt || 0)) continue;
+      if (skipCtrl && m.idx === ctrlIdx) { ctrlT = m.ic.t; continue; }
       if (m.ic.t < best) { second = best; info.chaser2 = info.chaser; best = m.ic.t; info.chaser = m.idx; }
       else if (m.ic.t < second) { second = m.ic.t; info.chaser2 = m.idx; }
     }
-    info.chaseT = best;
+    // the user is clearly first to it: one AI teammate only follows up if he is close behind
+    if (skipCtrl && ctrlT + 0.7 < best && !oppPass) { info.chaser2 = -1; if (ctrlT + 1.4 < best) info.chaser = -1; }
+    info.chaseT = Math.min(best, ctrlT);
+    // a second reader may also step into the lane when he too gets there before the receiver
+    info.cut2 = false;
+    if (oppPass && info.chaser2 >= 0 && b.intended >= 0) {
+      const r = sim.players[b.intended];
+      const rt = r && r.team !== team ? sim.intercept(r).t : 0;
+      info.cut2 = sim.players[info.chaser2].ic.t < rt - 0.1;
+    }
   }
-  // pressers (tactics: defensive style; human teams: aiDefending assisted / tactical)
-  info.press1 = -1; info.press2 = -1; info.contain = false;
+  // pressers (tactics: defensive style; human teams: aiDefending assisted / tactical) plus ONE
+  // cover player who sits goal-side behind whoever engages the carrier (presser + cover).
+  info.press1 = -1; info.press2 = -1; info.contain = false; info.cover = -1; info.coverPt = null;
   if (owner && owner.team !== team && !b.inHands) {
     const px = owner.x + owner.vx * 0.35, pz = owner.z + owner.vz * 0.35;
-    const ctrl = human ? sim.ctrl[team] : -1;
-    const ranked = mates.filter((m) => !m.isGK && m.idx !== ctrl)
+    const ranked = mates.filter((m) => !m.isGK && m.idx !== ctrlIdx && !m.sentOff)
       .map((m) => ({ m, d: Math.hypot(m.x - px, m.z - pz) / m.vmax, dist: Math.hypot(m.x - px, m.z - pz) }))
       .sort((a, c) => a.d - c.d);
     const oX = sim.X(team, owner.x);
     const ownThird = oX < 40;
+    let engaged = null; // who is (or will be) on the ball: the presser or the user
     if (human) {
       info.contain = true;
+      // is the user already engaging the carrier? then the AI doesn't send a presser from
+      // distance (only a teammate already right there helps double up) and covers behind him
+      const c = sim.players[ctrlIdx];
+      const cd = c && !c.isGK ? Math.hypot(c.x - px, c.z - pz) : 99;
+      const userOn = cd < 7 || (ranked[0] && cd / c.vmax < ranked[0].d + 0.25);
+      if (userOn) engaged = c;
       if (gp.aiDefending === 'assisted') {
-        if (ranked[0]) info.press1 = ranked[0].m.idx;
-        if (ranked[1] && ownThird && ranked[1].dist < 3) info.press2 = ranked[1].m.idx;
-      } else if (ranked[0] && ranked[0].dist < 3) info.press1 = ranked[0].m.idx;
+        if (ranked[0] && (!userOn || ranked[0].dist < 4.5)) info.press1 = ranked[0].m.idx;
+        const r2 = userOn ? ranked[0] : ranked[1];
+        if (r2 && ownThird && r2.dist < 3) info.press2 = r2.m.idx;
+      } else if (ranked[0] && ranked[0].dist < 3 && !(userOn && cd < 2.5)) info.press1 = ranked[0].m.idx;
     } else {
       const style = tac.defensiveStyle;
       const afterLoss = style === 'pressAfterLoss' && sim.t - (info.lostT || -9) < 5;
@@ -65,10 +102,40 @@ export function teamThink(sim, team) {
       const pr2 = style === 'constantPressure' || afterLoss ? 6 : drop ? 0 : 3.5;
       if (ranked[1] && (sim.diffFor(team).press >= 0.75 || ownThird || style === 'constantPressure' || afterLoss) && ranked[1].d < pr2) info.press2 = ranked[1].m.idx;
     }
+    if (info.press1 >= 0) engaged = sim.players[info.press1];
+    // cover: in our half, the best-placed free teammate takes the space behind the engaged player
+    if (engaged && (info.press2 < 0 ? oX < 68 : oX < 42 && sim.diffFor(team).level >= 1)) {
+      const own = sim.ownGoalX(team);
+      const gx = own - owner.x, gz = -owner.z * 0.6, gl = Math.hypot(gx, gz) || 1;
+      const back = ownThird ? 5 : 7;
+      const pt = { x: owner.x + (gx / gl) * back, z: owner.z + (gz / gl) * back };
+      let bc = null, bs = 1e9;
+      for (const r of ranked) {
+        const m = r.m;
+        if (m.idx === info.press1 || m.idx === info.press2 || m === engaged) continue;
+        // prefer players already goal-side of the ball (they don't have to recover)
+        // (and a midfielder over a centre-back who is busy marking a striker)
+        const s = Math.hypot(m.x - pt.x, m.z - pt.z) + (sim.X(team, m.x) > oX ? 8 : 0) + (m.marking ? 5 : 0) + (m.group === 'DEF' ? 2 : 0);
+        if (s < bs) { bs = s; bc = m; }
+      }
+      if (bc && bs < 18) { info.cover = bc.idx; info.coverPt = pt; }
+    }
   }
-  for (const m of mates) if (!m.isGK) m.home = formationTarget(sim, m, info);
+  for (const m of mates) if (!m.isGK) { m.home = formationTarget(sim, m, info); m.markPrev = m.marking; m.marking = 0; }
   if (!info.attacking && (!human || gp.autoMarking)) assignMarking(sim, team, info);
   if (info.attacking && owner && owner.team === team) planRuns(sim, team, info, owner);
+}
+
+// How long an outfielder needs to read an opposition pass before committing to cut it out:
+// difficulty reaction + defending awareness, sharpened by Anticipate / Intercept, with the odd
+// misread (he reacts late and usually can't get there).
+export function readDelay(sim, m) {
+  const diff = sim.diffFor(m.team), rng = sim.rng;
+  const ant = ps(m, 'anticipate'), icp = ps(m, 'intercept');
+  let d = diff.react * 0.45 + (1 - clamp(m.a.def, 20, 99) / 100) * 0.16 + rng() * 0.08 - ant * 0.05 - icp * 0.04;
+  const misread = 0.18 + (1 - diff.press) * 0.1 - m.a.def / 500 - ant * 0.08 - icp * 0.05;
+  if (rng() < misread) d += 0.3 + rng() * 0.3;
+  return Math.max(0.02, d);
 }
 
 export function formationTarget(sim, p, info) {
@@ -121,12 +188,18 @@ export function formationTarget(sim, p, info) {
   return { x: sim.wx(team, X), z };
 }
 
+// Man-marking inside the zonal shape: the most dangerous attackers (closest to our goal, runners)
+// get the nearest free teammate, who takes a GOAL-SIDE position (never on the wrong side in our
+// half) shaded into the carrier's passing lane — more so for good readers of the game. Defenders
+// don't step far out of the back line to follow a player dropping deep; midfielders pick those up.
 function assignMarking(sim, team, info) {
   const human = sim.human[team];
   const tactical = human && sim.gp[team].aiDefending === 'tactical';
   const ctrl = human ? sim.ctrl[team] : -1;
-  const opps = sim.teamList[1 - team].filter((o) => !o.isGK);
-  const mates = sim.teamList[team].filter((m) => !m.isGK && m.idx !== info.press1 && m.idx !== info.press2 && m.idx !== ctrl && (m.group !== 'FWD' || instr(sim, m, 'defend') === 'markPlayer'));
+  const cp = ctrl >= 0 ? sim.players[ctrl] : null;
+  const diff = sim.diffFor(team);
+  const opps = sim.teamList[1 - team].filter((o) => !o.isGK && !o.sentOff);
+  const mates = sim.teamList[team].filter((m) => !m.isGK && !m.sentOff && m.idx !== info.press1 && m.idx !== info.press2 && m.idx !== info.cover && m.idx !== ctrl && (m.group !== 'FWD' || instr(sim, m, 'defend') === 'markPlayer'));
   const own = { x: sim.ownGoalX(team), z: 0 };
   opps.sort((a, c) => sim.X(team, a.x) - sim.X(team, c.x));
   const used = new Set();
@@ -137,32 +210,47 @@ function assignMarking(sim, team, info) {
     const oX = sim.X(team, o.x);
     const running = o.run && o.run.until > sim.t;
     if (oX > 70 && !running) continue; // far from our goal: zonal only
-    let best = null, bd = running ? 20 : 14;
+    // offside trap: don't follow a runner beyond our line when the ball is far
+    if (!running && oX < lineX - 2 && info.ballX > lineX + 25) continue;
+    // the user is already tight and goal-side on him
+    if (cp && !cp.isGK && Math.hypot(cp.x - o.x, cp.z - o.z) < 2.6 && sim.X(team, cp.x) < oX + 0.3) continue;
+    const danger = oX < 45;
+    let best = null, bd = running ? 20 : danger ? 17 : 14;
     for (const m of mates) {
       if (used.has(m.idx)) continue;
-      const dd = Math.hypot(m.home.x - o.x, m.home.z - o.z);
+      // hold the line: a defender doesn't step 10+ m out of the back four to mark a deep player
+      if (m.group === 'DEF' && !running && oX > lineX + 10 && instr(sim, m, 'defend') !== 'markPlayer') continue;
+      // zonal home and where he actually is both count; keeping his current man is preferred
+      let dd = Math.hypot(m.home.x - o.x, m.home.z - o.z) * 0.6 + Math.hypot(m.x - o.x, m.z - o.z) * 0.4;
+      if (m.markPrev === o.idx + 1) dd -= 3;
       if (dd < bd) { bd = dd; best = m; }
     }
     if (!best) continue;
     used.add(best.idx);
     // track runners: aim at where the runner is going, goal side
-    const tx = running ? o.x + (o.run.x - o.x) * 0.35 : o.x, tz = running ? o.z + (o.run.z - o.z) * 0.35 : o.z;
+    const tx = running ? o.x + (o.run.x - o.x) * 0.35 : o.x + o.vx * 0.3, tz = running ? o.z + (o.run.z - o.z) * 0.35 : o.z + o.vz * 0.3;
     const gx = own.x - tx, gz = own.z - tz;
     const gl = Math.hypot(gx, gz) || 1;
     let mark = { x: tx + (gx / gl) * 1.7, z: tz + (gz / gl) * 1.7 };
-    // cover the passing lane from the carrier
+    // cover the passing lane from the carrier (readers of the game shade further into it)
     if (owner && owner.team !== team) {
-      const lane = instr(sim, best, 'defend') === 'cutPasses' ? 0.6 : human ? (tactical ? 0 : 0.45) : 0.3;
+      const read = clamp((best.a.def - 60) / 150, 0, 0.25) + ps(best, 'anticipate') * 0.08 + ps(best, 'intercept') * 0.07 + diff.level * 0.02;
+      const lane = instr(sim, best, 'defend') === 'cutPasses' ? 0.6 : human ? (tactical ? 0 : 0.35 + read) : 0.22 + read;
       const cx = owner.x - o.x, cz = owner.z - o.z, cl = Math.hypot(cx, cz) || 1;
       const lp = { x: o.x + (cx / cl) * Math.min(2.8, cl * 0.4), z: o.z + (cz / cl) * Math.min(2.8, cl * 0.4) };
       mark = { x: lerp(mark.x, lp.x, lane), z: lerp(mark.z, lp.z, lane) };
     }
-    // offside trap: don't follow a runner beyond our line when the ball is far
-    if (!running && oX < lineX - 2 && info.ballX > lineX + 25) continue;
-    let w = oX < 40 || running ? 0.85 : 0.5;
+    let w = oX < 40 || running ? 0.85 : oX < 55 ? 0.7 : 0.5;
     if (tactical) w *= 0.6;
     if (instr(sim, best, 'defend') === 'markPlayer') w = 0.95;
-    best.home = { x: lerp(best.home.x, mark.x, w), z: lerp(best.home.z, mark.z, w) };
+    let hx = lerp(best.home.x, mark.x, w), hz = lerp(best.home.z, mark.z, w);
+    // in our half the marker is ALWAYS goal-side of his man (the lane shading never costs that)
+    if (danger || running) {
+      const hX = sim.X(team, hx), lim = sim.X(team, tx) - 0.9;
+      if (hX > lim) hx = sim.wx(team, Math.max(1, lim));
+    }
+    best.home = { x: hx, z: hz };
+    best.marking = danger || running ? o.idx + 1 : 0;
   }
 }
 
@@ -248,9 +336,14 @@ export function think(sim, p, dt) {
       headerCheck(sim, p);
       return;
     }
-    if (info.chaser === p.idx || (info.chaser2 === p.idx && info.chaseT > 1.2 && sim.X(p.team, b.p.x) < 30)) {
+    if (info.chaser === p.idx || (info.chaser2 === p.idx && (info.cut2 || (info.chaseT > 1.2 && sim.X(p.team, b.p.x) < 30)))) {
       const ic = p.ic || sim.intercept(p);
       goTo(sim, p, ic, 'sprint', 0);
+      // cutting out an opposition ball: attack the line at full speed, don't ease into the spot
+      if (b.lastTeam !== p.team && ic.t < 1.5) {
+        const l = Math.hypot(p.des.x, p.des.z), vm = p.vmax * sim.stamFactor(p);
+        if (l > 0.05) { p.des.x *= vm / l; p.des.z *= vm / l; p.sprint = true; }
+      }
       headerCheck(sim, p);
       return;
     }
@@ -263,10 +356,28 @@ export function think(sim, p, dt) {
   }
   if (owner && owner.team !== p.team && !b.inHands) {
     if (info.press1 === p.idx || info.press2 === p.idx) return press(sim, p, owner, info.press1 === p.idx, info.contain);
+    // cover: sit in the space goal-side behind the player engaging the carrier
+    if (info.cover === p.idx && info.coverPt) {
+      headerCheck(sim, p);
+      const d = Math.hypot(info.coverPt.x - p.x, info.coverPt.z - p.z);
+      return goTo(sim, p, info.coverPt, d > 8 ? 'sprint' : 'run', 0.6);
+    }
   }
   headerCheck(sim, p);
   const d = Math.hypot(p.home.x - p.x, p.home.z - p.z);
-  goTo(sim, p, p.home, d > 22 ? 'sprint' : d > 8 ? 'run' : 'jog', 0.5);
+  // a marker in our half tracks his man at match speed; everyone else drifts into shape
+  if (p.marking) {
+    const o = sim.players[p.marking - 1];
+    goTo(sim, p, p.home, d > 5 ? 'sprint' : d > 1.2 ? 'run' : 'jog', 0.15);
+    // feed-forward his man's velocity so the marker moves WITH him instead of trailing
+    const ff = clamp(1 - d / 5, 0, 1) * 0.85; // catch up first, then shadow
+    let vx = p.des.x + o.vx * ff, vz = p.des.z + o.vz * ff;
+    const vm = p.vmax * sim.stamFactor(p), l = Math.hypot(vx, vz);
+    if (l > vm) { vx *= vm / l; vz *= vm / l; }
+    p.des.x = vx; p.des.z = vz;
+    p.sprint = l > vm * 0.8;
+  }
+  else goTo(sim, p, p.home, d > 22 ? 'sprint' : d > 8 ? 'run' : 'jog', 0.5);
 }
 
 export function goTo(sim, p, pt, mode, stopR = 0.3) {
