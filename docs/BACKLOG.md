@@ -105,3 +105,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 ## Paused 2026-09-28 (owner at 80% usage) — resume later
 - Owner: "I still can't apply more than 3 positions" (alt positions capped at 3 — likely Card Creator / card editing; allow more).
 - Unfinished, uncommitted in the working tree when paused: pack blank-stage fix + send-all buttons (packopen*.js), mobile pass + Moderation→Players merge + edit saved admin cards (hud.js, admin*.js, customcards.js, css), security hardening (net/accountcore.js, accountui.js, validate.js, CSP in index pages; migration 008 not written/applied), FUT Draft redesign + better odds + 7 subs (draft.js, modesview.js, draftpick.js, draft.css). All need finishing + testing before push.
+- Owner: "allow me to create my own ban time even if its as small as a second" (custom ban/timeout duration, down to 1 s, in admin Players/moderation).
