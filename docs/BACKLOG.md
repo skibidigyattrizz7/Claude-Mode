@@ -114,3 +114,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   - Online: FIFA-style animated opponent lineup reveal — GK, then defence, midfield, attack, then whole team.
   - Admin GK created in Card Creator saves as 65 with all stats 65.
   - Team shows old rating (96) instead of current (99).
+  - Chromebook: "Couldn't download the 3D files" — Failed to fetch dynamically imported module https://s3.amazonaws.com/mathassets/.../fallback/index.js (game is running from an S3 mirror, not GitHub Pages; the mirror is missing module files — likely needs a single-file/bundled build).
