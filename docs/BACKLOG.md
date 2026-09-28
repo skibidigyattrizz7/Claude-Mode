@@ -118,3 +118,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   - Shooting 500+: every shot from any distance/angle/type (even weak) goes top bins and can't be saved; ball flight must look like a real powerful curling shot from the moment it's struck (no pass-looking shot that suddenly flies). Currently a 999-SHO card gets saved even from its own half.
   - Add more skill moves.
   - GK animations need a full revamp: keepers dive with their back to the ball, and dive diagonally/vertically/horizontally in odd ways. Want realistic side-on dives (facing the shooter), proper low/high/diagonal saves.
+  - Add Power Shot and a proper Finesse shot; curved shots currently look bad.
