@@ -12,7 +12,7 @@ import { weekNumber } from './calendar.js';
 import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 import { restoreCustomCards } from './customreg.js';
-import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, secretCard } from './secretcard.js';
+import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, secretCards } from './secretcard.js';
 import { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX, ADMIN_VAULT_TOP } from './adminvault.js';
 export { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX } from './adminvault.js';
 import { MANAGERS, getManager } from './managers.js';
@@ -49,7 +49,7 @@ export function categoryPools() {
   _pools = {};
   for (const [k, c] of Object.entries(CATEGORIES)) _pools[k] = db.all.filter(c.test);
   _pools.totw = totwCards(weekNumber());
-  _pools.secret = [secretCard()];
+  _pools.secret = secretCards();
   _pools._week = weekNumber();
   return _pools;
 }

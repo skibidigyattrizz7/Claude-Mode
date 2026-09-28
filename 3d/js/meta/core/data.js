@@ -64,6 +64,11 @@ const EXTRA_NATION_ROWS = [
   // V3: nations of real regular players
   ['GEO', 'Georgia', 'sl', 3, { t: 'cross', c: ['#FFFFFF', '#E8112D'] }, ['#FFFFFF', '#E8112D', '#E8112D', '#FFFFFF', '#FFFFFF'], ['#E8112D', '#FFFFFF', '#FFFFFF', '#E8112D', '#E8112D'], '4-2-3-1'],
   ['SVN', 'Slovenia', 'sl', 3, { t: 'h', c: ['#FFFFFF', '#005DA4', '#ED1C24'] }, ['#FFFFFF', '#005DA4', '#005DA4', '#FFFFFF', '#FFFFFF'], ['#1E7F3C', '#FFFFFF', '#FFFFFF', '#1E7F3C', '#1E7F3C'], '4-4-2'],
+  // Secret card versions' nations (owner request, Sep 28) — extras, so the generated database is unchanged.
+  ['IND', 'India', 'en', 1, { t: 'h', c: ['#FF9933', '#FFFFFF', '#138808'], sun: '#000080' }, ['#1F4FA8', '#FF9933', '#FFFFFF', '#1F4FA8', '#1F4FA8'], ['#FFFFFF', '#1F4FA8', '#1F4FA8', '#FFFFFF', '#FFFFFF'], '4-4-2'],
+  ['PHI', 'Philippines', 'en', 1, { t: 'czech', c: ['#0038A8', '#CE1126', '#FFFFFF'] }, ['#0038A8', '#FFFFFF', '#FFFFFF', '#0038A8', '#0038A8'], ['#FFFFFF', '#CE1126', '#CE1126', '#FFFFFF', '#FFFFFF'], '4-4-2'],
+  ['KEN', 'Kenya', 'af', 2, { t: 'h', c: ['#000000', '#FFFFFF', '#BB0000', '#FFFFFF', '#006600'] }, ['#BB0000', '#FFFFFF', '#FFFFFF', '#BB0000', '#BB0000'], ['#FFFFFF', '#006600', '#006600', '#FFFFFF', '#FFFFFF'], '4-4-2'],
+  ['PLE', 'Palestine', 'ar', 2, { t: 'htri', c: ['#000000', '#FFFFFF', '#007A3D', '#CE1126'] }, ['#FFFFFF', '#CE1126', '#CE1126', '#FFFFFF', '#FFFFFF'], ['#CE1126', '#FFFFFF', '#FFFFFF', '#CE1126', '#CE1126'], '4-2-3-1'],
 ];
 const toNation = ([code, name, region, str, flag, home, away, formation]) => ({
   code, name, region, str, flag, formation, kit: K(home), away: K(away),

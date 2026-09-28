@@ -57,6 +57,8 @@ export function flagSVG(code, cls = 'pm-flag') {
     case 'usa': { for (let i = 0; i < 13; i++) body += `<rect y="${(i * 20 / 13).toFixed(3)}" width="30" height="${(20 / 13 + 0.05).toFixed(3)}" fill="${i % 2 ? c[1] : c[0]}"/>`; body += `<rect width="12" height="10.77" fill="${c[2]}"/>`; for (let r = 0; r < 4; r++) for (let k = 0; k < 5; k++) body += `<circle cx="${1.4 + k * 2.3}" cy="${1.4 + r * 2.6}" r=".45" fill="#fff"/>`; break; }
     case 'chile': body = `<rect width="30" height="10" fill="${c[0]}"/><rect y="10" width="30" height="10" fill="${c[1]}"/><rect width="10" height="10" fill="${c[2]}"/>${star(5, 5, 2.6, '#fff')}`; break;
     case 'czech': body = `<rect width="30" height="10" fill="${c[0]}"/><rect y="10" width="30" height="10" fill="${c[1]}"/><polygon points="0,0 15,10 0,20" fill="${c[2]}"/>`; break;
+    // three horizontal bands + a hoist triangle in the last colour (Palestine)
+    case 'htri': { const hh = 20 / (c.length - 1); c.slice(0, -1).forEach((col, i) => { body += `<rect y="${(i * hh).toFixed(3)}" width="30" height="${(hh + 0.05).toFixed(3)}" fill="${col}"/>`; }); body += `<polygon points="0,0 11,10 0,20" fill="${c[c.length - 1]}"/>`; break; }
     case 'canada': body = `<rect width="30" height="20" fill="${c[1]}"/><rect width="7.5" height="20" fill="${c[0]}"/><rect x="22.5" width="7.5" height="20" fill="${c[0]}"/>${star(15, 10, 4.5, c[0])}`; break;
     case 'solid': default: body = `<rect width="30" height="20" fill="${c[0]}"/>`;
   }

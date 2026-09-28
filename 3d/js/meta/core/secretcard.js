@@ -26,21 +26,39 @@ import { POSITIONS } from './data.js';
 export const SECRET_CARD_ID = 'secret_ghost';
 export const SECRET_PACK_ID = 'secret';
 export const SECRET_ODDS = 0.0005;
-export const isSecretCardId = (id) => id === SECRET_CARD_ID;
+
+// More versions of the same ∞ glitch card (owner request, Sep 28): each has its own name + nation and
+// otherwise identical powers. They share the Secret slot's odds (the slot picks one version at random), and
+// none of them can be admin-granted either.
+export const SECRET_VERSIONS = [
+  { id: SECRET_CARD_ID, last: 'Shawky', name: 'The Shawky', nat: 'EGY', skin: 3 },
+  { id: 'secret_kilner', last: 'Kilner', name: 'Kilner', nat: 'SCO', skin: 0 },
+  { id: 'secret_collins', last: 'Collins', name: 'Collins', nat: 'KOR', skin: 1 },
+  { id: 'secret_patel', last: 'Patel', name: 'Patel', nat: 'IND', skin: 3 },
+  { id: 'secret_oelke', last: 'Oelke', name: 'Oelke', nat: 'GER', skin: 0 },
+  { id: 'secret_masilang', last: 'Masilang', name: 'BraydenMasilang', nat: 'PHI', skin: 2 },
+  { id: 'secret_nickerson', last: 'Nickerson', name: 'Nickerson', nat: 'KEN', skin: 5 },
+  { id: 'secret_dammad', last: 'Dammad', name: 'Dammad', nat: 'PLE', skin: 3 },
+];
+const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
+export const SECRET_CARD_IDS = SECRET_VERSIONS.map((v) => v.id);
+export const isSecretCardId = (id) => VERSION_BY_ID.has(id);
 
 /** Overall shown to every "over 99" system (chemistry/swaps/engine boost) — matches admin cards' ceiling. */
 export const INFINITE_OVR = 999;
 
-let _card = null;
-function buildSecretCard() {
-  if (_card) return _card;
+const _cards = new Map();
+function buildSecretCard(id = SECRET_CARD_ID) {
+  const ver = VERSION_BY_ID.get(id);
+  if (!ver) return null;
+  if (_cards.has(id)) return _cards.get(id);
   const pos = 'ST';
   const alt = POSITIONS.filter((x) => x !== pos); // every other outfield position + GK — he plays anywhere
   const p = {
     // `last: 'Shawky'` (not the full "The Shawky") so the card face's compact nameplate (core/players.js
     // `cardName`) doesn't overflow/truncate like every other single-surname card; `name` stays the full
     // "The Shawky" everywhere else (details view title, aria-labels, market/admin listings, ...).
-    id: SECRET_CARD_ID, first: '', last: 'Shawky', name: 'The Shawky', age: 24, nat: 'EGY', club: 'SEC', league: 'SEC',
+    id: ver.id, first: '', last: ver.last, name: ver.name, age: 24, nat: ver.nat, club: 'SEC', league: 'SEC',
     pos, alt,
     stats: { pac: 99, sho: 99, pas: 99, dri: 99, def: 99, phy: 99 },
     gk: { div: 99, han: 99, kic: 99, ref: 99, spd: 99, pos: 99 },
@@ -53,18 +71,20 @@ function buildSecretCard() {
   // `glitch`: the in-match "OP tier" flag (core/teams.js carries it into the contract match-player shape,
   // same way `rawOvr` carries admin cards' over-99 — see engine/core/sim.js `_applyData` / ai.js / render).
   p.glitch = true;
-  p.skin = 3;
+  p.skin = ver.skin;
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   // Every PlayStyle AND PlayStyle+ that exists (owner request) — overrides genPhysique's normal draw/limits,
   // exactly like admincards.js hand-picks its own extra PlayStyle+ list instead of using pickStyles' bands.
   p.playstyles = PLAYSTYLE_IDS.map((id) => ({ id, plus: true }));
   p.value = 0; p.wage = 0; // never priced — never tradeable, never on any market (like admin cards)
   p.look = hashStr(p.id) % 997;
-  _card = p;
-  return _card;
+  _cards.set(id, p);
+  return p;
 }
 
-/** The one Secret card (always the same object/reference). */
-export function secretCard() { return buildSecretCard(); }
+/** A Secret card version (default: The Shawky); always the same object/reference per id. */
+export function secretCard(id = SECRET_CARD_ID) { return buildSecretCard(id); }
+/** Every version of the Secret card (the Secret slot's pool). */
+export function secretCards() { return SECRET_CARD_IDS.map((id) => buildSecretCard(id)); }
 
-addResolver((id) => (isSecretCardId(id) ? buildSecretCard() : null));
+addResolver((id) => (isSecretCardId(id) ? buildSecretCard(id) : null));
