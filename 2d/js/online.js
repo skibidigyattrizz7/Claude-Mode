@@ -96,8 +96,8 @@ function startHosting(app, homeTeam) {
   let code = '';
   on(r, '[data-act=copy]', () => { if (code && navigator.clipboard) navigator.clipboard.writeText(code).then(() => setText('online-status', 'Code copied.'), () => {}); });
   on(r, '[data-act=cancel]', () => { t.close(); showHostJoin(app); });
-  t.onStatus = (s) => setText('online-status', s === 'open' ? 'Your friend joined — they are picking their nation…'
-    : s === 'down' ? 'Your friend disconnected — waiting for someone to join…' : statusLine(s));
+  t.onStatus = (s) => setText('online-status', s === 'open' ? 'Your friend joined. They are picking their nation…'
+    : s === 'down' ? 'Your friend disconnected. Waiting for someone to join…' : statusLine(s));
   t.onMessage = (msg) => {
     if (msg.t !== 'pick') return;
     const pick = sanitizeTeamPick(msg, TEAMS.map((x) => x.code));
@@ -251,7 +251,7 @@ export class OnlineHostScene extends LinkScene {
     this.m._netSeq = 0;
     this.snapAcc = 0;
     this.ftSent = false;
-    this.downText = 'Opponent disconnected — waiting';
+    this.downText = 'Opponent disconnected, waiting';
     this.lostText = 'Your opponent\'s connection dropped and did not come back.';
   }
   onMessage(msg) {
@@ -302,7 +302,7 @@ export class OnlineGuestScene extends LinkScene {
     this.m = new Match({ home, away, humans: [], ctrls: [], minutes: minutes || settings.matchMinutes });
     this.sendAcc = 0; this.reconnAcc = 0;
     this.prev = null; this.cur = null; this.lerpT = 1;
-    this.downText = 'Connection to the host lost — reconnecting';
+    this.downText = 'Connection to the host lost, reconnecting';
     this.lostText = 'The connection to the host dropped and did not come back.';
   }
   onMessage(msg) {

@@ -61,7 +61,7 @@ export function swapTokenValue(p) {
 export function swapForCoins(state, pid, { confirm = false } = {}) {
   const chk = checkSwappable(state, pid);
   if (!chk.ok) return swapBlocked(chk);
-  if (chk.needsConfirm && !confirm) return fail('This card is in your squad — confirm to swap anyway');
+  if (chk.needsConfirm && !confirm) return fail('This card is in your squad, confirm to swap anyway');
   const coins = swapCoinValue(getPlayer(pid));
   UT.removeFromClub(state, pid);
   UT.addCoins(state, coins);
@@ -73,8 +73,8 @@ export function swapForTokens(state, pid, { confirm = false } = {}) {
   if (!chk.ok) return swapBlocked(chk);
   const p = getPlayer(pid);
   const tokens = swapTokenValue(p);
-  if (tokens <= 0) return fail('This card is not worth any tokens — try Swap for Coins instead');
-  if (chk.needsConfirm && !confirm) return fail('This card is in your squad — confirm to swap anyway');
+  if (tokens <= 0) return fail('This card is not worth any tokens. Try Swap for Coins instead');
+  if (chk.needsConfirm && !confirm) return fail('This card is in your squad, confirm to swap anyway');
   UT.removeFromClub(state, pid);
   addTokens(state, tokens);
   return { ok: true, tokens };
@@ -112,7 +112,7 @@ export function submitSwapSet(state, setId, pids, { confirm = false } = {}) {
   for (const pid of list) {
     const chk = checkSwappable(state, pid);
     if (!chk.ok) return swapBlocked(chk);
-    if (chk.needsConfirm && !confirm) return fail('One of these cards is in your squad — confirm to swap anyway');
+    if (chk.needsConfirm && !confirm) return fail('One of these cards is in your squad, confirm to swap anyway');
   }
   const ev = evaluateSwapSet(setId, list);
   if (!ev.ok) return fail('Requirements not met');

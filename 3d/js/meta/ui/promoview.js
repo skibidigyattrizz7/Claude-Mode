@@ -74,7 +74,7 @@ export function promoHubView(deps) {
           h('div', { class: 'pm-tabs', role: 'tablist' }, released.map((pr) => h('button', {
             class: `pm-tab ${ui.browse === pr.id ? 'on' : ''}`, role: 'tab', 'aria-selected': String(ui.browse === pr.id), onclick: () => { ui.browse = pr.id; app.refresh(); },
           }, pr.short))),
-          h('p', { class: 'pm-dim' }, PROMO_BY_ID[ui.browse].desc, live.includes(ui.browse) ? ' Live now.' : ' Not live this week — cards can still appear on the markets.'),
+          h('p', { class: 'pm-dim' }, PROMO_BY_ID[ui.browse].desc, live.includes(ui.browse) ? ' Live now.' : ' Not live this week. Cards can still appear on the markets.'),
           h('div', { class: 'pm-cardgrid' }, promoCards(ui.browse).map((p) => playerCard(p, { size: 'sm', onClick: () => deps.playerModal(app, p) })))),
       );
     },

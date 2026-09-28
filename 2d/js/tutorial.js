@@ -27,9 +27,9 @@ export class Tutorial {
       { id: 'shoot', text: `Hold ${k('shoot')} to fill the power bar, release to shoot. The dashed line and reticle show where the shot is going (green = on target).` },
       { id: 'skill', text: `Press ${k('skill')} while dribbling for a skill move (no direction = step-over, sideways = roulette, backwards = drag-back, sprinting = heel flick).` },
       { id: 'tackle', text: `Defending! Get in front of the opponent and press ${k('tackle')} for a standing tackle. Win the ball first = clean tackle.` },
-      { id: 'slide', text: `Press ${k('slide')} for a slide tackle — longer reach, but it commits you. Never slide in from behind (yellow card!).` },
+      { id: 'slide', text: `Press ${k('slide')} for a slide tackle: longer reach, but it commits you. Never slide in from behind (yellow card!).` },
       { id: 'corner', text: this.touch ? 'Set pieces: move the reticle with the joystick, hold SHOOT for power and release. LOB / THRU add curve.' : `Set pieces: aim the corner with the mouse, hold ${k('shoot')} for power and release. ${k('lob')} / ${k('through')} add curve, ${k('pass')} plays it short.` },
-      { id: 'done', text: 'Tutorial complete! You know the basics — now try a Quick Match or the World Cup.' },
+      { id: 'done', text: 'Tutorial complete! You know the basics. Now try a Quick Match or the World Cup.' },
     ];
   }
 

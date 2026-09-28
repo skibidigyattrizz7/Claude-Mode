@@ -68,7 +68,7 @@ export function rivalsView() {
           h('div', { class: 'pm-rankside' },
             h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', disabled: !canOnline, title: canOnline ? '' : 'Online Rivals unavailable', onclick: () => playOnline(app, view, ui) }, 'Play Rivals online'),
             h('button', { class: 'pm-btn', onclick: () => playAi(app, view, ui) }, 'Play vs AI Rival'),
-            !canOnline ? h('small', { class: 'pm-dim' }, 'Online unavailable — AI Rival matches count on your local ladder.') : online ? h('small', { class: 'pm-dim' }, 'AI Rival matches only update your local ladder.') : null)),
+            !canOnline ? h('small', { class: 'pm-dim' }, 'Online unavailable: AI Rival matches count on your local ladder.') : online ? h('small', { class: 'pm-dim' }, 'AI Rival matches only update your local ladder.') : null)),
         h('section', { class: 'pm-panel pm-rvweek' },
           h('div', null, h('h3', null, 'Weekly rewards'), h('small', { class: 'pm-dim' }, `Resets in ${fmtCountdown(msToWeekReset())} · ${cur.weeklyWins} win${cur.weeklyWins === 1 ? '' : 's'} this week`),
             h('div', { class: 'pm-rvtiers' }, RV.TIER_WINS.map((w) => h('div', { class: `pm-rvtier ${cur.weeklyWins >= w ? 'hit' : ''}` }, h('b', null, `${w}W`), h('small', null, rewardText(RV.weeklyReward(cur.division, w))))))),

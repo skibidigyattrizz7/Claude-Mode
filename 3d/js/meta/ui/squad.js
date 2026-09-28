@@ -234,7 +234,7 @@ export function squadEditor(opts) {
     const leagueSel = select(LEAGUES.map((l) => [l.id, l.name]), st.manager ? st.manager.league : LEAGUES[0].id, () => {}, { 'aria-label': 'Preferred league' });
     modal(modalRoot, {
       title: 'Club manager', body: h('div', { class: 'pm-mgr-form' },
-        h('p', { class: 'pm-dim' }, 'Cosmetic club identity — shown on your Squad and Club screens.'),
+        h('p', { class: 'pm-dim' }, 'Cosmetic club identity: shown on your Squad and Club screens.'),
         nameInp, natSel, leagueSel),
       actions: [
         st.manager ? { label: 'Remove', danger: true, onClick: () => { st.manager = null; renderManager(); if (opts.manager) opts.manager.onChange(null); } } : null,

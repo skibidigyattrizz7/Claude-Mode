@@ -14,6 +14,7 @@ import { setConfig as setOwnerToggles } from './meta/ui/config.js';
 // blocked/failed module downloads (school filters, proxies) -> an actionable message, not a raw TypeError
 import { explainLoadError } from './engine/ui/loading.js';
 import { mountStadium } from './ui/stadium.js';
+import { showLineupReveal } from './ui/lineupreveal.js';
 
 const Q = new URLSearchParams(location.search);
 const STUB_ENGINE = Q.get('stubEngine') === '1';
@@ -410,6 +411,26 @@ export async function openMatch(opts) {
   return ctl;
 }
 
+/**
+ * Online matches (opts.netRole 'host' | 'guest') open the engine as usual, then keep the sim paused under an
+ * opponent lineup reveal (goalkeeper, defence, midfield, attack, whole XI). Both players run the same ~6 s reveal
+ * at the same moment, so nobody kicks off early; a tap / any key skips it. The reveal only reads the opponent's
+ * team object that online.js already passes in (home / away); it never touches the network layer.
+ */
+async function openMatchWithReveal(opts) {
+  const m = await openMatch(opts);
+  const role = opts && opts.netRole;
+  if ((role !== 'host' && role !== 'guest') || Q.get('noReveal') === '1') return m;
+  const opp = role === 'host' ? opts.away : opts.home;
+  if (!opp || !Array.isArray(opp.players)) return m;
+  try { m.handle.pause(); } catch { return m; }
+  showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr }).then(() => {
+    // still in this match, and not held by the disconnect overlay: let the game begin
+    if (m.layer.isConnected && !m.layer.querySelector('.dc-overlay')) { try { m.handle.resume(); } catch { /* ignore */ } }
+  }).catch((e) => { console.error(e); try { m.handle.resume(); } catch { /* ignore */ } });
+  return m;
+}
+
 /** startMatch(home, away, opts) -> Promise<result>. Handed to mountMeta and used by Kick-Off. */
 export async function startMatch(home, away, opts = {}) {
   const m = await openMatch({ ...opts, home, away });
@@ -595,7 +616,7 @@ async function teamSelectScreen(mode) {
     local2p ? h('div', { class: 'hint-box' },
       h('b', null, 'Two players, one device. '),
       `P1 uses ${keyLabel(kb.p1.up)}${keyLabel(kb.p1.left)}${keyLabel(kb.p1.down)}${keyLabel(kb.p1.right)} + ${keyLabel(kb.p1.shoot)} to shoot; P2 uses the arrow keys + ${keyLabel(kb.p2.shoot)}. `,
-      'Plug in a gamepad for either player — press any button on it and the match picks it up. ',
+      'Plug in a gamepad for either player: press any button on it and the match picks it up. ',
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); controlsScreen(); } }, 'Edit controls')) : null,
     h('div', { class: 'opts' },
       local2p ? null : segmented('Difficulty', DIFFICULTIES, cfg.difficulty, (v) => { cfg.difficulty = v; }, `${mode}-diff`),
@@ -679,7 +700,7 @@ async function onlineScreen({ autoQuick = null, onResult = null, onClose = null,
   try {
     const mod = await import('./net/online.js');
     mounted = mod.mountOnline(body, {
-      h, nav, toast, getTeams, getSavedUT, openMatch, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
+      h, nav, toast, getTeams, getSavedUT, openMatch: openMatchWithReveal, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
       online, autoQuick, onResult, onAutoEnd, autoInvite, autoChallenge,
       transportKind: ['bc', 'loopback'].includes(Q.get('net')) ? Q.get('net') : 'peer',
       dcTimeoutMs: Math.max(2000, Number(Q.get('dcTimeout')) * 1000 || 15000),
@@ -880,7 +901,7 @@ const KEY_NAMES = {
   Mouse0: 'Left click', Mouse1: 'Middle click', Mouse2: 'Right click', PageUp: 'PgUp', PageDown: 'PgDn', Insert: 'Ins', Delete: 'Del',
 };
 export function keyLabel(code) {
-  if (!code) return '—';
+  if (!code) return '-';
   if (KEY_NAMES[code]) return KEY_NAMES[code];
   let m;
   if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
@@ -966,7 +987,7 @@ function controlsScreen() {
     if (listening) stopListening();
     listening = { player, action };
     render();
-    status.textContent = `Press a key for ${who(player, action)} — Esc to cancel.`;
+    status.textContent = `Press a key for ${who(player, action)}. Esc to cancel.`;
     window.addEventListener('keydown', onCaptureKey, true);
     window.addEventListener('keyup', swallow, true);
     document.addEventListener('pointerdown', onOutside, true);
@@ -1011,7 +1032,7 @@ function controlsScreen() {
         h('button', { class: 'btn', type: 'button', 'data-reset': 'p2', onclick: () => resetOne('p2') }, 'Reset P2'),
         h('button', { class: 'btn btn--danger', type: 'button', 'data-reset': 'all', onclick: () => { resetKeybinds(); binds = { p1: defaultBindsFor('p1'), p2: defaultBindsFor('p2') }; saveKeybinds(binds); render(); status.textContent = 'All controls reset to defaults.'; } }, 'Reset all'))),
     h('div', { class: 'panel info-grid' },
-      h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works — press a button on it to wake it up. Left stick moves, face buttons pass and shoot, triggers sprint. In Local 2-Player each pad can take a side.')),
+      h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works: press a button on it to wake it up. Left stick moves, face buttons pass and shoot, triggers sprint. In Local 2-Player each pad can take a side.')),
       h('div', null, h('h3', null, 'Touch'), h('p', null, 'On phones and tablets an on-screen stick and action buttons appear during the match.')),
       h('div', null, h('h3', null, 'Shooting'), h('p', null, 'Hold shoot to build power, release to strike. Finesse curls it; lob chips the keeper.')),
       h('div', null, h('h3', null, 'Defending'), h('p', null, 'Hold Jockey to contain the ball carrier without diving in; press Tackle to win the ball. Assists are in Settings → Gameplay.'))));
@@ -1233,7 +1254,7 @@ function startOnlineServices() {
     let gifts = null;
     online.presence.onUpdate((u) => {
       if (!u) return;
-      if (gifts !== null && u.gifts > gifts) toast(`🎁 You received a gift — open Ultimate Team → Gifts (${u.gifts}).`, 'good');
+      if (gifts !== null && u.gifts > gifts) toast(`🎁 You received a gift: open Ultimate Team → Gifts (${u.gifts}).`, 'good');
       gifts = u.gifts;
     });
     const cloud = createCloudSync(online, {

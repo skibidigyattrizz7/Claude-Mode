@@ -101,7 +101,7 @@ export function showTeamSelect(mode, cb, back) {
   let active = 0;
   let coop = false;
   const labels = mode === 'versus' ? ['P1', 'P2'] : ['YOU', 'CPU'];
-  const title = { quick: 'Quick Match', versus: 'Local 2 Players', worldcup: 'World Cup — pick your nation', shootout: 'Penalty Shootout', fkpractice: 'Free-Kick Practice — pick your kit', cornerpractice: 'Corner Practice — pick your team', coop: 'Co-op', online: 'Online — pick your nation' }[mode];
+  const title = { quick: 'Quick Match', versus: 'Local 2 Players', worldcup: 'World Cup: pick your nation', shootout: 'Penalty Shootout', fkpractice: 'Free-Kick Practice: pick your kit', cornerpractice: 'Corner Practice: pick your team', coop: 'Co-op', online: 'Online: pick your nation' }[mode];
   const render = () => {
     const k = chooseKits(sel[0], sel[1]);
     const panel = (i) => `
@@ -147,7 +147,7 @@ export function showTeamSelect(mode, cb, back) {
 /** Gameplay settings shown per player, grouped like FIFA's controller settings. */
 const GP_GROUPS = [
   ['Passing', [
-    ['passGround', 'Ground pass', { Assisted: 'Picks the team-mate nearest your aim (wide cone), auto power, leads him — only an interception stops it.', Semi: 'Narrower cone, the aim matters more; hold longer for a firmer pass; small skill-based error.', Manual: 'No targeting: exactly where you aim with the power you hold.' }],
+    ['passGround', 'Ground pass', { Assisted: 'Picks the team-mate nearest your aim (wide cone), auto power, leads him. Only an interception stops it.', Semi: 'Narrower cone, the aim matters more; hold longer for a firmer pass; small skill-based error.', Manual: 'No targeting: exactly where you aim with the power you hold.' }],
     ['passThrough', 'Through ball', { Assisted: 'Played into space ahead of the runner your aim picks, perfectly weighted.', Semi: 'Narrower cone; hold time sets the weight of the ball.', Manual: 'Straight along your aim with the power you hold.' }],
     ['passLob', 'Lob / cross', { Assisted: 'Lofted onto the team-mate nearest your aim, landing in his stride.', Semi: 'Narrower cone; hold time sets the distance.', Manual: 'Lands where you aim; hold time sets the distance.' }],
   ]],
@@ -227,7 +227,7 @@ export function showSettings(back, inGame = false) {
         const res = setBind(input.binds, pl, a, code);
         applyBinds(res.binds);
         note = res.swapped
-          ? `${keyLabel(code)} was used by ${res.conflict.player.toUpperCase()} "${ACTION_LABELS[res.conflict.action]}" — swapped (it now uses ${keyLabel(res.binds[res.conflict.player][res.conflict.action])}).`
+          ? `${keyLabel(code)} was used by ${res.conflict.player.toUpperCase()} "${ACTION_LABELS[res.conflict.action]}", swapped (it now uses ${keyLabel(res.binds[res.conflict.player][res.conflict.action])}).`
           : `${pl.toUpperCase()} ${ACTION_LABELS[a]} → ${keyLabel(code)} (saved)`;
         render();
       };
@@ -258,7 +258,7 @@ export function showHowTo(back) {
             <li><b>Skill move</b>: no direction = step-over, sideways = roulette, backwards = drag-back, while sprinting = heel flick. Timed well, standing tackles can't touch you.</li>
           </ul>
           <h3>Shooting assist (Settings)</h3>
-          <ul><li><b>Assisted</b>: broadly towards goal = always on target.</li><li><b>Precision</b>: exact aim; on target gives less error and +10% pace.</li><li><b>Manual</b>: exact aim, error from shooting skill, power, sprinting and pressure.</li><li><b>Timed finishing</b> (optional): tap Shoot again as the closing ring meets the player — green = better strike, red = worse.</li></ul>
+          <ul><li><b>Assisted</b>: broadly towards goal = always on target.</li><li><b>Precision</b>: exact aim; on target gives less error and +10% pace.</li><li><b>Manual</b>: exact aim, error from shooting skill, power, sprinting and pressure.</li><li><b>Timed finishing</b> (optional): tap Shoot again as the closing ring meets the player: green = better strike, red = worse.</li></ul>
         </div>
         <div>
           <h3>Defending</h3>
@@ -266,7 +266,7 @@ export function showHowTo(back) {
             <li><b>Standing tackle</b>: short poke. <b>Slide tackle</b>: long reach, you're committed and need time to get up.</li>
             <li>Win the ball first from the front = always clean, and shoulder-to-shoulder challenges are fair. Going through the man before the ball, or lunging in from behind (&gt;120°) on the player in possession and missing the ball = foul. Slide from behind = yellow card; two yellows = red.</li>
             <li><b>Jockey</b> (hold): face the carrier and side-step; with no direction your defender stays goal-side of him. On the ball the same key <b>shields</b> it with your body.</li>
-            <li>Running alongside the carrier you can win a <b>shoulder challenge</b> — strength decides it.</li>
+            <li>Running alongside the carrier you can win a <b>shoulder challenge</b>: strength decides it.</li>
             <li><b>Switch</b> selects the teammate closest to the ball (the dashed ring shows who). Auto switching, AI defending, auto marking / tackle / clearances are in Settings.</li>
           </ul>
           <h3>Set pieces</h3>
@@ -296,7 +296,7 @@ export function showHowTo(back) {
 function matchFacts(m) {
   const s = m.stats;
   const tot = s[0].poss + s[1].poss || 1;
-  const pc = (t) => (s[t].passAtt ? Math.round((s[t].passCmp / s[t].passAtt) * 100) + '%' : '—');
+  const pc = (t) => (s[t].passAtt ? Math.round((s[t].passCmp / s[t].passAtt) * 100) + '%' : '-');
   const rows = [
     ['Possession', Math.round((s[0].poss / tot) * 100) + '%', Math.round((s[1].poss / tot) * 100) + '%'],
     ['Shots (on target)', `${s[0].shots} (${s[0].onTarget})`, `${s[1].shots} (${s[1].onTarget})`],
@@ -333,7 +333,7 @@ export function showPause(h, m = null) {
 export function showFulltime(m, h) {
   const s = m.stats;
   const tot = s[0].poss + s[1].poss || 1;
-  const pct = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—');
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '-');
   const rows = [
     ['Possession', Math.round((s[0].poss / tot) * 100) + '%', Math.round((s[1].poss / tot) * 100) + '%'],
     ['Shots', s[0].shots, s[1].shots],
@@ -393,7 +393,7 @@ export function showWorldCup(t, h) {
   const col = (stage, n) => `<div class="kcol"><h4>${STAGE_LABEL[stage]}</h4>${Array.from({ length: n }, (_, i) => tie(stage, t.ko[stage][i])).join('')}</div>`;
   const status = t.stage === 'done'
     ? (t.champion === user ? `${esc(teamByCode(user).name)} are WORLD CHAMPIONS!` : `Champions: ${esc(teamByCode(t.champion).name)}`)
-    : t.out ? `${esc(teamByCode(user).name)} have been eliminated.` : nf ? `Next: ${esc(nf.label)} — ${esc(teamByCode(nf.home).name)} vs ${esc(teamByCode(nf.away).name)}` : '';
+    : t.out ? `${esc(teamByCode(user).name)} have been eliminated.` : nf ? `Next: ${esc(nf.label)}: ${esc(teamByCode(nf.home).name)} vs ${esc(teamByCode(nf.away).name)}` : '';
   const r = show(`
     <div class="panel wide wc">
       <h2>World Cup <small>${esc(STAGE_LABEL[t.stage])}</small></h2>

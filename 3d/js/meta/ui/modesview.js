@@ -28,7 +28,7 @@ const DIFF_LABEL = { amateur: 'Amateur', pro: 'Professional', world: 'World Clas
 const isTop = (app, view) => app.stack[app.stack.length - 1] === view;
 
 export function rewardText(r) {
-  if (!r) return '—';
+  if (!r) return '-';
   const parts = [];
   if (r.coins) parts.push(`${fmtNum(r.coins)} coins`);
   if (r.pack) parts.push(UT.PACK_BY_ID[r.pack] ? UT.PACK_BY_ID[r.pack].name : r.pack);
@@ -37,7 +37,7 @@ export function rewardText(r) {
   if (pid) { const p = getPlayer(pid); if (p) parts.push(`${p.name} (${p.ovr}${p.special ? ` ${UT.SPECIAL_NAME[p.special]}` : ''})`); }
   if (r.pick) parts.push(r.pick.label || 'Player Pick');
   if (r.item) parts.push(`${r.n || 1}× ${UT.ITEM_NAMES[r.item] || r.item}`);
-  return parts.join(' + ') || '—';
+  return parts.join(' + ') || '-';
 }
 
 // ---------- reward claim flow: celebration -> straight into packs / picks ----------
@@ -100,7 +100,7 @@ export function openPick(app, pickId) {
       const r = UT.choosePick(s, pk.id, pid);
       persist(app); app.topRefresh();
       close();
-      app.toast(r.dup ? `Duplicate — converted to ${fmtNum(r.coins)} coins.` : `${p.name} joined your club!`, 'good');
+      app.toast(r.dup ? `Duplicate: converted to ${fmtNum(r.coins)} coins.` : `${p.name} joined your club!`, 'good');
       app.refresh();
     });
     grid.appendChild(flip);
@@ -172,7 +172,7 @@ export function objectivesHubView(sec = 'daily') {
       const tabs = h('div', { class: 'pm-tabs', role: 'tablist' }, OBJ.SECTIONS.map(([id, label]) => h('button', {
         class: `pm-tab ${ui.sec === id ? 'on' : ''}`, role: 'tab', 'aria-selected': ui.sec === id ? 'true' : 'false', onclick: () => { ui.sec = id; app.refresh(); },
       }, label, count(id) ? h('span', { class: 'pm-dotbadge' }, count(id)) : null)));
-      const sub = { daily: `Resets in ${fmtCountdown(86400000 - (Date.now() % 86400000))}`, weekly: `Resets in ${fmtCountdown(msToWeekReset())}`, player: 'Challenges with specific players — plus Legend of the Game chains', season: `Season ${SS.seasonNumber()}`, promo: 'Live promo campaigns — rewards include promo players and packs', milestone: 'Lifetime achievements', foundation: 'Learn every part of Ultimate Team' }[ui.sec];
+      const sub = { daily: `Resets in ${fmtCountdown(86400000 - (Date.now() % 86400000))}`, weekly: `Resets in ${fmtCountdown(msToWeekReset())}`, player: 'Challenges with specific players, plus Legend of the Game chains', season: `Season ${SS.seasonNumber()}`, promo: 'Live promo campaigns: rewards include promo players and packs', milestone: 'Lifetime achievements', foundation: 'Learn every part of Ultimate Team' }[ui.sec];
       const items = list.filter((o) => o.section === ui.sec);
       const readyAll = items.filter((o) => o.ready);
       const body = h('div', { class: 'pm-objlist' });
@@ -220,7 +220,7 @@ export function evolutionsView() {
                 if (!card) return;
                 persist(app);
                 evoReveal(app, p, card);
-              } }, done ? 'Claim upgrade' : 'In progress — play matches with him in your XI'),
+              } }, done ? 'Claim upgrade' : 'In progress: play matches with him in your XI'),
               h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: async () => { if (await confirmBox(app.root, 'Cancel evolution', `Stop ${evo.name} for ${p.name}? Progress is lost.`, 'Cancel evolution', true)) { EVO.cancelEvolution(s, idx); persist(app); app.refresh(); } } }, 'Cancel')))));
       });
       const avail = h('section', { class: 'pm-section' }, h('h3', { class: 'pm-h' }, 'Available evolutions'),
@@ -456,7 +456,7 @@ export function eventsView() {
             run.done ? h('div', { class: 'pm-btnrow' },
               r && !run.claimed ? h('button', { class: 'pm-btn pm-btn--accent', onclick: () => rewardFlow(app, () => { run.claimed = true; return UT.grantReward(s, r, tpl.name); }, `${tpl.name} rewards`) }, `Claim: ${rewardText(r)}`) : null,
               h('button', { class: 'pm-btn', disabled: !!(r && !run.claimed), onclick: () => { EV.resetRun(run); persist(app); app.refresh(); } }, 'Play again'))
-              : h('button', { class: 'pm-btn pm-btn--primary', disabled: !ok || !info.complete, title: ok ? '' : 'Your XI does not meet the rules — edit your Squad', onclick: () => playEvent(app, tpl, run) }, ok ? `Play ${EV.EVENT_ROUNDS[run.round]}` : 'Squad does not meet rules'));
+              : h('button', { class: 'pm-btn pm-btn--primary', disabled: !ok || !info.complete, title: ok ? '' : 'Your XI does not meet the rules. Edit your Squad', onclick: () => playEvent(app, tpl, run) }, ok ? `Play ${EV.EVENT_ROUNDS[run.round]}` : 'Squad does not meet rules'));
         })));
     },
   };
@@ -485,7 +485,7 @@ export function totwView() {
       const heads = cards.filter((p) => p.headliner);
       const rest = cards.filter((p) => !p.headliner);
       const pack = UT.PACK_BY_ID.totw;
-      add(main, h('p', { class: 'pm-lead' }, `This week's standout performers — In-Form cards boosted +3 to +8, led by ${heads.length} headliners rated 88+. A new Team of the Week arrives in ${fmtCountdown(msToWeekReset())}.`),
+      add(main, h('p', { class: 'pm-lead' }, `This week's standout performers: In-Form cards boosted +3 to +8, led by ${heads.length} headliners rated 88+. A new Team of the Week arrives in ${fmtCountdown(msToWeekReset())}.`),
         h('div', { class: 'pm-btnrow' }, h('button', { class: 'pm-btn pm-btn--primary', disabled: app.ut.coins < pack.price, onclick: async () => {
           if (!(await confirmBox(app.root, 'TOTW Pack', `Buy ${pack.name} for ${fmtNum(pack.price)} coins? Guaranteed Team of the Week card.`, 'Buy & open'))) return;
           if (app.ut.coins < pack.price) return;

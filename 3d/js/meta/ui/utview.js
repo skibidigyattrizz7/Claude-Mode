@@ -75,7 +75,7 @@ function onboardView() {
             class: 'pm-swatch', 'aria-label': `Colours ${a} and ${b}`, style: { background: `linear-gradient(135deg, ${a} 50%, ${b} 50%)` },
             onclick: () => { st.c1 = a; st.c2 = b; c1.value = a; c2.value = b; drawPreview(); },
           })), h('label', { class: 'pm-colorpick' }, c1, c2)),
-          h('p', { class: 'pm-dim' }, 'You start with 10,000 coins, a starter squad and two welcome packs. All coins are earned by playing — no real money, ever.'),
+          h('p', { class: 'pm-dim' }, 'You start with 10,000 coins, a starter squad and two welcome packs. All coins are earned by playing, no real money, ever.'),
           h('button', {
             class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
               app.ut = UT.createUTState({ clubName: st.name, short: st.short, primary: st.c1, secondary: st.c2 });
@@ -111,7 +111,7 @@ export function utTabs(app, active) {
 export function tokenChip(app) {
   const s = app.ut;
   if (!s) return null;
-  return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens — spend them in the Token Store (Swaps)' },
+  return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens: spend them in the Token Store (Swaps)' },
     h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-token' })), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('span', { class: 'pm-sr' }, ' swap tokens'));
 }
 
@@ -432,7 +432,7 @@ export function sellModal(app, p, redraw) {
   const fair = utPrice(p);
   const input = h('input', { class: 'pm-input', type: 'number', min: '100', step: '50', value: String(fair), 'aria-label': 'Asking price' });
   modal(app.root, {
-    title: `AI Market — sell ${p.name}`,
+    title: `AI Market: sell ${p.name}`,
     body: h('div', { class: 'pm-form' }, h('p', { class: 'pm-dim' }, 'The AI Market is simulated (computer traders) and separate from the online Player Market.'), h('p', null, `Estimated value: ${fmtNum(fair)} coins. A 5% tax applies. Higher prices are less likely to find an AI buyer.`), h('label', null, h('span', null, 'Price'), input)),
     actions: [{ label: 'Cancel' }, { label: 'List', primary: true, onClick: () => {
       const price = Math.max(100, Math.round(Number(input.value) || fair));
@@ -448,12 +448,12 @@ export function oddsModal(app, pack) {
   const cats = Object.keys(UT.CATEGORIES).filter((c) => pack.slots.some((sl) => sl.odds[c]));
   const pct = (v) => (v >= 0.1 ? `${(v * 100).toFixed(1)}%` : v >= 0.001 ? `${(v * 100).toFixed(2)}%` : `${(v * 100).toFixed(3)}%`);
   modal(app.root, {
-    title: `${pack.name} — odds`, wide: true,
+    title: `${pack.name}: odds`, wide: true,
     body: h('div', null,
       h('p', { class: 'pm-dim' }, 'Every item is drawn independently using these published probabilities.'),
       h('div', { class: 'pm-tablewrap' }, h('table', { class: 'pm-table' },
         h('thead', null, h('tr', null, h('th', null, 'Category'), pack.slots.map((sl, i) => h('th', null, `Slot group ${i + 1} (${sl.n}×)`)), h('th', null, 'At least one'))),
-        h('tbody', null, cats.map((c) => h('tr', null, h('td', null, UT.CATEGORIES[c].label), pack.slots.map((sl) => h('td', null, sl.odds[c] ? pct(sl.odds[c]) : '—')), h('td', null, h('b', null, pct(UT.packAtLeastOne(pack, c)))))))))),
+        h('tbody', null, cats.map((c) => h('tr', null, h('td', null, UT.CATEGORIES[c].label), pack.slots.map((sl) => h('td', null, sl.odds[c] ? pct(sl.odds[c]) : '-')), h('td', null, h('b', null, pct(UT.packAtLeastOne(pack, c)))))))))),
     actions: [{ label: 'Close', primary: true }],
   });
 }

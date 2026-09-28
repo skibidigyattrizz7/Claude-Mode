@@ -149,7 +149,7 @@ export function adminView() {
       const amt = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount), 'aria-label': 'Coin amount' });
       amt.addEventListener('input', () => { st.amount = Math.round(Number(amt.value) || 0); });
       const inf = !!(s && s.admin && s.admin.infinite);
-      const balDisplay = h('b', { 'data-coin-display': '1' }, s ? (inf ? '∞' : fmtNum(s.coins)) : '—');
+      const balDisplay = h('b', { 'data-coin-display': '1' }, s ? (inf ? '∞' : fmtNum(s.coins)) : '-');
       const coins = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
         h('p', { class: 'pm-dim' }, s ? ['Balance shown to the player right now: ', balDisplay, ` (${app.coinSourceLabel()}). Up to ${(RANK[level] || 0) >= 3 ? 'unlimited' : fmtNum(1000000)} coins per grant.`] : ''),
         h('div', { class: 'pm-btnrow' }, amt,
@@ -180,7 +180,7 @@ export function adminView() {
           type: 'checkbox', checked: inf, disabled: !s,
           onchange: (e) => {
             app.setInfiniteCoins(e.target.checked); // one balance model: the real balance is stashed / restored, never lost
-            app.toast(e.target.checked ? 'Infinite coins on (spends are free; earnings still count).' : `Infinite coins off — balance back to ${fmtNum(s.coins)}.`, 'good');
+            app.toast(e.target.checked ? 'Infinite coins on (spends are free; earnings still count).' : `Infinite coins off, balance back to ${fmtNum(s.coins)}.`, 'good');
             app.refresh();
           },
         }), h('span', null, 'Infinite coins (UT)')));

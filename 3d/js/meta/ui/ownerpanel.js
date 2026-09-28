@@ -17,8 +17,8 @@ const DURATION_UNITS = [['s', 'sec'], ['m', 'min'], ['h', 'hr'], ['d', 'day']];
 const DURATION_MS = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
 const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
 const DESIGNS = [['', 'None'], ['inform', 'In-Form'], ['hero', 'Hero'], ['legend', 'Icon'], ['lotg', 'Legend of the Game'], ['objective', 'Pathfinder'], ...PROMOS.map((p) => [p.id, p.name])];
-const when = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
-const day = (iso) => (iso ? new Date(iso).toLocaleDateString() : '—');
+const when = (iso) => (iso ? new Date(iso).toLocaleString() : '-');
+const day = (iso) => (iso ? new Date(iso).toLocaleDateString() : '-');
 const errText = (r) => (r && (r.message || r.error)) || 'failed';
 const owner = (app) => app.online && app.online.owner;
 
@@ -86,7 +86,7 @@ export function playersPanel(app) {
   const filterInp = h('input', { class: 'pm-input', type: 'search', placeholder: 'Filter the list (optional)…', 'aria-label': 'Filter players' });
   filterInp.addEventListener('input', () => { st.filter = filterInp.value.trim().toLowerCase(); draw(); });
   async function load() {
-    clear(body); body.appendChild(h('p', { class: 'pm-dim' }, 'Loading every player…'));
+    clear(body); body.appendChild(h('p', { class: 'pm-dim pm-skel' }, 'Loading every player…'));
     const r = await safeCall(() => svc.allPlayers(), { ok: false, error: 'offline' });
     if (!r || r.ok === false) { st.items = null; st.error = errText(r); } else { st.items = r.items; st.error = ''; }
     draw();
@@ -113,7 +113,7 @@ export function playersPanel(app) {
           h('span', { class: 'pm-prow-who' },
             h('b', null, name, u.banned ? h('span', { class: 'pm-prow-flag' }, u.bannedUntil ? 'Timeout' : 'Banned') : null, ...restrictionChips(u.restrictions)),
             h('small', null, meta),
-            h('small', null, `${u.friendCode ? `Code ${u.friendCode} · ` : ''}Joined ${day(u.createdAt)} · Last seen ${u.online ? 'now' : u.lastSeenAt ? when(u.lastSeenAt) : '—'}`))),
+            h('small', null, `${u.friendCode ? `Code ${u.friendCode} · ` : ''}Joined ${day(u.createdAt)} · Last seen ${u.online ? 'now' : u.lastSeenAt ? when(u.lastSeenAt) : '-'}`))),
         h('div', { class: 'pm-prow-acts' },
           btn('Message', 'bell', async () => { const t = (prompt(`Message to ${name}:`, '') || '').trim(); if (t) quick('Message', () => svc.message(u.id, t)); }),
           btn('Coins', 'coins', async () => { const n = parseCoins(prompt(`Coins for ${name} (e.g. 5000 or -5000):`, '')); if (n) quick(n > 0 ? 'Add coins' : 'Remove coins', () => svc.giveCoins(u.id, n, { reason: 'owner panel' })); }),
@@ -215,7 +215,7 @@ export function playerDetailView(id, summary = null) {
     title: summary ? (summary.username || summary.name || 'Player') : 'Player', kicker: 'Owner · player', cls: 'pm-main--wide',
     render(main, app) {
       const svc = owner(app);
-      const box = h('div', null, h('p', { class: 'pm-dim' }, 'Loading player…'));
+      const box = h('div', null, h('p', { class: 'pm-dim pm-skel' }, 'Loading player…'));
       add(main, box);
       if (!svc || typeof svc.playerDetail !== 'function') { clear(box); box.appendChild(h('p', { class: 'pm-warnline' }, 'Needs the online service.')); return; }
       const reload = () => { if (!app.destroyed) app.refresh(); };
@@ -229,7 +229,7 @@ export function playerDetailView(id, summary = null) {
         const info = h('section', { class: 'pm-panel pm-admin-sec' },
           h('h3', null, icon('squad'), ` ${displayName(p)}`, h('span', { class: `pm-onlinedot ${p.online ? 'is-on' : ''}`, style: { marginLeft: '8px' } })),
           h('div', { class: 'pm-dim' }, [
-            `${p.account ? 'Account' : 'Device guest'} · role ${p.role} · friend code ${p.friendCode || '—'} · id ${p.id}`, h('br'),
+            `${p.account ? 'Account' : 'Device guest'} · role ${p.role} · friend code ${p.friendCode || '-'} · id ${p.id}`, h('br'),
             `Coins ${p.infinite ? '∞ (infinite)' : fmtNum(p.coins)} · rating ${p.rating} · Rivals ${p.rivalsDivision === 0 ? 'Elite' : `D${p.rivalsDivision}`} · ${p.wins}W ${p.draws}D ${p.losses}L`, h('br'),
             `Joined ${when(p.createdAt)} · last login ${when(p.lastLoginAt)} · last seen ${when(p.lastSeenAt)}`, h('br'),
             p.banned ? h('b', { class: 'pm-warnline' }, `${p.bannedUntil ? `Timed out until ${when(p.bannedUntil)}` : 'Banned permanently'}: ${p.banReason || ''}`) : 'Not banned',
@@ -304,7 +304,7 @@ export function playerDetailView(id, summary = null) {
         // -- club
         const club = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('club'), ' Club & cards'));
         if (!d.save.exists) {
-          club.appendChild(h('p', { class: 'pm-dim' }, 'No club saved on the server yet — it uploads the next time this player opens the game. Cards you add now are queued and land in their club when they next check in.'));
+          club.appendChild(h('p', { class: 'pm-dim' }, 'No club saved on the server yet. It uploads the next time this player opens the game. Cards you add now are queued and land in their club when they next check in.'));
         } else {
           const data = d.save.data;
           const cards = saveCards(data).sort((a, b) => (b.ovr || 0) - (a.ovr || 0));
@@ -325,11 +325,11 @@ export function playerDetailView(id, summary = null) {
           h('button', { class: 'pm-btn pm-btn--primary', onclick: () => addCardModal(app, (c, untradeable) => patch(`Add ${c.name}`, [{ op: 'addCard', card: giftPayloadCard(c), untradeable }])) }, icon('grant'), ' Add a card'),
           h('button', { class: 'pm-btn pm-btn--danger', onclick: async () => { if (await confirmBox(app.root, 'Reset club', 'Replace their club with a fresh starter club?', 'Reset club', true)) patch('Reset club', [{ op: 'resetClub' }]); } }, 'Fresh starter club')));
         if (d.patches.length) {
-          club.appendChild(h('p', { class: 'pm-warnline' }, `${d.patches.length} change${d.patches.length > 1 ? 's' : ''} waiting — applied when the player next opens Ultimate Team:`));
+          club.appendChild(h('p', { class: 'pm-warnline' }, `${d.patches.length} change${d.patches.length > 1 ? 's' : ''} waiting, applied when the player next opens Ultimate Team:`));
           club.appendChild(h('ul', { class: 'pm-dim' }, d.patches.map((x) => h('li', null, `${when(x.at)}: ${x.ops.map((o) => o.op + (o.card && o.card.name ? ` ${o.card.name}` : o.id ? ` ${o.id}` : '')).join(', ')}`))));
         }
         if (d.squad && Array.isArray(d.squad.players)) {
-          club.appendChild(h('p', { class: 'pm-dim' }, `Shared squad: ${d.squad.name || ''} (${d.squad.formation || ''}) — ${d.squad.players.map((x) => `${x.name} ${x.ovr || ''}`).join(', ')}`));
+          club.appendChild(h('p', { class: 'pm-dim' }, `Shared squad: ${d.squad.name || ''} (${d.squad.formation || ''}): ${d.squad.players.map((x) => `${x.name} ${x.ovr || ''}`).join(', ')}`));
         }
 
         // -- history

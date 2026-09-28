@@ -454,20 +454,20 @@ export class Hud {
       const b = this.binds[ctx.local[1 - view.spk]];
       txt = this.touch && ctx.local[1 - view.spk] === 'p1'
         ? 'KEEPER: hold the stick in a direction as the kick is struck to dive (towards the taker = high)'
-        : `KEEPER — hold a direction as the kick is struck to dive (towards the taker = high) · <b>${esc(keyName(b.up))}${esc(keyName(b.left))}${esc(keyName(b.down))}${esc(keyName(b.right))}</b>`;
+        : `KEEPER: hold a direction as the kick is struck to dive (towards the taker = high) · <b>${esc(keyName(b.up))}${esc(keyName(b.left))}${esc(keyName(b.down))}${esc(keyName(b.right))}</b>`;
     } else if (!ctx.replay && (view.ph === PHASE.SETPIECE || view.ph === PHASE.KICKOFF) && view.spk >= 0 && ctx.local[view.spk] && view.c[view.spk] >= 0) {
       const b = this.binds[ctx.local[view.spk]];
       const onTouch = this.touch && ctx.local[view.spk] === 'p1'; // the touch overlay drives player 1: name its buttons, not keys
       const k = (a) => `<b>${esc(onTouch ? TOUCH_LABEL[a] || a : keyName(b[a]))}</b>`;
       switch (view.spt) {
-        case SP.PENALTY: txt = `PENALTY — move the crosshair (movement / right stick / mouse) · hold ${k('shoot')} for power, release when the ring is smallest`; break;
+        case SP.PENALTY: txt = `PENALTY: move the crosshair (movement / right stick / mouse) · hold ${k('shoot')} for power, release when the ring is smallest`; break;
         case SP.FREEKICK: txt = view.sa && view.sa[6]
-          ? `FREE KICK — crosshair: movement / mouse · contact ${k('switchP')} ${k('tackle')} ${k('skill')} ${k('jockey')} · hold ${k('shoot')} / ${k('finesse')}, release on the small ring · ${k('lob')} cross, ${k('pass')} pass`
-          : `FREE KICK — aim with movement · curve ${k('switchP')} / ${k('tackle')} · ${k('lob')} long, ${k('pass')} pass (tap ${k('pass')} during the whistle = quick)`; break;
-        case SP.CORNER: txt = `CORNER — aim with movement · curve ${k('switchP')} / ${k('tackle')} · hold ${k('lob')} to cross, ${k('pass')} short`; break;
-        case SP.THROW: txt = `THROW-IN — aim with movement · ${k('pass')} short, ${k('lob')} long (tap ${k('pass')} during the whistle = quick throw)`; break;
-        case SP.GOALKICK: txt = `GOAL KICK — aim with movement · ${k('pass')} short, ${k('lob')} long`; break;
-        case SP.KICKOFF: txt = `KICK-OFF — ${k('pass')} to pass`; break;
+          ? `FREE KICK: crosshair by movement / mouse · contact ${k('switchP')} ${k('tackle')} ${k('skill')} ${k('jockey')} · hold ${k('shoot')} / ${k('finesse')}, release on the small ring · ${k('lob')} cross, ${k('pass')} pass`
+          : `FREE KICK: aim with movement · curve ${k('switchP')} / ${k('tackle')} · ${k('lob')} long, ${k('pass')} pass (tap ${k('pass')} during the whistle = quick)`; break;
+        case SP.CORNER: txt = `CORNER: aim with movement · curve ${k('switchP')} / ${k('tackle')} · hold ${k('lob')} to cross, ${k('pass')} short`; break;
+        case SP.THROW: txt = `THROW-IN: aim with movement · ${k('pass')} short, ${k('lob')} long (tap ${k('pass')} during the whistle = quick throw)`; break;
+        case SP.GOALKICK: txt = `GOAL KICK: aim with movement · ${k('pass')} short, ${k('lob')} long`; break;
+        case SP.KICKOFF: txt = `KICK-OFF: ${k('pass')} to pass`; break;
       }
     }
     if (txt !== this.hintTxt) { this.hint.innerHTML = txt; this.hint.style.display = txt ? 'block' : 'none'; this.hintTxt = txt; }

@@ -90,7 +90,7 @@ export function tacticsEditor(opts) {
       rows.length ? rows : h('p', { class: 'pm-dim' }, 'Complete your XI to set player instructions.'));
 
     // --- quick tactics ---
-    const qOpts = [['', '— none —'], ...T.PRESET_IDS.map((id) => [`p:${id}`, `Preset: ${T.PRESETS[id].name}`]), ...H.tacticSets.filter((x) => x.id !== set.id).map((x) => [`s:${x.id}`, `Saved: ${x.name}`])];
+    const qOpts = [['', '(none)'], ...T.PRESET_IDS.map((id) => [`p:${id}`, `Preset: ${T.PRESETS[id].name}`]), ...H.tacticSets.filter((x) => x.id !== set.id).map((x) => [`s:${x.id}`, `Saved: ${x.name}`])];
     const quick = h('section', { class: 'pm-panel' }, h('h3', null, 'Quick tactics'), h('p', { class: 'pm-dim' }, 'Up to 4 in-match presets bound to the quick-tactic keys.'),
       [0, 1, 2, 3].map((i) => h('label', { class: 'pm-tac-field' }, h('span', null, `Quick ${i + 1}`), select(qOpts, (t.quickSrc || [])[i] || '', (v) => {
         t.quickSrc = (t.quickSrc || []).slice(); t.quickSrc[i] = v;

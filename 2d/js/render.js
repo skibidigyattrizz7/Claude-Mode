@@ -618,7 +618,7 @@ function drawSetPieceHUD(ctx, m, w, h, binds) {
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(8,14,28,0.8)';
-  const label = SP_LABEL[sp.type] + ' — ' + m.teams[sp.team].name;
+  const label = SP_LABEL[sp.type] + ': ' + m.teams[sp.team].name;
   ctx.font = 'bold 15px Arial';
   const tw = ctx.measureText(label).width + 30;
   ctx.fillRect(w / 2 - tw / 2, h - 118, tw, 26);

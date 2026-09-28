@@ -352,7 +352,7 @@ export const ICE_SERVERS = [
   { urls: 'stun:global.stun.twilio.com:3478' },
   { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
 ];
-export const P2P_FAIL_MSG = 'A direct connection could not be opened — one of your networks blocks peer-to-peer play (common on mobile data, school or office Wi-Fi). Try another network, or retry.';
+export const P2P_FAIL_MSG = 'A direct connection could not be opened. One of your networks blocks peer-to-peer play (common on mobile data, school or office Wi-Fi). Try another network, or retry.';
 const PEER_ERRORS = {
   'browser-incompatible': 'This browser does not support WebRTC.',
   network: 'Cannot reach the matchmaking server.',

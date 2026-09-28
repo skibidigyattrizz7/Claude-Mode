@@ -92,7 +92,7 @@ export function saveBinds(storage, binds) {
 
 /** Human readable label for a KeyboardEvent.code. */
 export function keyLabel(code) {
-  if (!code) return '—';
+  if (!code) return '-';
   const map = {
     Space: 'Space', ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl',
     AltLeft: 'L-Alt', AltRight: 'R-Alt', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',

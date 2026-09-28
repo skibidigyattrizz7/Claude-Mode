@@ -199,7 +199,7 @@ function renderMine(body, app, st, view) {
     if (!isTop(app, view)) return;
     if (!r.ok) { app.toast(r.error, 'bad'); st.mine = []; } else {
       st.mine = r.items; persist(app);
-      if (r.sold && r.sold.length) { app.toast(`${r.sold.length} of your listing${r.sold.length > 1 ? 's' : ''} sold — coins already added.`, 'good'); app.refreshOnlineCoins(); }
+      if (r.sold && r.sold.length) { app.toast(`${r.sold.length} of your listing${r.sold.length > 1 ? 's' : ''} sold. Coins already added.`, 'good'); app.refreshOnlineCoins(); }
     }
     draw();
   };
@@ -281,7 +281,7 @@ export function playerMarketListModal(app, p, done) {
   upd();
   const inSquad = s.squad.slots.concat(s.squad.bench).includes(p.id);
   modal(app.root, {
-    title: `Player Market — list ${p.name}`,
+    title: `Player Market: list ${p.name}`,
     body: h('div', { class: 'pm-form pm-listform' },
       h('div', { class: 'pm-listcard' }, playerCard(p, { size: 'sm' }),
         h('div', null,
@@ -333,7 +333,7 @@ function renderAiMarket(body, app, st) {
   name.addEventListener('input', () => { f.name = name.value; });
   const num = (key, label, min, max) => { const i = h('input', { class: 'pm-input pm-input--num', type: 'number', min: String(min), max: String(max), value: String(f[key] || ''), placeholder: label, 'aria-label': label }); i.addEventListener('input', () => { f[key] = Number(i.value) || 0; }); return i; };
   add(body,
-    h('div', { class: 'pm-ainote' }, h('span', { class: 'pm-chip on' }, 'AI'), h('span', { class: 'pm-dim' }, `Simulated market with computer traders — separate from the Player Market. Uses your ${app.coinSourceLabel()}.`)),
+    h('div', { class: 'pm-ainote' }, h('span', { class: 'pm-chip on' }, 'AI'), h('span', { class: 'pm-dim' }, `Simulated market with computer traders, separate from the Player Market. Uses your ${app.coinSourceLabel()}.`)),
     h('form', { class: 'pm-filterbar pm-mktform', onsubmit: (e) => { e.preventDefault(); setFlag(s, 'marketSearch'); f.seed++; st.results = UT.marketSearch({ ...f, maxOvr: f.maxOvr || 99 }, `${Date.now() >> 16}-${f.seed}`); drawList(); } },
       name,
       select([['', 'Any position'], ...POSITIONS.map((p) => [p, p])], f.pos, (v) => { f.pos = v; }, { 'aria-label': 'Position' }),

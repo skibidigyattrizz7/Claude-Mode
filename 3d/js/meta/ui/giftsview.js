@@ -121,7 +121,7 @@ export function giftsView() {
   return {
     title: 'Gifts', kicker: 'Inbox', coins: true,
     render(main, app) {
-      const list = h('div', { class: 'pm-gifts-list' }, h('p', { class: 'pm-dim' }, 'Loading…'));
+      const list = h('div', { class: 'pm-gifts-list' }, h('p', { class: 'pm-dim pm-skel' }, 'Loading…'));
       add(main, h('p', { class: 'pm-lead' }, 'Coins, packs and players sent to you by the owner or through promos land here.'), list);
       listGifts(app).then((items) => {
         clear(list);

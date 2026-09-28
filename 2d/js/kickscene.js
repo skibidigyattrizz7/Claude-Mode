@@ -589,7 +589,7 @@ export class KickScene {
       if (this.isFK && !input.touchMode) hint += ` · ${keyLabel(b.lob)}/${keyLabel(b.through)} curve · ${keyLabel(b.skill)} type`;
       if (this.mode === 'fkpractice' && !input.touchMode) hint += ' · N new spot · P place ball';
     } else if (this.humanKeeper != null && (this.phase === 'aim' || this.phase === 'runup' || this.phase === 'flight')) {
-      hint = input.touchMode ? 'Tap where you want to dive — timing matters!' : `Pick a spot (mouse / move keys), press ${keyLabel(b.shoot)} / click to dive — go too early and he'll see it!`;
+      hint = input.touchMode ? 'Tap where you want to dive: timing matters!' : `Pick a spot (mouse / move keys), press ${keyLabel(b.shoot)} / click to dive. Go too early and he'll see it!`;
     }
     if (hint) {
       ctx.font = '13px Arial'; ctx.textAlign = 'center';
