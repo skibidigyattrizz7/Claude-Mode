@@ -478,7 +478,7 @@ test('password strength rules (same as SQL pitchside__password_error, migration 
   // every common entry is refused, and the SQL list is the same list in the same order
   for (const pw of COMMON_PASSWORDS) assert.equal(passwordError(pw), 'weak_password', pw);
   assert.ok(COMMON_PASSWORDS.length >= 45 && COMMON_PASSWORDS.every((x) => x.length >= 8 && !/^[0-9]+$/.test(x) && x === x.toLowerCase()));
-  const sql = readFileSync(new URL('../../../../supabase/migrations/20260928000000_pitchside_008_security.sql', import.meta.url), 'utf8');
+  const sql = readFileSync(new URL('../../../../supabase/drafts/pitchside_008_security.sql', import.meta.url), 'utf8');
   const m = /COMMON-PASSWORDS-BEGIN([\s\S]*?)-- COMMON-PASSWORDS-END/.exec(sql);
   assert.ok(m, 'common list found in SQL');
   assert.deepEqual([...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]), COMMON_PASSWORDS);
