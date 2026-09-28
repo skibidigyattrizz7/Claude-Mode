@@ -92,7 +92,7 @@ export function squadEditor(opts) {
     const p = player(arr(area)[idx]);
     clear(btn);
     btn.className = `pm-slot ${st.sel && st.sel.area === area && st.sel.idx === idx ? 'is-sel' : ''} ${p ? '' : 'is-empty'}`;
-    btn.setAttribute('aria-label', p ? `${pos}: ${p.name} ${p.ovr}` : `Empty ${pos} slot`);
+    btn.setAttribute('aria-label', p ? `${pos}: ${p.name} ${p.glitch === true ? 'infinity' : p.ovr}` : `Empty ${pos} slot`);
     btn.draggable = !!p;
     if (p) {
       const card = playerCard(p, { size: 'xs', pos: area === 'slot' ? pos : p.pos, extra: opts.decorate ? opts.decorate(p) : null });

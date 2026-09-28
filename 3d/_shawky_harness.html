@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shawky screenshot harness (temporary, not committed)</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } #app { position: absolute; inset: 0; }</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createRenderer } from './js/engine/render/index.js';
+import { PHASE, BALL_R } from './js/engine/core/constants.js';
+import { MatchSim } from './js/engine/core/sim.js';
+import { viewFromSim } from './js/engine/core/snapshot.js';
+import { BRAZIL, FRANCE } from './js/engine/tests/sampleTeams.mjs';
+
+const home = structuredClone(BRAZIL);
+Object.assign(home.players[9], { glitch: true, rawOvr: 999, name: 'The Shawky' });
+const DT = 1 / 120;
+const sim = new MatchSim({ home, away: FRANCE, halfMinutes: 3, difficulty: 'pro', controllers: { home: 'ai', away: 'ai' }, seed: 7 });
+sim.step(DT, [null, null]);
+sim.phase = PHASE.PLAY; sim.sp.done = true; sim.dir = [1, -1];
+
+const R = createRenderer(document.getElementById('app'), { home, away: FRANCE, stadium: 'day', quality: 'high' });
+R.setCamera('broadcast');
+window.addEventListener('resize', () => R.resize());
+
+function setupShot() {
+  const p = sim.players[9];
+  sim.players.forEach((q) => { if (q !== p) sim._teleport(q, -50, -30); });
+  sim._teleport(sim.gk(1), 52.5, 0);
+  sim._teleport(p, -22, 5); p.face = 0;
+  const b = sim.ball;
+  b.owner = p.idx; b.inHands = false; b.p.x = -21.55; b.p.z = 5; b.p.y = BALL_R; b.v.x = b.v.y = b.v.z = 0; b.lastTeam = 0;
+  sim.aiKick(p, 'shot', { tz: 0, ty: 1, power: 0.9 });
+}
+window.__step = (n = 1) => { for (let i = 0; i < n; i++) sim.step(DT, [null, null]); R.render(viewFromSim(sim), DT); };
+window.__setup = setupShot;
+window.__cam = (pos, look, fov) => R._debug.setCameraOverride(pos, look, fov);
+window.__redraw = () => R.render(viewFromSim(sim), 0);
+window.__sim = sim;
+window.__R = R;
+R.render(viewFromSim(sim), 0);
+window.__ready = true;
+</script>
+</body>
+</html>

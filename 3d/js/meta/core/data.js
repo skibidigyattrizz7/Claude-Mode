@@ -27,7 +27,8 @@ const NATION_ROWS = [
   ['MAR', 'Morocco', 'ar', 4, { t: 'solid', c: ['#C1272D'], star: '#006233' }, ['#C1272D', '#006233', '#FFFFFF', '#006233', '#C1272D'], ['#FFFFFF', '#C1272D', '#C1272D', '#FFFFFF', '#FFFFFF'], '4-3-3'],
   ['GHA', 'Ghana', 'af', 3, { t: 'h', c: ['#CE1126', '#FCD116', '#006B3F'], star: '#000000' }, ['#FFFFFF', '#000000', '#000000', '#FFFFFF', '#FFFFFF'], ['#CE1126', '#FCD116', '#FCD116', '#CE1126', '#CE1126'], '4-2-3-1'],
   ['CMR', 'Cameroon', 'af', 3, { t: 'v', c: ['#007A5E', '#CE1126', '#FCD116'] }, ['#007A5E', '#CE1126', '#FCD116', '#CE1126', '#FCD116'], ['#FFFFFF', '#007A5E', '#007A5E', '#FFFFFF', '#FFFFFF'], '4-3-3'],
-  ['EGY', 'Egypt', 'ar', 3, { t: 'h', c: ['#CE1126', '#FFFFFF', '#000000'] }, ['#CE1126', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#000000'], ['#FFFFFF', '#CE1126', '#CE1126', '#000000', '#FFFFFF'], '4-2-3-1'],
+  // `eagle`: gold Eagle of Saladin, simplified, centred in the white band (owner flagged the real one missing it, Sep 28).
+  ['EGY', 'Egypt', 'ar', 3, { t: 'h', c: ['#CE1126', '#FFFFFF', '#000000'], eagle: '#C09A2E' }, ['#CE1126', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#000000'], ['#FFFFFF', '#CE1126', '#CE1126', '#000000', '#FFFFFF'], '4-2-3-1'],
   ['SWE', 'Sweden', 'no', 3, { t: 'nordic', c: ['#006AA7', '#FECC00'] }, ['#FECC00', '#006AA7', '#006AA7', '#006AA7', '#FECC00'], ['#006AA7', '#FECC00', '#FECC00', '#006AA7', '#006AA7'], '4-4-2'],
   ['DEN', 'Denmark', 'no', 4, { t: 'nordic', c: ['#C60C30', '#FFFFFF'] }, ['#C60C30', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#C60C30'], ['#FFFFFF', '#C60C30', '#C60C30', '#FFFFFF', '#FFFFFF'], '4-3-3'],
   ['NOR', 'Norway', 'no', 3, { t: 'nordic2', c: ['#BA0C2F', '#FFFFFF', '#00205B'] }, ['#BA0C2F', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#00205B'], ['#FFFFFF', '#00205B', '#00205B', '#00205B', '#FFFFFF'], '4-3-3'],

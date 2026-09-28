@@ -11,7 +11,7 @@ import { subStats } from '../core/substats.js';
 
 const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
 const GK_LABELS = ['DIV', 'HAN', 'KIC', 'REF', 'SPD', 'POS'];
-const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'CLASSIC', lotg: 'LEGEND OF THE GAME', objective: 'PATHFINDER' };
+const SPECIAL_LABEL = { inform: 'IN-FORM', hero: 'HERO', legend: 'CLASSIC', lotg: 'LEGEND OF THE GAME', objective: 'PATHFINDER', secret: 'GLITCH' };
 for (const pr of PROMOS) SPECIAL_LABEL[pr.id] = pr.tag;
 
 // Promo colours live in ONE place (core/promos.js `colors`): expose them as CSS custom properties for the card
@@ -84,9 +84,13 @@ export function attributeBlock(p) {
     document.head.appendChild(el);
   }
   const cls = (v) => (v >= 85 ? 'hi' : v >= 70 ? 'mid' : v < 50 ? 'lo' : '');
+  // "The Shawky" (secretcard.js `glitch`): every number here is still a real, 1-99-safe value underneath
+  // (see substats.js) — only the display reads "∞", same as the card face and rating.
+  const inf = p.glitch === true;
+  const disp = (v) => (inf ? '∞' : v);
   return h('div', { class: 'pm-attrs pm-attrs--full' }, subStats(p).map((g) => h('div', { class: 'pm-attrgroup', 'data-attr': g.key },
-    h('div', { class: 'pm-attr' }, h('span', null, g.label), h('b', { class: cls(g.value) }, g.value), h('i', { style: { '--v': `${Math.min(99, g.value)}%` } })),
-    g.subs.map((x) => h('div', { class: 'pm-subattr', 'data-attr': x.key }, h('span', null, x.label), h('b', { class: cls(x.value) }, x.value), h('i', { style: { '--v': `${x.value}%` } }))))));
+    h('div', { class: 'pm-attr' }, h('span', null, g.label), h('b', { class: cls(g.value) }, disp(g.value)), h('i', { style: { '--v': `${Math.min(99, g.value)}%` } })),
+    g.subs.map((x) => h('div', { class: 'pm-subattr', 'data-attr': x.key }, h('span', null, x.label), h('b', { class: cls(x.value) }, disp(x.value)), h('i', { style: { '--v': `${x.value}%` } }))))));
 }
 
 export function cardClasses(p) {
@@ -116,8 +120,11 @@ export function playerCard(p, opts = {}) {
   const club = opts.club || clubById(p.club) || { id: p.club, name: p.club, short: String(p.club).slice(0, 3), colors: { primary: '#445', secondary: '#99a' } };
   const vals = p.pos === 'GK' ? [p.gk.div, p.gk.han, p.gk.kic, p.gk.ref, p.gk.spd, p.gk.pos] : [p.stats.pac, p.stats.sho, p.stats.pas, p.stats.dri, p.stats.def, p.stats.phy];
   const labels = p.pos === 'GK' ? GK_LABELS : STAT_LABELS;
+  // "The Shawky" (secretcard.js `glitch`): shown as "∞" everywhere on the face — the underlying numbers stay
+  // finite/1-99 (market value, SBC rating math, sorting all use the real number, never this display string).
+  const inf = p.glitch === true;
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
-  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
+  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${inf ? '∞' : v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : sortedStyles(p).slice(0, 3).map((x) => psBadge(x)).join('');
   const others = [p.pos, ...(p.alt || [])].filter((x) => x !== posLabel).slice(0, 3);
@@ -129,7 +136,7 @@ export function playerCard(p, opts = {}) {
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.photo ? `<img class="pc-avatar pc-photo" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
-      <div class="pc-ovr">${p.ovr}</div>
+      <div class="pc-ovr">${inf ? '∞' : p.ovr}</div>
       <div class="pc-pos">${esc(posLabel)}</div>
       ${altHtml}
       <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>
@@ -144,7 +151,7 @@ export function playerCard(p, opts = {}) {
     ${p.evo ? `<div class="pc-evo" title="Evolved ×${p.evo}">EVO${p.evo > 1 ? ` ${p.evo}` : ''}</div>` : ''}
   </div>`;
   const el = frag(html);
-  el.setAttribute('aria-label', `${p.name}, ${p.ovr} ${posLabel}`);
+  el.setAttribute('aria-label', `${p.name}, ${inf ? 'infinity' : p.ovr} ${posLabel}`);
   if (opts.extra) el.appendChild(opts.extra);
   if (opts.onClick) {
     el.tabIndex = 0;

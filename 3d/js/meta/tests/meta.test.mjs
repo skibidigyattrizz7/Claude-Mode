@@ -1198,26 +1198,80 @@ test('B2: +500 real players — every club stays a valid Career starting squad (
   for (const id of ['ISL05', 'SOL04', 'ISL02', 'SOL05', 'ISL07']) assert.ok((cnt[id] || 0) < 32, `${id} has ${cnt[id]}`);
 });
 
-test('B2: Secret card — one unique card, ~0.0005 odds in its one pack only, never admin-grantable', () => {
+test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "infinite" stats that stay '
+  + 'math-safe, ~0.0005 odds in the Secret Vault pack + ~0.005 in the admin-only Admin Vault pack only, '
+  + 'never admin-grantable', () => {
   const card = SC.secretCard();
   assert.equal(card.special, 'secret');
-  assert.ok(card.ovr >= 90 && card.ovr <= 99);
+  assert.equal(card.name, 'The Shawky');
+  assert.equal(card.nat, 'EGY');
+  // "Infinite": the number itself is finite/1-99-safe everywhere it's used for math (computeOvr already
+  // clamps to 99 before the display override, and every face stat is a plain 99), but ovr/pot are pushed to
+  // the same "over 99" signal admin cards use, and `glitch` is what the UI (card.js/utview.js) keys "∞" off.
+  assert.equal(card.ovr, SC.INFINITE_OVR);
+  assert.ok(card.ovr > 99, 'must read as admin-tier (isAdminChem/isSwapHidden) too');
+  assert.equal(card.pot, card.ovr);
+  assert.equal(card.glitch, true);
+  assert.equal(computeOvr(card.pos, card), 99, 'face stats alone (before the "infinite" override) are a clean 99');
+  for (const k of ['pac', 'sho', 'pas', 'dri', 'def', 'phy']) assert.equal(card.stats[k], 99);
+  for (const k of ['div', 'han', 'kic', 'ref', 'spd', 'pos']) assert.equal(card.gk[k], 99);
+  assert.ok(Number.isFinite(card.value) && Number.isFinite(card.wage) && card.value === 0 && card.wage === 0, 'never priced/tradeable');
+  // Every position: main pos CF/ST, every other outfield position + GK in alt.
+  assert.ok(['ST', 'CF'].includes(card.pos));
+  assert.deepEqual([card.pos, ...card.alt].slice().sort(), POSITIONS.slice().sort());
+  // Every PlayStyle AND PlayStyle+ that exists.
+  const psIds = card.playstyles.map((x) => x.id).sort();
+  assert.deepEqual(psIds, Object.keys(PH.PLAYSTYLES).sort());
+  assert.ok(card.playstyles.every((x) => x.plus === true), 'every PlayStyle must be a PlayStyle+');
+  // SBC rating math / sorting / chemistry never NaN or break with this card in a squad.
+  const slots = new Array(11).fill(null); slots[9] = card;
+  const rating = teamRating(slots);
+  assert.ok(Number.isFinite(rating) && rating >= 0 && rating <= 99, `teamRating broke: ${rating}`);
+  const chem = calcChemistry('4-3-3', slots);
+  assert.equal(chem.players[9], 3, 'max chemistry (isAdminChem: ovr>99)');
+  assert.ok(!SW.isSwapHidden || SW.isSwapHidden(card) === true, 'hidden from Swaps like admin cards');
+  // Sorting by ovr (as pack/market/search views do) never produces NaN comparisons with this card mixed in.
+  const mixed = [card, { ovr: 82 }, { ovr: 91 }].sort((a, b) => b.ovr - a.ovr);
+  assert.equal(mixed[0], card);
   const db = getDB();
   assert.ok(!db.all.some((p) => p.id === card.id), 'secret card must never be in db.all');
+  // Only the Secret Vault pack (public) and the Admin Vault pack (admin-only) ever reference the 'secret' odds.
   const pack = UT.PACK_BY_ID[SC.SECRET_PACK_ID];
   assert.ok(pack, 'secret pack missing');
   assert.ok(pack.slots.some((s) => 'secret' in s.odds));
   assert.ok(Math.abs(pack.slots[0].odds.secret - SC.SECRET_ODDS) < 1e-9);
-  for (const p of UT.PACKS) if (p.id !== SC.SECRET_PACK_ID) assert.ok(!p.slots.some((s) => 'secret' in s.odds), `${p.id} also has secret odds`);
-  // Statistically confirm the pack's actual pull rate matches (large sample, seeded/deterministic).
+  const avPack = UT.PACK_BY_ID[UT.ADMIN_VAULT_PACK_ID];
+  assert.ok(avPack, 'admin vault pack missing');
+  assert.ok(Math.abs(avPack.slots[0].odds.secret - UT.ADMIN_VAULT_SECRET_ODDS) < 1e-9);
+  for (const p of UT.PACKS) if (p.id !== SC.SECRET_PACK_ID && p.id !== UT.ADMIN_VAULT_PACK_ID) assert.ok(!p.slots.some((s) => 'secret' in s.odds), `${p.id} also has secret odds`);
+  // Statistically confirm both packs' actual pull rates match (large sample, seeded/deterministic).
   let hits = 0; const N = 40000;
   for (let i = 0; i < N; i++) { const items = UT.openPack(SC.SECRET_PACK_ID, new Set(), new Rng(`secret-${i}`)); if (items.some((it) => it.pid === SC.SECRET_CARD_ID)) hits++; }
   assert.ok(hits >= 2 && hits <= 60, `expected ~${N * SC.SECRET_ODDS} hits, got ${hits}`);
+  let avHits = 0;
+  for (let i = 0; i < N; i++) { const items = UT.openPack(UT.ADMIN_VAULT_PACK_ID, new Set(), new Rng(`av-${i}`)); if (items.some((it) => it.pid === SC.SECRET_CARD_ID)) avHits++; }
+  assert.ok(avHits >= 130 && avHits <= 290, `expected ~${N * UT.ADMIN_VAULT_SECRET_ODDS} admin-vault hits, got ${avHits}`);
   // No admin level can ever grant it (the one generic "give any player id" API is admin.js's grantPlayer).
   const s = UT.createUTState({ clubName: 'X' }, new Rng(1));
   const r = A.grantPlayer(s, SC.SECRET_CARD_ID);
   assert.equal(r.ok, false);
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
+});
+
+test('B2: Admin Vault pack — admin-only (never in the public store), a fixed 50-card pool', () => {
+  const pack = UT.PACK_BY_ID[UT.ADMIN_VAULT_PACK_ID];
+  assert.ok(pack.adminOnly, 'must be flagged admin-only');
+  assert.ok(!UT.storePacks().some((p) => p.id === UT.ADMIN_VAULT_PACK_ID), 'must never be in the public store');
+  const pool = UT.adminVaultPool();
+  assert.equal(pool.length, UT.ADMIN_VAULT_SIZE);
+  assert.equal(new Set(pool.map((p) => p.id)).size, pool.length, 'no duplicate cards in the pool');
+  assert.ok(!pool.some((p) => p.id === SC.SECRET_CARD_ID), 'the Secret card is layered on by pack odds, not part of the 50');
+  // A real, seeded pack open never errors and always returns 5 items, only from the pool (or the Secret card).
+  for (let i = 0; i < 200; i++) {
+    const items = UT.openPack(UT.ADMIN_VAULT_PACK_ID, new Set(), new Rng(`av-size-${i}`));
+    assert.equal(items.length, 5);
+    for (const it of items) assert.ok(it.pid === SC.SECRET_CARD_ID || pool.some((p) => p.id === it.pid), `unexpected card ${it.pid}`);
+  }
 });
 
 test('B2: Manager cards contribute chemistry in both styles, and never regress an unmanaged squad', () => {

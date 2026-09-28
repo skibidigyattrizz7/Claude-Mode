@@ -62,6 +62,18 @@ export function buildBall(scene, q, track) {
       const rs = r * sc;
       const y = Math.max(rs, py - BALL_R + rs);
       mesh.position.set(px, y, pz);
+      // "The Shawky" glitch shot (owner request, Sep 28): a short 2-3 frame RGB-split teleport-flicker as
+      // the ball jumps toward the top-bin target instead of just flying there — see index.js `processFx`'s
+      // 'glitch' fx (pushed once per such shot from engine/core/sim.js `_release`). Self-reverting: outside
+      // the short window below the ball's own emissive/position are untouched.
+      if (opts.glitchAt != null && t - opts.glitchAt < 0.09 && opts.glitchTo) {
+        mesh.position.set(opts.glitchTo.x, Math.max(rs, opts.glitchTo.y), opts.glitchTo.z);
+        const frame = Math.floor((t - opts.glitchAt) * 90) % 3;
+        baseMat.emissive.setHex([0x14e6ff, 0xff2b6b, 0x14ffa0][frame]);
+        baseMat.emissiveIntensity = 1.15;
+      } else if (baseMat.emissiveIntensity) {
+        baseMat.emissive.setHex(0x000000); baseMat.emissiveIntensity = 0;
+      }
       // rolling rotation: ω = v × up / r on the ground; keep last spin in the air
       const onGround = py < BALL_R + 0.05;
       if (onGround) spin.set(-vz / rs, 0, vx / rs);

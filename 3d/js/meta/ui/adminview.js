@@ -11,6 +11,7 @@ import { getDB } from '../core/players.js';
 import { remove as removeKey } from '../core/storage.js';
 import { safeCall } from './app.js';
 import { openPackFlow } from './utview.js';
+import { packArt } from './packopen_common.js';
 import { icon } from './icons.js';
 import * as X from './adminextra.js';
 import * as OP from './ownerpanel.js';
@@ -184,9 +185,13 @@ export function adminView() {
           },
         }), h('span', null, 'Infinite coins (UT)')));
 
-      // ---- packs ----
+      // ---- packs ---- (owner request Sep 28: each button uses that pack's own look — same small packArt
+      // tiles the Store and My Packs already use — and the admin-only Admin Vault pack is labelled as such;
+      // it never appears in UT.storePacks(), only here and in "My Packs" is where a normal pack ends up.)
       const packs = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('chest'), ' Open any pack for free'),
-        h('div', { class: 'pm-btnrow pm-wrap' }, UT.PACKS.map((pk) => h('button', { class: 'pm-btn pm-btn--sm', disabled: !s, onclick: () => openPackFlow(app, pk.id) }, pk.name))));
+        h('div', { class: 'pm-adminpacks' }, UT.PACKS.map((pk) => h('button', {
+          class: 'pm-adminpack', disabled: !s, title: pk.name, onclick: () => openPackFlow(app, pk.id),
+        }, packArt(pk, 'sm'), h('span', null, pk.name), pk.adminOnly ? h('small', { class: 'pm-adminpack-badge' }, 'Admin only') : null))));
 
       // ---- grant player ----
       const results = h('div', { class: 'pm-admin-results' });

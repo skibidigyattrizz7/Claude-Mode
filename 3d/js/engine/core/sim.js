@@ -171,11 +171,17 @@ export class MatchSim {
     // admin / Owner-Access cards: a rating (or attribute) above 99 unlocks `boost` (0..1 per area);
     // the ordinary attribute maths below stays clamped to 1-99 so normal cards remain balanced
     const g0 = OVER(Math.max(+pd.rawOvr || 0, +pd.ovr || 0));
+    // "The Shawky" (secretcard.js `glitch`, carried by core/teams.js toMatchPlayer): a stronger tier on top
+    // of the admin boost above. `p.glitch` gates the guaranteed effects below (unsaveable top-bin shots,
+    // zero pass error, unbeatable tackling, long-range steals — see _shootPlan/_execute/_resolveStanding/
+    // _slideContact and ai.js); maxing every `boost` area here also gives him the full admin-tier rockets/
+    // near-perfect-ball/win-from-anywhere effects that already exist, with no new numbers to balance.
+    p.glitch = pd.glitch === true;
     p.boost = null;
     const bo = {};
     for (const key of ['pac', 'sho', 'pas', 'dri', 'def', 'phy', 'gk']) {
       const raw = key === 'gk' ? Math.max(+a.div || 0, +a.ref || 0, +a.han || 0) : +a[key] || 0;
-      bo[key] = Math.max(g0, OVER(raw));
+      bo[key] = p.glitch ? 1 : Math.max(g0, OVER(raw));
       if (bo[key] > 0) p.boost = bo;
     }
     const k = 1 + clamp(((chem ?? 50) - 50) / 1000, -0.05, 0.05);
@@ -367,6 +373,8 @@ export class MatchSim {
     this._updateBall(dt);
     if (this.phase !== PHASE.PLAY) return;
     this._tackles();
+    if (this.phase !== PHASE.PLAY) return;
+    this._glitchSteal();
     if (this.phase !== PHASE.PLAY) return;
     this._interactions();
     if (this.phase !== PHASE.PLAY) return;
@@ -1031,7 +1039,18 @@ export class MatchSim {
       case 'lowdriven': case 'powershot': case 'trivela': case 'chip': {
         const gx = this.goalX(team), s = Math.sign(gx);
         let tz = o.tz, ty = o.ty;
-        const tx = o.tx ?? gx;
+        const tx = p.glitch ? gx : (o.tx ?? gx);
+        // "The Shawky" (owner request, Sep 28): every shot — from anywhere, any kind — is aimed at a top
+        // corner and can't be saved (see the keeper-touch check in _gkTry below, `info.glitch`). Which
+        // corner is a deterministic pick (seeded off the ball's position + match clock, not `rng()`, so
+        // the sim stays fully seeded/reproducible) rather than always the same side.
+        if (p.glitch) {
+          const seed = (Math.abs(p.hash ^ Math.round(from.x * 37) ^ Math.round(from.z * 53) ^ Math.round(this.t * 240)) >>> 0);
+          tz = (seed % 2 === 0 ? 1 : -1) * (GOAL.HW - 0.42);
+          ty = GOAL.H - 0.26;
+          info.glitch = true;
+          info.glitchTo = { x: tx, y: ty, z: tz };
+        }
         if (tz == null) {
           const nx = gx - from.x, nz = -from.z, nl = Math.hypot(nx, nz) || 1;
           const pz = nx / nl;
@@ -1045,9 +1064,9 @@ export class MatchSim {
         if (ty == null) {
           ty = kind === 'finesse' ? 0.8 + power * 0.9 : kind === 'header' ? 0.5 + power * 0.8 : 0.3 + power * 1.3;
           if (power > 0.85 && kind !== 'header') ty += (power - 0.85) * 16;
-        } else if (kind === 'penalty' && power > 0.86) ty += (power - 0.86) * 12;
-        if (kind === 'lowdriven') ty = Math.min(ty, 0.5);
-        if (kind === 'chip') ty = Math.max(ty, 1.75);
+        } else if (kind === 'penalty' && power > 0.86 && !p.glitch) ty += (power - 0.86) * 12;
+        if (kind === 'lowdriven' && !p.glitch) ty = Math.min(ty, 0.5);
+        if (kind === 'chip' && !p.glitch) ty = Math.max(ty, 1.75);
         const D = Math.hypot(tx - from.x, tz - from.z);
         let speed;
         if (kind === 'finesse') speed = 12 + power * (11 + a.sho * 0.065);
@@ -1078,6 +1097,10 @@ export class MatchSim {
       default: return null;
     }
     if (!vel || !Number.isFinite(vel.x + vel.y + vel.z)) return null;
+    // "The Shawky": flat ground passes/through balls travel much faster ("instant passing") — shots are left
+    // alone here since their velocity was already solved to land exactly on the top-corner target above;
+    // scaling it would overshoot that point.
+    if (p.glitch && (kind === 'ground' || kind === 'through')) vel = { x: vel.x * 1.8, y: vel.y, z: vel.z * 1.8 };
     return { vel, spin, info, from };
   }
 
@@ -1096,8 +1119,10 @@ export class MatchSim {
   _execute(p, plan) {
     const { info } = plan;
     let vel = plan.vel;
-    const a = p.a, em0 = this._errMul(p);
-    // admin cards: passes / shots are (near) perfect
+    const a = p.a, em0 = p.glitch ? 0 : this._errMul(p);
+    // admin cards: passes / shots are (near) perfect. "The Shawky" (p.glitch): em0 is already 0 above, so
+    // every error multiplier below is exactly zero — instant, perfectly accurate passing and shooting from
+    // anywhere, not just "near" perfect.
     const emP = em0 * (1 - bst(p, 'pas')), emS = em0 * (1 - 0.97 * bst(p, 'sho'));
     const em = ['ground', 'through', 'gkthrow', 'lob', 'cross', 'throw', 'punt'].includes(info.kind) ? emP : emS;
     const fatigue = 1 - p.stam;
@@ -1204,8 +1229,20 @@ export class MatchSim {
     const km = this.admin.kickMul;
     b.v = { x: vel.x * km, y: vel.y * km, z: vel.z * km };
     b.w = { x: spin.x, y: spin.y, z: spin.z };
+    // "The Shawky": from anywhere on the pitch a normal (if fast) flight would give defenders and the
+    // keeper time to close it down or head it clear well before it arrives — so the ball is put right at
+    // the top-corner target the instant it's struck (matches the owner's "instantly teleports" wording)
+    // and only needs a short final push to cross the line; nothing has time to react. `_gkTouch`'s
+    // `skGlitch` check still makes this unsaveable even in the unlikely case someone is already stood there.
+    if (info.glitch && info.glitchTo) {
+      const gs = Math.sign(info.glitchTo.x) || 1;
+      b.p.x = info.glitchTo.x - gs * 0.4; b.p.y = info.glitchTo.y; b.p.z = info.glitchTo.z;
+      b.v = { x: gs * 9, y: 0, z: 0 }; b.w = { x: 0, y: 0, z: 0 };
+    }
     b.lastTouch = p.idx; b.lastTeam = p.team; b.kicker = p.idx; b.kickT = t;
     b.intended = info.target ?? -1;
+    // "The Shawky": a short teleport-flicker fx for the renderer (ball.js) — pure visual, no gameplay effect.
+    if (info.glitch && info.glitchTo) this.fxPush('glitch', { pi: p.idx, x: info.glitchTo.x, y: info.glitchTo.y, z: info.glitchTo.z });
     // through balls run the receiver onto space instead of snapping him to face the ball (see ai.js think())
     b.throughBall = info.kind === 'through';
     p.cool.touch = t + 0.3;
@@ -1857,6 +1894,10 @@ export class MatchSim {
       hit = hd < reach && b.p.y < g.h + 0.55 + this._jumpH(g) + ps(g, 'crossclaimer') * 0.1;
     } else return false;
     if (!hit) return false;
+    // "The Shawky": nothing the keeper does here can stop it — no catch, no parry, no punch — the ball just
+    // keeps going (its trajectory already aims at a top corner, see _plan's `p.glitch` block above).
+    const skGlitch = b.kicker >= 0 ? this.players[b.kicker] : null;
+    if (skGlitch && skGlitch.team !== g.team && skGlitch.glitch) return false;
     // an admin card's shot beats the keeper (unless he's an admin keeper himself); decided once per shot
     const sk = b.kicker >= 0 ? this.players[b.kicker] : null;
     if (sk && sk.team !== g.team && bst(sk, 'sho') > 0 && b.beatKick !== b.kickT) {
@@ -2011,6 +2052,27 @@ export class MatchSim {
     this.fxPush('kick', { s: 6 });
   }
 
+  // "The Shawky" (p.glitch): steals the ball from opponents even from far away — a much bigger radius than
+  // any tackle, resolved outside the tackle-action state machine (that needs an AI/human decision to even
+  // attempt a tackle) so a far-away steal doesn't depend on that decision ever firing. Deterministic (seeded
+  // rng only, via `_winBall`/`this.rng`); a per-player cooldown (the existing `cool.steal` field) stops it
+  // re-triggering every single frame on the same ball.
+  _glitchSteal() {
+    const b = this.ball, t = this.t;
+    if (b.inHands) return; // only called during PHASE.PLAY (see _stepPlay), so no separate set-piece guard needed
+    const owner = this.owner();
+    if (!owner || owner.glitch) return;
+    for (const p of this.players) {
+      if (p.sentOff || !p.glitch || p.team === owner.team) continue;
+      if (p.cool.steal > t) continue;
+      if (Math.hypot(owner.x - p.x, owner.z - p.z) > 15) continue;
+      this._winBall(p, false);
+      p.cool.steal = t + 0.5;
+      p.st.tackles++;
+      return;
+    }
+  }
+
   _lastMan(victim, offender) {
     const team = victim.team;
     const X = this.X(team, victim.x);
@@ -2030,11 +2092,16 @@ export class MatchSim {
     if ((owner && owner.team === p.team) || b.inHands) return;
     const victim = owner;
     const bd = Math.hypot(b.p.x - foot.x, b.p.z - foot.z);
-    const reach = bd < 0.85 + bst(p, 'def') * 1.6 && b.p.y < 0.6 + bst(p, 'def');
+    // "The Shawky" (p.glitch): a long-range steal radius (owner: "steals the ball even while being far
+    // away") — well beyond the admin-tier `bst(p,'def')` reach, and works on a ball that's briefly in the air too.
+    const reach = bd < 0.85 + bst(p, 'def') * 1.6 + (p.glitch ? 11 : 0) && b.p.y < 0.6 + bst(p, 'def') + (p.glitch ? 3 : 0);
     const behind = victim ? (p.act && p.act.behind != null ? p.act.behind && this.fromBehind(p, victim) : this.fromBehind(p, victim)) : false;
     let won = false;
     if (reach) {
-      if (!victim) won = true;
+      // "The Shawky" can never be dispossessed: any tackle attempted on him fails outright, no roll.
+      if (victim && victim.glitch) won = false;
+      else if (!victim) won = true;
+      else if (p.glitch) won = true; // guaranteed steal, not just a better chance
       else {
         const pr = clamp(0.5 + (p.a.def - victim.a.dri) * 0.012 + (behind ? -0.2 : 0.12) + (victim.act && victim.act.type === 'skill' ? -0.15 : 0)
           + ps(p, 'anticipate') * 0.1 + ps(p, 'enforcer') * 0.05 + (p.jockeyT > this.t - 0.4 ? 0.06 : 0) - ps(victim, 'pressproven') * 0.05, 0.1, 0.93);
@@ -2056,7 +2123,8 @@ export class MatchSim {
     const foot = { x: p.x + f.x * 0.95, z: p.z + f.z * 0.95 };
     if (!a.ballDone && !b.inHands && Math.hypot(b.p.x - foot.x, b.p.z - foot.z) < 0.75 + ps(p, 'slidetackle') * 0.18 && b.p.y < 0.5) {
       const o = this.owner();
-      if (!o || o.team !== p.team) {
+      // "The Shawky" can never be dispossessed, slide tackles included.
+      if ((!o || o.team !== p.team) && !(o && o.glitch)) {
         a.ballDone = true;
         this._winBall(p, true);
         p.st.tackles++;
@@ -2078,7 +2146,8 @@ export class MatchSim {
 
   _contests() {
     const o = this.owner(), b = this.ball, t = this.t;
-    if (!o || b.inHands || (o.act && o.act.type === 'skill')) return;
+    // "The Shawky" can never be dispossessed — no 50/50 loose-ball contest or shoulder barge takes it off him.
+    if (!o || b.inHands || (o.act && o.act.type === 'skill') || o.glitch) return;
     for (const d of this.teamList[1 - o.team]) {
       if (d.act || d.fooledUntil > t || d.cool.steal > t || d.isGK) continue;
       const bd = Math.hypot(b.p.x - d.x, b.p.z - d.z);
