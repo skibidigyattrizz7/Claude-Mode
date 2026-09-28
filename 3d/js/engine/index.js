@@ -7,6 +7,7 @@ import { DT, PHASE, SP, PITCH, halfBase, GOAL } from './core/constants.js';
 import { predictBall } from './core/physics.js';
 import { InputManager, emptyInput, EXTRA_BINDS } from './ui/input.js';
 import { Hud } from './ui/hud.js';
+import { GoalCard, goalCardInfo } from './ui/goalcard.js';
 import { MatchAudio } from './ui/audio.js';
 import { Commentary } from './ui/commentary.js';
 import { createCommentary } from './audio/commentary.js';
@@ -144,6 +145,7 @@ export function createMatch(container, opts = {}) {
     gameplay: gp,
   });
   hud.camMode = camMode;
+  const goalCard = new GoalCard(hud.el || root, { home: rHome, away: rAway, touch });
   const input = new InputManager(root, binds, {
     touch,
     onCommand: (cmd, arg, slot) => {
@@ -458,6 +460,7 @@ export function createMatch(container, opts = {}) {
           const pd = playerData(f.pi);
           const cap = (halfBase(view.h) + (view.h <= 2 ? 2700 : 900)) / 60 + (view.ad || 0);
           hud.bannerMsg('GOAL!', `${pd.name || ''}${f.og ? ' (OG)' : ''}  ${Math.min(minute, cap)}'`, 'goal', 3.2);
+          goalCard.show(goalCardInfo(f, pd, [rHome, rAway], Math.min(minute, cap)));
           commentary.say('goal', { name: pd.name, og: !!f.og, score: view.sc, team: f.team });
           say({ type: 'goal', playerName: f.og ? '' : pd.name });
           if (!sim) safe(onEvent, { type: 'goal', team: SIDES[f.team], playerId: pd.id, playerName: pd.name, minute, ownGoal: !!f.og, score: [...view.sc] });
@@ -735,6 +738,7 @@ export function createMatch(container, opts = {}) {
       if (ro) ro.disconnect();
       input.dispose();
       hud.dispose();
+      goalCard.dispose();
       audio.dispose();
       commentary.stop();
       for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.removeEventListener(ev, unlockVoice);
