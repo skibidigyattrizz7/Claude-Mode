@@ -461,3 +461,22 @@ html[data-ui="stadium"] .loading--sm::before { height: 64px; }
   html[data-ui="stadium"] .pm-btn--sm, html[data-ui="stadium"] .pm-chip, html[data-ui="stadium"] .btn { min-height: 44px; }
   html[data-ui="stadium"] .online-pill, html[data-ui="stadium"] .mm-status .acc-count, html[data-ui="stadium"] .mm-bar > .acc-chip { min-height: 44px; }
 }
+
+/* ------------------------------------------------------------------ 14. online lineup reveal (js/ui/lineupreveal.js, base rules in css/lineup.css) */
+/* cards are angled kit panels, the line rating is the big number, the pitch is a flat surface with one accent for the elite ratings */
+html[data-ui="stadium"] .lr-kicker { letter-spacing: .14em; }
+html[data-ui="stadium"] .lr-team, html[data-ui="stadium"] .lr-line-name, html[data-ui="stadium"] .lr-info-name { font-weight: 400; letter-spacing: .02em; }
+html[data-ui="stadium"] .lr-line-avg, html[data-ui="stadium"] .lr-ovr, html[data-ui="stadium"] .lr-stat b, html[data-ui="stadium"] .lr-node-ovr, html[data-ui="stadium"] .lr-name, html[data-ui="stadium"] .lr-node-name { font-weight: 400; }
+html[data-ui="stadium"] .lr-line-name::before {
+  content: ""; display: inline-block; width: 10px; height: .72em; margin-right: 12px; background: var(--acc); clip-path: var(--shape-tag); vertical-align: -.02em;
+}
+html[data-ui="stadium"] .lr-card { position: relative; border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); }
+html[data-ui="stadium"] .lr-card::after { content: ""; position: absolute; left: 0; bottom: 0; height: 5px; width: calc(100% - 22px); background: var(--acc); }
+html[data-ui="stadium"] .lr-pip i { height: 5px; clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 100%, 0 100%); }
+html[data-ui="stadium"] .lr-pitch { background-color: #0c1f2b; border: 1px solid var(--line2); border-radius: 3px; }
+html[data-ui="stadium"] .lr-node-ovr { border: 0; border-radius: 0; clip-path: var(--shape-tag); padding: 1px 8px 1px 7px; background: var(--panel3); }
+html[data-ui="stadium"] .lr-node.is-elite .lr-node-ovr { background: var(--acc); color: var(--acc-ink); }
+html[data-ui="stadium"] .lr-go { color: var(--acc); }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui="stadium"] .lr-card::after { animation: st-draw 520ms calc(240ms + var(--i, 0) * 90ms) var(--ease-out) backwards; transform-origin: left; }
+}

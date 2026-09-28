@@ -14,6 +14,7 @@ import { setConfig as setOwnerToggles } from './meta/ui/config.js';
 // blocked/failed module downloads (school filters, proxies) -> an actionable message, not a raw TypeError
 import { explainLoadError } from './engine/ui/loading.js';
 import { mountStadium } from './ui/stadium.js';
+import { showLineupReveal } from './ui/lineupreveal.js';
 
 const Q = new URLSearchParams(location.search);
 const STUB_ENGINE = Q.get('stubEngine') === '1';
@@ -410,6 +411,26 @@ export async function openMatch(opts) {
   return ctl;
 }
 
+/**
+ * Online matches (opts.netRole 'host' | 'guest') open the engine as usual, then keep the sim paused under an
+ * opponent lineup reveal (goalkeeper, defence, midfield, attack, whole XI). Both players run the same ~6 s reveal
+ * at the same moment, so nobody kicks off early; a tap / any key skips it. The reveal only reads the opponent's
+ * team object that online.js already passes in (home / away); it never touches the network layer.
+ */
+async function openMatchWithReveal(opts) {
+  const m = await openMatch(opts);
+  const role = opts && opts.netRole;
+  if ((role !== 'host' && role !== 'guest') || Q.get('noReveal') === '1') return m;
+  const opp = role === 'host' ? opts.away : opts.home;
+  if (!opp || !Array.isArray(opp.players)) return m;
+  try { m.handle.pause(); } catch { return m; }
+  showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr }).then(() => {
+    // still in this match, and not held by the disconnect overlay: let the game begin
+    if (m.layer.isConnected && !m.layer.querySelector('.dc-overlay')) { try { m.handle.resume(); } catch { /* ignore */ } }
+  }).catch((e) => { console.error(e); try { m.handle.resume(); } catch { /* ignore */ } });
+  return m;
+}
+
 /** startMatch(home, away, opts) -> Promise<result>. Handed to mountMeta and used by Kick-Off. */
 export async function startMatch(home, away, opts = {}) {
   const m = await openMatch({ ...opts, home, away });
@@ -679,7 +700,7 @@ async function onlineScreen({ autoQuick = null, onResult = null, onClose = null,
   try {
     const mod = await import('./net/online.js');
     mounted = mod.mountOnline(body, {
-      h, nav, toast, getTeams, getSavedUT, openMatch, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
+      h, nav, toast, getTeams, getSavedUT, openMatch: openMatchWithReveal, renderResult, teamPicker, teamOvr, shirtSVG, loadSettings,
       online, autoQuick, onResult, onAutoEnd, autoInvite, autoChallenge,
       transportKind: ['bc', 'loopback'].includes(Q.get('net')) ? Q.get('net') : 'peer',
       dcTimeoutMs: Math.max(2000, Number(Q.get('dcTimeout')) * 1000 || 15000),
