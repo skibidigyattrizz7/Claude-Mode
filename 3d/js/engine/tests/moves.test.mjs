@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../../../vendor/three.module.min.js';
 import { MatchSim, SKILL_KINDS, SKILL_INFO, SURE_MIN } from '../core/sim.js';
-import { PHASE, GOAL, BALL_R, ANIM } from '../core/constants.js';
+import { PHASE, GOAL, BALL_R, ANIM, SP } from '../core/constants.js';
 import { createBall, stepBall, predictBall, behindLine } from '../core/physics.js';
 import { encodeSnapshot } from '../core/snapshot.js';
 import { PlayerRig, decodeDive } from '../render/player.js';
@@ -345,6 +345,20 @@ export function runMoveTests(test) {
     assert.ok(bites(5) > 8, 'defenders bite ' + bites(5));
     assert.equal(bites(5), bites(5));
   });
+  test('timing ring: penalties only (owner) - free kick accuracy ignores ring timing, penalty accuracy depends on it', () => {
+    const { sim, p } = mkSim({ attrs: { sho: 85 } });
+    place(sim, p, 30, 3);
+    const mk = (type) => ({ type, team: 0, ball: { x: 30, z: 3 }, aim: 0, aimZ: 1.5, aimY: 1.4, curve: 0.4, kx: 0.4, ky: 0, cross: true, t0: sim.t, period: 1.2 });
+    const fkGood = sim._setPiecePlan(p, mk(SP.FREEKICK), 'shoot', 0.6, 0), fkBad = sim._setPiecePlan(p, mk(SP.FREEKICK), 'shoot', 0.6, 1);
+    assert.ok(fkGood && fkBad);
+    assert.equal(fkGood.info.errMul, fkBad.info.errMul, 'free kick errMul must not depend on the ring');
+    place(sim, p, 41.5, 0);
+    const pen = { ...mk(SP.PENALTY), ball: { x: 41.5, z: 0 }, aimZ: 1.2, aimY: 1 };
+    const pGood = sim._setPiecePlan(p, pen, 'shoot', 0.6, 0), pBad = sim._setPiecePlan(p, { ...pen }, 'shoot', 0.6, 1);
+    assert.ok(pGood && pBad);
+    assert.ok(pBad.info.errMul > pGood.info.errMul * 2, `penalty timing matters: ${pGood.info.errMul} vs ${pBad.info.errMul}`);
+  });
+
   test('rig: all 9 skill animations and the finesse / power kick + windup poses are finite and distinct', () => {
     const rig = Object.create(PlayerRig.prototype);
     Object.assign(rig, { leftFoot: false, seed: 0, face: 0, px: 0, pz: 0, turn: 0, headYaw: 0, cyc: 0 });

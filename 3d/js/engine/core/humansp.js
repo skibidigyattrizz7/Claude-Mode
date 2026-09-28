@@ -65,7 +65,7 @@ export function step(sim, team, dt, inp, el) {
   const heldKey = KICK_KEYS.find((k) => inp[k]);
   const power = heldKey ? clamp(H[heldKey] / 1, 0.05, 1) : 0.6;
   const r = ring(sim, sp);
-  sim.aimInfo[team] = { setPiece: true, type: sp.type, aim: sp.aim, curve: sp.curve, aimZ: sp.aimZ, aimY: sp.aimY, power, held: !!heldKey, cross: sp.cross, kx: sp.kx, ky: sp.ky, ring: r };
+  sim.aimInfo[team] = { setPiece: true, type: sp.type, aim: sp.aim, curve: sp.curve, aimZ: sp.aimZ, aimY: sp.aimY, power, held: !!heldKey, cross: sp.cross, kx: sp.kx, ky: sp.ky, ring: sp.type === SP.PENALTY ? r : 1 };
   // preview trajectory (no error) for deliveries; crosshair shots only show the crosshair
   if (!sp.cross || (heldKey && heldKey !== 'shoot' && heldKey !== 'finesse')) {
     const pk = sim._setPiecePlan(p, sp, heldKey || sim._defaultSpKey(sp), power);
@@ -90,7 +90,8 @@ export function crosshairPlan(sim, p, sp, key, power, ringV) {
   const team = p.team, gx = sim.goalX(team);
   const a = p.a, db = ps(p, 'deadball');
   const from = { ...sim.ball.p };
-  const tm = timingMul(ringV ?? ring(sim, sp));
+  // timing ring: penalties only (owner, Sep 29); a direct free kick uses neutral timing
+  const tm = sp.type === SP.PENALTY ? timingMul(ringV ?? ring(sim, sp)) : 1;
   if (sp.type === SP.PENALTY) {
     const plan = sim._plan(p, 'penalty', { tz: sp.aimZ, ty: sp.aimY, power });
     if (!plan) return null;
@@ -116,7 +117,7 @@ export function crosshairPlan(sim, p, sp, key, power, ringV) {
   if (!vel || !Number.isFinite(vel.x + vel.y + vel.z)) return null;
   return {
     vel, spin, from,
-    info: { kind: 'fk', pass: false, shot: true, target: -1, power: Math.min(power, 0.85), point: { x: gx, z: sp.aimZ }, errMul: (1 - db * 0.18) * tm * (knuckle ? 1.35 : 1), knuckle, timing: ringV },
+    info: { kind: 'fk', pass: false, shot: true, target: -1, power: Math.min(power, 0.85), point: { x: gx, z: sp.aimZ }, errMul: (1 - db * 0.18) * tm * (knuckle ? 1.35 : 1), knuckle },
   };
 }
 

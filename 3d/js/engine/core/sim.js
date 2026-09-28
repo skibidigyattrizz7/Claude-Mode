@@ -2880,6 +2880,8 @@ export class MatchSim {
   }
 
   _setPiecePlan(p, sp, key, power, ringV) {
+    // owner (Sep 29): the timing ring only exists for penalties; free kicks, corners etc. ignore timing
+    if (sp.type !== SP.PENALTY) ringV = undefined;
     const dir = { x: Math.cos(sp.aim), z: Math.sin(sp.aim) };
     const team = p.team;
     if (sp.type === SP.PENALTY) return HSP.crosshairPlan(this, p, sp, key, power, ringV);

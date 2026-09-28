@@ -402,8 +402,8 @@ export class Hud {
     if (!mine || !ctx.project) { this.contact.style.display = 'none'; return; }
     const [type, , , kx, ky, ring, cross] = sa;
     const bx = view.b[0], bz = view.b[2];
-    if (cross || type === SP.FREEKICK || type === SP.PENALTY || type === SP.CORNER) {
-      // timing ring on the ground around the ball: smallest = best moment to strike
+    if (type === SP.PENALTY) {
+      // timing ring on the ground around the ball (penalties only): smallest = best moment to strike
       const r = 0.35 + ring * 1.5;
       const pts = [];
       for (let k = 0; k <= 40; k++) {
