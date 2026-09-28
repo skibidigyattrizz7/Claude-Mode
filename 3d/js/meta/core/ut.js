@@ -112,7 +112,7 @@ export const PACKS = [
   // ADMIN_VAULT_SECRET_ODDS (0.005) per opening — an admin testing tool, not a way to farm him.
   {
     id: ADMIN_VAULT_PACK_ID, name: 'Admin Vault Pack', price: 0, look: 'adminvault', adminOnly: true,
-    desc: `Admin only — ${ADMIN_VAULT_SIZE} random players (golds, rares, In-Forms, Heroes, Legends), plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of each Secret card`,
+    desc: `Admin only: ${ADMIN_VAULT_SIZE} random players (golds, rares, In-Forms, Heroes, Legends), plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of each Secret card`,
     slots: [{ n: 1, odds: { ...secretOdds(ADMIN_VAULT_SECRET_ODDS), ...Object.fromEntries(Object.entries(ADMIN_VAULT_TOP).map(([k, v]) => [k, v * (1 - SECRET_TOTAL(ADMIN_VAULT_SECRET_ODDS))])) } }, { n: ADMIN_VAULT_SIZE - 1, odds: ADMIN_VAULT_MIX }],
   },
 ];

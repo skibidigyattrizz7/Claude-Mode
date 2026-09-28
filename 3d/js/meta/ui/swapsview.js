@@ -17,7 +17,7 @@ const tokenLabel = (n) => `${n} token${n === 1 ? '' : 's'}`;
 /** Token balance chip for the top bar (shown next to the coin chip via the view's `topRight` hook). */
 function tokenChip(app) {
   const s = app.ut;
-  return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens — spend them in the Token Store' },
+  return h('div', { class: 'pm-coins is-tokens', title: 'Swap tokens: spend them in the Token Store' },
     h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-token' })), h('span', { class: 'pm-coins-n' }, fmtNum(s.tokens || 0)), h('span', { class: 'pm-sr' }, ' swap tokens'));
 }
 
@@ -92,7 +92,7 @@ async function confirmSwap(app, p, redraw, kind) {
   const s = app.ut;
   const chk = SW.checkSwappable(s, p.id);
   if (chk.needsConfirm) {
-    const ok = await confirmBox(app.root, 'Swap card', `${p.name} is on your bench — swapping it will leave that slot empty until refilled. Continue?`, 'Swap anyway', true);
+    const ok = await confirmBox(app.root, 'Swap card', `${p.name} is on your bench, swapping it will leave that slot empty until refilled. Continue?`, 'Swap anyway', true);
     if (!ok) return;
   }
   const r = kind === 'coins' ? SW.swapForCoins(s, p.id, { confirm: true }) : SW.swapForTokens(s, p.id, { confirm: true });

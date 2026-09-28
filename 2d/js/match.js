@@ -878,7 +878,7 @@ export class Match {
       const res = applyCard(fouler, verdict.card);
       if (res === 'red') {
         this.stats[fouler.team].reds++;
-        this.banner('RED CARD', `#${fouler.num} ${fouler.name} — second yellow`, '#ff3b3b', 2.8);
+        this.banner('RED CARD', `#${fouler.num} ${fouler.name}, second yellow`, '#ff3b3b', 2.8);
         this.sendOff(fouler);
       } else {
         this.stats[fouler.team].yellows++;
@@ -891,7 +891,7 @@ export class Match {
     let r;
     if (inPenaltyArea(spot, side)) {
       r = { type: 'penalty', team: victim.team, x: side === 0 ? PEN_SPOT : PITCH.L - PEN_SPOT, y: CY };
-      sub = verdict.reason + ' — PENALTY!';
+      sub = verdict.reason + ': PENALTY!';
     } else {
       const gc = this.goalCenter(side);
       const direct = dist(spot, gc) < 31 && Math.abs(spot.y - CY) < 19;
@@ -1228,7 +1228,7 @@ export class Match {
       this.ball.kickId++;
       this.lastTouch = gk; this.owner = null; this.pass = null; this.shot = null;
       this.state = 'play'; this.stateT = 0;
-      this.banner('SAVED!', `${gk.name} parries — rebound!`, '#8ecae6', 1.6);
+      this.banner('SAVED!', `${gk.name} parries, rebound!`, '#8ecae6', 1.6);
       return;
     }
     if (res.result === 'wall') {

@@ -257,7 +257,7 @@ export function personalInfo(p, now = new Date()) {
       out.ageLabel = `${n - y - 1}–${n - y}`;
     } else out.ageLabel = String(out.age);
   }
-  if (p.era === 'prime' || p.club === 'ICN') out.status = out.died ? 'Icon (deceased)' : 'Icon — prime version';
+  if (p.era === 'prime' || p.club === 'ICN') out.status = out.died ? 'Icon (deceased)' : 'Icon (prime version)';
   return out;
 }
 

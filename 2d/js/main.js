@@ -308,7 +308,7 @@ function wcPlay(t, nf) {
       };
       if (nf.knockout && gf === ga) {
         UI.showFulltime(m, {
-          extra: 'Level after 90 minutes — penalties!', contLabel: 'Penalty shootout',
+          extra: 'Level after 90 minutes: penalties!', contLabel: 'Penalty shootout',
           cont: () => app.startKickOnly({
             mode: 'shootout', teams: [home, away], humanTeam: userTeam, firstTeam: 0,
             onDone: (r) => finish(r.winner === userTeam),

@@ -95,7 +95,7 @@ export function cardCreatorPanel(app, { level }) {
     const chip = (id, d) => {
       const cur = st.playstyles.find((x) => x.id === id);
       const b = h('button', {
-        class: `pm-chip psi-chip ${cur ? 'on' : ''} ${cur && cur.plus ? 'is-plus' : ''}`, title: `${d[0]} — ${d[3]}`, 'aria-pressed': cur ? 'true' : 'false',
+        class: `pm-chip psi-chip ${cur ? 'on' : ''} ${cur && cur.plus ? 'is-plus' : ''}`, title: `${d[0]}: ${d[3]}`, 'aria-pressed': cur ? 'true' : 'false',
         onclick: () => {
           if (!cur) st.playstyles = [...st.playstyles, { id, plus: false }];
           else if (!cur.plus) st.playstyles = st.playstyles.map((x) => (x.id === id ? { ...x, plus: true } : x));
@@ -129,7 +129,7 @@ export function cardCreatorPanel(app, { level }) {
   const editNote = editing ? h('p', { class: 'pm-cc-editing' }, `Editing ${editing.name}. Saving updates this card (same card id) everywhere it is used on this device.`) : null;
   nameInp.addEventListener('input', () => { st.name = nameInp.value; saveBtn.disabled = !nameInp.value.trim(); drawPreview(); });
   const upload = h('input', { type: 'file', accept: 'image/png,image/jpeg', class: 'pm-cc-upload' });
-  const uploadMsg = h('small', { class: 'pm-dim' }, 'PNG/JPG — auto-cropped to the card portrait.');
+  const uploadMsg = h('small', { class: 'pm-dim' }, 'PNG/JPG: auto-cropped to the card portrait.');
   upload.addEventListener('change', async () => {
     const f = upload.files && upload.files[0];
     if (!f) return;
@@ -173,7 +173,7 @@ export function cardCreatorPanel(app, { level }) {
     }
     const card = createCustomCard(input);
     app.toast(`${card.name} (${card.ovr} OVR) saved to the Admin Cards gallery.`, 'good');
-    nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; uploadMsg.textContent = 'PNG/JPG — auto-cropped to the card portrait.'; drawPs(); drawAlt(); drawPreview(); drawGallery();
+    nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; uploadMsg.textContent = 'PNG/JPG: auto-cropped to the card portrait.'; drawPs(); drawAlt(); drawPreview(); drawGallery();
   });
   drawPreview(); drawGallery(); drawAlt(); drawPs();
   return h('section', { class: 'pm-panel pm-admin-sec pm-cardcreator' },
@@ -233,7 +233,7 @@ export function moderationPanel(app, { level }) {
         h('span', { class: `pm-onlinedot ${onlineNow ? 'is-on' : ''}`, title: onlineNow ? 'Online now' : 'Offline' }),
         h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || (u.name && !/^player$/i.test(u.name) ? u.name : '') || u.clubName || 'Guest'),
           h('span', { class: 'pm-dim' }, `${u.role || 'player'}${banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`),
-          h('span', { class: 'pm-dim' }, `Joined ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'} · Last seen ${u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}`)),
+          h('span', { class: 'pm-dim' }, `Joined ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'} · Last seen ${u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '-'}`)),
         h('div', { class: 'pm-btnrow pm-wrap' },
           row(banned ? 'Unban' : 'Ban', 'ban', !banned, () => runAction(banned ? 'unban' : 'ban', banned ? 'Unban' : 'Ban', u.id, 'Admin action')),
           row('Adjust coins', 'coins', false, async () => { const v = Number(prompt(`Coin delta for ${u.username || u.name} (e.g. -500 or 500):`, '0')); if (!v) return; runAction('adjustCoins', 'Adjust coins', u.id, v, 'admin'); }),
@@ -276,7 +276,7 @@ export function broadcastPanel(app) {
         },
       }, 'Broadcast to everyone')),
     status,
-    !svc || typeof svc.broadcast !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service — not connected in this session.') : null);
+    !svc || typeof svc.broadcast !== 'function' ? h('p', { class: 'pm-dim' }, 'Broadcasting needs the online service, not connected in this session.') : null);
 }
 
 /** Send a coins/pack/card gift via `online.owner.gift` (real API) with a local Gifts-inbox fallback.
@@ -294,12 +294,12 @@ export async function sendGift(app, { to, kind, coins, packId, card, count = 1, 
       target = r0.id; shown = r0.username || to;
     }
     const r = await safeCall(() => owner.gift({ to: target, kind, coins, packId, card: payloadCard, count, ...(minutes ? { minutes } : {}) }), { ok: false });
-    if (r && r.ok !== false) app.toast(`${label} sent${to === 'all' ? ' to everyone' : ` to ${shown}`} — it waits in their Gifts inbox.`, 'good');
+    if (r && r.ok !== false) app.toast(`${label} sent${to === 'all' ? ' to everyone' : ` to ${shown}`}. It waits in their Gifts inbox.`, 'good');
     else app.toast(`${label} failed${r && r.error ? `: ${r.error}` : ''}.`, 'bad');
     return r;
   }
-  sendLocalGift({ kind: kind === 'card' ? 'player' : kind, amount: coins, packId, count, pid: payloadCard && payloadCard.id, card: payloadCard, note: to === 'all' ? `${label} (local device only — no online service connected)` : `${label} for ${to || 'you'} (local device only)` });
-  app.toast('Online gifting is not connected — queued to this device’s Gifts inbox instead.', 'good');
+  sendLocalGift({ kind: kind === 'card' ? 'player' : kind, amount: coins, packId, count, pid: payloadCard && payloadCard.id, card: payloadCard, note: to === 'all' ? `${label} (local device only, no online service connected)` : `${label} for ${to || 'you'} (local device only)` });
+  app.toast('Online gifting is not connected. Queued to this device’s Gifts inbox instead.', 'good');
   return { ok: true, local: true };
 }
 
@@ -330,7 +330,7 @@ export function pendingGiftsPanel(app) {
     for (const g of r.items) {
       list.appendChild(h('div', { class: 'pm-mktrow', 'data-gift': g.id },
         h('div', { class: 'pm-mkt-info' }, h('b', null, label(g)),
-          h('span', { class: 'pm-dim' }, `${g.all ? `Everyone (${g.claims} claimed)` : `To ${g.to ? g.to.username || g.to.name : '?'}`} · sent ${g.at ? new Date(g.at).toLocaleString() : '—'} · expires ${g.until ? new Date(g.until).toLocaleString() : '—'}`)),
+          h('span', { class: 'pm-dim' }, `${g.all ? `Everyone (${g.claims} claimed)` : `To ${g.to ? g.to.username || g.to.name : '?'}`} · sent ${g.at ? new Date(g.at).toLocaleString() : '-'} · expires ${g.until ? new Date(g.until).toLocaleString() : '-'}`)),
         h('button', {
           class: 'pm-btn pm-btn--danger pm-btn--sm',
           onclick: async () => { const x = await safeCall(() => svc.cancelGift(g.id), { ok: false }); app.toast(x && x.ok ? 'Gift cancelled.' : `Cancel failed: ${(x && x.error) || 'offline'}.`, x && x.ok ? 'good' : 'bad'); draw(); },
@@ -447,7 +447,7 @@ export function configPanel(app, { level } = {}) {
     row('promosOn', 'Promo campaigns enabled'),
     row('packsInShop', 'Packs available in the shop'),
     h('label', { class: 'pm-cc-stat' }, h('span', null, 'Shop price multiplier'), mult, multOut),
-    h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device — the online config service is not connected yet.')),
+    h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device: the online config service is not connected yet.')),
     level === 'super' ? resetEveryonePanel(app) : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('reset'), ' Reset everyone'), h('p', { class: 'pm-dim' }, 'Owner Access only.')));
 }
 
@@ -473,7 +473,7 @@ function resetEveryonePanel(app) {
           const features = { ...(cur && cur.config && cur.config.features) || {}, resetEpoch: Math.floor(Date.now() / 1000) };
           r = owner && typeof owner.setConfig === 'function' ? await safeCall(() => owner.setConfig('features', features), { ok: false }) : { ok: false, error: 'not_connected' };
         }
-        if (r && r.ok !== false) { status.textContent = 'Done — every device resets on its next check-in.'; app.toast('Global reset broadcast.', 'good'); app.checkResetEpoch(); }
+        if (r && r.ok !== false) { status.textContent = 'Done: every device resets on its next check-in.'; app.toast('Global reset broadcast.', 'good'); app.checkResetEpoch(); }
         else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
       },
     }, 'Reset everyone now'), status);

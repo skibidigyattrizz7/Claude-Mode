@@ -27,7 +27,7 @@ export function careerHomeView() {
     render(main, app) {
       const slots = C.listSlots();
       add(main, 
-        h('p', { class: 'pm-lead' }, 'Take charge of a club. Win the league, conquer the cup, develop youth — or survive the drop.'),
+        h('p', { class: 'pm-lead' }, 'Take charge of a club. Win the league, conquer the cup, develop youth, or survive the drop.'),
         h('div', { class: 'pm-slots' }, slots.map((sl) => h('div', { class: `pm-slotcard ${sl.empty ? 'is-empty' : ''}` },
           h('div', { class: 'pm-kicker' }, `Save slot ${sl.slot}`),
           sl.empty ? h('div', { class: 'pm-slot-empty' }, h('b', null, 'Empty'), h('button', { class: 'pm-btn pm-btn--primary', onclick: () => app.push(newCareerView(sl.slot)) }, 'New career'))
@@ -54,7 +54,7 @@ function newCareerView(slot) {
         const modeBtn = (id, title, sub) => h('button', { class: 'pm-tile pm-tile--wide pm-careermode', onclick: () => { st.mode = id; app.refresh(); } }, h('div', { class: 'pm-tile-body' }, h('h2', null, title), h('p', null, sub)));
         add(main, h('h3', { class: 'pm-h' }, 'Choose a career'), h('div', { class: 'pm-tiles' },
           modeBtn('manager', 'Manager Career', 'Take over an existing club: transfers, tactics, youth, scouting network.'),
-          modeBtn('custom', 'Create-a-Club', 'Your own name, badge colours and identity — replaces a club in a league.'),
+          modeBtn('custom', 'Create-a-Club', 'Your own name, badge colours and identity. Replaces a club in a league.'),
           modeBtn('player', 'Player Career', 'Create a 17-year-old pro. Train, earn caps, request moves to bigger clubs.')));
         return;
       }
@@ -194,7 +194,7 @@ async function playUserMatch(app, simulate) {
   app.push(resultView({
     title: u.ev.type === 'cup' ? `Cup · ${C.CUP_ROUNDS[u.ev.round]}` : `Matchday ${u.ev.md}`, kicker: C.seasonLabel(s),
     home: u.home, away: u.away, result: res, userSide: uf.home ? 'home' : 'away',
-    extra: f.winner ? h('p', { class: 'pm-center' }, `${s.clubs[f.winner].name} advance${f.winner === s.userClub ? ' — into the next round!' : '.'}`) : null,
+    extra: f.winner ? h('p', { class: 'pm-center' }, `${s.clubs[f.winner].name} advance${f.winner === s.userClub ? ' into the next round!' : '.'}`) : null,
     onContinue: (a) => a.pop(),
   }));
 }
@@ -498,7 +498,7 @@ function tabPro(body, app, s) {
       h('h3', null, 'Training focus'),
       h('div', { class: 'pm-chips' }, C.TRAINING_PLANS.map(([id, label, desc]) => h('button', { class: `pm-chip ${plan === id ? 'on' : ''}`, title: desc, onclick: () => { C.setTraining(s, p.id, id); persist(app); app.refresh(); } }, label))),
       h('h3', null, 'Career moves'),
-      s.transferRequest ? h('p', null, `Transfer request accepted — joining ${s.clubs[s.transferRequest].name} when the window opens.`) : h('button', { class: 'pm-btn', onclick: () => { const r = C.requestTransfer(s); persist(app); app.toast(r.message); app.refresh(); } }, 'Request a transfer'),
+      s.transferRequest ? h('p', null, `Transfer request accepted, joining ${s.clubs[s.transferRequest].name} when the window opens.`) : h('button', { class: 'pm-btn', onclick: () => { const r = C.requestTransfer(s); persist(app); app.toast(r.message); app.refresh(); } }, 'Request a transfer'),
       ps.transfers.length ? h('p', { class: 'pm-dim' }, `Moves: ${ps.transfers.map((t) => `${s.clubs[t.from]?.name || t.from} → ${s.clubs[t.to]?.name || t.to} (S${t.season})`).join(' · ')}`) : null),
     h('section', { class: 'pm-panel' }, h('h3', null, 'Recent match ratings'),
       ps.ratings.length ? h('div', { class: 'pm-formguide pm-proratings' }, ps.ratings.slice(-12).map((r) => h('i', { class: r >= 7.5 ? 'f-W' : r >= 6.3 ? 'f-D' : 'f-L', title: String(r) }, r.toFixed(1)))) : h('p', { class: 'pm-dim' }, 'Play your first match!'),
@@ -514,7 +514,7 @@ function seasonEndView() {
       const S = s.seasonSummary;
       if (!S) { app.pop(); return; }
       const award = (title, a, fmt) => h('div', { class: 'pm-award' }, h('div', { class: 'pm-kicker' }, title),
-        a ? [crest(s, a.club, 'pm-crest'), h('b', null, a.name), h('small', { class: 'pm-dim' }, `${s.clubs[a.club]?.name || ''} · ${fmt(a)}`)] : h('p', { class: 'pm-dim' }, '—'));
+        a ? [crest(s, a.club, 'pm-crest'), h('b', null, a.name), h('small', { class: 'pm-dim' }, `${s.clubs[a.club]?.name || ''} · ${fmt(a)}`)] : h('p', { class: 'pm-dim' }, '-'));
       const nm = (id) => s.clubs[id]?.name || id;
       add(main, 
         h('section', { class: 'pm-seasonhero' },
@@ -535,7 +535,7 @@ function seasonEndView() {
           h('section', { class: 'pm-panel' }, h('h3', null, 'Promotion & relegation'),
             h('p', null, h('b', null, 'Promoted: '), S.promoted.map(nm).join(', ')),
             h('p', null, h('b', null, 'Relegated: '), S.relegated.map(nm).join(', ')),
-            S.promoted.includes(s.userClub) ? h('p', { class: 'pm-good' }, 'Congratulations — you have been promoted!') : null,
+            S.promoted.includes(s.userClub) ? h('p', { class: 'pm-good' }, 'Congratulations, you have been promoted!') : null,
             S.relegated.includes(s.userClub) ? h('p', { class: 'pm-warn' }, 'Your club has been relegated.') : null,
             h('p', { class: 'pm-dim' }, 'Next season: players age, develop or decline, veterans may retire and regens appear. Expiring contracts will leave.'))),
         h('div', { class: 'pm-actions-row' }, h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', 'data-autofocus': '1', onclick: () => {

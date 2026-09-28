@@ -376,7 +376,7 @@ export class MetaApp {
         w.pending = w.pending.then(async () => {
           const r = await safeCall(() => this.online.coins.add(delta, delta > 0 ? 'ut-earn' : 'ut-spend'), { ok: false });
           w.inflight--;
-          if (!r || r.ok === false) { this.toast('Online coin sync failed — balance refreshed from server.', 'warn'); const b = coinNum(await safeCall(() => this.online.coins.get())); if (Number.isFinite(b) && this.ut) { w.synced = b; this.ut.coins = b; } }
+          if (!r || r.ok === false) { this.toast('Online coin sync failed. Balance refreshed from server.', 'warn'); const b = coinNum(await safeCall(() => this.online.coins.get())); if (Number.isFinite(b) && this.ut) { w.synced = b; this.ut.coins = b; } }
           else { const b = coinNum(r); if (Number.isFinite(b) && w.inflight === 0 && this.ut) { w.synced = b; this.ut.coins = b; } }
           this.topRefresh();
         });
@@ -402,7 +402,7 @@ export class MetaApp {
       const lvl = getAdminLevel(); const matchLevel = lvl === 'super' || lvl === 'full' ? 'owner' : lvl === 'mod' ? 'mod' : null;
       const res = await this.startMatchFn(home, away, { ...opts, adminLevel: matchLevel });
       if (this.destroyed) return null;
-      if (!res || res.abandoned) { this.toast('Match abandoned — no result recorded.', 'warn'); return null; }
+      if (!res || res.abandoned) { this.toast('Match abandoned. No result recorded.', 'warn'); return null; }
       return res;
     } catch (err) {
       console.error('[meta] startMatch failed', err);
@@ -439,7 +439,7 @@ export class MetaApp {
     const season = recordSeasonMatch({ outcome: m.outcome, goals: m.gf, mode });
     const msgs = [];
     if (season.levelsGained.length) msgs.push(`Season level ${season.levelsGained[season.levelsGained.length - 1]} reached!`);
-    if (done.length) msgs.push(`${done.length} objective${done.length > 1 ? 's' : ''} complete — claim in Objectives`);
+    if (done.length) msgs.push(`${done.length} objective${done.length > 1 ? 's' : ''} complete: claim in Objectives`);
     if (msgs.length) setTimeout(() => this.toast(msgs.join(' · '), 'good'), 400);
     return { m, season, done };
   }
@@ -474,7 +474,7 @@ export function resultView({ title = 'Full Time', home, away, result, userSide =
     render(main, app) {
       const scorersFor = (side, team) => (result.scorers || []).filter((s) => s.team === side).map((s) => {
         const p = team.players.concat(team.bench).find((x) => x.id === s.playerId);
-        return h('li', null, `${p ? p.name : '—'} ${s.minute}'`);
+        return h('li', null, `${p ? p.name : '-'} ${s.minute}'`);
       });
       const st = result.stats || {};
       const row = (label, arr, pct = false) => (arr ? h('div', { class: 'pm-srow' },

@@ -616,7 +616,7 @@ async function teamSelectScreen(mode) {
     local2p ? h('div', { class: 'hint-box' },
       h('b', null, 'Two players, one device. '),
       `P1 uses ${keyLabel(kb.p1.up)}${keyLabel(kb.p1.left)}${keyLabel(kb.p1.down)}${keyLabel(kb.p1.right)} + ${keyLabel(kb.p1.shoot)} to shoot; P2 uses the arrow keys + ${keyLabel(kb.p2.shoot)}. `,
-      'Plug in a gamepad for either player — press any button on it and the match picks it up. ',
+      'Plug in a gamepad for either player: press any button on it and the match picks it up. ',
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); controlsScreen(); } }, 'Edit controls')) : null,
     h('div', { class: 'opts' },
       local2p ? null : segmented('Difficulty', DIFFICULTIES, cfg.difficulty, (v) => { cfg.difficulty = v; }, `${mode}-diff`),
@@ -901,7 +901,7 @@ const KEY_NAMES = {
   Mouse0: 'Left click', Mouse1: 'Middle click', Mouse2: 'Right click', PageUp: 'PgUp', PageDown: 'PgDn', Insert: 'Ins', Delete: 'Del',
 };
 export function keyLabel(code) {
-  if (!code) return '—';
+  if (!code) return '-';
   if (KEY_NAMES[code]) return KEY_NAMES[code];
   let m;
   if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
@@ -987,7 +987,7 @@ function controlsScreen() {
     if (listening) stopListening();
     listening = { player, action };
     render();
-    status.textContent = `Press a key for ${who(player, action)} — Esc to cancel.`;
+    status.textContent = `Press a key for ${who(player, action)}. Esc to cancel.`;
     window.addEventListener('keydown', onCaptureKey, true);
     window.addEventListener('keyup', swallow, true);
     document.addEventListener('pointerdown', onOutside, true);
@@ -1032,7 +1032,7 @@ function controlsScreen() {
         h('button', { class: 'btn', type: 'button', 'data-reset': 'p2', onclick: () => resetOne('p2') }, 'Reset P2'),
         h('button', { class: 'btn btn--danger', type: 'button', 'data-reset': 'all', onclick: () => { resetKeybinds(); binds = { p1: defaultBindsFor('p1'), p2: defaultBindsFor('p2') }; saveKeybinds(binds); render(); status.textContent = 'All controls reset to defaults.'; } }, 'Reset all'))),
     h('div', { class: 'panel info-grid' },
-      h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works — press a button on it to wake it up. Left stick moves, face buttons pass and shoot, triggers sprint. In Local 2-Player each pad can take a side.')),
+      h('div', null, h('h3', null, 'Gamepad'), h('p', null, 'Any standard controller works: press a button on it to wake it up. Left stick moves, face buttons pass and shoot, triggers sprint. In Local 2-Player each pad can take a side.')),
       h('div', null, h('h3', null, 'Touch'), h('p', null, 'On phones and tablets an on-screen stick and action buttons appear during the match.')),
       h('div', null, h('h3', null, 'Shooting'), h('p', null, 'Hold shoot to build power, release to strike. Finesse curls it; lob chips the keeper.')),
       h('div', null, h('h3', null, 'Defending'), h('p', null, 'Hold Jockey to contain the ball carrier without diving in; press Tackle to win the ball. Assists are in Settings → Gameplay.'))));
@@ -1254,7 +1254,7 @@ function startOnlineServices() {
     let gifts = null;
     online.presence.onUpdate((u) => {
       if (!u) return;
-      if (gifts !== null && u.gifts > gifts) toast(`🎁 You received a gift — open Ultimate Team → Gifts (${u.gifts}).`, 'good');
+      if (gifts !== null && u.gifts > gifts) toast(`🎁 You received a gift: open Ultimate Team → Gifts (${u.gifts}).`, 'good');
       gifts = u.gifts;
     });
     const cloud = createCloudSync(online, {
