@@ -126,3 +126,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - Owner (2026-09-28, later): Admin Vault pack = **10** random players per opening (not 5 top-rated, not 50), 0.5% Shawky.
 - Owner: more versions of The Shawky card (same ∞ glitch card, own name + nation): Kilner (Scotland), Collins (South Korea), Patel (India), Oelke (Germany), BraydenMasilang (Philippines), Nickerson (Kenya), Dammad (Palestine).
 - Owner: start/finish ALL paused work on `wip/paused-work` (see list above).
+- DONE 2026-09-28 (on claude/compassionate-gates-n9kfni): Shawky WIP tested (all 403 tests pass, walkout/∞/Egypt eagle checked in browser); Admin Vault = 10 random players; 7 extra Secret card versions + nations IND/PHI/KEN/PLE; pack tile name overlap fixed.
+- NEXT (paused by owner): finish everything on `wip/paused-work` (not started yet).
