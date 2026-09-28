@@ -28,6 +28,7 @@ import { getConfig, effPrice } from './config.js';
 import { promoHubView, promoTileSub } from './promoview.js';
 import { PROMO_BY_ID } from '../core/promos.js';
 import * as PM from '../core/pmarket.js';
+import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
 
 const persist = (app) => app.saveUT();
@@ -273,18 +274,65 @@ function squadView() {
     render(main, app) {
       const s = app.ut;
       main.appendChild(utTabs(app, 'squad'));
-      const autoBtn = h('button', { class: 'pm-btn pm-btn--accent', onclick: () => { UT.autoSquad(s, ed.get().formation); persist(app); ed.set(s.squad); app.toast('Best squad selected (rating + chemistry).', 'good'); } }, 'Auto-build best squad');
+      SQ.ensureSquads(s);
+      // ---- saved squads: switch / new / rename / delete (owner request, Sep 29) ----
+      const squads = SQ.listSquads(s);
+      const nameInput = (value) => h('input', { class: 'pm-input', maxlength: '20', value, 'aria-label': 'Squad name' });
+      const squadBar = h('div', { class: 'pm-squadbar' },
+        h('label', { class: 'pm-squadbar-pick' }, h('span', { class: 'pm-dim' }, 'Squad'),
+          select(squads.map((q, i) => [i, `${q.name} · ${q.formation} · ${q.rating || '-'}`]), s.activeSquad, (v) => {
+            if (SQ.switchSquad(s, Number(v))) { persist(app); app.toast(`${s.squads[s.activeSquad].name} loaded.`, 'good'); app.refresh(); }
+          }, { 'aria-label': 'Active squad' })),
+        h('button', { class: 'pm-btn pm-btn--sm', disabled: squads.length >= SQ.MAX_SQUADS, title: squads.length >= SQ.MAX_SQUADS ? `Up to ${SQ.MAX_SQUADS} squads` : 'New squad (starts as a copy of this one)', onclick: () => {
+          const inp = nameInput(`Squad ${squads.length + 1}`);
+          modal(app.root, { title: 'New squad', body: h('div', null, h('p', { class: 'pm-dim' }, 'Starts as a copy of your current squad. Change it, then switch between squads any time.'), inp),
+            actions: [{ label: 'Cancel' }, { label: 'Create', primary: true, onClick: () => { if (SQ.addSquad(s, inp.value) >= 0) { persist(app); app.refresh(); } } }] });
+        } }, '+ New'),
+        h('button', { class: 'pm-btn pm-btn--sm', onclick: () => {
+          const inp = nameInput(s.squads[s.activeSquad].name);
+          modal(app.root, { title: 'Rename squad', body: inp, actions: [{ label: 'Cancel' }, { label: 'Save', primary: true, onClick: () => { SQ.renameSquad(s, s.activeSquad, inp.value); persist(app); app.refresh(); } }] });
+        } }, 'Rename'),
+        h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', disabled: squads.length <= 1, onclick: async () => {
+          if (!(await confirmBox(app.root, 'Delete squad', `Delete "${s.squads[s.activeSquad].name}"? Your players stay in your club.`, 'Delete', true))) return;
+          if (SQ.deleteSquad(s, s.activeSquad)) { persist(app); app.refresh(); }
+        } }, 'Delete'));
+      main.appendChild(squadBar);
+      const autoBtn = h('button', { class: 'pm-btn pm-btn--accent', onclick: () => {
+        const before = s.squad.formation;
+        UT.autoSquad(s, ed.get().formation); persist(app);
+        const o = UT.autoBuildSettings(s);
+        if (s.squad.formation !== before) app.refresh(); else ed.set(s.squad);
+        app.toast(`Best squad built (${{ rating: 'highest rating', balanced: 'rating + chemistry', chemistry: 'max chemistry' }[o.priority]}${o.formation === 'best' ? `, best formation: ${s.squad.formation}` : ''}).`, 'good');
+      } }, 'Auto-build best squad');
+      const autoSettingsBtn = h('button', { class: 'pm-btn', 'aria-label': 'Auto-build settings', title: 'Auto-build settings', onclick: () => autoBuildSettingsModal(app) }, 'Auto-build settings');
       const ed = squadEditor({
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
         getPlayer, pool: () => UT.clubPlayers(s),
         onChange: (v) => { s.squad = v; OBJ.setFlag(s, 'squadEdited'); persist(app); },
-        toolbar: [autoBtn], chemToggle: true,
+        toolbar: [autoBtn, autoSettingsBtn], chemToggle: true,
         manager: { value: s.squad.manager || null, onChange: (m) => { s.squad.manager = m; persist(app); } },
         chemStyle: { value: s.squad.chemStyle || 'classic', onChange: (v) => { s.squad.chemStyle = v; persist(app); } },
       });
       add(main, ed.el);
     },
   };
+}
+
+/** Auto-build settings (owner request, Sep 29): what "Auto-build best squad" optimises for. */
+function autoBuildSettingsModal(app) {
+  const s = app.ut;
+  const o = { ...UT.autoBuildSettings(s) };
+  const row = (label, hint, control) => h('label', { class: 'pm-setrow' }, h('span', null, h('b', null, label), h('small', { class: 'pm-dim' }, hint)), control);
+  const check = (key) => h('input', { type: 'checkbox', checked: o[key], onchange: (e) => { o[key] = e.target.checked; } });
+  const body = h('div', { class: 'pm-autobuild' },
+    row('Priority', 'What matters most when picking players', select([['rating', 'Highest rating'], ['balanced', 'Balanced (rating + chemistry)'], ['chemistry', 'Max chemistry']], o.priority, (v) => { o.priority = v; }, { 'aria-label': 'Priority' })),
+    row('Formation', 'Keep yours, or let it pick the strongest shape', select([['current', 'Keep my formation'], ['best', 'Pick the best formation']], o.formation, (v) => { o.formation = v; }, { 'aria-label': 'Formation' })),
+    row('Use untradeable cards', 'Off leaves untradeable cards out of the squad', check('untradeables')),
+    row('Only fill empty spots', 'Keeps the players already in your XI', check('fillOnly')));
+  modal(app.root, {
+    title: 'Auto-build settings', body,
+    actions: [{ label: 'Cancel' }, { label: 'Save', primary: true, onClick: () => { UT.setAutoBuildSettings(s, o); persist(app); app.toast('Auto-build settings saved.', 'good'); } }],
+  });
 }
 
 // ---------- club collection ----------

@@ -1366,6 +1366,51 @@ test('B2: Admin Vault pack — admin-only (never in the public store), 10 varied
   assert.ok(ovrs.size > 15, 'a varied spread of ratings');
 });
 
+test('Squads: up to 5 saved squads, switching keeps each one, cleans sold cards; auto-build settings work', async () => {
+  const SQ = await import('../core/squads.js');
+  const s = UT.createUTState({ clubName: 'Sq' }, new Rng('squads'));
+  SQ.ensureSquads(s);
+  assert.equal(s.squads.length, 1);
+  const first = s.squad.slots.slice();
+  assert.equal(SQ.addSquad(s, 'Second'), 1);
+  assert.equal(s.activeSquad, 1);
+  assert.deepEqual(s.squad.slots, first, 'a new squad starts as a copy');
+  s.squad.slots[5] = null; s.squad.formation = '4-4-2';
+  SQ.switchSquad(s, 0);
+  assert.deepEqual(s.squad.slots, first, 'squad 1 unchanged');
+  SQ.switchSquad(s, 1);
+  assert.equal(s.squad.formation, '4-4-2'); assert.equal(s.squad.slots[5], null);
+  // a card that left the club disappears from a stored squad when it is loaded
+  SQ.switchSquad(s, 0);
+  const gone = s.squad.slots[3];
+  s.club = s.club.filter((id) => id !== gone);
+  SQ.switchSquad(s, 1); SQ.switchSquad(s, 0);
+  assert.ok(!s.squad.slots.includes(gone));
+  for (let i = 0; i < 6; i++) SQ.addSquad(s, `x${i}`);
+  assert.equal(s.squads.length, SQ.MAX_SQUADS);
+  assert.equal(SQ.addSquad(s, 'too many'), -1);
+  assert.ok(SQ.renameSquad(s, 0, '  Main  XI  ')); assert.equal(s.squads[0].name, 'Main XI');
+  while (s.squads.length > 1) assert.ok(SQ.deleteSquad(s, s.activeSquad));
+  assert.equal(SQ.deleteSquad(s, 0), false, 'never deletes the last squad');
+  assert.equal(SQ.listSquads(s).length, 1);
+  // auto-build settings
+  assert.deepEqual(UT.autoBuildSettings(s), UT.AUTO_BUILD_DEFAULTS);
+  UT.setAutoBuildSettings(s, { priority: 'chemistry', formation: 'best', bogus: 1 });
+  assert.equal(UT.autoBuildSettings(s).priority, 'chemistry'); assert.equal(s.autoBuild.bogus, undefined);
+  UT.autoSquad(s);
+  assert.ok(s.squad.slots.every(Boolean), 'best formation squad is complete');
+  const u = s.squad.slots[4];
+  s.untradeable = [u];
+  UT.setAutoBuildSettings(s, { untradeables: false, formation: 'current' });
+  UT.autoSquad(s);
+  assert.ok(!s.squad.slots.includes(u) && !s.squad.bench.includes(u), 'untradeables left out');
+  UT.setAutoBuildSettings(s, { untradeables: true, fillOnly: true });
+  const keep = s.squad.slots[7]; s.squad.slots[2] = null;
+  UT.autoSquad(s);
+  assert.equal(s.squad.slots[7], keep, 'fill-only keeps existing starters');
+  assert.ok(s.squad.slots.every(Boolean), 'and fills the gap');
+});
+
 test('B2: Manager cards contribute chemistry in both styles, and never regress an unmanaged squad', () => {
   const db = getDB();
   const mgr = MG.getManager('mgr_ashcombe'); // ENG / ISL / ISL01

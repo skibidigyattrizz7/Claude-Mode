@@ -1532,3 +1532,13 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
   .pm-clubhead-btns { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
   .pm-clubhead-btns:has(> :nth-child(3)) { order: 4; flex-basis: 100%; justify-content: flex-start; margin-left: 0; }
 }
+
+/* ---------- saved squads bar + auto-build settings (Sep 29) ---------- */
+.pm-squadbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.pm-squadbar-pick { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0; }
+.pm-squadbar-pick .pm-select { flex: 1; min-width: 0; }
+.pm-autobuild { display: grid; gap: 16px; }
+.pm-setrow { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 14px; }
+.pm-setrow > span { display: grid; gap: 2px; min-width: 0; }
+.pm-setrow .pm-select { grid-column: 1 / -1; width: 100%; }
+.pm-setrow input[type="checkbox"] { width: 22px; height: 22px; }

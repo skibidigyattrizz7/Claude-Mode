@@ -136,3 +136,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE 2026-09-29 (owner said yes): (a) owner ACCOUNT = Owner Access (migration 009 applied; fixes re-entering the code + laptop `needs_super`); (b) gift "Claim all" (packs go to My Packs, one summary toast); (c) old 96 rating: owner confirmed it's gone (2026-09-29).
 - DONE 2026-09-29: new 'Stadium' interface style (Settings > General > Interface style), Classic stays default. Not yet restyled beyond colours/fonts: Career, Draft, gifts, admin/owner panels.
 - 2026-09-29: installed /brag + /brag-slim skills (launch videos) into .claude/skills/ (from latent-spaces/brag, MIT; music/sfx assets left out, license unverified).
+- Owner (2026-09-29): multiple UT squads you can switch between; settings for 'Auto-build best squad' (what to prioritise etc.).
+- DONE 2026-09-29: multiple squads (up to 5, switch/new/rename/delete on the Squad screen) + Auto-build settings (priority rating/balanced/chemistry, keep or best formation, use untradeables, fill empty spots only).

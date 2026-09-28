@@ -1,7 +1,7 @@
 // Pitchside Ultimate Team — pure logic (packs, club, squad, SBCs, objectives, squad battles, market). DOM-free.
 import { Rng, clamp, hashStr } from './rng.js';
 import { getDB, getPlayer, utPrice, quickSellValue, registerCard, registerLocalCard, personOf } from './players.js';
-import { FORMATIONS } from './formations.js';
+import { FORMATIONS, effectiveOvr } from './formations.js';
 import { calcChemistry, calcChemistryStyled, teamRating } from './chemistry.js';
 import { buildTeam, gkKitFor, bestLineup, autoBuildSquad, contrastColor } from './teams.js';
 import { LEAGUES } from './data.js';
@@ -269,16 +269,83 @@ export function saveUT(state) { return save(UT_KEY, state); }
 export function clubPlayers(state) { return state.club.map(getPlayer).filter(Boolean); }
 export function ownedSet(state) { return new Set(state.club); }
 
-export function autoSquad(state, formation = state.squad.formation) {
-  const pool = clubPlayers(state);
-  const res = autoBuildSquad(pool, formation);
+// Auto-build settings (owner request, Sep 29), stored per club in `state.autoBuild`:
+//   priority   'rating' | 'balanced' | 'chemistry'  (how much chemistry counts against raw rating)
+//   formation  'current' | 'best'                    ('best' tries every formation and keeps the strongest)
+//   untradeables true | false                        (use untradeable cards or leave them out)
+//   fillOnly   true | false                          (keep the players already in the XI, only fill gaps)
+export const AUTO_BUILD_DEFAULTS = Object.freeze({ priority: 'balanced', formation: 'current', untradeables: true, fillOnly: false });
+const CHEM_WEIGHT = { rating: 0.02, balanced: 0.15, chemistry: 1.2 };
+/** The club's auto-build settings, sanitised (always a full object). */
+export function autoBuildSettings(state) {
+  const a = state && state.autoBuild && typeof state.autoBuild === 'object' ? state.autoBuild : {};
+  return {
+    priority: CHEM_WEIGHT[a.priority] != null ? a.priority : AUTO_BUILD_DEFAULTS.priority,
+    formation: a.formation === 'best' ? 'best' : 'current',
+    untradeables: a.untradeables !== false,
+    fillOnly: a.fillOnly === true,
+  };
+}
+export function setAutoBuildSettings(state, patch) {
+  state.autoBuild = autoBuildSettings({ autoBuild: { ...autoBuildSettings(state), ...(patch || {}) } });
+  return state.autoBuild;
+}
+
+export function autoSquad(state, formation = state.squad.formation, opts = null) {
+  const o = opts ? autoBuildSettings({ autoBuild: opts }) : autoBuildSettings(state);
+  const untr = new Set(state.untradeable || []);
+  const pool = clubPlayers(state).filter((p) => o.untradeables || !untr.has(p.id));
+  const chemWeight = CHEM_WEIGHT[o.priority];
+  const keep = o.fillOnly && state.squad ? state.squad.slots.map((id) => (id && state.club.includes(id) ? getPlayer(id) : null)) : null;
+  const build = (fm) => {
+    if (keep && keep.some(Boolean) && fm === state.squad.formation) return fillSquad(pool, fm, keep);
+    return autoBuildSquad(pool, fm, { chemWeight });
+  };
+  let fm = formation, res = build(fm);
+  if (o.formation === 'best' && !keep) {
+    const scoreOf = (r) => (r.slots.every(Boolean) ? teamRating(r.slots) + calcChemistry(fm, r.slots).scaled * chemWeight : -1);
+    let best = scoreOf(res);
+    for (const f of Object.keys(FORMATIONS)) {
+      if (f === formation) continue;
+      const r = autoBuildSquad(pool, f, { chemWeight });
+      const sc = r.slots.every(Boolean) ? teamRating(r.slots) + calcChemistry(f, r.slots).scaled * chemWeight : -1;
+      if (sc > best + 1e-9) { best = sc; res = r; fm = f; }
+    }
+  }
+  const prev = state.squad || {};
   state.squad = {
-    formation,
+    formation: fm,
     slots: res.slots.map((p) => (p ? p.id : null)),
     bench: Array.from({ length: 7 }, (_, i) => (res.bench[i] ? res.bench[i].id : null)),
-    manager: (state.squad && state.squad.manager) || null,
+    manager: prev.manager || null,
+    ...(prev.chemStyle ? { chemStyle: prev.chemStyle } : {}),
   };
   return state.squad;
+}
+
+/** Keep the given starters (array[11] of players or null) and fill the empty slots + bench with the best
+ * remaining players for each position (no second card of a player already in the squad). */
+function fillSquad(pool, formation, keep) {
+  const f = FORMATIONS[formation];
+  const slots = keep.slice(0, 11);
+  const used = new Set(slots.filter(Boolean).map(personOf));
+  for (let i = 0; i < 11; i++) {
+    if (slots[i]) continue;
+    const pos = f.slots[i].pos;
+    let best = null, bv = -1;
+    for (const p of pool) {
+      if (used.has(personOf(p)) || (i === 0) !== (p.pos === 'GK')) continue;
+      const v = effectiveOvr(p, pos);
+      if (v > bv) { bv = v; best = p; }
+    }
+    if (best) { slots[i] = best; used.add(personOf(best)); }
+  }
+  const rest = pool.filter((p) => !used.has(personOf(p))).sort((a, b) => b.ovr - a.ovr);
+  const bench = [];
+  const bgk = rest.find((p) => p.pos === 'GK');
+  if (bgk) { bench.push(bgk); used.add(personOf(bgk)); }
+  for (const p of rest) { if (bench.length >= 7) break; if (p.pos === 'GK' || used.has(personOf(p))) continue; bench.push(p); used.add(personOf(p)); }
+  return { slots, bench };
 }
 
 /** Null out any slot/bench id that is a second card of a player already placed earlier in the squad
