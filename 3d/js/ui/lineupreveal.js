@@ -8,10 +8,10 @@
 // underneath). Under prefers-reduced-motion it shows only the final XI, for a short beat.
 
 const LINES = [
-  { key: 'gk', label: 'Goalkeeper', pos: ['GK'], hold: 850 },
-  { key: 'def', label: 'Defence', pos: ['CB', 'LB', 'RB', 'LWB', 'RWB'], hold: 1000 },
-  { key: 'mid', label: 'Midfield', pos: ['CM', 'CDM', 'CAM', 'LM', 'RM'], hold: 1000 },
-  { key: 'att', label: 'Attack', pos: ['ST', 'CF', 'LW', 'RW'], hold: 900 },
+  { key: 'gk', label: 'Goalkeeper', pos: ['GK'], hold: 1300 },
+  { key: 'def', label: 'Defence', pos: ['CB', 'LB', 'RB', 'LWB', 'RWB'], hold: 1800 },
+  { key: 'mid', label: 'Midfield', pos: ['CM', 'CDM', 'CAM', 'LM', 'RM'], hold: 1800 },
+  { key: 'att', label: 'Attack', pos: ['ST', 'CF', 'LW', 'RW'], hold: 1600 },
 ];
 const FINAL_HOLD = 2000; // includes the 500 ms the pitch takes to fill
 const REDUCED_HOLD = 2600;
@@ -74,7 +74,19 @@ export function pitchSlots(team, lines) {
   return out;
 }
 
-function card(p, shirtSVG, kit, i) {
+function card(p, shirtSVG, kit, i, renderCard) {
+  // Owner (Sep 29): each line shows the real Ultimate Team card (design, rating, attributes) when the game can
+  // draw it; the plain shirt tile stays as the fallback.
+  if (renderCard) {
+    let node = null;
+    try { node = renderCard(p); } catch (e) { console.warn('[lineup] card render failed', e); }
+    if (node) {
+      const c = el('div', 'lr-card lr-card--full');
+      c.style.setProperty('--i', String(i));
+      c.append(node);
+      return c;
+    }
+  }
   const c = el('div', 'lr-card');
   c.style.setProperty('--i', String(i));
   if (Number(p.ovr) >= ELITE) c.classList.add('is-elite');
@@ -126,8 +138,9 @@ function pitchSVG(vertical) {
  * @param {(team)=>number} o.teamOvr
  * @param {string} [o.label]     small heading, default "Opponent lineup"
  * @param {boolean} [o.reduceMotion]
+ * @param {(player)=>HTMLElement|null} [o.renderCard]  draws a full card for the line stages (null = shirt tile)
  */
-export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = 'Opponent lineup', reduceMotion } = {}) {
+export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = 'Opponent lineup', reduceMotion, renderCard = null } = {}) {
   return new Promise((resolve) => {
     if (!team || !container || !Array.isArray(team.players) || !team.players.length) { resolve('gone'); return; }
     const calm = reduceMotion != null ? reduceMotion : !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -204,7 +217,7 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
       const title = el('div', 'lr-line-title');
       title.append(el('span', 'lr-line-name', line.label), el('span', 'lr-line-avg', line.avg), el('small', 'lr-line-lbl', 'Line rating'));
       const row = el('div', 'lr-cards');
-      line.players.forEach((p, i) => row.append(card(p, shirtSVG, line.key === 'gk' ? (team.gkKit || kit) : kit, i)));
+      line.players.forEach((p, i) => row.append(card(p, shirtSVG, line.key === 'gk' ? (team.gkKit || kit) : kit, i, renderCard)));
       wrap.append(title, row);
       stage.replaceChildren(wrap);
       later(() => {

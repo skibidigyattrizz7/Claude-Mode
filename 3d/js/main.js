@@ -417,6 +417,27 @@ export async function openMatch(opts) {
  * at the same moment, so nobody kicks off early; a tap / any key skips it. The reveal only reads the opponent's
  * team object that online.js already passes in (home / away); it never touches the network layer.
  */
+/** Full Ultimate Team card for a match player in the lineup reveal: the real card when this game knows it (same
+ * id), else a card built from the match stats (e.g. an opponent's custom card). null if the card UI can't load. */
+async function revealCardRenderer() {
+  try {
+    const [{ playerCard }, { getPlayer }] = await Promise.all([import('./meta/ui/card.js'), import('./meta/core/players.js')]);
+    const small = () => window.innerWidth < 640 || window.innerHeight < 480;
+    return (mp) => {
+      const known = mp.id ? getPlayer(mp.id) : null;
+      const a = mp.attrs || {};
+      const ovr = Number(mp.rawOvr || mp.ovr) || 0;
+      const c = known || {
+        id: String(mp.id || mp.name), name: mp.name, last: String(mp.name || '').split(' ').slice(-1)[0], pos: mp.pos, alt: [], ovr,
+        tier: ovr >= 75 ? 'gold' : ovr >= 65 ? 'silver' : 'bronze', rare: true, nat: mp.nat || '', club: mp.club || '', playstyles: [],
+        stats: { pac: a.pac, sho: a.sho, pas: a.pas, dri: a.dri, def: a.def, phy: a.phy },
+        gk: { div: a.div, han: a.han, kic: a.kic, ref: a.ref, spd: a.spd, pos: a.pos },
+      };
+      return playerCard(c, { size: small() ? 'sm' : 'md', pos: mp.pos });
+    };
+  } catch (e) { console.warn('[lineup] card UI unavailable, using shirts', e); return null; }
+}
+
 async function openMatchWithReveal(opts) {
   const m = await openMatch(opts);
   const role = opts && opts.netRole;
@@ -424,7 +445,8 @@ async function openMatchWithReveal(opts) {
   const opp = role === 'host' ? opts.away : opts.home;
   if (!opp || !Array.isArray(opp.players)) return m;
   try { m.handle.pause(); } catch { return m; }
-  showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr }).then(() => {
+  const renderCard = await revealCardRenderer();
+  showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr, renderCard }).then(() => {
     // still in this match, and not held by the disconnect overlay: let the game begin
     if (m.layer.isConnected && !m.layer.querySelector('.dc-overlay')) { try { m.handle.resume(); } catch { /* ignore */ } }
   }).catch((e) => { console.error(e); try { m.handle.resume(); } catch { /* ignore */ } });

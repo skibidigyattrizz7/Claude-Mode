@@ -1542,3 +1542,9 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-setrow > span { display: grid; gap: 2px; min-width: 0; }
 .pm-setrow .pm-select { grid-column: 1 / -1; width: 100%; }
 .pm-setrow input[type="checkbox"] { width: 22px; height: 22px; }
+.pm-autofilters { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line, #262b33); }
+.pm-autofilters-head { display: grid; gap: 2px; }
+.pm-filtergrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.pm-filterfield { display: grid; gap: 4px; min-width: 0; }
+.pm-filterfield .pm-select, .pm-filterfield .pm-input { width: 100%; min-width: 0; }
+.pm-modal:has(.pm-autobuild) .pm-modal-body { max-height: min(70vh, 640px); overflow-y: auto; }

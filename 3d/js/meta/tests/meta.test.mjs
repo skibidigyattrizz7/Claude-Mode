@@ -1411,6 +1411,33 @@ test('Squads: up to 5 saved squads, switching keeps each one, cleans sold cards;
   assert.ok(s.squad.slots.every(Boolean), 'and fills the gap');
 });
 
+test('Auto-build filters: rating range, card type, league/club/country; gaps filled from the club when too few match', () => {
+  const s = UT.createUTState({ clubName: 'Flt' }, new Rng('filters'));
+  const db = getDB();
+  // give the club plenty of one nation so a full XI of it is possible
+  const fra = db.players.filter((p) => p.nat === 'FRA' && !p.special);
+  for (const p of fra.slice(0, 40)) if (!s.club.includes(p.id)) s.club.push(p.id);
+  UT.setAutoBuildSettings(s, { nation: 'FRA' });
+  UT.autoSquad(s);
+  const xi = s.squad.slots.map(getPlayer);
+  assert.ok(xi.every(Boolean));
+  assert.ok(xi.every((p) => p.nat === 'FRA'), 'every starter is French');
+  assert.equal(s.autoBuildShort, 0);
+  UT.setAutoBuildSettings(s, { nation: '', minOvr: 60, maxOvr: 70 });
+  UT.autoSquad(s);
+  const xi2 = s.squad.slots.map(getPlayer);
+  const inRange = xi2.filter((p) => p.ovr >= 60 && p.ovr <= 70).length;
+  assert.equal(inRange + s.autoBuildShort, 11, 'in-range starters + gaps filled from the club = 11');
+  assert.ok(xi2.every(Boolean), 'always a full XI');
+  // an impossible filter still returns a full XI, flagged as all gaps
+  UT.setAutoBuildSettings(s, { minOvr: 0, maxOvr: 0, cardType: 'nosuchpromo' });
+  UT.autoSquad(s);
+  assert.ok(s.squad.slots.every(Boolean));
+  assert.equal(s.autoBuildShort, 11);
+  assert.equal(UT.autoBuildMatch({ special: null, tier: 'gold', rare: true, ovr: 80 }, UT.autoBuildSettings({ autoBuild: { cardType: 'base', rarity: 'rare', tier: 'gold' } })), true);
+  assert.equal(UT.autoBuildMatch({ special: 'inform', tier: 'gold', rare: true, ovr: 80 }, UT.autoBuildSettings({ autoBuild: { cardType: 'base' } })), false);
+});
+
 test('B2: Manager cards contribute chemistry in both styles, and never regress an unmanaged squad', () => {
   const db = getDB();
   const mgr = MG.getManager('mgr_ashcombe'); // ENG / ISL / ISL01

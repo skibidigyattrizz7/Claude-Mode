@@ -274,7 +274,11 @@ export function ownedSet(state) { return new Set(state.club); }
 //   formation  'current' | 'best'                    ('best' tries every formation and keeps the strongest)
 //   untradeables true | false                        (use untradeable cards or leave them out)
 //   fillOnly   true | false                          (keep the players already in the XI, only fill gaps)
-export const AUTO_BUILD_DEFAULTS = Object.freeze({ priority: 'balanced', formation: 'current', untradeables: true, fillOnly: false });
+//   filters (owner, Sep 29): cardType 'any'|'base'|'special'|<special id>, tier 'any'|'gold'|'silver'|'bronze'|'icon',
+//   rarity 'any'|'rare'|'common', minOvr/maxOvr (0 = no limit), league / club / nation ('' = any).
+//   Too few matching players for a full XI? The gaps are filled from the rest of the club (see autoSquad).
+export const AUTO_BUILD_DEFAULTS = Object.freeze({ priority: 'balanced', formation: 'current', untradeables: true, fillOnly: false,
+  cardType: 'any', tier: 'any', rarity: 'any', minOvr: 0, maxOvr: 0, league: '', club: '', nation: '' });
 const CHEM_WEIGHT = { rating: 0.02, balanced: 0.15, chemistry: 1.2 };
 /** The club's auto-build settings, sanitised (always a full object). */
 export function autoBuildSettings(state) {
@@ -284,7 +288,30 @@ export function autoBuildSettings(state) {
     formation: a.formation === 'best' ? 'best' : 'current',
     untradeables: a.untradeables !== false,
     fillOnly: a.fillOnly === true,
+    cardType: typeof a.cardType === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(a.cardType) ? a.cardType : 'any',
+    tier: ['gold', 'silver', 'bronze', 'icon'].includes(a.tier) ? a.tier : 'any',
+    rarity: a.rarity === 'rare' || a.rarity === 'common' ? a.rarity : 'any',
+    minOvr: Math.max(0, Math.min(999, Math.round(Number(a.minOvr) || 0))),
+    maxOvr: Math.max(0, Math.min(999, Math.round(Number(a.maxOvr) || 0))),
+    league: typeof a.league === 'string' ? a.league.slice(0, 16) : '',
+    club: typeof a.club === 'string' ? a.club.slice(0, 16) : '',
+    nation: typeof a.nation === 'string' ? a.nation.slice(0, 8) : '',
   };
+}
+/** Does a card pass the auto-build filters? */
+export function autoBuildMatch(p, o) {
+  if (o.cardType === 'base' && p.special) return false;
+  if (o.cardType === 'special' && !p.special) return false;
+  if (!['any', 'base', 'special'].includes(o.cardType) && p.special !== o.cardType) return false;
+  if (o.tier !== 'any' && p.tier !== o.tier) return false;
+  if (o.rarity === 'rare' && !p.rare) return false;
+  if (o.rarity === 'common' && p.rare) return false;
+  if (o.minOvr && p.ovr < o.minOvr) return false;
+  if (o.maxOvr && p.ovr > o.maxOvr) return false;
+  if (o.league && p.league !== o.league) return false;
+  if (o.club && p.club !== o.club) return false;
+  if (o.nation && p.nat !== o.nation) return false;
+  return true;
 }
 export function setAutoBuildSettings(state, patch) {
   state.autoBuild = autoBuildSettings({ autoBuild: { ...autoBuildSettings(state), ...(patch || {}) } });
@@ -294,7 +321,8 @@ export function setAutoBuildSettings(state, patch) {
 export function autoSquad(state, formation = state.squad.formation, opts = null) {
   const o = opts ? autoBuildSettings({ autoBuild: opts }) : autoBuildSettings(state);
   const untr = new Set(state.untradeable || []);
-  const pool = clubPlayers(state).filter((p) => o.untradeables || !untr.has(p.id));
+  const allowed = clubPlayers(state).filter((p) => o.untradeables || !untr.has(p.id));
+  const pool = allowed.filter((p) => autoBuildMatch(p, o));
   const chemWeight = CHEM_WEIGHT[o.priority];
   const keep = o.fillOnly && state.squad ? state.squad.slots.map((id) => (id && state.club.includes(id) ? getPlayer(id) : null)) : null;
   const build = (fm) => {
@@ -311,6 +339,17 @@ export function autoSquad(state, formation = state.squad.formation, opts = null)
       const sc = r.slots.every(Boolean) ? teamRating(r.slots) + calcChemistry(f, r.slots).scaled * chemWeight : -1;
       if (sc > best + 1e-9) { best = sc; res = r; fm = f; }
     }
+  }
+  // filters left gaps: fill them from the rest of the club (still no second card of the same player)
+  state.autoBuildShort = 0;
+  if (res.slots.some((x) => !x) || res.bench.length < 7) {
+    state.autoBuildShort = res.slots.filter((x) => !x).length;
+    const filled = fillSquad(allowed, fm, res.slots.slice(0, 11));
+    const used = new Set(filled.slots.filter(Boolean).map(personOf));
+    const bench = res.bench.filter((p) => p && !used.has(personOf(p)));
+    for (const p of bench) used.add(personOf(p));
+    for (const p of filled.bench) { if (bench.length >= 7) break; if (!used.has(personOf(p))) { bench.push(p); used.add(personOf(p)); } }
+    res = { slots: filled.slots, bench };
   }
   const prev = state.squad || {};
   state.squad = {

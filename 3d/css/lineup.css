@@ -50,6 +50,10 @@
 .lr-card-art .shirt { width: 58cqw; height: 58cqw; }
 .lr-name { font: 600 11cqw/1.1 var(--font-display); letter-spacing: .05em; text-transform: uppercase; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lr-card.is-elite .lr-ovr { color: var(--acc); }
+/* full Ultimate Team card (design, rating, attributes): the card draws its own frame */
+.lr-card--full { flex: 0 0 auto; width: auto; aspect-ratio: auto; container-type: normal; background: none; border: 0; display: grid; place-items: center; }
+.lr-card--full .pm-card { pointer-events: none; }
+@media (min-width: 1100px) and (min-height: 700px) { .lr-card--full .pm-card--md { font-size: 18px; } }
 
 /* ---- the whole XI */
 .lr-final { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(200px, 340px) minmax(0, 1fr); gap: var(--sp-6); align-items: center; }

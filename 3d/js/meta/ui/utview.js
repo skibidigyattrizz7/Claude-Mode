@@ -302,7 +302,8 @@ function squadView() {
         UT.autoSquad(s, ed.get().formation); persist(app);
         const o = UT.autoBuildSettings(s);
         if (s.squad.formation !== before) app.refresh(); else ed.set(s.squad);
-        app.toast(`Best squad built (${{ rating: 'highest rating', balanced: 'rating + chemistry', chemistry: 'max chemistry' }[o.priority]}${o.formation === 'best' ? `, best formation: ${s.squad.formation}` : ''}).`, 'good');
+        const short = s.autoBuildShort || 0;
+        app.toast(`Best squad built (${{ rating: 'highest rating', balanced: 'rating + chemistry', chemistry: 'max chemistry' }[o.priority]}${o.formation === 'best' ? `, best formation: ${s.squad.formation}` : ''}).${short ? ` Only enough matching cards for ${11 - short} of 11: the rest came from your club.` : ''}`, short ? 'warn' : 'good');
       } }, 'Auto-build best squad');
       const autoSettingsBtn = h('button', { class: 'pm-btn', 'aria-label': 'Auto-build settings', title: 'Auto-build settings', onclick: () => autoBuildSettingsModal(app) }, 'Auto-build settings');
       const ed = squadEditor({
@@ -318,6 +319,31 @@ function squadView() {
   };
 }
 
+/** Auto-build filters (owner, Sep 29): card type / promo, tier, rarity, rating range, league, club, country.
+ * Choices come from the cards actually in the club, so every option can match something. */
+function filterBlock(s, o) {
+  const club = UT.clubPlayers(s);
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))];
+  const specials = uniq(club.map((p) => p.special)).sort((a, b) => String(UT.SPECIAL_NAME[a] || a).localeCompare(String(UT.SPECIAL_NAME[b] || b)));
+  const leagues = uniq(club.map((p) => p.league)).map((id) => [id, leagueName(id)]).sort((a, b) => a[1].localeCompare(b[1]));
+  const clubs = uniq(club.map((p) => p.club)).map((id) => [id, (clubById(id) || { name: id }).name]).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  const nations = uniq(club.map((p) => p.nat)).map((id) => [id, (NATION_BY_CODE[id] || { name: id }).name]).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  const sel = (key, opts, label) => select(opts, o[key], (v) => { o[key] = v; }, { 'aria-label': label });
+  const num = (key, label) => h('input', { class: 'pm-input pm-input--num', type: 'number', min: '0', max: '999', value: o[key] || '', placeholder: 'Any', 'aria-label': label, oninput: (e) => { o[key] = Number(e.target.value) || 0; } });
+  const field = (label, control) => h('label', { class: 'pm-filterfield' }, h('span', { class: 'pm-dim' }, label), control);
+  return h('div', { class: 'pm-autofilters' },
+    h('div', { class: 'pm-autofilters-head' }, h('b', null, 'Filters'), h('small', { class: 'pm-dim' }, 'Only use cards that match. Gaps are filled from the rest of your club.')),
+    h('div', { class: 'pm-filtergrid' },
+      field('Card type', sel('cardType', [['any', 'Any'], ['base', 'Base cards only'], ['special', 'Special cards only'], ...specials.map((id) => [id, UT.SPECIAL_NAME[id] || id])], 'Card type')),
+      field('Tier', sel('tier', [['any', 'Any'], ['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze'], ['icon', 'Icon']], 'Tier')),
+      field('Rarity', sel('rarity', [['any', 'Any'], ['rare', 'Rare only'], ['common', 'Common only']], 'Rarity')),
+      field('Min OVR', num('minOvr', 'Minimum overall')),
+      field('Max OVR', num('maxOvr', 'Maximum overall')),
+      field('League', sel('league', [['', 'Any league'], ...leagues], 'League')),
+      field('Club', sel('club', [['', 'Any club'], ...clubs], 'Club')),
+      field('Country', sel('nation', [['', 'Any country'], ...nations], 'Country'))));
+}
+
 /** Auto-build settings (owner request, Sep 29): what "Auto-build best squad" optimises for. */
 function autoBuildSettingsModal(app) {
   const s = app.ut;
@@ -328,10 +354,14 @@ function autoBuildSettingsModal(app) {
     row('Priority', 'What matters most when picking players', select([['rating', 'Highest rating'], ['balanced', 'Balanced (rating + chemistry)'], ['chemistry', 'Max chemistry']], o.priority, (v) => { o.priority = v; }, { 'aria-label': 'Priority' })),
     row('Formation', 'Keep yours, or let it pick the strongest shape', select([['current', 'Keep my formation'], ['best', 'Pick the best formation']], o.formation, (v) => { o.formation = v; }, { 'aria-label': 'Formation' })),
     row('Use untradeable cards', 'Off leaves untradeable cards out of the squad', check('untradeables')),
-    row('Only fill empty spots', 'Keeps the players already in your XI', check('fillOnly')));
+    row('Only fill empty spots', 'Keeps the players already in your XI', check('fillOnly')),
+    filterBlock(s, o));
   modal(app.root, {
     title: 'Auto-build settings', body,
-    actions: [{ label: 'Cancel' }, { label: 'Save', primary: true, onClick: () => { UT.setAutoBuildSettings(s, o); persist(app); app.toast('Auto-build settings saved.', 'good'); } }],
+    actions: [
+      { label: 'Reset', onClick: () => { UT.setAutoBuildSettings(s, UT.AUTO_BUILD_DEFAULTS); persist(app); app.toast('Auto-build settings reset.', 'good'); } },
+      { label: 'Cancel' },
+      { label: 'Save', primary: true, onClick: () => { UT.setAutoBuildSettings(s, o); persist(app); app.toast('Auto-build settings saved.', 'good'); } }],
   });
 }
 
