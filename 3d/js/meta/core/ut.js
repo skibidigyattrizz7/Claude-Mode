@@ -12,7 +12,7 @@ import { weekNumber } from './calendar.js';
 import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 import { restoreCustomCards } from './customreg.js';
-import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, secretCards } from './secretcard.js';
+import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, SECRET_VERSIONS, secretCard, secretCards } from './secretcard.js';
 import { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX, ADMIN_VAULT_TOP } from './adminvault.js';
 export { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX } from './adminvault.js';
 import { MANAGERS, getManager } from './managers.js';
@@ -39,6 +39,12 @@ export const CATEGORIES = {
   // categoryPools() below, exactly like `totw`, and only `SECRET_PACK_ID` ever references this category.
   secret: { label: 'Secret', test: () => false },
 };
+// One category per Secret card version (owner, Sep 29): each version has its OWN chance, so adding versions
+// never makes an existing one (The Shawky) rarer. Pools filled in categoryPools().
+for (const v of SECRET_VERSIONS) CATEGORIES[`secret_${v.id}`] = { label: `Secret: ${v.name}`, test: () => false };
+/** Odds entries giving every Secret card version the same per-version chance `each`. */
+export function secretOdds(each) { return Object.fromEntries(SECRET_VERSIONS.map((v) => [`secret_${v.id}`, each])); }
+const SECRET_TOTAL = (each) => each * SECRET_VERSIONS.length;
 // V3 promo categories (one per campaign)
 for (const pr of PROMOS) CATEGORIES[`promo_${pr.id}`] = { label: pr.name, test: (p) => p.special === pr.id };
 
@@ -50,6 +56,7 @@ export function categoryPools() {
   for (const [k, c] of Object.entries(CATEGORIES)) _pools[k] = db.all.filter(c.test);
   _pools.totw = totwCards(weekNumber());
   _pools.secret = secretCards();
+  for (const v of SECRET_VERSIONS) _pools[`secret_${v.id}`] = [secretCard(v.id)];
   _pools._week = weekNumber();
   return _pools;
 }
@@ -96,8 +103,8 @@ export const PACKS = [
   // Secret card is a true bonus, not the sole reason to buy it. Publicly on sale, normal odds.
   {
     id: SECRET_PACK_ID, name: 'The Vault Pack', price: 300000, look: 'secret',
-    desc: `1 guaranteed Legend of the Game (real player) + 4 rare golds — plus a ${SECRET_ODDS * 100}% chance of the Secret card instead`,
-    slots: [{ n: 1, odds: { secret: SECRET_ODDS, lotg: 1 - SECRET_ODDS } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
+    desc: `1 guaranteed Legend of the Game (real player) + 4 rare golds, plus a ${SECRET_ODDS * 100}% chance of each Secret card instead`,
+    slots: [{ n: 1, odds: { ...secretOdds(SECRET_ODDS), lotg: 1 - SECRET_TOTAL(SECRET_ODDS) } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
   },
   // Admin Vault (owner request, Sep 28): admin-only (see storePacks' `adminOnly` filter — never on sale,
   // never a reward, never in "My Packs"), 10 random players per opening (adminvault.js),
@@ -105,8 +112,8 @@ export const PACKS = [
   // ADMIN_VAULT_SECRET_ODDS (0.005) per opening — an admin testing tool, not a way to farm him.
   {
     id: ADMIN_VAULT_PACK_ID, name: 'Admin Vault Pack', price: 0, look: 'adminvault', adminOnly: true,
-    desc: `Admin only — ${ADMIN_VAULT_SIZE} random players (golds, rares, In-Forms, Heroes, Legends), plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of the Secret card`,
-    slots: [{ n: 1, odds: ADMIN_VAULT_TOP }, { n: ADMIN_VAULT_SIZE - 1, odds: ADMIN_VAULT_MIX }],
+    desc: `Admin only — ${ADMIN_VAULT_SIZE} random players (golds, rares, In-Forms, Heroes, Legends), plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of each Secret card`,
+    slots: [{ n: 1, odds: { ...secretOdds(ADMIN_VAULT_SECRET_ODDS), ...Object.fromEntries(Object.entries(ADMIN_VAULT_TOP).map(([k, v]) => [k, v * (1 - SECRET_TOTAL(ADMIN_VAULT_SECRET_ODDS))])) } }, { n: ADMIN_VAULT_SIZE - 1, odds: ADMIN_VAULT_MIX }],
   },
 ];
 // V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)

@@ -1310,19 +1310,24 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   // Only the Secret Vault pack (public) and the Admin Vault pack (admin-only) ever reference the 'secret' odds.
   const pack = UT.PACK_BY_ID[SC.SECRET_PACK_ID];
   assert.ok(pack, 'secret pack missing');
-  assert.ok(pack.slots.some((s) => 'secret' in s.odds));
-  assert.ok(Math.abs(pack.slots[0].odds.secret - SC.SECRET_ODDS) < 1e-9);
+  const hasSecret = (s) => Object.keys(s.odds).some((k) => k.startsWith('secret'));
+  assert.ok(pack.slots.some(hasSecret));
+  // Every version has its OWN chance (adding versions never makes The Shawky rarer).
+  for (const v of SC.SECRET_VERSIONS) assert.ok(Math.abs(pack.slots[0].odds[`secret_${v.id}`] - SC.SECRET_ODDS) < 1e-9, v.id);
+  for (const p of [pack]) for (const sl of p.slots) assert.ok(Math.abs(Object.values(sl.odds).reduce((a, b) => a + b, 0) - 1) < 1e-9, 'odds sum to 1');
   const avPack = UT.PACK_BY_ID[UT.ADMIN_VAULT_PACK_ID];
   assert.ok(avPack, 'admin vault pack missing');
-  assert.ok(Math.abs(avPack.slots[0].odds.secret - UT.ADMIN_VAULT_SECRET_ODDS) < 1e-9);
-  for (const p of UT.PACKS) if (p.id !== SC.SECRET_PACK_ID && p.id !== UT.ADMIN_VAULT_PACK_ID) assert.ok(!p.slots.some((s) => 'secret' in s.odds), `${p.id} also has secret odds`);
+  for (const v of SC.SECRET_VERSIONS) assert.ok(Math.abs(avPack.slots[0].odds[`secret_${v.id}`] - UT.ADMIN_VAULT_SECRET_ODDS) < 1e-9, v.id);
+  for (const p of UT.PACKS) if (p.id !== SC.SECRET_PACK_ID && p.id !== UT.ADMIN_VAULT_PACK_ID) assert.ok(!p.slots.some(hasSecret), `${p.id} also has secret odds`);
   // Statistically confirm both packs' actual pull rates match (large sample, seeded/deterministic).
-  let hits = 0; const N = 40000;
-  for (let i = 0; i < N; i++) { const items = UT.openPack(SC.SECRET_PACK_ID, new Set(), new Rng(`secret-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) hits++; }
-  assert.ok(hits >= 2 && hits <= 60, `expected ~${N * SC.SECRET_ODDS} hits, got ${hits}`);
+  let hits = 0, shawky = 0; const N = 40000;
+  for (let i = 0; i < N; i++) { const items = UT.openPack(SC.SECRET_PACK_ID, new Set(), new Rng(`secret-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) hits++; if (items.some((it) => it.pid === SC.SECRET_CARD_ID)) shawky++; }
+  const nv = SC.SECRET_VERSIONS.length;
+  assert.ok(hits >= N * SC.SECRET_ODDS * nv * 0.6 && hits <= N * SC.SECRET_ODDS * nv * 1.4, `expected ~${N * SC.SECRET_ODDS * nv} hits, got ${hits}`);
+  assert.ok(shawky >= 5 && shawky <= 45, `The Shawky alone keeps ~${N * SC.SECRET_ODDS}, got ${shawky}`);
   let avHits = 0;
   for (let i = 0; i < N; i++) { const items = UT.openPack(UT.ADMIN_VAULT_PACK_ID, new Set(), new Rng(`av-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) avHits++; }
-  assert.ok(avHits >= 130 && avHits <= 290, `expected ~${N * UT.ADMIN_VAULT_SECRET_ODDS} admin-vault hits, got ${avHits}`);
+  assert.ok(avHits >= N * UT.ADMIN_VAULT_SECRET_ODDS * nv * 0.8 && avHits <= N * UT.ADMIN_VAULT_SECRET_ODDS * nv * 1.2, `expected ~${N * UT.ADMIN_VAULT_SECRET_ODDS * nv} admin-vault hits, got ${avHits}`);
   // No admin level can ever grant it (the one generic "give any player id" API is admin.js's grantPlayer).
   const s = UT.createUTState({ clubName: 'X' }, new Rng(1));
   const r = A.grantPlayer(s, SC.SECRET_CARD_ID);

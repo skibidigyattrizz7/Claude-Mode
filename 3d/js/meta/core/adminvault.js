@@ -16,7 +16,6 @@ export const ADMIN_VAULT_MIX = {
   gold: 0.24, goldRare: 0.26, gold83: 0.16, gold86: 0.1, silverRare: 0.04,
   inform: 0.08, hero: 0.05, legend: 0.04, lotg: 0.03,
 };
-/** The first slot: 0.5% Secret card, otherwise a good card (so every opening has a real walkout). */
-export const ADMIN_VAULT_TOP = {
-  secret: ADMIN_VAULT_SECRET_ODDS, gold86: 0.5 - ADMIN_VAULT_SECRET_ODDS, legend: 0.2, lotg: 0.15, hero: 0.15,
-};
+/** The first slot's non-secret mix (sums to 1). ut.js adds ADMIN_VAULT_SECRET_ODDS per Secret card version on
+ * top and scales these down to fit, so every opening still has a real walkout. */
+export const ADMIN_VAULT_TOP = { gold86: 0.5, legend: 0.2, lotg: 0.15, hero: 0.15 };
