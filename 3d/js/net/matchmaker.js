@@ -8,7 +8,7 @@
 //        -> done | failed | cancelled | timeout
 import { parseMmResponse, MODES } from './validate.js';
 
-export const MM_DEFAULTS = { pollMs: 1500, timeoutMs: 90000, openTimeoutMs: 15000, connectTimeoutMs: 20000, maxErrors: 5 };
+export const MM_DEFAULTS = { pollMs: 1500, timeoutMs: Infinity, openTimeoutMs: 15000, connectTimeoutMs: 20000, maxErrors: 5 };
 
 /** Random PeerJS-safe id (starts/ends alphanumeric), e.g. "psq-k3j9...". */
 export function randomPeerId(randBytes) {

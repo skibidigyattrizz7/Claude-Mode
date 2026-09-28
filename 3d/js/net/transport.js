@@ -15,6 +15,7 @@
 // Implementations: PeerTransport (WebRTC via PeerJS cloud or a custom PeerServer),
 // LoopbackTransport (same page, in-memory; for tests), BroadcastChannelTransport (two tabs, same origin; for tests).
 import { encode, decode, makeRoomCode, normalizeRoomCode, PEER_PREFIX } from './protocol.js';
+import { openRelay } from './relay.js';
 
 class BaseTransport {
   constructor() {
@@ -368,6 +369,7 @@ export class PeerTransport extends BaseTransport {
         await this._openPeer(PEER_PREFIX + code);
         this.code = code;
         this._setStatus('waiting');
+        this._startHostRelay(PEER_PREFIX + code);
         return code;
       } catch (e) {
         try { this.peer.destroy(); } catch { /* ignore */ }
@@ -389,6 +391,46 @@ export class PeerTransport extends BaseTransport {
     }
     this.code = id;
     this._setStatus('waiting');
+    this._startHostRelay(id);
+  }
+  /** Host: also wait on the relay channel, for guests whose direct link can't open. */
+  _startHostRelay(id) {
+    if (typeof window === 'undefined') return;
+    openRelay(id, 'h', {
+      onData: (raw, n) => { if (n && n === this.relayN) this._emitRaw(raw); },
+      onHello: (p) => {
+        if (this.closed || !this.relay || (this.ctl && this.ctl.open) || !p.n) return;
+        this.relayN = p.n;
+        this.relay.signal('welcome', { n: p.n });
+        this._setStatus('open');
+      },
+    }).then((r) => { if (this.closed) r.close(); else this.relay = r; })
+      .catch((e) => console.warn('[net] relay unavailable:', e && e.message));
+  }
+  /** Guest: open the link through the relay channel. */
+  _startGuestRelay(id, onOpen, onFail) {
+    if (this._relayTrying || typeof window === 'undefined') return;
+    this._relayTrying = true;
+    const n = Math.random().toString(36).slice(2, 10);
+    this.relayN = n;
+    let iv = null;
+    openRelay(id, 'g', {
+      onData: (raw, m) => { if (m === n) this._emitRaw(raw); },
+      onWelcome: (p) => {
+        if (p.n !== n || this.relayOpen) return;
+        this.relayOpen = true;
+        clearInterval(iv);
+        console.info('[net] connected through relay');
+        if (!(this.ctl && this.ctl.open)) this._setStatus('open');
+        if (onOpen) onOpen();
+      },
+    }).then((r) => {
+      if (this.closed) { r.close(); return; }
+      this.relay = r;
+      const hi = () => r.signal('hello', { n });
+      hi();
+      iv = setInterval(() => { if (this.relayOpen || this.closed) clearInterval(iv); else hi(); }, 1500);
+    }).catch((e) => { this._relayTrying = false; if (onFail) onFail(e && e.message); });
   }
   async join(code) {
     const c = normalizeRoomCode(code);
@@ -404,15 +446,22 @@ export class PeerTransport extends BaseTransport {
     this._setStatus('connecting');
     await new Promise((resolve, reject) => {
       let done = false;
+      let p2pErr = null;
       const fin = (err) => {
         if (done) return;
         done = true;
-        clearTimeout(t);
+        clearTimeout(t); clearTimeout(rt);
         this._connectFail = null;
         if (err) reject(new Error(err)); else resolve();
       };
-      const t = setTimeout(() => fin(`Timed out connecting. ${P2P_FAIL_MSG}`), 30000);
-      this._connectFail = (msg) => fin(msg);
+      const t = setTimeout(() => fin(`Timed out connecting. ${p2pErr || P2P_FAIL_MSG}`), 30000);
+      // direct link first; if it hasn't opened in a few seconds (or fails), try the relay too
+      const relay = () => this._startGuestRelay(targetId, () => fin(null), (msg) => { if (p2pErr) fin(p2pErr); else console.warn('[net] relay failed:', msg); });
+      const rt = setTimeout(relay, 5000);
+      this._connectFail = (msg) => {
+        if (msg === PEER_ERRORS['peer-unavailable'] && !this.relayOpen) { fin(msg); return; }
+        p2pErr = msg; relay();
+      };
       this._connect(() => fin(null));
     });
   }
@@ -432,7 +481,7 @@ export class PeerTransport extends BaseTransport {
   }
   reconnect() {
     if (this.role !== 'guest' || this.closed || !this.peer) return;
-    if (this.ctl && this.ctl.open) return;
+    if ((this.ctl && this.ctl.open) || this.relayOpen) return;
     const now = Date.now();
     if (this._lastRetry && now - this._lastRetry < 2500) return;
     this._lastRetry = now;
@@ -445,14 +494,18 @@ export class PeerTransport extends BaseTransport {
     if (this.blackhole) return false;
     const raw = encode(obj);
     const c = rt && this.rt && this.rt.open ? this.rt : this.ctl;
-    if (!c || !c.open || this.closed) return false;
-    try { c.send(raw); return true; } catch { return false; }
+    if (c && c.open && !this.closed) { try { c.send(raw); return true; } catch { return false; } }
+    // relay path (guest after welcome; host once a guest said hello). Realtime msgs capped ~20/s.
+    if (this.closed || !this.relay || !this.relayN || (this.role === 'guest' && !this.relayOpen)) return false;
+    if (rt) { const now = Date.now(); if (this._lastRelayRt && now - this._lastRelayRt < 50) return false; this._lastRelayRt = now; }
+    return this.relay.send(raw, this.relayN);
   }
   close() {
     if (this.closed) return;
     this.closed = true;
     try { if (this.peer) this.peer.destroy(); } catch { /* ignore */ }
-    this.peer = null; this.ctl = null; this.rt = null;
+    try { if (this.relay) this.relay.close(); } catch { /* ignore */ }
+    this.peer = null; this.ctl = null; this.rt = null; this.relay = null;
     this._setStatus('closed');
   }
 }
