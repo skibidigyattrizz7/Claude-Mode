@@ -36,3 +36,5 @@ rather than silently keeping or adding more of it. See also `docs/UI_DIRECTION.m
 - Supabase: never edit an applied migration; add a new numbered file, then rename it to
   the version Supabase records.
 - Keep answers to the owner short and simple.
+- Subagents: use cheaper models (Sonnet, or older Opus), not the top model, unless the owner says otherwise.
+- "Notes mode": when the owner sends info to save for later, append it to docs/BACKLOG.md and reply with one word ("Saved"). Minimal usage.
