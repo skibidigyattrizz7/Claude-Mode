@@ -115,3 +115,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   - Admin GK created in Card Creator saves as 65 with all stats 65.
   - Team shows old rating (96) instead of current (99).
   - Chromebook: "Couldn't download the 3D files" — Failed to fetch dynamically imported module https://s3.amazonaws.com/mathassets/.../fallback/index.js (game is running from an S3 mirror, not GitHub Pages; the mirror is missing module files — likely needs a single-file/bundled build).
+  - Shooting 500+: every shot from any distance/angle/type (even weak) goes top bins and can't be saved; ball flight must look like a real powerful curling shot from the moment it's struck (no pass-looking shot that suddenly flies). Currently a 999-SHO card gets saved even from its own half.
