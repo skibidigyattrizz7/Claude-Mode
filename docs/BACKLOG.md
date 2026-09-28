@@ -119,3 +119,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   - Add more skill moves.
   - GK animations need a full revamp: keepers dive with their back to the ball, and dive diagonally/vertically/horizontally in odd ways. Want realistic side-on dives (facing the shooter), proper low/high/diagonal saves.
   - Add Power Shot and a proper Finesse shot; curved shots currently look bad.
+- In progress (2026-09-28): "The Shawky" secret card: ∞ stats, Egypt, all positions + all PlayStyles, glitch-in-the-matrix design, teleport top-bins shots, acrobatic shot animations (bicycle kick etc.), instant perfect passes, penalties always in, long-range steals, can't be dispossessed. Egypt flag: add the gold eagle. Admin Vault pack (admin panel only, 50 players, 0.5% Shawky) with a green 0/1 matrix button. Small themed designs for every pack button.
+- Unfinished work saved on branch `wip/paused-work`: packs Chromebook fix + send-all buttons, admin Players/Moderation merge + Card Creator bugs + edit saved cards + custom ban time, FUT Draft redesign + odds + subs, mobile pass, security (migration 008 drafted, not applied).
+- Hosting: GitHub Pages, Render (pitchside-xl8m.onrender.com, auto-updates), Replit (manual copy, doesn't auto-update).
