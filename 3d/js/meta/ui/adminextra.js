@@ -217,7 +217,7 @@ export function moderationPanel(app, { level }) {
   async function draw() {
     clear(results); clear(moreWrap);
     if (!has('search')) { results.appendChild(h('p', { class: 'pm-dim' }, 'User search is not available from the online service yet.')); return; }
-    results.appendChild(h('p', { class: 'pm-dim' }, 'Loading…'));
+    results.appendChild(h('p', { class: 'pm-dim pm-skel' }, 'Loading…'));
     const r = await safeCall(() => svc.search(st.q.trim(), undefined, st.page), { ok: false });
     clear(results);
     if (!r || r.ok === false) { results.appendChild(h('p', { class: 'pm-warnline' }, `Could not load players${r && r.error ? `: ${r.error}` : ''}.`)); return; }
@@ -322,7 +322,7 @@ export function pendingGiftsPanel(app) {
   if (!svc || typeof svc.gifts !== 'function') { wrap.appendChild(h('p', { class: 'pm-dim' }, 'Needs the online service.')); return wrap; }
   const label = (g) => (g.kind === 'coins' ? `${fmtNum(g.coins)} coins` : g.kind === 'pack' ? `${g.count}× ${g.packId} pack` : g.card ? `${g.card.name} (${g.card.ovr})` : 'Card');
   async function draw() {
-    clear(list); list.appendChild(h('p', { class: 'pm-dim' }, 'Loading…'));
+    clear(list); list.appendChild(h('p', { class: 'pm-dim pm-skel' }, 'Loading…'));
     const r = await safeCall(() => svc.gifts(), { ok: false, error: 'offline' });
     clear(list);
     if (!r || r.ok === false) { list.appendChild(h('p', { class: 'pm-warnline' }, `Could not load gifts: ${(r && (r.message || r.error)) || 'offline'}.`)); return; }

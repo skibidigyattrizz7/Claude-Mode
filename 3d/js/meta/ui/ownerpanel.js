@@ -86,7 +86,7 @@ export function playersPanel(app) {
   const filterInp = h('input', { class: 'pm-input', type: 'search', placeholder: 'Filter the list (optional)…', 'aria-label': 'Filter players' });
   filterInp.addEventListener('input', () => { st.filter = filterInp.value.trim().toLowerCase(); draw(); });
   async function load() {
-    clear(body); body.appendChild(h('p', { class: 'pm-dim' }, 'Loading every player…'));
+    clear(body); body.appendChild(h('p', { class: 'pm-dim pm-skel' }, 'Loading every player…'));
     const r = await safeCall(() => svc.allPlayers(), { ok: false, error: 'offline' });
     if (!r || r.ok === false) { st.items = null; st.error = errText(r); } else { st.items = r.items; st.error = ''; }
     draw();
@@ -215,7 +215,7 @@ export function playerDetailView(id, summary = null) {
     title: summary ? (summary.username || summary.name || 'Player') : 'Player', kicker: 'Owner · player', cls: 'pm-main--wide',
     render(main, app) {
       const svc = owner(app);
-      const box = h('div', null, h('p', { class: 'pm-dim' }, 'Loading player…'));
+      const box = h('div', null, h('p', { class: 'pm-dim pm-skel' }, 'Loading player…'));
       add(main, box);
       if (!svc || typeof svc.playerDetail !== 'function') { clear(box); box.appendChild(h('p', { class: 'pm-warnline' }, 'Needs the online service.')); return; }
       const reload = () => { if (!app.destroyed) app.refresh(); };

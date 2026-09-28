@@ -480,3 +480,239 @@ html[data-ui="stadium"] .lr-go { color: var(--acc); }
 @media (prefers-reduced-motion: no-preference) {
   html[data-ui="stadium"] .lr-card::after { animation: st-draw 520ms calc(240ms + var(--i, 0) * 90ms) var(--ease-out) backwards; transform-origin: left; }
 }
+
+/* ------------------------------------------------------------------ 15. Career mode (meta.css classes: pm-slotcard, pm-league, pm-clubpick, pm-next, tables ...) */
+/* one extra angled outline used on small tiles: only the lower right corner is cut */
+html[data-ui="stadium"] {
+  --shape-cut: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+}
+/* save slots: flat panels, big "Empty" / club name, a flare bar draws along the foot on hover */
+html[data-ui="stadium"] .pm-slotcard, html[data-ui="stadium"] .pm-slotcard.is-empty {
+  min-height: 250px; border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel);
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base);
+}
+html[data-ui="stadium"] .pm-slotcard.is-empty { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line2); }
+html[data-ui="stadium"] .pm-slotcard:hover { transform: translateY(-4px); background: var(--panel2); }
+html[data-ui="stadium"] .pm-slotcard::after {
+  content: ""; inset: auto auto 0 0; width: calc(100% - 22px); height: 5px; background: var(--acc);
+  transform: scaleX(0); transform-origin: left; transition: transform var(--dur-slow) var(--ease-out);
+}
+html[data-ui="stadium"] .pm-slotcard:hover::after, html[data-ui="stadium"] .pm-slotcard:focus-within::after { transform: scaleX(1); }
+html[data-ui="stadium"] .pm-slotcard .pm-kicker { font: 400 56px/1 var(--font-display); letter-spacing: 0; color: var(--panel3); text-transform: none; top: 14px; left: 22px; }
+html[data-ui="stadium"] .pm-slotcard .pm-kicker { font-size: 13px; font-family: var(--font-body); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+html[data-ui="stadium"] .pm-slot-empty b, html[data-ui="stadium"] .pm-slot-full b { font-weight: 400; letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-slot-empty b { font-size: 40px; color: var(--mut); }
+
+/* league picker + club picker: flat tiles, selection = tinted fill + a bar down the left edge */
+html[data-ui="stadium"] .pm-league {
+  border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); position: relative; padding: 20px 22px 24px;
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base);
+}
+html[data-ui="stadium"] .pm-league:hover { transform: translateY(-4px); background: var(--panel2); border-color: transparent; }
+html[data-ui="stadium"] .pm-league:active { transform: translateY(-1px) scale(.99); transition-duration: 80ms; }
+html[data-ui="stadium"] .pm-league::after { content: ""; position: absolute; left: 0; bottom: 0; height: 5px; width: calc(100% - 22px); background: var(--acc); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-slow) var(--ease-out); }
+html[data-ui="stadium"] .pm-league:hover::after, html[data-ui="stadium"] .pm-league:focus-visible::after { transform: scaleX(1); }
+html[data-ui="stadium"] .pm-league b { font-weight: 400; font-size: 24px; letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-league-flag .pm-flag, html[data-ui="stadium"] .pm-league-flag svg { width: 44px; height: auto; }
+html[data-ui="stadium"] .pm-clubpick {
+  border: 0; border-radius: 0; clip-path: var(--shape-cut); background: var(--panel); min-height: 64px;
+  transition: transform 90ms var(--ease-out), background var(--dur-fast), box-shadow var(--dur-fast);
+}
+html[data-ui="stadium"] .pm-clubpick:hover { background: var(--panel3); transform: translateY(-2px); }
+html[data-ui="stadium"] .pm-clubpick:active { transform: scale(.97); }
+html[data-ui="stadium"] .pm-clubpick.on { background: var(--acc-soft); box-shadow: inset 5px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-clubpick b { font-family: var(--font-display); font-weight: 400; font-size: 16px; letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-startbar { border: 0; border-radius: 0; background: var(--panel2); box-shadow: inset 0 4px 0 var(--acc), 0 -18px 36px -18px #000; padding-top: 28px; }
+html[data-ui="stadium"] .pm-league-grid, html[data-ui="stadium"] .pm-leaguegrid { gap: 14px; }
+
+/* the next-match card: flat, the VS is the big orange number, crests bigger, teams in display type */
+html[data-ui="stadium"] .pm-next {
+  border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); box-shadow: inset 0 5px 0 var(--acc); padding: 24px 28px 28px;
+}
+html[data-ui="stadium"] .pm-next--end { background: var(--acc-soft); }
+html[data-ui="stadium"] .pm-next h2 { font-size: 26px; font-weight: 400; }
+html[data-ui="stadium"] .pm-vs { gap: 24px; }
+html[data-ui="stadium"] .pm-vs-team .pm-crest--lg { width: 76px; height: 91px; }
+html[data-ui="stadium"] .pm-vs-team b { font: 400 clamp(20px, 2.6vw, 30px)/1.05 var(--font-display); letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-vs-team small { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+html[data-ui="stadium"] .pm-vs-mid { font: 400 60px/1 var(--font-display); color: var(--acc); }
+html[data-ui="stadium"] .pm-vs-mid small { font: 700 13px var(--font-body); letter-spacing: .14em; color: var(--dim); }
+html[data-ui="stadium"] .pm-window { border-radius: 0; background: var(--panel); }
+html[data-ui="stadium"] .pm-window.open { border-color: var(--line); box-shadow: inset 5px 0 0 var(--ok); }
+html[data-ui="stadium"] .pm-seasonhero { border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); box-shadow: inset 0 5px 0 var(--acc); }
+html[data-ui="stadium"] .pm-seasonhero h2 { font-weight: 400; }
+
+/* hub content rises in after a tab change */
+html[data-ui="stadium"] .pm-tabbody > * { animation: none; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui="stadium"] .pm-tabbody > * { animation: st-rise 420ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-tabbody > *:nth-child(2) { animation-delay: 50ms; } html[data-ui="stadium"] .pm-tabbody > *:nth-child(3) { animation-delay: 100ms; }
+  html[data-ui="stadium"] .pm-tabbody > *:nth-child(4) { animation-delay: 150ms; } html[data-ui="stadium"] .pm-tabbody > *:nth-child(n+5) { animation-delay: 200ms; }
+  html[data-ui="stadium"] .pm-league, html[data-ui="stadium"] .pm-slotcard, html[data-ui="stadium"] .pm-clubpick, html[data-ui="stadium"] .pm-youth, html[data-ui="stadium"] .pm-scoutreg { animation: st-rise 420ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-league:nth-child(2), html[data-ui="stadium"] .pm-slotcard:nth-child(2) { animation-delay: 50ms; }
+  html[data-ui="stadium"] .pm-league:nth-child(3), html[data-ui="stadium"] .pm-slotcard:nth-child(3) { animation-delay: 100ms; }
+  html[data-ui="stadium"] .pm-league:nth-child(n+4) { animation-delay: 150ms; }
+  html[data-ui="stadium"] .pm-clubpick:nth-child(3n+2) { animation-delay: 30ms; } html[data-ui="stadium"] .pm-clubpick:nth-child(3n) { animation-delay: 60ms; }
+}
+/* tables: quiet small headings, the numbers carry the weight; rows lean in on hover */
+html[data-ui="stadium"] .pm-table th { font: 700 12px var(--font-body); letter-spacing: .12em; color: var(--dim); border-bottom: 2px solid var(--line2); }
+html[data-ui="stadium"] .pm-table td { border-bottom: 1px solid var(--line); }
+html[data-ui="stadium"] .pm-table tbody tr { transition: background var(--dur-fast); }
+html[data-ui="stadium"] .pm-table tr.me td { background: var(--acc-soft); font-weight: 700; }
+html[data-ui="stadium"] .pm-table tr.me td:first-child, html[data-ui="stadium"] .pm-table tr.z-champ td:first-child { box-shadow: inset 4px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-table tr.xi td:first-child { color: var(--acc); }
+html[data-ui="stadium"] .pm-table b.ovr { border-radius: 0; clip-path: var(--shape-tag); padding: 2px 9px; font-weight: 400; font-size: 15px; }
+html[data-ui="stadium"] .pm-table td:last-child b, html[data-ui="stadium"] .pm-table td.pts { font-family: var(--font-display); font-weight: 400; font-size: 16px; }
+html[data-ui="stadium"] .pm-formguide i { border-radius: 0; clip-path: var(--shape-tag); width: 22px; font-weight: 700; }
+html[data-ui="stadium"] .pm-fitbar { height: 6px; border-radius: 0; background: var(--panel3); }
+html[data-ui="stadium"] .pm-news li { border-radius: 0; background: var(--panel2); border-left: 4px solid var(--line2); transition: background var(--dur-fast), transform 90ms var(--ease-out); }
+html[data-ui="stadium"] .pm-news li:hover { background: var(--panel3); }
+html[data-ui="stadium"] .pm-offer { transition: background var(--dur-fast); }
+html[data-ui="stadium"] .pm-fx, html[data-ui="stadium"] .pm-myfx-row, html[data-ui="stadium"] .pm-leaders li { border-radius: 0; transition: background var(--dur-fast), transform 90ms var(--ease-out); }
+html[data-ui="stadium"] .pm-myfx-row { background: var(--panel2); }
+html[data-ui="stadium"] .pm-myfx-row:hover, html[data-ui="stadium"] .pm-fx:hover, html[data-ui="stadium"] .pm-leaders li:hover { background: var(--panel3); }
+html[data-ui="stadium"] .pm-fx.me, html[data-ui="stadium"] .pm-leaders li.me { box-shadow: inset 4px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-leaders li b { font-weight: 400; font-size: 18px; }
+html[data-ui="stadium"] .pm-fx-s { font-family: var(--font-display); font-size: 18px; }
+html[data-ui="stadium"] .pm-youth, html[data-ui="stadium"] .pm-scoutreg, html[data-ui="stadium"] .pm-formpick {
+  border: 0; border-radius: 0; clip-path: var(--shape-cut); background: var(--panel);
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-fast), box-shadow var(--dur-fast);
+}
+html[data-ui="stadium"] .pm-scoutreg { background: var(--panel2); }
+html[data-ui="stadium"] .pm-youth:hover, html[data-ui="stadium"] .pm-scoutreg:hover:not(:disabled), html[data-ui="stadium"] .pm-formpick:hover { transform: translateY(-3px); background: var(--panel3); box-shadow: inset 0 -4px 0 var(--acc); }
+html[data-ui="stadium"] .pm-scoutreg:active:not(:disabled), html[data-ui="stadium"] .pm-formpick:active { transform: scale(.97); transition-duration: 80ms; }
+html[data-ui="stadium"] .pm-scoutreg:disabled { opacity: 1; color: var(--dim); }
+
+/* ------------------------------------------------------------------ 16. Draft (draft.css + modesview draft section) */
+html[data-ui="stadium"] .pm-draftintro { border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); box-shadow: inset 0 5px 0 var(--acc); padding: 28px; }
+html[data-ui="stadium"] .pm-draftintro h2, html[data-ui="stadium"] .pm-draftdone h2 { font: 400 34px/1.05 var(--font-display); letter-spacing: .03em; text-transform: uppercase; }
+html[data-ui="stadium"] .pm-draftrewards { gap: 12px; }
+html[data-ui="stadium"] .pm-draftrewards > div {
+  display: grid; align-content: start; gap: 6px; padding: 16px 18px 20px; border: 0; border-radius: 0; clip-path: var(--shape-cut); background: var(--panel2);
+}
+html[data-ui="stadium"] .pm-draftrewards > div b { font: 400 34px/1 var(--font-display); letter-spacing: .01em; color: var(--txt); text-transform: uppercase; }
+html[data-ui="stadium"] .pm-draftrewards > div:last-child b { color: var(--acc); }
+html[data-ui="stadium"] .pm-draftrewards > div small { font-size: 14px; color: var(--mut); }
+html[data-ui="stadium"] .pm-draftpath { gap: 8px; }
+html[data-ui="stadium"] .dp-title h2, html[data-ui="stadium"] .dp-pickhead h2 { font-weight: 400; letter-spacing: .03em; }
+html[data-ui="stadium"] .dp-title h2::after, html[data-ui="stadium"] .dp-pickhead h2::after { content: ""; display: block; width: 72px; height: 5px; margin: 12px auto 0; background: var(--acc); clip-path: var(--shape-tag); }
+html[data-ui="stadium"] .dp-pickhead h2::after { margin-left: 0; }
+html[data-ui="stadium"] .dp-overlay { background: rgba(3, 6, 10, .92); }
+html[data-ui="stadium"] .dp-note { font-size: 14px; }
+html[data-ui="stadium"] .dp-benchwrap h3 { font-weight: 400; }
+html[data-ui="stadium"] .dp-slot:hover .pm-card--empty, html[data-ui="stadium"] .dp-slot:focus-visible .pm-card--empty { --bord: linear-gradient(var(--acc), var(--acc)); }
+html[data-ui="stadium"] .dp-slot:focus-visible .pm-card { outline-color: var(--txt); }
+html[data-ui="stadium"] .dp-slot:active .pm-card--empty { transform: scale(.94); }
+html[data-ui="stadium"] .dp-opt .pm-card[role="button"]:active { transform: translateY(-4px) scale(.98); transition-duration: 80ms; }
+html[data-ui="stadium"] .pm-card.dp-back .pc-in { background:
+  radial-gradient(circle at 50% 44%, transparent 0 17%, rgba(255, 106, 31, .7) 17.5% 19%, transparent 19.5%),
+  repeating-linear-gradient(135deg, rgba(255, 255, 255, .035) 0 6px, transparent 6px 12px), linear-gradient(180deg, #172232, #0b111a); }
+html[data-ui="stadium"] .dp-bar .pm-stat-chip { min-height: 44px; }
+html[data-ui="stadium"] .pm-draftpitch { border-radius: 3px; }
+
+/* ------------------------------------------------------------------ 17. Gifts inbox */
+html[data-ui="stadium"] .pm-giftsbtn {
+  width: 44px; height: 44px; border: 0; border-radius: 0; clip-path: var(--shape-btn); --cut: 9px; background: var(--panel2); box-shadow: inset 0 0 0 1px var(--line2);
+  transition: background var(--dur-fast), transform 90ms var(--ease-out), color var(--dur-fast);
+}
+html[data-ui="stadium"] .pm-giftsbtn:hover, html[data-ui="stadium"] .pm-giftsbtn:focus-visible { background: var(--panel3); transform: translateY(-2px); border-color: transparent; }
+html[data-ui="stadium"] .pm-giftsbtn:active { transform: scale(.94); }
+html[data-ui="stadium"] .pm-giftsbtn .pm-badge { clip-path: var(--shape-tag); background: var(--acc); color: var(--acc-ink); }
+html[data-ui="stadium"] .pm-gifts-list { gap: 12px; }
+html[data-ui="stadium"] .pm-gifts-all { justify-content: flex-end; }
+html[data-ui="stadium"] .pm-giftrow {
+  border: 0; border-radius: 0; clip-path: var(--shape-cut); background: var(--panel); padding: 14px 20px 14px 14px; gap: 16px;
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-fast), box-shadow var(--dur-fast);
+}
+html[data-ui="stadium"] .pm-giftrow:hover { transform: translateX(4px); background: var(--panel2); box-shadow: inset 5px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-gifticon { width: 48px; height: 48px; border-radius: 0; clip-path: var(--shape-btn); --cut: 10px; background: var(--acc-soft); color: var(--acc); }
+html[data-ui="stadium"] .pm-gift-info b { font: 400 22px/1.15 var(--font-display); letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-gift-info small { font-size: 13px; }
+html[data-ui="stadium"] .pm-empty-state { border: 0; background: var(--panel); clip-path: var(--shape-tile); padding: 56px 16px; }
+html[data-ui="stadium"] .pm-empty-state .pm-icon { color: var(--acc); opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui="stadium"] .pm-giftrow, html[data-ui="stadium"] .pm-empty-state { animation: st-rise 420ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-giftrow:nth-child(2) { animation-delay: 50ms; } html[data-ui="stadium"] .pm-giftrow:nth-child(3) { animation-delay: 100ms; }
+  html[data-ui="stadium"] .pm-giftrow:nth-child(4) { animation-delay: 150ms; } html[data-ui="stadium"] .pm-giftrow:nth-child(n+5) { animation-delay: 200ms; }
+}
+
+/* skeleton loaders for the async admin / gifts lists: the "Loading..." line becomes shimmering rows the shape of a list row */
+html[data-ui="stadium"] .pm-skel { position: relative; min-height: 148px; font-size: 0; color: transparent; }
+html[data-ui="stadium"] .pm-skel::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, var(--panel2) 30%, var(--panel3) 50%, var(--panel2) 70%) 0 0 / 300% 100%;
+  -webkit-mask: repeating-linear-gradient(180deg, #000 0 40px, transparent 40px 52px); mask: repeating-linear-gradient(180deg, #000 0 40px, transparent 40px 52px);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui="stadium"] .pm-skel::before { animation: st-shimmer 1.4s linear infinite; }
+}
+
+/* ------------------------------------------------------------------ 18. Admin, owner panel, card creator */
+html[data-ui="stadium"] .pm-admin-grid { gap: 16px; }
+html[data-ui="stadium"] .pm-admin-sec { border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); padding: 24px 24px 28px; }
+html[data-ui="stadium"] .pm-admin-sec h3 { font-size: 18px; letter-spacing: .06em; }
+html[data-ui="stadium"] .pm-admin-danger { background: var(--panel); box-shadow: inset 5px 0 0 var(--bad); }
+html[data-ui="stadium"] .pm-admin-danger h3::before { background: var(--bad); }
+html[data-ui="stadium"] .pm-adminbadge { border-radius: 0; clip-path: var(--shape-tag); border: 0; background: var(--panel3); color: var(--txt); padding: 6px 18px; transition: background var(--dur-fast), transform 90ms var(--ease-out); }
+html[data-ui="stadium"] .pm-adminbadge:hover { background: var(--panel2); transform: translateY(-2px); }
+html[data-ui="stadium"] .pm-adminbadge:active { transform: scale(.96); }
+html[data-ui="stadium"] .pm-adminbadge.is-owner { background: var(--acc); color: var(--acc-ink); box-shadow: none; }
+html[data-ui="stadium"] .pm-adminbadge.lv-temp, html[data-ui="stadium"] .pm-adminbadge.lv-mod { background: var(--panel3); color: var(--acc3); }
+html[data-ui="stadium"] .pm-codes-ico { border-radius: 0; clip-path: var(--shape-btn); --cut: 8px; background: var(--acc-soft); color: var(--acc); }
+html[data-ui="stadium"] .pm-goodline { color: var(--ok); }
+html[data-ui="stadium"] .pm-warnline { color: var(--warn); }
+/* the packs grid: flat tiles that lift, press and show the flare bar */
+html[data-ui="stadium"] .pm-adminpack { border: 0; border-radius: 0; clip-path: var(--shape-cut); background: var(--panel2); transition: transform var(--dur-base) var(--ease-out), background var(--dur-fast), box-shadow var(--dur-fast); }
+html[data-ui="stadium"] .pm-adminpack:hover { transform: translateY(-3px); background: var(--panel3); box-shadow: inset 0 -4px 0 var(--acc); }
+html[data-ui="stadium"] .pm-adminpack:active { transform: scale(.96); transition-duration: 80ms; }
+html[data-ui="stadium"] .pm-adminpack-badge { border-radius: 0; clip-path: var(--shape-tag); }
+/* result rows (player search, users, gifts, listings): flat rows with a bar on hover */
+html[data-ui="stadium"] .pm-mktrow, html[data-ui="stadium"] .pm-prow { border: 0; border-radius: 0; background: var(--panel2); transition: background var(--dur-fast), transform 90ms var(--ease-out), box-shadow var(--dur-fast); }
+html[data-ui="stadium"] .pm-mktrow { clip-path: var(--shape-cut); }
+html[data-ui="stadium"] .pm-mktrow:hover, html[data-ui="stadium"] .pm-prow:hover { background: var(--panel3); box-shadow: inset 4px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-prow.is-banned { background: rgba(255, 90, 106, .1); box-shadow: inset 4px 0 0 var(--bad); }
+html[data-ui="stadium"] .pm-prow-av { border-radius: 0; clip-path: var(--shape-tag); width: 46px; background: var(--panel3); font-weight: 400; }
+html[data-ui="stadium"] .pm-prow-av .pm-onlinedot { box-shadow: 0 0 0 3px var(--panel3); }
+html[data-ui="stadium"] .pm-prow-who b { font: 400 17px/1.2 var(--font-display); letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-prow-flag { border-radius: 0; clip-path: var(--shape-tag); }
+html[data-ui="stadium"] .pm-onlinedot.is-on { box-shadow: 0 0 0 3px rgba(52, 217, 135, .22); }
+html[data-ui="stadium"] .pm-toggle { min-height: 44px; }
+html[data-ui="stadium"] .pm-toggle input { accent-color: var(--acc); }
+html[data-ui="stadium"] .pm-admin-results { gap: 8px; }
+/* card creator: the live preview is the hero, the form is a flat panel, stats are sliders with big values */
+html[data-ui="stadium"] .pm-cc-grid { gap: 24px; }
+html[data-ui="stadium"] .pm-cc-stat { grid-template-columns: 56px 1fr 44px; font-size: 13px; }
+html[data-ui="stadium"] .pm-cc-stat > :last-child, html[data-ui="stadium"] .pm-cc-stat output { font: 400 20px/1 var(--font-display); color: var(--txt); text-align: right; }
+html[data-ui="stadium"] .pm-cc-editing { border-radius: 0; background: var(--acc-soft); box-shadow: inset 4px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-cc-previewwrap { padding: 16px; background: var(--panel2); clip-path: var(--shape-cut); }
+html[data-ui="stadium"] .pm-cc-item { transition: transform var(--dur-base) var(--ease-out); }
+html[data-ui="stadium"] .pm-cc-item:hover { transform: translateY(-4px); }
+html[data-ui="stadium"] .pm-cc-upload { border-radius: 0; }
+html[data-ui="stadium"] .psi-chip.on { background: var(--acc); color: var(--acc-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui="stadium"] .pm-admin-sec, html[data-ui="stadium"] .pm-adminpack { animation: st-rise 420ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-admin-grid > *:nth-child(2) { animation-delay: 50ms; } html[data-ui="stadium"] .pm-admin-grid > *:nth-child(3) { animation-delay: 100ms; }
+  html[data-ui="stadium"] .pm-admin-grid > *:nth-child(n+4) { animation-delay: 150ms; }
+  html[data-ui="stadium"] .pm-prow, html[data-ui="stadium"] .pm-mktrow { animation: st-rise 380ms var(--ease-spring) backwards; }
+}
+@media (max-width: 600px) {
+  html[data-ui="stadium"] .pm-vs-mid { font-size: 40px; }
+  html[data-ui="stadium"] .pm-vs-team .pm-crest--lg { width: 56px; height: 67px; }
+  html[data-ui="stadium"] .pm-next { padding: 18px 16px 20px; }
+  html[data-ui="stadium"] .pm-admin-sec { padding: 18px 16px 22px; }
+  html[data-ui="stadium"] .pm-draftintro { padding: 20px 16px; }
+  html[data-ui="stadium"] .pm-slotcard { min-height: 200px; }
+  html[data-ui="stadium"] .pm-gift-info b { font-size: 18px; }
+}
+html[data-ui="stadium"] .pm-h { margin-bottom: 16px; }
+html[data-ui="stadium"] .pm-formgrid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+html[data-ui="stadium"] .pm-formpick { padding: 20px 16px 22px; }
+html[data-ui="stadium"] .pm-formpick b { font: 400 26px/1 var(--font-display); letter-spacing: .03em; }
+html[data-ui="stadium"] .pm-formpick svg { width: 130px; height: auto; }
+@media (max-width: 600px) {
+  html[data-ui="stadium"] .pm-draftrewards > div b { font-size: 24px; }
+  html[data-ui="stadium"] .pm-draftintro h2 { font-size: 28px; }
+  html[data-ui="stadium"] .pm-formgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-ui="stadium"] .pm-formpick svg { width: 100px; }
+}
