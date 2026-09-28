@@ -462,7 +462,7 @@ export class Hud {
       switch (view.spt) {
         case SP.PENALTY: txt = `PENALTY: move the crosshair (movement / right stick / mouse) · hold ${k('shoot')} for power, release when the ring is smallest`; break;
         case SP.FREEKICK: txt = view.sa && view.sa[6]
-          ? `FREE KICK: crosshair by movement / mouse · contact ${k('switchP')} ${k('tackle')} ${k('skill')} ${k('jockey')} · hold ${k('shoot')} / ${k('finesse')}, release on the small ring · ${k('lob')} cross, ${k('pass')} pass`
+          ? `FREE KICK: crosshair by movement / mouse · contact ${k('switchP')} ${k('tackle')} ${k('skill')} ${k('jockey')} · hold ${k('shoot')} / ${k('finesse')} for power, release to shoot · ${k('lob')} cross, ${k('pass')} pass`
           : `FREE KICK: aim with movement · curve ${k('switchP')} / ${k('tackle')} · ${k('lob')} long, ${k('pass')} pass (tap ${k('pass')} during the whistle = quick)`; break;
         case SP.CORNER: txt = `CORNER: aim with movement · curve ${k('switchP')} / ${k('tackle')} · hold ${k('lob')} to cross, ${k('pass')} short`; break;
         case SP.THROW: txt = `THROW-IN: aim with movement · ${k('pass')} short, ${k('lob')} long (tap ${k('pass')} during the whistle = quick throw)`; break;

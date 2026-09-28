@@ -138,3 +138,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - 2026-09-29: installed /brag + /brag-slim skills (launch videos) into .claude/skills/ (from latent-spaces/brag, MIT; music/sfx assets left out, license unverified).
 - Owner (2026-09-29): multiple UT squads you can switch between; settings for 'Auto-build best squad' (what to prioritise etc.).
 - DONE 2026-09-29: multiple squads (up to 5, switch/new/rename/delete on the Squad screen) + Auto-build settings (priority rating/balanced/chemistry, keep or best formation, use untradeables, fill empty spots only).
+- DONE 2026-09-29: online lineup reveal (GK, defence, midfield, attack, full XI; skippable); Stadium style for Career/Draft/Gifts/Admin/Owner/Card Creator; ~109 em dashes removed from UI copy; free-kick hint no longer mentions the ring.
+- TODO (net/, needs OK): ~15 em dashes left in `3d/js/net/online.js`, `services.js`, `transport.js` UI strings. Possible `renderLobby` TypeError on the guest side of a friend-code lobby (seen twice in mock two-tab tests, not reproduced reliably). Lineup reveals on the two devices aren't synced (would need a net/ change).
