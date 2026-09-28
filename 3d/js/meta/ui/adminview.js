@@ -282,13 +282,16 @@ export function adminView() {
 
       // ---- extra tabs: moderation (mod/full), and owner-only Cards / Broadcast / Config ----
       const extraTabs = [];
-      if (can('moderation', level)) extraTabs.push(['moderation', 'Moderation', () => X.moderationPanel(app, { level })]);
+      // ONE player list: the owner's full list (every moderation action is on its rows / player screen);
+      // staff below owner get the same "Players" tab backed by the moderation list.
+      if (can('owner', level)) extraTabs.push(['players', 'Players', () => OP.playersPanel(app)]);
+      else if (can('moderation', level)) extraTabs.push(['players', 'Players', () => X.moderationPanel(app, { level })]);
       if (can('owner', level)) {
-        extraTabs.push(['players', 'Players', () => OP.playersPanel(app)]);
         extraTabs.push(['cards', level === 'super' ? 'Card Creator ★' : 'Card Creator', () => X.cardCreatorPanel(app, { level })]);
         extraTabs.push(['broadcast', 'Broadcast & Giveaways', () => h('div', null, X.broadcastPanel(app), X.giveawayPanel(app), X.pendingGiftsPanel(app))]);
         extraTabs.push(['config', 'Global Config', () => X.configPanel(app, { level })]);
       }
+      if (st.tab === 'moderation') st.tab = 'players';
       if (!extraTabs.some(([k]) => k === st.tab)) st.tab = 'tools';
       const panes = { tools };
       for (const [k, , build] of extraTabs) { const p = h('div', { 'data-admin-tab': k, hidden: k !== st.tab }); if (k === st.tab) p.appendChild(build()); panes[k] = p; }

@@ -2,6 +2,7 @@
 // (sign out, change username / password), the global broadcast banner and the "N online" counter.
 // Pure DOM on top of `online.account.*` / `online.presence.*` (services.js); styles in 3d/css/account.css.
 import { mountFriends } from './friendsui.js';
+import { passwordHint } from './accountcore.js';
 
 let cssDone = false;
 export function ensureAccountCss() {
@@ -33,6 +34,23 @@ const field = (label, input, hint) => el('label', { class: 'acc-field' }, el('sp
 const input = (o) => el('input', { class: 'acc-input', spellcheck: 'false', autocapitalize: 'off', ...o });
 const busy = (form, on) => { for (const x of form.querySelectorAll('input, button')) x.disabled = on; form.classList.toggle('is-busy', on); };
 function say(msgEl, text, kind = '') { msgEl.textContent = text || ''; msgEl.dataset.kind = kind; }
+/**
+ * Live strength hint under a new-password field (plain text; red while the server would refuse it).
+ * getUser() -> current username (the password must not equal it).
+ */
+function pwHint(pw, getUser) {
+  const hint = el('small', { class: 'acc-hint acc-pwhint', 'aria-live': 'polite' });
+  const upd = () => {
+    const r = passwordHint(pw.value, getUser());
+    hint.textContent = r.text;
+    hint.dataset.level = String(r.level);
+    hint.style.color = !pw.value ? '' : r.level === 0 ? 'var(--bad, #ef4444)' : r.level >= 2 ? 'var(--ok, #22c55e)' : '';
+  };
+  pw.addEventListener('input', upd);
+  upd();
+  return hint;
+}
+const pwField = (label, pw, getUser) => el('label', { class: 'acc-field' }, el('span', { class: 'acc-label' }, label), pw, pwHint(pw, getUser));
 
 // ------------------------------------------------------------------ gate
 /**
@@ -76,7 +94,7 @@ export function openAccountGate(online, { view = 'choose', toast = null, canDism
       const codeRow = field('Owner code', code, 'This name is reserved for the owner.');
       codeRow.hidden = true;
       const rem = el('input', { type: 'checkbox', id: 'acc-su-remember', checked: true });
-      u.addEventListener('input', () => { codeRow.hidden = !online.account.isReservedName(u.value); });
+      u.addEventListener('input', () => { codeRow.hidden = !online.account.isReservedName(u.value); if (p1.value) p1.dispatchEvent(new Event('input')); });
       const form = el('form', { class: 'acc-form', novalidate: true, onsubmit: async (e) => {
         e.preventDefault();
         const err = online.account.validateUsername(u.value) || online.account.validatePassword(p1.value, u.value, p2.value);
@@ -89,7 +107,7 @@ export function openAccountGate(online, { view = 'choose', toast = null, canDism
         if (r.queued) setTimeout(() => close('dismissed'), 1600);
       } },
       field('Username', u, '3–16 letters, numbers, _ or single spaces'),
-      field('Password', p1, 'At least 8 characters'),
+      pwField('Password', p1, () => u.value),
       field('Confirm password', p2), codeRow,
       el('label', { class: 'acc-check' }, rem, 'Keep me signed in on this device'),
       el('div', { class: 'acc-row' },
@@ -219,7 +237,7 @@ export function accountSettingsPane(online, { toast = null } = {}) {
         if (!r.ok) { say(pwMsg, r.message || online.errorText(r.error), 'bad'); return; }
         op.value = p1.value = p2.value = '';
         say(pwMsg, 'Password changed. Other devices were signed out.', 'good');
-      } }, field('Current password', op), field('New password', p1, 'At least 8 characters'), field('Repeat new password', p2),
+      } }, field('Current password', op), pwField('New password', p1, () => c.username || ''), field('Repeat new password', p2),
       el('div', { class: 'acc-form-foot' }, el('button', { class: 'acc-btn acc-btn--primary', type: 'submit', id: 'acc-cp-submit' }, 'Change password')), pwMsg);
       const outMsg = el('p', { class: 'acc-msg', role: 'status', 'aria-live': 'polite' });
       const signOut = async (all) => { say(outMsg, 'Signing out…'); await online.account.logout(all ? { all: true } : undefined); note(all ? 'Signed out on every device' : 'Signed out'); };

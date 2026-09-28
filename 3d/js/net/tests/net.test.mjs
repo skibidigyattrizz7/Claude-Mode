@@ -12,7 +12,8 @@ import { createMatchmaker, randomPeerId } from '../matchmaker.js';
 import { createOnline, online as defaultOnline } from '../services.js';
 import { LoopbackTransport } from '../transport.js';
 import { NetSession } from '../session.js';
-import { usernameError, passwordError, nameNorm, isReservedName, usernameKey, parseBan, banActive, banText, BLOCKED_WORDS } from '../accountcore.js';
+import { usernameError, passwordError, passwordHint, COMMON_PASSWORDS, nameNorm, isReservedName, usernameKey, parseBan, banActive, banText, BLOCKED_WORDS } from '../accountcore.js';
+import { errorText } from '../validate.js';
 import { readFileSync } from 'node:fs';
 import { receiveCard, giftPayloadCard, registerCustomCard } from '../../meta/core/customreg.js';
 import * as UT from '../../meta/core/ut.js';
@@ -464,6 +465,60 @@ test('account rules: usernames, passwords, name filter, SQL parity', () => {
   assert.ok(sql.includes("position('shawkyfc' in"), 'reserved name in SQL');
 });
 
+test('password strength rules (same as SQL pitchside__password_error, migration 008)', () => {
+  for (const pw of ['aaaaaaaa', 'ZZZZZZZZZZ', '12345678', '0000000000', '98765432109', 'password', 'PASSWORD1', 'Qwerty123', 'iloveyou', 'Liverpool', 'short1!', ''])
+    assert.equal(passwordError(pw), 'weak_password', pw);
+  assert.equal(passwordError('Cool Kid 9', 'cool kid 9'), 'weak_password'); // equals the username
+  assert.equal(passwordError(null), 'weak_password');
+  assert.equal(passwordError('x'.repeat(73)), 'bad_password');
+  assert.equal(passwordError('abc\u0001defgh'), 'bad_password');
+  for (const pw of ['Blue-Kite-42', 'correct horse', 'aaaaaaab', '1234567a', 'password!2x', 'Pitch-pass1'])
+    assert.equal(passwordError(pw, 'someone'), null, pw);
+  assert.equal(passwordError('Blue-Kite-42', 'x', 'Blue-Kite-43'), 'password_mismatch');
+  // every common entry is refused, and the SQL list is the same list in the same order
+  for (const pw of COMMON_PASSWORDS) assert.equal(passwordError(pw), 'weak_password', pw);
+  assert.ok(COMMON_PASSWORDS.length >= 45 && COMMON_PASSWORDS.every((x) => x.length >= 8 && !/^[0-9]+$/.test(x) && x === x.toLowerCase()));
+  const sql = readFileSync(new URL('../../../../supabase/migrations/20260928000000_pitchside_008_security.sql', import.meta.url), 'utf8');
+  const m = /COMMON-PASSWORDS-BEGIN([\s\S]*?)-- COMMON-PASSWORDS-END/.exec(sql);
+  assert.ok(m, 'common list found in SQL');
+  assert.deepEqual([...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]), COMMON_PASSWORDS);
+  assert.ok(sql.includes("p_password ~ '^(.)\\1*$'") && sql.includes("p_password ~ '^[0-9]+$'"), 'repeat / digits rules in SQL');
+});
+
+test('password hint text follows the rules', () => {
+  assert.equal(passwordHint('').level, 0);
+  assert.match(passwordHint('abc').text, /5 more characters/);
+  assert.match(passwordHint('abcdefg').text, /1 more character needed/);
+  assert.match(passwordHint('12345678').text, /not only numbers/);
+  assert.match(passwordHint('football').text, /common/);
+  assert.match(passwordHint('Cool Kid 9', 'cool kid 9').text, /username/);
+  assert.match(passwordHint('bbbbbbbbbb').text, /Too weak/);
+  assert.equal(passwordHint('greenkite').level, 1);
+  assert.equal(passwordHint('Blue-Kite').level, 2);
+  assert.equal(passwordHint('Blue-Kite-42').level, 3);
+  assert.equal(passwordHint('x'.repeat(80)).level, 0);
+});
+
+test('friendly error text for security codes (new and existing)', () => {
+  const fallback = errorText('definitely_not_a_code');
+  for (const code of ['weak_password', 'bad_password', 'too_many_attempts', 'rate_limited', 'bad_credentials', 'invalid', 'reserved_username', 'password_mismatch']) {
+    const t = errorText(code);
+    assert.ok(typeof t === 'string' && t.length > 5 && t !== fallback, code);
+  }
+  assert.match(errorText('weak_password'), /common password/);
+  assert.match(errorText('too_many_attempts'), /15 minutes/);
+});
+
+test('admin code lock (rate_limited) reaches the UI as a friendly message', async () => {
+  const rpc = async (fn) => (fn === 'admin_login' ? { ok: true, data: { ok: false, error: 'rate_limited' } } : { ok: false, error: 'offline' });
+  const O = createOnline({ rpc, storage: memStorage(), volatileStorage: memStorage(), transportKind: 'loopback' });
+  const r = await O.admin.verifyLevel('Some-Code-1');
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'rate_limited');
+  assert.equal(r.message, errorText('rate_limited'));
+  assert.equal(O.admin.verified, false);
+});
+
 test('ban parsing and text', () => {
   const b = parseBan('{"reason":"Cheating\\u0000","until":"2099-01-01T00:00:00Z"}');
   assert.equal(b.reason, 'Cheating');
@@ -481,9 +536,9 @@ test('accounts: signup, duplicate names, remember-me storage, login elsewhere, l
   const A = mkAcc(be, { storage: disk, volatile: tab });
   assert.equal(A.account.current().state, 'none');
   assert.equal((await A.profile()).error, 'no_account'); // online features need an account
-  assert.equal((await A.account.signup({ username: 'Al', password: 'password1', confirm: 'password1' })).error, 'bad_username');
-  assert.equal((await A.account.signup({ username: 'Alice Smith', password: 'password1', confirm: 'nope' })).error, 'password_mismatch');
-  const r = await A.account.signup({ username: ' Alice Smith ', password: 'password1', confirm: 'password1', remember: true });
+  assert.equal((await A.account.signup({ username: 'Al', password: 'Pitch-pass1', confirm: 'Pitch-pass1' })).error, 'bad_username');
+  assert.equal((await A.account.signup({ username: 'Alice Smith', password: 'Pitch-pass1', confirm: 'nope' })).error, 'password_mismatch');
+  const r = await A.account.signup({ username: ' Alice Smith ', password: 'Pitch-pass1', confirm: 'Pitch-pass1', remember: true });
   assert.equal(r.ok, true);
   assert.equal(r.username, 'Alice Smith');
   assert.ok(disk.getItem('pitchside.account') && !tab.getItem('pitchside.account'));
@@ -493,13 +548,13 @@ test('accounts: signup, duplicate names, remember-me storage, login elsewhere, l
   assert.equal(p.coins, 5000);
   // case / space / underscore variants are the same name
   const B = mkAcc(be);
-  assert.equal((await B.account.signup({ username: 'ALICE_SMITH', password: 'password2', confirm: 'password2' })).error, 'username_taken');
-  assert.equal((await B.account.signup({ username: 'alicesmith', password: 'password2', confirm: 'password2' })).error, 'username_taken');
+  assert.equal((await B.account.signup({ username: 'ALICE_SMITH', password: 'Pitch-pass2', confirm: 'Pitch-pass2' })).error, 'username_taken');
+  assert.equal((await B.account.signup({ username: 'alicesmith', password: 'Pitch-pass2', confirm: 'Pitch-pass2' })).error, 'username_taken');
   // log in on another device, not remembered -> session only in the volatile store
   const disk2 = memStorage(), tab2 = memStorage();
   const A2 = mkAcc(be, { storage: disk2, volatile: tab2 });
   assert.equal((await A2.account.login({ username: 'alice smith', password: 'wrong-one' })).error, 'bad_credentials');
-  const l = await A2.account.login({ username: 'alice smith', password: 'password1', remember: false });
+  const l = await A2.account.login({ username: 'alice smith', password: 'Pitch-pass1', remember: false });
   assert.equal(l.ok, true);
   assert.equal(l.id, r.id);
   assert.ok(!disk2.getItem('pitchside.account') && tab2.getItem('pitchside.account'));
@@ -516,14 +571,19 @@ test('accounts: failed-login throttle, reserved owner name needs the admin code'
   const be = createMockBackend(memoryStore());
   be.setAdminCode('Owner-Code-1');
   const A = mkAcc(be);
-  await A.account.signup({ username: 'Target', password: 'password1', confirm: 'password1' });
+  await A.account.signup({ username: 'Target', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   const X = mkAcc(be);
-  for (let i = 0; i < 10; i++) assert.equal((await X.account.login({ username: 'target', password: `bad${i}xxxx` })).error, 'bad_credentials');
-  assert.equal((await X.account.login({ username: 'target', password: 'password1' })).error, 'too_many_attempts');
+  // 4 failures, then the right password clears the counter
+  for (let i = 0; i < 4; i++) assert.equal((await X.account.login({ username: 'target', password: `bad${i}xxxx` })).error, 'bad_credentials');
+  assert.equal((await X.account.login({ username: 'target', password: 'Pitch-pass1' })).ok, true);
+  await X.account.logout();
+  // 5 failures in 15 minutes lock the username (migration 008)
+  for (let i = 0; i < 5; i++) assert.equal((await X.account.login({ username: 'target', password: `bad${i}xxxx` })).error, 'bad_credentials');
+  assert.equal((await X.account.login({ username: 'target', password: 'Pitch-pass1' })).error, 'too_many_attempts');
   const O = mkAcc(be);
-  assert.equal((await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9' })).error, 'reserved_username');
-  assert.equal((await O.account.signup({ username: 'Shawky_FC', password: 'password9', confirm: 'password9', adminCode: 'wrong' })).error, 'reserved_username');
-  const ok = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'Owner-Code-1' });
+  assert.equal((await O.account.signup({ username: 'Shawky Fc', password: 'Pitch-pass9', confirm: 'Pitch-pass9' })).error, 'reserved_username');
+  assert.equal((await O.account.signup({ username: 'Shawky_FC', password: 'Pitch-pass9', confirm: 'Pitch-pass9', adminCode: 'wrong' })).error, 'reserved_username');
+  const ok = await O.account.signup({ username: 'Shawky Fc', password: 'Pitch-pass9', confirm: 'Pitch-pass9', adminCode: 'Owner-Code-1' });
   assert.equal(ok.ok, true);
   assert.equal(ok.role, 'owner');
   assert.equal(O.account.current().role, 'owner');
@@ -539,7 +599,7 @@ test('accounts: claim an existing anonymous device profile keeps its coins and i
   await be.call('admin_add_coins', {}); // no-op
   const A = mkAcc(be, { storage: disk });
   assert.equal(A.account.current().hasDevice, true);
-  const r = await A.account.signup({ username: 'Old Timer', password: 'password1', confirm: 'password1' });
+  const r = await A.account.signup({ username: 'Old Timer', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal(r.ok, true);
   assert.equal(r.claimed, true);
   assert.equal(r.id, p0.id);
@@ -552,10 +612,10 @@ test('bans: moderation ban blocks online RPCs with the reason, login shows it, u
   const be = createMockBackend(memoryStore());
   be.setAdminCode('Owner-Code-1');
   const P = mkAcc(be);
-  const pr = await P.account.signup({ username: 'Cheater', password: 'password1', confirm: 'password1' });
+  const pr = await P.account.signup({ username: 'Cheater', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   await P.market.list(card(), 1000);
   const M = mkAcc(be);
-  const mr = await M.account.signup({ username: 'Helper', password: 'password1', confirm: 'password1' });
+  const mr = await M.account.signup({ username: 'Helper', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal((await M.moderation.search('cheat')).error, 'not_admin'); // players cannot moderate
   be.setRole(mr.id, 'mod');
   await M.account.status();
@@ -575,7 +635,7 @@ test('bans: moderation ban blocks online RPCs with the reason, login shows it, u
   assert.equal((await P.market.buy(UUID)).error, 'banned'); // refused locally from the cached ban
   assert.equal((await P.matchmaking.quickSearch({ mode: 'friendly' })).reason, 'banned');
   const again = mkAcc(be);
-  const lg = await again.account.login({ username: 'cheater', password: 'password1' });
+  const lg = await again.account.login({ username: 'cheater', password: 'Pitch-pass1' });
   assert.equal(lg.error, 'banned');
   assert.equal(lg.ban.reason, 'Market abuse');
   assert.equal(again.account.current().state, 'none'); // no session for banned players
@@ -591,7 +651,7 @@ test('bans: moderation ban blocks online RPCs with the reason, login shows it, u
   assert.equal((await Adm.moderation.adjustCoins(pr.id, -100, 'refund')).coins, 4900);
   // mods cannot ban owners; owners promote mods, cannot touch owners
   const O = mkAcc(be);
-  const or = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'Owner-Code-1' });
+  const or = await O.account.signup({ username: 'Shawky Fc', password: 'Pitch-pass9', confirm: 'Pitch-pass9', adminCode: 'Owner-Code-1' });
   assert.equal((await M.moderation.ban(or.id, 'nope')).error, 'not_allowed');
   assert.equal((await M.moderation.setRole(pr.id, 'mod')).error, 'not_allowed');
   assert.equal((await O.moderation.setRole(pr.id, 'mod')).player.role, 'mod');
@@ -603,13 +663,13 @@ test('offline sign-up is queued (no password stored) and completes when online i
   const disk = memStorage();
   const A = mkAcc(be, { storage: disk });
   be.down = true;
-  const r = await A.account.signup({ username: 'Late Joiner', password: 'password1', confirm: 'password1' });
+  const r = await A.account.signup({ username: 'Late Joiner', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal(r.ok, false);
   assert.equal(r.queued, true);
   assert.match(r.message, /play offline now and your account will be created/);
   assert.equal(A.account.current().state, 'offline');
   assert.equal(A.account.pending().username, 'Late Joiner');
-  assert.ok(!disk.getItem('pitchside.account.pending').includes('password1'));
+  assert.ok(!disk.getItem('pitchside.account.pending').includes('Pitch-pass1'));
   assert.equal((await A.account.retryPending()).error, 'offline');
   be.down = false;
   await sleep(20);
@@ -625,7 +685,7 @@ test('offline sign-up is queued (no password stored) and completes when online i
 test('expired session logs the account out instead of creating an anonymous profile', async () => {
   const be = createMockBackend(memoryStore());
   const A = mkAcc(be);
-  await A.account.signup({ username: 'Sleepy', password: 'password1', confirm: 'password1' });
+  await A.account.signup({ username: 'Sleepy', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   let events = 0;
   A.account.onChange(() => { events++; });
   be.reset(); // server forgot the session (expired / revoked)
@@ -640,9 +700,9 @@ test('staff match tokens: owner/mod only, bound to the room, verified server-sid
   const be = createMockBackend(memoryStore());
   be.setAdminCode('Owner-Code-1');
   const O = mkAcc(be);
-  const or = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'Owner-Code-1' });
+  const or = await O.account.signup({ username: 'Shawky Fc', password: 'Pitch-pass9', confirm: 'Pitch-pass9', adminCode: 'Owner-Code-1' });
   const P = mkAcc(be);
-  await P.account.signup({ username: 'Plain', password: 'password1', confirm: 'password1' });
+  await P.account.signup({ username: 'Plain', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal((await P.admin.matchToken('ROOM1')).ok, false);
   assert.equal(O.admin.level, 'owner');
   const t = await O.admin.matchToken('ROOM1');
@@ -661,9 +721,9 @@ async function world3() {
   const be = createMockBackend(memoryStore());
   be.setAdminCodes({ full: 'full-code-1', super: 'super-code-1' });
   const A = mk3(be), B = mk3(be), O = mk3(be);
-  const a = await A.account.signup({ username: 'Alice Smith', password: 'password1', confirm: 'password1' });
-  const b = await B.account.signup({ username: 'Bob Jones', password: 'password2', confirm: 'password2' });
-  const o = await O.account.signup({ username: 'Shawky Fc', password: 'password9', confirm: 'password9', adminCode: 'super-code-1' });
+  const a = await A.account.signup({ username: 'Alice Smith', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
+  const b = await B.account.signup({ username: 'Bob Jones', password: 'Pitch-pass2', confirm: 'Pitch-pass2' });
+  const o = await O.account.signup({ username: 'Shawky Fc', password: 'Pitch-pass9', confirm: 'Pitch-pass9', adminCode: 'super-code-1' });
   return { be, A, B, O, a, b, o };
 }
 
@@ -932,15 +992,15 @@ test('messages + squads + player search; guests cannot DM; images must be small 
 test('account: change username (password + reserved check) and password (other sessions end)', async () => {
   const { be, A, a } = await world3();
   assert.equal((await A.account.changeUsername({ username: 'Alicia', password: 'wrong-pass' })).error, 'bad_credentials');
-  assert.equal((await A.account.changeUsername({ username: 'Bob_Jones', password: 'password1' })).error, 'username_taken');
-  assert.equal((await A.account.changeUsername({ username: 'Shawky FC 2', password: 'password1' })).error, 'reserved_username');
-  const r = await A.account.changeUsername({ username: 'Alicia', password: 'password1' });
+  assert.equal((await A.account.changeUsername({ username: 'Bob_Jones', password: 'Pitch-pass1' })).error, 'username_taken');
+  assert.equal((await A.account.changeUsername({ username: 'Shawky FC 2', password: 'Pitch-pass1' })).error, 'reserved_username');
+  const r = await A.account.changeUsername({ username: 'Alicia', password: 'Pitch-pass1' });
   assert.equal(r.ok, true);
   assert.equal(A.account.current().username, 'Alicia');
   const A2 = mk3(be);
-  assert.equal((await A2.account.login({ username: 'alicia', password: 'password1' })).id, a.id);
-  assert.equal((await A.account.changePassword({ password: 'password1', newPassword: 'password7', confirm: 'nope' })).error, 'password_mismatch');
-  assert.equal((await A.account.changePassword({ password: 'password1', newPassword: 'password7', confirm: 'password7' })).ok, true);
+  assert.equal((await A2.account.login({ username: 'alicia', password: 'Pitch-pass1' })).id, a.id);
+  assert.equal((await A.account.changePassword({ password: 'Pitch-pass1', newPassword: 'Pitch-pass7', confirm: 'nope' })).error, 'password_mismatch');
+  assert.equal((await A.account.changePassword({ password: 'Pitch-pass1', newPassword: 'Pitch-pass7', confirm: 'Pitch-pass7' })).ok, true);
   assert.equal((await A2.profile()).error, 'auth'); // other device logged out
   assert.equal((await A.profile()).ok, true);
   const G = mk3(be);
@@ -1047,7 +1107,7 @@ test('reset everyone (004): only profiles older than the reset, once each; newco
   const be = createMockBackend(memoryStore(), { now: () => t });
   be.setAdminCodes({ full: 'full-code-1' });
   const A = mk3(be), O = mk3(be);
-  await A.account.signup({ username: 'Old Timer', password: 'password1', confirm: 'password1' });
+  await A.account.signup({ username: 'Old Timer', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   await A.coins.earn(50000, 'quicksell');
   await O.admin.verifyLevel('full-code-1');
   assert.equal((await A.presence.tick()).resetDue, null);
@@ -1061,7 +1121,7 @@ test('reset everyone (004): only profiles older than the reset, once each; newco
   assert.equal((await A.presence.tick()).resetDue, null); // at most once
   t += 60000;
   const N = mk3(be);
-  await N.account.signup({ username: 'New Comer', password: 'password2', confirm: 'password2' });
+  await N.account.signup({ username: 'New Comer', password: 'Pitch-pass2', confirm: 'Pitch-pass2' });
   const n = await N.presence.tick();
   assert.deepEqual([n.resetDue, n.resetEpoch], [null, r.epoch]); // joining after the reset: never reset
   assert.equal((await N.owner.resetEveryone()).error, 'not_admin');
@@ -1092,10 +1152,10 @@ test('cloud save: sign up uploads the local club, login elsewhere downloads it, 
   let replaced2 = 0;
   const c1 = createCloudSync(A1, { storage: d1 }), c2 = createCloudSync(A2, { storage: d2, onReplaced: () => replaced2++ });
   assert.equal((await c1.syncNow()).error, 'no_account'); // guests: nothing uploaded
-  await A1.account.signup({ username: 'Cloud Guy', password: 'password1', confirm: 'password1' });
+  await A1.account.signup({ username: 'Cloud Guy', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal((await c1.syncNow()).action, 'uploaded');
   d2.setItem('pitchside.ut', JSON.stringify({ club: ['other'] }));
-  await A2.account.login({ username: 'cloud guy', password: 'password1' });
+  await A2.account.login({ username: 'cloud guy', password: 'Pitch-pass1' });
   assert.equal((await c2.syncNow()).action, 'downloaded');
   assert.deepEqual(JSON.parse(d2.getItem('pitchside.ut')).club, ['p1', 'p2']);
   assert.deepEqual(JSON.parse(d2.getItem('pitchside.ut.backup')).club, ['other']);

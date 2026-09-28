@@ -5,7 +5,7 @@ import { h, clear, add, fmtNum, confirmBox, select, modal, frag } from './dom.js
 import { icon } from './icons.js';
 import { playerCard } from './card.js';
 import { safeCall } from './app.js';
-import { createCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, POSITIONS_ALL } from './customcards.js';
+import { createCustomCard, updateCustomCard, duplicateCustomCard, listCustomCards, deleteCustomCard, grantCustomCard, POSITIONS_ALL, ALT_MAX } from './customcards.js';
 import { giftPayloadCard } from '../core/customreg.js';
 import { getDB } from '../core/players.js';
 import { NATIONS } from '../core/data.js';
@@ -46,7 +46,17 @@ function cropToCard(file) {
 // The creator's draft lives outside the panel: the admin view re-renders on account / config / presence
 // events (and a touch release can land right after one), which used to rebuild the panel from defaults and
 // snap every slider back. Now a re-render shows exactly what was being edited.
-const newDraft = () => ({ name: '', pos: 'ST', alt: [], nat: 'ENG', tier: 'gold', special: '', photo: null, playstyles: [], stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } });
+const newDraft = () => ({ editId: null, name: '', pos: 'ST', alt: [], nat: 'ENG', club: 'FUT', tier: 'gold', special: '', photo: null, playstyles: [], stats: { pac: 75, sho: 75, pas: 75, dri: 75, def: 45, phy: 70 } });
+/** Load a saved card back into the creator form (edit mode). GK stats map onto the same six sliders. */
+function draftFromCard(c) {
+  const d = newDraft();
+  const isGk = c.pos === 'GK';
+  const src = isGk ? c.gk || {} : c.stats || {};
+  const keys = isGk ? ['div', 'han', 'kic', 'ref', 'spd', 'pos'] : ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
+  ['pac', 'sho', 'pas', 'dri', 'def', 'phy'].forEach((k, i) => { d.stats[k] = Math.max(1, Math.round(Number(src[keys[i]]) || d.stats[k])); });
+  return { ...d, editId: c.id, name: c.name || '', pos: c.pos || 'ST', alt: Array.isArray(c.alt) ? c.alt.slice(0, ALT_MAX) : [], nat: c.nat || 'ENG', club: c.club || 'FUT', tier: c.tier || 'gold', special: c.special || '', photo: c.photo || null,
+    playstyles: Array.isArray(c.playstyles) ? c.playstyles.map((x) => ({ id: x.id, plus: !!x.plus })) : [] };
+}
 let ccDraft = newDraft();
 /** Test hook: the Card Creator draft (values survive re-renders). */
 export function cardCreatorDraft() { return ccDraft; }
@@ -70,9 +80,10 @@ export function cardCreatorPanel(app, { level }) {
   const altRow = h('div', { class: 'pm-cc-alt' });
   const drawAlt = () => {
     clear(altRow);
-    add(altRow, h('span', { class: 'pm-dim' }, 'Alt positions'), h('div', { class: 'pm-chips' }, POSITIONS_ALL.filter((p) => p !== st.pos).map((p) => h('button', {
+    add(altRow, h('span', { class: 'pm-dim' }, `Alt positions (up to ${ALT_MAX})`), h('div', { class: 'pm-chips' }, POSITIONS_ALL.filter((p) => p !== st.pos).map((p) => h('button', {
       class: `pm-chip ${st.alt.includes(p) ? 'on' : ''}`,
-      onclick: () => { st.alt = st.alt.includes(p) ? st.alt.filter((x) => x !== p) : [...st.alt, p].slice(0, 3); drawAlt(); drawPreview(); },
+      disabled: !st.alt.includes(p) && st.alt.length >= ALT_MAX,
+      onclick: () => { st.alt = st.alt.includes(p) ? st.alt.filter((x) => x !== p) : [...st.alt, p].slice(0, ALT_MAX); drawAlt(); drawPreview(); },
     }, p))));
   };
   const psRow = h('div', { class: 'pm-cc-ps' });
@@ -111,7 +122,11 @@ export function cardCreatorPanel(app, { level }) {
     return row;
   };
   const nameInp = h('input', { class: 'pm-input', placeholder: 'Player name', maxlength: '26', value: st.name });
-  const saveBtn = h('button', { class: 'pm-btn pm-btn--primary', disabled: !st.name.trim() }, 'Save to gallery');
+  const saveBtn = h('button', { class: 'pm-btn pm-btn--primary', disabled: !st.name.trim() }, st.editId ? 'Save changes' : 'Save to gallery');
+  const editing = st.editId ? listCustomCards().find((c) => c.id === st.editId) : null;
+  if (st.editId && !editing) st.editId = null;
+  const cancelEdit = st.editId ? h('button', { class: 'pm-btn pm-btn--ghost', onclick: () => { ccDraft = newDraft(); app.refresh(); } }, 'Cancel editing') : null;
+  const editNote = editing ? h('p', { class: 'pm-cc-editing' }, `Editing ${editing.name}. Saving updates this card (same card id) everywhere it is used on this device.`) : null;
   nameInp.addEventListener('input', () => { st.name = nameInp.value; saveBtn.disabled = !nameInp.value.trim(); drawPreview(); });
   const upload = h('input', { type: 'file', accept: 'image/png,image/jpeg', class: 'pm-cc-upload' });
   const uploadMsg = h('small', { class: 'pm-dim' }, 'PNG/JPG — auto-cropped to the card portrait.');
@@ -138,11 +153,25 @@ export function cardCreatorPanel(app, { level }) {
             app.toast(r.duplicate ? `${c.name} is already in your club.` : `${c.name} added to your club (tradable).`, 'good');
           } }, 'Grant to my club'),
           h('button', { class: 'pm-btn pm-btn--sm pm-btn--accent', onclick: () => openSendCardModal(app, { card: c }) }, icon('gifts'), ' Send'),
-          h('button', { class: 'pm-btn pm-btn--danger pm-btn--sm', onclick: () => { deleteCustomCard(c.id); drawGallery(); } }, 'Delete'))));
+          h('button', { class: 'pm-btn pm-btn--sm', onclick: () => { ccDraft = draftFromCard(c); app.refresh(); try { app.root.querySelector('.pm-cardcreator').scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch { /* ignore */ } } }, 'Edit'),
+          h('button', { class: 'pm-btn pm-btn--sm', onclick: () => { const d = duplicateCustomCard(c.id); if (d) { app.toast(`${c.name} duplicated.`, 'good'); drawGallery(); } } }, 'Duplicate'),
+          h('button', { class: 'pm-btn pm-btn--danger pm-btn--sm', onclick: async () => {
+            if (!(await confirmBox(app.root, 'Delete card', `Delete ${c.name} from the Admin Cards gallery? Copies already in clubs stay there.`, 'Delete', true))) return;
+            deleteCustomCard(c.id); if (ccDraft.editId === c.id) { ccDraft = newDraft(); app.refresh(); } else drawGallery();
+          } }, 'Delete'))));
     }
   };
   saveBtn.addEventListener('click', () => {
-    const card = createCustomCard({ name: st.name, pos: st.pos, alt: st.alt, nat: st.nat, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper, playstyles: st.playstyles });
+    const input = { name: st.name, pos: st.pos, alt: st.alt, nat: st.nat, club: st.club, tier: st.tier, special: st.special || null, stats: st.stats, photo: st.photo, superLevel: isSuper, playstyles: st.playstyles };
+    if (st.editId) {
+      const card = updateCustomCard(st.editId, input, { state: app.ut });
+      if (!card) { app.toast('That card is no longer in the gallery.', 'bad'); ccDraft = newDraft(); app.refresh(); return; }
+      if (app.ut) app.saveUT();
+      app.toast(`${card.name} updated (${card.ovr} OVR). Other players' copies update when you send it to them again.`, 'good');
+      ccDraft = newDraft(); app.refresh();
+      return;
+    }
+    const card = createCustomCard(input);
     app.toast(`${card.name} (${card.ovr} OVR) saved to the Admin Cards gallery.`, 'good');
     nameInp.value = ''; st.name = ''; st.photo = null; st.playstyles = []; st.alt = []; saveBtn.disabled = true; uploadMsg.textContent = 'PNG/JPG — auto-cropped to the card portrait.'; drawPs(); drawAlt(); drawPreview(); drawGallery();
   });
@@ -152,6 +181,7 @@ export function cardCreatorPanel(app, { level }) {
     h('p', { class: 'pm-dim' }, `Design a fully custom card, up to ${fmtNum(cap)} in any stat, any promo design, unlimited PlayStyles and alt positions. Saved cards can be granted to your own club or sent to any player (they arrive in the Gifts inbox and land in the club, tradable).`),
     h('div', { class: 'pm-cc-grid' },
       h('div', { class: 'pm-cc-form' },
+        editNote,
         nameInp,
         h('div', { class: 'pm-btnrow' },
           select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; st.alt = st.alt.filter((x) => x !== v); drawAlt(); drawPs(); drawPreview(); }, { 'aria-label': 'Position' }),
@@ -162,7 +192,7 @@ export function cardCreatorPanel(app, { level }) {
         h('div', { class: 'pm-cc-stats' }, (st.pos === 'GK' ? [['pac', 'DIV'], ['sho', 'HAN'], ['pas', 'KIC'], ['dri', 'REF'], ['def', 'SPD'], ['phy', 'POS']] : [['pac', 'PAC'], ['sho', 'SHO'], ['pas', 'PAS'], ['dri', 'DRI'], ['def', 'DEF'], ['phy', 'PHY']]).map(([k, l]) => statRow(k, l))),
         psRow,
         h('label', { class: 'pm-cc-uploadrow' }, icon('upload'), ' Upload photo', upload), uploadMsg,
-        saveBtn),
+        h('div', { class: 'pm-btnrow' }, saveBtn, cancelEdit)),
       h('div', { class: 'pm-cc-previewwrap' }, h('div', { class: 'pm-sq-label' }, 'Preview'), preview)),
     h('div', { class: 'pm-cc-galwrap' }, h('div', { class: 'pm-sq-label' }, icon('crop'), ' Admin Cards'), gallery));
 }
@@ -171,7 +201,7 @@ export function cardCreatorPanel(app, { level }) {
 export function moderationPanel(app, { level }) {
   const svc = app.online && app.online.moderation;
   const has = (fn) => svc && typeof svc[fn] === 'function';
-  if (!svc) return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), h('p', { class: 'pm-dim' }, 'Moderation connects to the online service once it is available — nothing to do here offline.'));
+  if (!svc) return h('section', { class: 'pm-panel' }, h('h3', null, icon('squad'), ' Players'), h('p', { class: 'pm-dim' }, 'The player list needs the online service. Nothing to do here offline.'));
   if (typeof svc.mount === 'function') { const el = h('div'); try { const un = svc.mount(el, { level, app }); if (typeof un === 'function') app.onCleanup(un); } catch (e) { console.warn('[meta] moderation mount failed', e); } return el; }
   const st = { q: '', page: 0, more: false };
   const results = h('div', { class: 'pm-admin-results' });
@@ -194,14 +224,14 @@ export function moderationPanel(app, { level }) {
     const users = r.items || [];
     st.more = !!r.more;
     if (!users.length) { results.appendChild(h('p', { class: 'pm-dim' }, st.q.trim() ? 'No matches.' : 'No players yet.')); return; }
-    if (!st.q.trim() && st.page === 0) results.appendChild(h('p', { class: 'pm-dim' }, `All players (newest first) — ${users.length}${st.more ? '+' : ''} shown.`));
+    if (!st.q.trim() && st.page === 0) results.appendChild(h('p', { class: 'pm-dim' }, `All players, newest first: ${users.length}${st.more ? '+' : ''} shown.`));
     for (const u of users) {
       const ownerLevel = can('owner', level);
       const banned = u.ban || u.banned;
       const onlineNow = u.lastSeenAt && (Date.now() - new Date(u.lastSeenAt).getTime()) < 60000;
       results.appendChild(h('div', { class: 'pm-mktrow' },
         h('span', { class: `pm-onlinedot ${onlineNow ? 'is-on' : ''}`, title: onlineNow ? 'Online now' : 'Offline' }),
-        h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || u.name || u.id),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, u.username || (u.name && !/^player$/i.test(u.name) ? u.name : '') || u.clubName || 'Guest'),
           h('span', { class: 'pm-dim' }, `${u.role || 'player'}${banned ? ' · BANNED' : ''} · ${fmtNum(u.coins || 0)} coins`),
           h('span', { class: 'pm-dim' }, `Joined ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'} · Last seen ${u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}`)),
         h('div', { class: 'pm-btnrow pm-wrap' },
@@ -220,10 +250,10 @@ export function moderationPanel(app, { level }) {
     const r = await safeCall(() => app.online.owner.reset(id, what), { ok: false });
     app.toast(r && r.ok !== false ? `Reset ${what} done.` : `Reset failed${r && r.error ? `: ${r.error}` : ''}`, r && r.ok !== false ? 'good' : 'bad');
   }
-  const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search a username, friend code, or leave blank for all players…', 'aria-label': 'Search players' });
+  const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Filter by username or friend code (optional)', 'aria-label': 'Filter players' });
   search.addEventListener('input', () => { st.q = search.value; draw(); });
   draw();
-  return h('section', { class: 'pm-panel' }, h('h3', null, icon('moderation'), ' Moderation'), h('p', { class: 'pm-dim' }, 'Search by username, friend code or name — or leave it blank for the all-players list.'), icon('search', 'pm-inline-search-ico'), search, results, moreWrap);
+  return h('section', { class: 'pm-panel' }, h('h3', null, icon('squad'), ' Every player'), h('p', { class: 'pm-dim' }, 'All players, newest first. Ban, adjust coins or send a card from each row. Type to filter (optional).'), search, results, moreWrap);
 }
 
 // ---------------------------------------------------------------- Broadcast + giveaways

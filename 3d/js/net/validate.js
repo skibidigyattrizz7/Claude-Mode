@@ -281,7 +281,7 @@ export function errorText(code) {
     username_not_allowed: 'That username is not allowed.',
     username_taken: 'That username is already taken.',
     reserved_username: 'That username is reserved.',
-    weak_password: 'Passwords need at least 8 characters (and must not be your username).',
+    weak_password: 'That password is too easy to guess. Use at least 8 characters, not only numbers, not a common password and not your username.',
     bad_password: 'Passwords can be at most 72 characters.',
     password_mismatch: 'The passwords do not match.',
     bad_credentials: 'Wrong username or password.',

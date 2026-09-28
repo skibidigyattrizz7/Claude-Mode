@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Content-Security-Policy: scripts only from this site (+ the PeerJS CDN fallbacks), no inline scripts. connect-src stays open to https:/wss: because the online screen lets players pick their own PeerJS server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://baxzjrueelirgcstjbdc.supabase.co wss://baxzjrueelirgcstjbdc.supabase.co https://0.peerjs.com wss://0.peerjs.com https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b0d10">
 <meta name="description" content="Claude-Mode Football — two free browser football games: Pitchside 3D and Touchline 2D.">
@@ -132,9 +134,6 @@
   <span><kbd>Tab</kbd>Move</span><span><kbd>Enter</kbd>Play</span>
   <span>All teams and players are fictional.</span>
 </footer>
-<script type="module">
-  import { mountStadium } from './3d/js/ui/stadium.js';
-  mountStadium(document.querySelector('.bg'), { seed: 5 });
-</script>
+<script type="module" src="3d/js/ui/landing.js"></script>
 </body>
 </html>

@@ -146,7 +146,6 @@
 .fr-n { min-width: 22px; padding: 3px 6px; border-radius: var(--radius-pill, 999px); background: var(--panel3, #242933); color: var(--txt, #fff); font: 600 12px/1 var(--font-body, inherit); letter-spacing: 0; text-align: center; }
 .fr-ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .fr-row { min-width: 0; border-radius: var(--radius-md, 6px); background: var(--panel2, #1c2027); border: 1px solid var(--line, #262b33); }
-.fr-row--incoming { border-color: rgba(205, 251, 60, .35); }
 .fr-row-main { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 12px; }
 .fr-av { position: relative; flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--panel3, #242933); color: var(--txt, #fff); font: 700 20px/1 var(--font-display, inherit); }
 .fr-dot { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #5b6370; box-shadow: 0 0 0 3px var(--panel2, #1c2027); }

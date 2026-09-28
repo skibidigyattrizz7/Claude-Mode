@@ -66,7 +66,7 @@ const CSS = `
 .ps3d-btns button{width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(20,30,55,.55);color:#fff;font-weight:800;font-size:11px;touch-action:none}
 .ps3d-btns button.big{background:rgba(200,16,46,.6)}.ps3d-btns button.wide{grid-column:span 3;width:100%;border-radius:32px;height:44px}
 .ps3d-btns button.on{background:rgba(63,169,255,.8)}
-.ps3d-tpause{position:absolute;right:16px;top:14px;width:44px;height:40px;border-radius:6px;border:0;background:rgba(10,16,34,.7);color:#fff;font-weight:900;pointer-events:auto}
+.ps3d-tpause{position:absolute;right:max(16px,calc(env(safe-area-inset-right) + 8px));top:max(14px,calc(env(safe-area-inset-top) + 6px));width:48px;height:44px;border-radius:6px;border:0;background:rgba(10,16,34,.7);color:#fff;font-weight:900;pointer-events:auto;touch-action:manipulation}
 
 .ps3d-hud.compact .ps3d-radar{transform:translateX(-50%) scale(.62);transform-origin:50% 100%}
 .ps3d-hud.compact .ps3d-hint{bottom:100px;font-size:11px;padding:5px 10px}
@@ -79,7 +79,23 @@ const CSS = `
 .ps3d-hud.touch .ps3d-radar{bottom:6px}
 .ps3d-root.compact-touch .ps3d-btns{grid-template-columns:repeat(3,54px);gap:7px}
 .ps3d-root.compact-touch .ps3d-btns button{width:54px;height:54px;font-size:10px}
-.ps3d-root.compact-touch .ps3d-btns button.wide{height:38px}
+.ps3d-root.compact-touch .ps3d-btns button.wide{width:100%;height:44px;border-radius:22px}
+.ps3d-touch .ps3d-joy{left:max(28px,calc(env(safe-area-inset-left) + 16px));bottom:max(28px,calc(env(safe-area-inset-bottom) + 16px))}
+.ps3d-touch .ps3d-btns{right:max(18px,calc(env(safe-area-inset-right) + 12px));bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px))}
+.ps3d-btns button{-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.ps3d-hud.touch .ps3d-sb{left:max(18px,calc(env(safe-area-inset-left) + 10px));top:max(16px,calc(env(safe-area-inset-top) + 8px))}
+.ps3d-hud.touch .ps3d-panel.p1{left:max(18px,calc(env(safe-area-inset-left) + 10px))}
+.ps3d-hud.touch .ps3d-ticker{left:max(18px,calc(env(safe-area-inset-left) + 10px));bottom:auto;top:max(128px,calc(env(safe-area-inset-top) + 120px));max-width:40%}
+.ps3d-hud.touch .ps3d-hint{white-space:normal;max-width:min(460px,calc(100% - 420px));min-width:220px}
+.ps3d-hud.touch .ps3d-contact{right:auto;left:50%;bottom:auto;top:26%;transform:translateX(-50%)}
+@media (orientation:portrait){
+.ps3d-hud.touch .ps3d-radar{left:auto;bottom:auto;right:max(12px,calc(env(safe-area-inset-right) + 8px));top:max(66px,calc(env(safe-area-inset-top) + 58px));transform:scale(.55);transform-origin:right top}
+.ps3d-hud.touch .ps3d-ticker{left:50%;transform:translateX(-50%);top:auto;bottom:max(290px,calc(env(safe-area-inset-bottom) + 280px));max-width:calc(100% - 24px)}
+.ps3d-hud.touch .ps3d-hint{bottom:max(330px,calc(env(safe-area-inset-bottom) + 320px));max-width:calc(100% - 24px);min-width:0}
+.ps3d-hud.touch .ps3d-banner .big{font-size:34px;padding:4px 18px}
+.ps3d-hud.touch .ps3d-banner .sub{font-size:16px}
+.ps3d-hud.touch .ps3d-toast{top:auto;bottom:max(370px,calc(env(safe-area-inset-bottom) + 360px));white-space:normal;max-width:calc(100% - 24px)}
+}
 .ps3d-next{position:absolute;transform:translate(-50%,-100%);font-size:13px;font-weight:900;color:#fff;opacity:.75;text-shadow:0 1px 3px #000;display:none}
 .ps3d-timed{position:absolute;transform:translate(-50%,-100%);padding:2px 8px;border-radius:9px;font-size:11px;font-weight:900;letter-spacing:1px;display:none;color:#081022}
 .ps3d-ps{margin-top:4px;display:flex;gap:3px;flex-wrap:wrap}
@@ -106,6 +122,9 @@ const CSS = `
 .ps3d-menu label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:5px 0;font-size:13px}
 @media (max-width:700px){.ps3d-banner .big{font-size:40px}.ps3d-sb{transform:scale(.85);transform-origin:left top}.ps3d-hint{bottom:210px;font-size:12px}}
 `;
+
+// touch overlay button names (engine/ui/input.js), used in set-piece hints on touch devices
+const TOUCH_LABEL = { shoot: 'SHOOT', pass: 'PASS', through: 'THRU', lob: 'LOB', finesse: 'CURL', tackle: 'TACKLE', switchP: 'SWITCH', skill: 'SKILL', jockey: 'JOCKEY', sprint: 'SPRINT' };
 
 let styleRefs = 0, styleEl = null;
 function addStyle() {
@@ -433,10 +452,13 @@ export class Hud {
     let txt = '';
     if (!ctx.replay && view.ph === PHASE.SETPIECE && view.spt === SP.PENALTY && view.spk >= 0 && !ctx.local[view.spk] && ctx.local[1 - view.spk]) {
       const b = this.binds[ctx.local[1 - view.spk]];
-      txt = `KEEPER — hold a direction as the kick is struck to dive (towards the taker = high) · <b>${esc(keyName(b.up))}${esc(keyName(b.left))}${esc(keyName(b.down))}${esc(keyName(b.right))}</b>`;
+      txt = this.touch && ctx.local[1 - view.spk] === 'p1'
+        ? 'KEEPER: hold the stick in a direction as the kick is struck to dive (towards the taker = high)'
+        : `KEEPER — hold a direction as the kick is struck to dive (towards the taker = high) · <b>${esc(keyName(b.up))}${esc(keyName(b.left))}${esc(keyName(b.down))}${esc(keyName(b.right))}</b>`;
     } else if (!ctx.replay && (view.ph === PHASE.SETPIECE || view.ph === PHASE.KICKOFF) && view.spk >= 0 && ctx.local[view.spk] && view.c[view.spk] >= 0) {
       const b = this.binds[ctx.local[view.spk]];
-      const k = (a) => `<b>${esc(keyName(b[a]))}</b>`;
+      const onTouch = this.touch && ctx.local[view.spk] === 'p1'; // the touch overlay drives player 1: name its buttons, not keys
+      const k = (a) => `<b>${esc(onTouch ? TOUCH_LABEL[a] || a : keyName(b[a]))}</b>`;
       switch (view.spt) {
         case SP.PENALTY: txt = `PENALTY — move the crosshair (movement / right stick / mouse) · hold ${k('shoot')} for power, release when the ring is smallest`; break;
         case SP.FREEKICK: txt = view.sa && view.sa[6]

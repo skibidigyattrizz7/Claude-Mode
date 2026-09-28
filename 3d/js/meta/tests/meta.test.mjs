@@ -602,7 +602,10 @@ test('draft: formation, captain, 1-of-5 picks, valid team, knockout rewards', ()
   DR.chooseCaptain(d, d.captainOptions[0]);
   let i;
   while ((i = DR.nextOpenSlot(d)) >= 0) { const o = DR.slotOptions(d, i); assert.equal(o.length, 5); DR.pickSlot(d, i, o[0]); }
+  assert.equal(d.stage, 'slots', 'XI alone does not finish the draft: the 7 subs are required');
+  while ((i = DR.nextOpenBench(d)) >= 0) { const o = DR.benchOptions(d, i); assert.equal(o.length, 5); DR.pickBench(d, i, o[0]); }
   assert.equal(d.stage, 'play');
+  assert.equal(DR.draftTeam(d).bench.length, 7, 'drafted subs reach the match Team');
   const t = DR.draftTeam(d);
   assert.deepEqual(validateTeam(t), []);
   DR.applyDraftResult(d, 'W'); DR.applyDraftResult(d, 'L');
@@ -865,6 +868,74 @@ test('Rivals AI: opponents at every difficulty build valid, duplicate-free Teams
   }
 });
 
+test('Draft: any-order picking, options stable per slot, completes only when XI + 7 subs are filled', () => {
+  const d = DR.newDraft('anyorder');
+  DR.chooseFormation(d, '4-3-3');
+  const capIdx = DR.chooseCaptain(d, d.captainOptions[2]);
+  assert.equal(d.bench.length, DR.BENCH_SIZE);
+  assert.equal(DR.picksLeft(d), 10 + 7);
+  // open every XI slot + sub slot in a scrambled order first: each keeps the same 5 when re-opened
+  const order = [10, 0, 5, 3, 8, 1, 9, 2, 7, 4, 6].filter((i) => i !== capIdx);
+  const first = new Map(order.map((i) => [i, DR.slotOptions(d, i).slice()]));
+  const bfirst = [6, 0, 3, 1, 5, 2, 4].map((j) => [j, DR.benchOptions(d, j).slice()]);
+  // no person is on offer in two open slots (a pick can never invalidate another slot's cards)
+  const persons = new Set([getPlayer(d.captain)].map((p) => p.person || p.baseId || p.id));
+  for (const ids of [...first.values(), ...bfirst.map((x) => x[1])]) for (const id of ids) {
+    const p = getPlayer(id); const per = p.person || p.baseId || p.id;
+    assert.ok(!persons.has(per), `${id} offered twice`); persons.add(per);
+  }
+  // mix subs and XI, pick the LAST option each time, in scrambled order
+  const steps = [];
+  order.forEach((i, k) => { steps.push(['s', i]); if (k < bfirst.length) steps.push(['b', bfirst[k][0]]); });
+  for (const [kind, i] of steps) {
+    assert.notEqual(d.stage, 'play');
+    if (kind === 's') { const o = DR.slotOptions(d, i); assert.deepEqual(o, first.get(i), `slot ${i} stable`); DR.pickSlot(d, i, o[4]); }
+    else { const o = DR.benchOptions(d, i); assert.deepEqual(o, bfirst.find((x) => x[0] === i)[1], `sub ${i} stable`); DR.pickBench(d, i, o[4]); }
+    assert.throws(() => (kind === 's' ? DR.pickSlot(d, i, first.get(i)[0]) : DR.pickBench(d, i, 'x')));
+  }
+  assert.equal(DR.picksLeft(d), 0);
+  assert.equal(d.stage, 'play');
+  assert.throws(() => DR.pickBench(d, 0, 'x'));
+  const t = DR.draftTeam(d);
+  assert.deepEqual(validateTeam(t), []);
+  assert.equal(t.bench.length, 7);
+  assert.equal(t.bench.filter((p) => p.pos === 'GK').length >= 1, true, 'a sub keeper');
+  // old saves (pre-subs) in the picking stage get 7 empty sub slots
+  const old = DR.newDraft('legacy'); DR.chooseFormation(old, '4-4-2'); old.slots[0] = null; old.stage = 'slots'; old.bench = [];
+  DR.slotOptions(old, 1);
+  assert.equal(old.bench.length, 7);
+});
+
+test('Draft odds: strong captains, a headline 85+ card in (almost) every 5, chem-friendly options', () => {
+  let capBest = 0, cap90 = 0, capMin = 99, n = 0, best = 0, has85 = 0, has88 = 0, chemLinked = 0, slotsWithXI = 0;
+  const RUNS = 40;
+  for (let r = 0; r < RUNS; r++) {
+    const d = DR.newDraft(`odds-${r}`);
+    DR.chooseFormation(d, DR.FORMATION_NAMES[r % DR.FORMATION_NAMES.length]);
+    const caps = d.captainOptions.map(getPlayer);
+    assert.equal(caps.length, 5);
+    capMin = Math.min(capMin, ...caps.map((p) => p.ovr));
+    const cb = Math.max(...caps.map((p) => p.ovr)); capBest += cb; if (cb >= 90) cap90++;
+    DR.chooseCaptain(d, d.captainOptions[0]);
+    let i;
+    while ((i = DR.nextOpenSlot(d)) >= 0) {
+      const xi = d.slots.filter(Boolean).map(getPlayer);
+      const opts = DR.slotOptions(d, i).map(getPlayer);
+      assert.equal(opts.length, 5);
+      const b = Math.max(...opts.map((p) => p.ovr));
+      n++; best += b; if (b >= 85) has85++; if (b >= 88) has88++;
+      slotsWithXI++; if (opts.some((p) => xi.some((x) => x.nat === p.nat || x.league === p.league))) chemLinked++;
+      DR.pickSlot(d, i, opts.sort((a, c) => c.ovr - a.ovr)[1].id);
+    }
+  }
+  assert.ok(capMin >= 84, `captain min ${capMin}`);
+  assert.ok(cap90 / RUNS >= 0.7, `captain 90+ only ${cap90}/${RUNS}`);
+  assert.ok(best / n >= 86, `avg best-of-5 ${(best / n).toFixed(1)}`);
+  assert.ok(has85 / n >= 0.8, `85+ in ${(100 * has85 / n).toFixed(0)}%`);
+  assert.ok(has88 / n >= 0.3, `88+ in ${(100 * has88 / n).toFixed(0)}%`);
+  assert.ok(chemLinked / slotsWithXI >= 0.8, `chem-linked option in ${(100 * chemLinked / slotsWithXI).toFixed(0)}%`);
+});
+
 test('Draft: repeated runs build valid, duplicate-free user + opponent Teams', () => {
   for (let i = 0; i < 8; i++) {
     const d = DR.newDraft(`stress-${i}`);
@@ -872,6 +943,7 @@ test('Draft: repeated runs build valid, duplicate-free user + opponent Teams', (
     DR.chooseCaptain(d, d.captainOptions[0]);
     let guard = 0, slot;
     while ((slot = DR.nextOpenSlot(d)) >= 0 && guard++ < 20) DR.pickSlot(d, slot, DR.slotOptions(d, slot)[0]);
+    while ((slot = DR.nextOpenBench(d)) >= 0 && guard++ < 40) DR.pickBench(d, slot, DR.benchOptions(d, slot)[0]);
     assert.equal(d.stage, 'play');
     assertValidNoDup(DR.draftTeam(d), `draft ${i} user`);
     for (let r = 0; r < 4; r++) { d.round = r; assertValidNoDup(DR.draftOpponent(d).team, `draft ${i} round ${r} opp`); }
@@ -1694,6 +1766,34 @@ test('Leagues: recognisable real names + badge per league; details attributes co
     assert.ok(Math.abs(avg - g.value) <= 2.5, `${g.key} subs average ${avg} vs ${g.value}`);
   }
   assert.equal(SUB.subStats(getPlayer('ic_yashin')).length, 6);
+});
+
+// Owner request (Sep 28): saved admin cards can be edited in place (Card Creator → Edit).
+test('updateCustomCard keeps the card id, rebuilds stats and refreshes the registry + club snapshot', async () => {
+  const hadLS = 'localStorage' in globalThis;
+  const mem = new Map();
+  if (!hadLS) globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+  try {
+    const CC = await import('../ui/customcards.js');
+    const { getPlayer: gp } = await import('../core/players.js');
+    const card = CC.createCustomCard({ name: 'Edit Me', pos: 'ST', nat: 'ENG', tier: 'gold', stats: { pac: 70, sho: 70, pas: 70, dri: 70, def: 40, phy: 70 } });
+    const state = UT.createUTState({ clubName: 'Test FC' });
+    assert.ok(CC.grantCustomCard(state, card).ok);
+    assert.equal(gp(card.id).stats.sho, 70);
+    const upd = CC.updateCustomCard(card.id, { name: 'Edited Star', pos: 'CAM', nat: 'ENG', tier: 'gold', special: 'inform', stats: { pac: 88, sho: 91, pas: 90, dri: 92, def: 40, phy: 70 }, playstyles: [{ id: 'finesse', plus: true }] }, { state });
+    assert.equal(upd.id, card.id, 'same id');
+    assert.equal(upd.createdAt, card.createdAt);
+    assert.equal(CC.listCustomCards().filter((c) => c.id === card.id).length, 1, 'no new gallery entry');
+    assert.equal(CC.getCustomCard(card.id).stats.sho, 91);
+    assert.ok(upd.ovr > card.ovr);
+    const reg = gp(card.id);
+    assert.equal(reg.name, 'Edited Star'); assert.equal(reg.pos, 'CAM'); assert.equal(reg.stats.sho, 91); assert.equal(reg.special, 'inform');
+    assert.equal(state.customCards[card.id].stats.sho, 91, 'club snapshot updated');
+    assert.ok(state.club.includes(card.id));
+    const dup = CC.duplicateCustomCard(card.id);
+    assert.notEqual(dup.id, card.id); assert.equal(dup.stats.sho, 91);
+    assert.equal(CC.updateCustomCard('admin_missing', { name: 'x', stats: {} }), null);
+  } finally { if (!hadLS) delete globalThis.localStorage; }
 });
 
 await runAll();

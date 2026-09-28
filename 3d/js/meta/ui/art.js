@@ -4,6 +4,10 @@ import { contrastColor, luminance } from '../core/teams.js';
 import { esc } from './dom.js';
 
 let uid = 0;
+// Club / badge colours can come from other players (shared squads, cloud saves, online opponents): only plain
+// colour values reach the SVG markup; anything else falls back to a neutral grey.
+const COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgba?\([0-9.,%\s]{1,40}\)|hsla?\([0-9.,%\sdeg]{1,40}\)|[a-zA-Z]{3,20})$/;
+export const safeColor = (c, fb = '#445566') => (typeof c === 'string' && COLOR_RE.test(c.trim()) ? c.trim() : fb);
 const nid = (p) => `${p}${++uid}`;
 
 // Simplified gold Eagle of Saladin (owner request, Sep 28: the EGY flag was missing it) — a spread-wing
@@ -86,8 +90,9 @@ const BADGE_PATHS = {
 };
 /** Custom UT badge: { shape, c1, c2, c3, text, stripe } */
 export function badgeSVG(b, cls = 'pm-crest', label = 'Club badge') {
-  const d = BADGE_PATHS[b.shape] || BADGE_PATHS.shield;
+  const d = (Object.hasOwn(BADGE_PATHS, b.shape) && BADGE_PATHS[b.shape]) || BADGE_PATHS.shield;
   const cid = nid('bd');
+  b = { ...b, c1: safeColor(b.c1), c2: safeColor(b.c2, '#99aabb'), c3: b.c3 ? safeColor(b.c3, '#fff') : null };
   const text = esc(String(b.text || '').slice(0, 3));
   const fs = text.length >= 3 ? 11 : 14;
   const band = b.stripe ? `<rect x="0" y="18" width="40" height="10" fill="${b.c2}"/>` : `<path d="M0 30L40 14V48H0Z" fill="${b.c2}" opacity=".9"/>`;
@@ -101,7 +106,7 @@ export function badgeSVG(b, cls = 'pm-crest', label = 'Club badge') {
 export function crestSVG(club, cls = 'pm-crest') {
   if (typeof club === 'string') club = clubById(club) || { id: club, name: club, short: club.slice(0, 3), colors: { primary: '#445', secondary: '#aab' } };
   if (club.badge) return badgeSVG(club.badge, cls, club.name);
-  const { primary: p, secondary: s } = club.colors;
+  const p = safeColor(club.colors && club.colors.primary), s = safeColor(club.colors && club.colors.secondary, '#99aabb');
   const cid = nid('cc');
   const shield = 'M4 3H36V21C36 33 28.5 41 20 45.5C11.5 41 4 33 4 21Z';
   if (club.id === 'LEG') {
