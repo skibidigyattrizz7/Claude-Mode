@@ -140,7 +140,7 @@ export function solveShot(from, target, speed, spin = { x: 0, y: 0, z: 0 }) {
     const dt = 1 / 120;
     let t = 0, hit = null;
     let prevS = b.p.x * planeN.x + b.p.z * planeN.z - planeD;
-    while (t < 4) {
+    while (t < 6) {
       const pp = { ...b.p };
       stepBall(b, dt);
       t += dt;
@@ -158,6 +158,54 @@ export function solveShot(from, target, speed, spin = { x: 0, y: 0, z: 0 }) {
     aim.x += ex; aim.y += ey; aim.z += ez;
   }
   return vel;
+}
+
+/**
+ * Shot with a strong sidespin (finesse / curler): the fixed-point aim of solveShot() oscillates once the
+ * Magnus bend is large, so this uses a shooting method on the launch yaw and pitch (angle corrections,
+ * damped) against the same ball physics. Returns {vel, err} where err (m) is the miss at the target plane;
+ * callers treat err > ~0.15 as "no solution".
+ */
+export function solveShotCurl(from, target, speed, spin) {
+  const y0 = from.y ?? BALL_R;
+  const dx = target.x - from.x, dz = target.z - from.z;
+  const dh = Math.hypot(dx, dz) || 1e-3;
+  const ux = dx / dh, uz = dz / dh;
+  const te = dh / (speed * 0.8);
+  let yaw = Math.atan2(dz, dx);
+  let pitch = Math.atan2(target.y - y0 + 0.5 * 9.81 * te * te, dh);
+  let best = null;
+  for (let it = 0; it < 16; it++) {
+    const cp = Math.cos(pitch);
+    const vel = { x: cp * Math.cos(yaw) * speed, y: Math.sin(pitch) * speed, z: cp * Math.sin(yaw) * speed };
+    const b = createBall();
+    b.p.x = from.x; b.p.y = y0; b.p.z = from.z;
+    b.v = { ...vel }; b.w = { ...spin };
+    const dt = 1 / 120;
+    let t = 0, hit = null, prevS = 0;
+    while (t < 6) {
+      const px = b.p.x, py = b.p.y, pz = b.p.z;
+      stepBall(b, dt);
+      t += dt;
+      const sN = (b.p.x - from.x) * ux + (b.p.z - from.z) * uz - dh;
+      if (sN >= 0) {
+        const f = prevS === sN ? 0 : -prevS / (sN - prevS);
+        hit = { x: px + (b.p.x - px) * f, y: py + (b.p.y - py) * f, z: pz + (b.p.z - pz) * f };
+        break;
+      }
+      prevS = sN;
+    }
+    if (!hit) { if (!best) best = { vel, err: 99 }; pitch += 0.05; continue; }
+    const el = (hit.x - target.x) * -uz + (hit.z - target.z) * ux; // + = hit on the +yaw side of the target
+    const ey = target.y - hit.y;
+    const err = Math.hypot(el, ey);
+    if (!best || err < best.err) best = { vel, err };
+    if (err < 0.04) break;
+    yaw -= Math.atan2(el, dh) * 0.85;
+    pitch += Math.atan2(ey, dh) * 0.8;
+    pitch = Math.max(-0.2, Math.min(1.25, pitch));
+  }
+  return best;
 }
 
 // Kick velocity for a ground pass to (tx,tz) with launch speed s.

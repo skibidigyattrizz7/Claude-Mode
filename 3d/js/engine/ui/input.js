@@ -1,15 +1,16 @@
 // Local input devices -> raw InputState (screen-relative: mx +1 = screen right, my +1 = screen up).
 // Keyboard (+ 'Mouse0'/'Mouse2' binds), Gamepad API (standard mapping) and a touch overlay
 // (virtual joystick + action buttons) when 'ontouchstart' in window.
-const ACTIONS = ['sprint', 'pass', 'through', 'lob', 'shoot', 'finesse', 'switchP', 'tackle', 'skill', 'jockey', 'keeper'];
+const ACTIONS = ['sprint', 'pass', 'through', 'lob', 'shoot', 'finesse', 'switchP', 'tackle', 'skill', 'jockey', 'keeper', 'power'];
 // engine-side fallbacks for binds that older saved keybinds (or shared defaults) lack
-export const EXTRA_BINDS = { p1: { jockey: 'KeyF', keeper: 'KeyG' }, p2: { jockey: 'Numpad7', keeper: 'Numpad8' } };
+// power = the power-shot modifier (hold with the shoot key); on a gamepad it is LB + RB together
+export const EXTRA_BINDS = { p1: { jockey: 'KeyF', keeper: 'KeyG', power: 'KeyO' }, p2: { jockey: 'Numpad7', keeper: 'Numpad8', power: 'Numpad9' } };
 // quick tactics (player 1 keyboard): 1-4 presets, - / = mentality
 const TAC_KEYS = { Digit1: { k: 'quick', i: 0 }, Digit2: { k: 'quick', i: 1 }, Digit3: { k: 'quick', i: 2 }, Digit4: { k: 'quick', i: 3 }, Minus: { k: 'ment', d: -1 }, Equal: { k: 'ment', d: 1 } };
 const KICKS = ['pass', 'through', 'lob', 'shoot', 'finesse'];
 
 export function emptyInput() {
-  return { mx: 0, my: 0, aimX: 0, aimY: 0, cx: 0, cy: 0, kx: 0, ky: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false, jockey: false, keeper: false };
+  return { mx: 0, my: 0, aimX: 0, aimY: 0, cx: 0, cy: 0, kx: 0, ky: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false, jockey: false, keeper: false, power: false };
 }
 
 export class InputManager {
@@ -126,7 +127,10 @@ export class InputManager {
         out.cx = rx; out.cy = -ry;
         if (Math.hypot(rx, ry) > 0.75) out.skill = true;
         out.pass ||= btn(0); out.lob ||= btn(1); out.shoot ||= btn(2); out.through ||= btn(3);
-        out.switchP ||= btn(4); out.finesse ||= btn(5); out.jockey ||= btn(6); out.tackle ||= btn(1); out.sprint ||= btn(7);
+        // LB + RB together = the power-shot modifier (instead of switch + finesse)
+        const lbrb = btn(4) && btn(5);
+        out.switchP ||= btn(4) && !lbrb; out.finesse ||= btn(5) && !lbrb; out.power ||= lbrb;
+        out.jockey ||= btn(6); out.tackle ||= btn(1); out.sprint ||= btn(7);
         out.skill ||= btn(11); out.keeper ||= btn(10);
       }
       // touch (player 1 only)
@@ -183,6 +187,7 @@ export class InputManager {
         <button data-a="switchP">SWITCH</button>
         <button data-a="skill">SKILL</button>
         <button data-a="jockey">JOCKEY</button>
+        <button data-a="power">POWER</button>
         <button data-a="sprint" class="wide">SPRINT</button>
       </div>
       <button class="ps3d-tpause" data-cmd="pause">II</button>`;

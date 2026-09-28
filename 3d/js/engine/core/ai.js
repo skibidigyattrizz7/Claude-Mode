@@ -310,7 +310,7 @@ function planRuns(sim, team, info, owner) {
 }
 
 // ------------------------------------------------------------------ player level
-const LOCK = new Set(['slide', 'dive', 'fall', 'down', 'sentoff', 'tackle', 'celeb', 'gkjump']);
+const LOCK = new Set(['slide', 'dive', 'getup', 'fall', 'down', 'sentoff', 'tackle', 'celeb', 'gkjump']);
 
 export function think(sim, p, dt) {
   if (p.act && LOCK.has(p.act.type)) return;
@@ -555,6 +555,9 @@ function decideCarrier(sim, p, pressure) {
   } else if (p.glitch && D < 105) {
     // "The Shawky": shoots (and scores) from literally anywhere on the pitch
     opts.push({ type: 'shoot', s: 8 + noise() });
+  } else if (p.sure && D < 100) {
+    // 500+ shooters: any shot from anywhere is a top-corner curler, so they simply shoot
+    opts.push({ type: 'shoot', s: 3 + noise() });
   } else if (bst(p, 'sho') > 0.3 && D < 60) {
     // admin cards shoot (and score) from anywhere in the opposition half
     opts.push({ type: 'shoot', s: 0.6 + bst(p, 'sho') + noise() });
@@ -650,7 +653,7 @@ function decideCarrier(sim, p, pressure) {
       const sprint = space > 5 && sim.stamFactor(p) > 0.85;
       p.drib = { x: ddx / dl, z: ddz / dl, sprint, t0: t };
       if (pressure < 1.5 && rng() < (p.a.dri - 55) / 250 + ps(p, 'trickster') * 0.05 && sim.human[team] === false) {
-        sim.doSkill(p, rng() < 0.5 ? { x: -Math.sin(p.face), z: Math.cos(p.face) } : null);
+        sim.doSkill(p, rng() < 0.5 ? { x: -Math.sin(p.face), z: Math.cos(p.face) } : null, p.sm >= 3 && rng() < 0.3);
       }
     }
   }

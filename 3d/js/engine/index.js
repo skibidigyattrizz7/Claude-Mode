@@ -16,7 +16,7 @@ import { webglStatus, isModuleLoadError, lowGraphics, setLowGraphics, showLoadEr
 
 const SIDES = ['home', 'away'];
 const SP_TOAST = { [SP.THROW]: 'THROW-IN', [SP.CORNER]: 'CORNER', [SP.GOALKICK]: 'GOAL KICK', [SP.FREEKICK]: 'FREE KICK' };
-const BOOL_KEYS = ['sprint', 'pass', 'through', 'lob', 'shoot', 'switchP', 'tackle', 'skill', 'finesse', 'jockey', 'keeper'];
+const BOOL_KEYS = ['sprint', 'pass', 'through', 'lob', 'shoot', 'switchP', 'tackle', 'skill', 'finesse', 'jockey', 'keeper', 'power'];
 const NUM_KEYS = ['mx', 'my', 'aimX', 'aimY', 'cx', 'cy', 'kx', 'ky'];
 const SKIP_ACTIONS = ['pass', 'shoot', 'lob', 'through', 'finesse', 'skill', 'switchP', 'tackle'];
 const TAC_KINDS = ['quick', 'ment', 'set', 'formation', 'swap', 'sub', 'takers'];
@@ -454,6 +454,12 @@ export function createMatch(container, opts = {}) {
         case 'punch': audio.ooh(); hud.toast('PUNCHED CLEAR', '#46d17a', 1.2); break;
         case 'rocket': doShake(0.25); say({ type: 'attack' }); break;
         case 'timed': hud.timed(f.q, f.pi); break;
+        case 'skill': {
+          // the name of a skill move a person on this machine just pulled off (or the stars it still needs)
+          if (!(view.c || []).includes(f.pi) || !local[f.pi < 11 ? 0 : 1]) break;
+          hud.toast(f.ok ? String(f.n).toUpperCase() : `${String(f.n).toUpperCase()} NEEDS ${f.need} SKILL STARS`, f.ok ? '#3fa9ff' : '#ff9f1a', 0.9);
+          break;
+        }
         case 'goal': {
           audio.goal();
           doShake(1);
@@ -775,6 +781,9 @@ export function createMatch(container, opts = {}) {
       const raw = input.read(slot, 'net');
       const o = toCanonical(raw, camYaw(lastView));
       o.shootPower = input.power[slot] || 0;
+      // the online input packet (net/protocol.js) has no `power` flag: send the power modifier as the
+      // shoot + finesse chord, which the host reads as a low driven tap / power shot hold
+      if (o.power) { o.finesse = true; o.switchP = false; }
       // latest tactics command stays attached (with its sequence number) so a lost packet is harmless
       if (tacOut[slot]) o.tac = tacOut[slot];
       return o;

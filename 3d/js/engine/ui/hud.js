@@ -64,7 +64,7 @@ const CSS = `
 .ps3d-knob{position:absolute;left:42px;top:42px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:none}
 .ps3d-btns{position:absolute;right:18px;bottom:18px;display:grid;grid-template-columns:repeat(3,64px);gap:9px;pointer-events:auto;touch-action:none}
 .ps3d-btns button{width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(20,30,55,.55);color:#fff;font-weight:800;font-size:11px;touch-action:none}
-.ps3d-btns button.big{background:rgba(200,16,46,.6)}.ps3d-btns button.wide{grid-column:span 3;width:100%;border-radius:32px;height:44px}
+.ps3d-btns button.big{background:rgba(200,16,46,.6)}.ps3d-btns button.wide{grid-column:span 2;width:100%;border-radius:32px;height:64px}
 .ps3d-btns button.on{background:rgba(63,169,255,.8)}
 .ps3d-tpause{position:absolute;right:max(16px,calc(env(safe-area-inset-right) + 8px));top:max(14px,calc(env(safe-area-inset-top) + 6px));width:48px;height:44px;border-radius:6px;border:0;background:rgba(10,16,34,.7);color:#fff;font-weight:900;pointer-events:auto;touch-action:manipulation}
 
@@ -79,7 +79,7 @@ const CSS = `
 .ps3d-hud.touch .ps3d-radar{bottom:6px}
 .ps3d-root.compact-touch .ps3d-btns{grid-template-columns:repeat(3,54px);gap:7px}
 .ps3d-root.compact-touch .ps3d-btns button{width:54px;height:54px;font-size:10px}
-.ps3d-root.compact-touch .ps3d-btns button.wide{width:100%;height:44px;border-radius:22px}
+.ps3d-root.compact-touch .ps3d-btns button.wide{width:100%;height:54px;border-radius:27px}
 .ps3d-touch .ps3d-joy{left:max(28px,calc(env(safe-area-inset-left) + 16px));bottom:max(28px,calc(env(safe-area-inset-bottom) + 16px))}
 .ps3d-touch .ps3d-btns{right:max(18px,calc(env(safe-area-inset-right) + 12px));bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px))}
 .ps3d-btns button{-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -124,7 +124,7 @@ const CSS = `
 `;
 
 // touch overlay button names (engine/ui/input.js), used in set-piece hints on touch devices
-const TOUCH_LABEL = { shoot: 'SHOOT', pass: 'PASS', through: 'THRU', lob: 'LOB', finesse: 'CURL', tackle: 'TACKLE', switchP: 'SWITCH', skill: 'SKILL', jockey: 'JOCKEY', sprint: 'SPRINT' };
+const TOUCH_LABEL = { shoot: 'SHOOT', pass: 'PASS', through: 'THRU', lob: 'LOB', finesse: 'CURL', tackle: 'TACKLE', switchP: 'SWITCH', skill: 'SKILL', jockey: 'JOCKEY', power: 'POWER', sprint: 'SPRINT' };
 
 let styleRefs = 0, styleEl = null;
 function addStyle() {

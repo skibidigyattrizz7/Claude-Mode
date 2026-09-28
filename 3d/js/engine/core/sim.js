@@ -11,13 +11,13 @@ import { normTactics, applyTactic } from './tactics.js';
 import { clamp, lerp, wrapAngle, angleTo, mulberry32, segDist } from './mathx.js';
 import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine, setWeather } from './physics.js';
 import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
-import { leadPass, rollSpeedFor, rollTimeTo, solveLob, solveShot, groundVel } from './passing.js';
+import { leadPass, rollSpeedFor, rollTimeTo, solveLob, solveShot, solveShotCurl, groundVel } from './passing.js';
 import { FORMATIONS, assignSlots, roleGroup } from './formations.js';
 import * as AI from './ai.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
 const HUMAN_AI = { ...DIFFICULTY.world, err: 1 };
-const HOLD_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse', 'tackle', 'switchP', 'skill', 'jockey'];
+const HOLD_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse', 'tackle', 'switchP', 'skill', 'jockey', 'power'];
 const KICK_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse'];
 // FIFA-style pass reception assist: while a pass is inbound to the controlled player, his movement
 // is AI-driven onto the interception point (or, for a through ball, the run it was threaded onto);
@@ -25,7 +25,7 @@ const KICK_KEYS = ['pass', 'through', 'lob', 'shoot', 'finesse'];
 const RECEIVE_NUDGE = 0.22;
 const RECEIVE_TIMEOUT = 2.5; // seconds an inbound pass stays assisted before control reverts fully to the stick
 export const REPLAY_LEN = 12; // max wait; the UI ends replays earlier via skipReplay()
-const EMPTY_IN = { mx: 0, my: 0, aimX: 0, aimY: 0, cx: 0, cy: 0, kx: 0, ky: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false, jockey: false };
+const EMPTY_IN = { mx: 0, my: 0, aimX: 0, aimY: 0, cx: 0, cy: 0, kx: 0, ky: 0, sprint: false, pass: false, through: false, lob: false, shoot: false, shootPower: 0, switchP: false, tackle: false, skill: false, finesse: false, jockey: false, power: false };
 const GP_ENUMS = {
   passAssist: ['assisted', 'semi', 'manual'], throughAssist: ['assisted', 'semi', 'manual'], lobAssist: ['assisted', 'semi', 'manual'],
   shotAssist: ['assisted', 'precision', 'manual'], autoSwitch: ['auto', 'airballs', 'manual'], autoSwitchAssist: ['none', 'low', 'high'],
@@ -45,7 +45,22 @@ export function mergeGameplay(g) {
   }
   return o;
 }
-const SKILL_KINDS = ['stepover', 'roulette', 'ballroll', 'heel'];
+// Skill moves. The first four keep their original indices (snapshot animP = index, +10 = to the left).
+// `stars` = skill-move stars needed (1-5); `adv` = only reachable on the advanced layer (see doSkill).
+export const SKILL_KINDS = ['stepover', 'roulette', 'ballroll', 'heel', 'dragback', 'croqueta', 'elastico', 'rainbow', 'fakeshot'];
+export const SKILL_INFO = {
+  stepover: { stars: 1, adv: false, dur: 0.55, label: 'Step-over' },
+  roulette: { stars: 1, adv: false, dur: 0.62, label: 'Roulette' },
+  ballroll: { stars: 1, adv: false, dur: 0.45, label: 'Ball roll' },
+  heel: { stars: 1, adv: false, dur: 0.4, label: 'Heel flick' },
+  dragback: { stars: 2, adv: true, dur: 0.62, label: 'Drag back' },
+  croqueta: { stars: 3, adv: true, dur: 0.6, label: 'La Croqueta' },
+  elastico: { stars: 4, adv: true, dur: 0.62, label: 'Elastico' },
+  rainbow: { stars: 5, adv: true, dur: 0.5, label: 'Rainbow flick' },
+  fakeshot: { stars: 1, adv: true, dur: 0.5, label: 'Fake shot' },
+};
+// A rating / shooting attribute at or above this gives the guaranteed-corner "500+" shooting tier.
+export const SURE_MIN = 500;
 
 const faceVec = (p) => ({ x: Math.cos(p.face), z: Math.sin(p.face) });
 // Over-99 "power" of admin / Owner-Access cards (see _applyData): 0 for every normal card, rising to
@@ -184,6 +199,9 @@ export class MatchSim {
       bo[key] = p.glitch ? 1 : Math.max(g0, OVER(raw));
       if (bo[key] > 0) p.boost = bo;
     }
+    // "500+ shooting": an admin card rated (or shooting) 500 or more never misses the top corners and can't be
+    // saved (see _plan / _gkTouch); The Shawky (glitch) is always in this tier.
+    p.sure = p.glitch || Math.max(+pd.rawOvr || 0, +pd.ovr || 0, +a.sho || 0) >= SURE_MIN;
     const k = 1 + clamp(((chem ?? 50) - 50) / 1000, -0.05, 0.05);
     for (const key in a) a[key] = clamp((+a[key] || 50) * k, 1, 99);
     p.a = a;
@@ -202,6 +220,11 @@ export class MatchSim {
     // standing reach / jump used for headers and keeper handling
     p.jump = 0.28 + a.phy * 0.0025 + (p.isGK ? a.div * 0.002 : 0) + ps(p, 'aerial') * 0.08;
     p.hash = strHash(String(pd.id ?? pd.name ?? p.idx));
+    // skill-move stars (1-5): the card's own `sm` when the team carries it, else derived from dribbling/PlayStyles
+    const smDrv = a.dri >= 88 ? 5 : a.dri >= 80 ? 4 : a.dri >= 70 ? 3 : a.dri >= 60 ? 2 : 1;
+    p.sm = clamp(Math.round(Number.isFinite(+pd.sm) && +pd.sm >= 1 ? +pd.sm : smDrv + (ps(p, 'trickster') > 0 ? 1 : 0)), 1, 5);
+    if (p.isGK) p.sm = 1;
+    if (bst(p, 'dri') > 0.5) p.sm = 5;
     p.st = this.pstats[pd.id] || (this.pstats[pd.id] = { ...newStats(), team: p.team, gk: p.isGK, def: p.group === 'DEF' });
   }
 
@@ -468,7 +491,7 @@ export class MatchSim {
     const sh = this.shotTracker.shot;
     if (sh && sh.team !== team && b.owner < 0 && this.t - sh.t < 1.6 && -this.dir[team] * b.v.x > 3) return true;
     const cur = this.players[this.ctrl[team]];
-    return !!(cur && cur.isGK && g.act && g.act.type === 'dive');
+    return !!(cur && cur.isGK && g.act && (g.act.type === 'dive' || g.act.type === 'getup'));
   }
 
   _assistActive(team) {
@@ -531,7 +554,7 @@ export class MatchSim {
     const pp = this.pendingPass;
     const incoming = !own && b.owner < 0 && b.intended === p.idx;
     const assisting = incoming && (!pp || pp.team !== team || t - pp.t < RECEIVE_TIMEOUT);
-    const locked = p.act && ['slide', 'dive', 'fall', 'down', 'tackle', 'throw', 'sentoff'].includes(p.act.type);
+    const locked = p.act && ['slide', 'dive', 'fall', 'down', 'tackle', 'throw', 'sentoff', 'getup'].includes(p.act.type);
     const opp = this.owner();
     const oppHas = !!opp && opp.team !== team && !b.inHands;
     const jockey = !!inp.jockey && !own && oppHas && !p.isGK;
@@ -606,6 +629,7 @@ export class MatchSim {
         if (inp.finesse) m.fin = true;
         if (inp.switchP) m.chip = true;
         if (inp.jockey) m.triv = true;
+        if (inp.power) m.pow = true;
       } else if (!prev.shoot) H.mods = null;
       if (inp.pass && inp.jockey) H.flair = true;
       if (b.inHands) {
@@ -626,13 +650,22 @@ export class MatchSim {
           H.mods = null;
           if (inp.finesse || m.fin) H.skipFin = true;
           const power = pw('shoot', 1);
-          const kind = m.chip ? 'chip' : m.fin ? (power < 0.45 ? 'lowdriven' : 'powershot') : m.triv ? 'trivela' : 'shot';
-          this._shootRelease(p, kind, aim, kind === 'lowdriven' ? 0.78 : power);
+          // shoot + POWER = power shot (any charge); shoot + finesse = low driven (tap) / power shot (hold);
+          // shoot + switch = chip; shoot + jockey = trivela
+          const kind = m.chip ? 'chip' : m.pow ? 'powershot' : m.fin ? (power < 0.45 ? 'lowdriven' : 'powershot') : m.triv ? 'trivela' : 'shot';
+          this._shootRelease(p, kind, aim, kind === 'lowdriven' ? 0.78 : kind === 'powershot' ? Math.max(power, 0.45) : power);
         } else if (released('finesse') && !tfb) {
           if (H.skipFin || inp.shoot) H.skipFin = false;
           else this._shootRelease(p, 'finesse', aim, pw('finesse', 1));
-        } else if (pressed('skill')) this.doSkill(p, hasMove ? mv : null);
-        p.windup = inp.shoot ? pw('shoot') : inp.finesse && !inp.shoot ? pw('finesse') : 0;
+        } else if (pressed('skill')) {
+          // right-stick flick (gamepad) picks the direction, otherwise the move stick; jockey held = advanced layer
+          const rs = Math.hypot(inp.cx || 0, inp.cy || 0) > 0.5 ? this._worldMove({ mx: inp.cx, my: inp.cy }) : null;
+          this.doSkill(p, rs || (hasMove ? mv : null), !!inp.jockey);
+        }
+        // WINDUP animP: 0..1 normal shot, 1.x finesse (inside-foot), 2.x power shot (long back-swing)
+        const powCharge = inp.shoot && ((H.mods && H.mods.pow) || inp.power || (inp.finesse && (H.shoot || 0) >= 0.45));
+        p.windup = inp.shoot ? (powCharge ? 2 + Math.min(0.99, pw('shoot')) : pw('shoot'))
+          : inp.finesse ? 1 + Math.min(0.99, pw('finesse')) : 0;
         // arcade auto-shot: a clear sight of goal close in
         if (gp.autoShots && !inp.shoot && !inp.pass && this._autoShotChance(p)) this._shootRelease(p, 'shot', this._goalAim(p), 0.62);
       }
@@ -701,11 +734,11 @@ export class MatchSim {
   // shoot key released: strike now, or (timed finishing) after a short backswing
   _shootRelease(p, kind, aim, power) {
     const team = p.team, t = this.t;
-    const back = kind === 'powershot' ? 0.42 : 0.24;
+    const back = kind === 'powershot' ? 0.55 : 0.24;
     if (this.gp[team].timedFinishing || kind === 'powershot') {
       this.pendingShot[team] = { kind, aim, power, tRel: t, tc: t + back, idx: p.idx };
       this.tfBlock[team] = t + back + 0.35;
-      p.windup = 1;
+      p.windup = kind === 'powershot' ? 2.99 : 1;
       return;
     }
     this._humanKick(p, kind, aim, power);
@@ -833,29 +866,51 @@ export class MatchSim {
     if (p.act) return;
     p.act = { type: 'head', t0: this.t, dur: 0.65, jh: p.jump };
   }
-  doSkill(p, dir) {
-    const sk = ps(p, 'flair') * 0.06 + ps(p, 'trickster') * 0.1;
+  // Skill move. `dir` = stick direction (world, unit) or null; `adv` = the advanced layer (jockey held, or a second
+  // press right after a move). Basic layer: none step-over, forward heel flick, back roulette, sideways ball roll.
+  // Advanced layer: none fake shot, forward rainbow flick, diagonal elastico, sideways La Croqueta, back drag back.
+  // A move needs its skill-move stars (p.sm, 1-5); without them the basic move for that direction is used.
+  doSkill(p, dir, adv = false) {
     const t = this.t;
-    if (p.act || this.ball.owner !== p.idx || this.ball.inHands) return;
+    if (this.ball.owner !== p.idx || this.ball.inHands) return;
+    if (p.act) {
+      // chaining: pressing skill again shortly after a move (touch: double tap) switches to the advanced layer
+      if (p.act.type === 'skill' && t - p.act.t0 > 0.12 && t - p.act.t0 < 0.9) { adv = true; p.act = null; }
+      else return;
+    } else if (!adv && p.lastSkillT != null && t - p.lastSkillT < 0.9 && t - p.lastSkillT > 0.12) adv = true;
+    const sk = ps(p, 'flair') * 0.06 + ps(p, 'trickster') * 0.1;
     const f = faceVec(p), r = { x: -f.z, z: f.x };
-    let kind = 'stepover', side = 1;
+    let sector = 'none', side = 1;
     if (dir && Math.hypot(dir.x, dir.z) > 0.2) {
       const fwd = dir.x * f.x + dir.z * f.z, lat = dir.x * r.x + dir.z * r.z;
       side = lat >= 0 ? 1 : -1;
-      if (fwd > 0.6) kind = 'heel';
-      else if (fwd < -0.45) kind = 'roulette';
-      else kind = 'ballroll';
+      sector = fwd > 0.6 ? 'fwd' : fwd < -0.45 ? 'back' : fwd > 0.2 && Math.abs(lat) > 0.4 ? 'fdiag' : 'side';
     }
-    const dur = { stepover: 0.55, roulette: 0.62, ballroll: 0.45, heel: 0.4 }[kind];
+    const BASIC = { none: 'stepover', fwd: 'heel', back: 'roulette', fdiag: 'ballroll', side: 'ballroll' };
+    const ADV = { none: 'fakeshot', fwd: 'rainbow', back: 'dragback', fdiag: 'elastico', side: 'croqueta' };
+    let kind = adv ? ADV[sector] : BASIC[sector];
+    if (SKILL_INFO[kind].stars > p.sm) {
+      this.fxPush('skill', { pi: p.idx, n: SKILL_INFO[kind].label, need: SKILL_INFO[kind].stars });
+      kind = BASIC[sector];
+    }
+    const info = SKILL_INFO[kind];
+    const dur = info.dur * (1 - ps(p, 'trickster') * 0.1);
     p.act = { type: 'skill', kind, side, t0: t, dur };
     p.skillIdx = SKILL_KINDS.indexOf(kind);
     p.skillSide = side;
+    p.lastSkillT = t;
+    this.fxPush('skill', { pi: p.idx, n: info.label, k: p.skillIdx, ok: 1 });
+    // who bites: (radius, base chance, how long they are left flat-footed)
+    const FOOL = {
+      stepover: [3.8, 0.32, 0.5], roulette: [3.8, 0.32, 0.5], ballroll: [3.8, 0.32, 0.5], heel: [3.8, 0.32, 0.5],
+      dragback: [3.4, 0.3, 0.6], croqueta: [3.4, 0.42, 0.65], elastico: [3.6, 0.5, 0.8], rainbow: [4.5, 0.55, 0.9], fakeshot: [4.8, 0.5, 0.75],
+    }[kind];
     for (const o of this.teamList[1 - p.team]) {
-      if (Math.hypot(o.x - p.x, o.z - p.z) > 3.8) continue;
-      const pr = clamp(0.32 + (p.a.dri - o.a.def) * 0.012 + sk, 0.08, 0.88);
-      if (this.rng() < pr) { o.fooledUntil = t + 0.5 + p.a.dri * 0.003; o.des.x = -o.des.x * 0.4; o.des.z = -o.des.z * 0.4; }
+      if (Math.hypot(o.x - p.x, o.z - p.z) > FOOL[0]) continue;
+      const pr = clamp(FOOL[1] + (p.a.dri - o.a.def) * 0.012 + sk + (p.sm - 3) * 0.03, 0.08, 0.9);
+      if (this.rng() < pr) { o.fooledUntil = t + FOOL[2] + p.a.dri * 0.003; o.des.x = -o.des.x * 0.4; o.des.z = -o.des.z * 0.4; }
     }
-    if (p.a.dri < 62 && !sk && this.rng() < 0.15) {
+    if (p.a.dri < 62 && !sk && kind !== 'rainbow' && this.rng() < 0.15) {
       // fumbled skill: ball runs loose
       const b = this.ball;
       b.owner = -1; b.v.x = f.x * 4 + (this.rng() - 0.5) * 3; b.v.z = f.z * 4 + (this.rng() - 0.5) * 3; b.v.y = 0;
@@ -864,14 +919,76 @@ export class MatchSim {
   }
   _skillMove(p, a, at) {
     const f = faceVec(p), r = { x: -f.z, z: f.x };
+    const sd = a.side, k = a.dur / (SKILL_INFO[a.kind].dur || a.dur);
     let vx = 0, vz = 0;
     switch (a.kind) {
       case 'stepover': vx = f.x * 1.8; vz = f.z * 1.8; if (at > a.dur - 0.05) p.burst = this.t + 0.8; break;
-      case 'roulette': vx = r.x * a.side * 3.0 + f.x * 0.6; vz = r.z * a.side * 3.0 + f.z * 0.6; break;
-      case 'ballroll': vx = r.x * a.side * 3.6; vz = r.z * a.side * 3.6; break;
+      case 'roulette': vx = r.x * sd * 3.0 + f.x * 0.6; vz = r.z * sd * 3.0 + f.z * 0.6; break;
+      case 'ballroll': vx = r.x * sd * 3.6; vz = r.z * sd * 3.6; break;
       case 'heel': vx = f.x * 4.2; vz = f.z * 4.2; if (at > a.dur - 0.05) p.burst = this.t + 0.8; break;
+      case 'dragback': {
+        // sole drags the ball back under the body, a half turn, then away the other way
+        if (at < 0.28 * k) { vx = -f.x * 3.2; vz = -f.z * 3.2; }
+        else {
+          if (!a.turned) { a.turned = true; p.face = wrapAngle(p.face + Math.PI); }
+          const g = faceVec(p), u = Math.min(1, (at - 0.28 * k) / (0.34 * k));
+          vx = g.x * (2.0 + 3.6 * u); vz = g.z * (2.0 + 3.6 * u);
+          if (at > a.dur - 0.05) p.burst = this.t + 0.8;
+        }
+        break;
+      }
+      case 'croqueta': {
+        // two quick touches from foot to foot across the body, then a push away
+        if (at < 0.16 * k) { vx = r.x * sd * 3.8; vz = r.z * sd * 3.8; }
+        else if (at < 0.3 * k) { vx = -r.x * sd * 1.0; vz = -r.z * sd * 1.0; }
+        else { vx = f.x * 3.8 + r.x * sd * 1.4; vz = f.z * 3.8 + r.z * sd * 1.4; if (at > a.dur - 0.05) p.burst = this.t + 0.9; }
+        break;
+      }
+      case 'elastico': {
+        // flip-flap: show the ball one way with the outside of the boot, snap it back the other way and go
+        if (at < 0.22 * k) { vx = r.x * sd * 3.4 + f.x * 1.2; vz = r.z * sd * 3.4 + f.z * 1.2; }
+        else if (at < 0.34 * k) { vx = p.vx * 0.2; vz = p.vz * 0.2; }
+        else { vx = -r.x * sd * 3.8 + f.x * 3.6; vz = -r.z * sd * 3.8 + f.z * 3.6; if (at > a.dur - 0.05) p.burst = this.t + 1; }
+        break;
+      }
+      case 'rainbow': {
+        // heels trap the ball, flick it up and over the defender, then run onto it
+        if (!a.flick && at >= 0.2 * k) {
+          a.flick = true;
+          const b = this.ball, t = this.t;
+          b.owner = -1; b.inHands = false;
+          b.p.y = 0.3;
+          b.v = { x: f.x * 4.4 + p.vx * 0.5, y: 6.6, z: f.z * 4.4 + p.vz * 0.5 };
+          b.w = { x: -f.z * 6, y: 0, z: f.x * 6 };
+          b.lastTouch = p.idx; b.lastTeam = p.team; b.intended = p.idx; b.throughBall = false;
+          p.cool.touch = t + 0.45; p.drib = null; p.burst = t + 1.2;
+          this.path = null; this.nextPredict = 0; this.pendingPass = null;
+          this.fxPush('kick', { s: 8 });
+        }
+        vx = f.x * 1.6; vz = f.z * 1.6;
+        break;
+      }
+      case 'fakeshot': {
+        // leg swung through, ball left behind: stand still, then step past the bitten defender
+        if (at < 0.3 * k) { vx = f.x * 0.8; vz = f.z * 0.8; }
+        else { vx = f.x * 2.6 + r.x * sd * 0.9; vz = f.z * 2.6 + r.z * sd * 0.9; if (at > a.dur - 0.05) p.burst = this.t + 0.9; }
+        break;
+      }
     }
     p.vx = vx; p.vz = vz;
+  }
+
+  // ball placement while a skill move is running (used by _dribble): forward reach override and sideways offset
+  _skillBall(p, a) {
+    const at = this.t - a.t0, k = a.dur / (SKILL_INFO[a.kind].dur || a.dur), sd = a.side;
+    switch (a.kind) {
+      case 'ballroll': return { off: null, side: 0.18 * sd };
+      case 'dragback': return at < 0.28 * k ? { off: 0.42 - 0.7 * Math.min(1, at / (0.28 * k)), side: 0 } : { off: 0.5, side: 0 };
+      case 'croqueta': return { off: null, side: 0.26 * sd * Math.sin(at * 21 / k) * Math.max(0, 1 - at / a.dur) };
+      case 'elastico': return { off: null, side: at < 0.22 * k ? 0.32 * sd * (at / (0.22 * k)) : at < 0.34 * k ? 0.32 * sd - 0.6 * sd * ((at - 0.22 * k) / (0.12 * k)) : -0.28 * sd * Math.max(0, 1 - (at - 0.34 * k) / (0.28 * k)) };
+      case 'fakeshot': return at < 0.3 * k ? { off: 0.34, side: 0 } : { off: null, side: 0 };
+      default: return { off: null, side: 0 };
+    }
   }
 
   // ------------------------------------------------------------------ kicking
@@ -1051,6 +1168,17 @@ export class MatchSim {
           info.glitch = true;
           info.glitchTo = { x: tx, y: ty, z: tz };
         }
+        // "500+" shooting (p.sure, not the teleporting Shawky above): whatever the kind, distance, angle or power,
+        // the shot is a real, hard, curling strike into a top corner (see _sureShot) that nothing can stop.
+        const sureShot = p.sure && !p.glitch;
+        if (sureShot) {
+          const gkp0 = this.gk(1 - team);
+          const seed = (Math.abs(p.hash ^ Math.round(from.x * 37) ^ Math.round(from.z * 53) ^ Math.round(this.t * 240)) >>> 0);
+          // far post when he is wide (the natural curler), otherwise the corner away from the keeper
+          const sgn = Math.abs(from.z) > 3.5 ? -Math.sign(from.z) : Math.abs(gkp0.z) > 0.5 ? -Math.sign(gkp0.z) : (seed % 2 ? 1 : -1);
+          tz = sgn * (GOAL.HW - 0.42);
+          ty = GOAL.H - 0.26;
+        }
         if (tz == null) {
           const nx = gx - from.x, nz = -from.z, nl = Math.hypot(nx, nz) || 1;
           const pz = nx / nl;
@@ -1066,7 +1194,21 @@ export class MatchSim {
           if (power > 0.85 && kind !== 'header') ty += (power - 0.85) * 16;
         } else if (kind === 'penalty' && power > 0.86 && !p.glitch) ty += (power - 0.86) * 12;
         if (kind === 'lowdriven' && !p.glitch) ty = Math.min(ty, 0.5);
+        // power shot: a low, driven strike (the ball dips with topspin); it never sails high, it just may go wide
+        if (kind === 'powershot' && !p.glitch) ty = Math.min(1.3, o.ty != null ? ty : 0.3 + power * 0.9);
         if (kind === 'chip' && !p.glitch) ty = Math.max(ty, 1.75);
+        if (sureShot) {
+          const sureTy = GOAL.H - 0.26;
+          const ss = this._sureShot(from, gx, tz, sureTy);
+          if (ss) {
+            info.sure = true; info.shot = true; info.target = -1; info.point = { x: gx, z: tz };
+            info.sureTo = { x: gx, y: sureTy, z: tz };
+            if (kind === 'finesse' || kind === 'trivela') info.finesse = true;
+            return { vel: ss.vel, spin: ss.spin, info, from };
+          }
+          // no real trajectory exists from this spot (goal-line angle): fall back to the Shawky-style placement
+          info.glitch = true; info.glitchTo = { x: gx, y: sureTy, z: tz }; info.sure = true;
+        }
         const D = Math.hypot(tx - from.x, tz - from.z);
         let speed;
         if (kind === 'finesse') speed = 12 + power * (11 + a.sho * 0.065);
@@ -1075,22 +1217,39 @@ export class MatchSim {
         else if (kind === 'header') speed = clamp(9 + a.phy * 0.04 + (p.h - 1.8) * 6 + ps(p, 'powerheader') * 2.5 + Math.hypot(b.v.x, b.v.y, b.v.z) * 0.25, 8, 21);
         else if (kind === 'chip') speed = clamp(9 + power * 5 + D * 0.22, 10, 19);
         else if (kind === 'lowdriven') speed = 16 + power * (12 + a.sho * 0.1) + ps(p, 'lowdriven') * 1.2;
-        else if (kind === 'powershot') speed = 18 + power * (14 + a.sho * 0.12);
+        else if (kind === 'powershot') speed = 19 + power * (17 + a.sho * 0.14);
         else speed = 12 + power * (11 + a.sho * 0.16); // 60 SHO ~31 m/s at full power, 95 ~37 m/s
         if (kind === 'shot' || kind === 'powershot' || kind === 'lowdriven') speed *= 1 + ps(p, 'power') * 0.06;
         speed *= o.speedMul || 1;
         if (kind !== 'header' && kind !== 'chip') speed *= 1 + bst(p, 'sho') * 0.45; // admin cards: rockets
         const dist = Math.hypot(tx - from.x, tz - from.z) || 1;
         const fx = (tx - from.x) / dist, fz = (tz - from.z) / dist;
-        const topW = kind === 'fk' ? 22 : kind === 'header' ? 0 : kind === 'chip' ? -12 : kind === 'lowdriven' ? 14 : 8;
+        const topW = kind === 'fk' ? 22 : kind === 'header' ? 0 : kind === 'chip' ? -12 : kind === 'lowdriven' ? 14 : kind === 'powershot' ? 18 : 8;
         spin = { x: fz * topW, y: 0, z: -fx * topW };
         if (kind === 'finesse' || kind === 'fk' || kind === 'trivela') {
           const want = kind === 'fk' ? -Math.sign(tz || 1) : Math.sign(from.z - tz) || 1;
-          const W = (kind === 'fk' ? 34 : 22 + a.sho * 0.3) * (1 + ps(p, 'finesse') * 0.2 * (kind === 'finesse' ? 1 : 0));
+          let W;
+          if (kind === 'fk') W = 34 * (1 + ps(p, 'finesse') * 0.2 * (kind === 'finesse' ? 1 : 0));
+          else {
+            // finesse / trivela: heavy sidespin. The ball leaves wide of the target and bends in progressively
+            // (Magnus), curling toward the far post; the bend grows with range and shooting skill.
+            W = (105 + a.sho * 1.0) * clamp((D - 8) / 14, 0.35, 1) * (1 + ps(p, 'finesse') * 0.2 * (kind === 'finesse' ? 1 : 0));
+          }
           // trivela: outside of the foot, bends the other way
           spin.y = (kind === 'trivela' ? 0.9 : -1) * want * s * W;
         }
-        vel = solveShot(from, { x: tx, y: ty, z: tz }, speed, spin);
+        vel = null;
+        if (Math.abs(spin.y) > 30) {
+          // strong curl: shooting-method solve; if the ball can't be bent that far at this speed/range, ease the spin
+          const full = spin.y;
+          for (const kf of [1, 0.65, 0.35]) {
+            spin.y = full * kf;
+            const r = solveShotCurl(from, { x: tx, y: ty, z: tz }, speed, spin);
+            if (r && r.err < 0.25) { vel = r.vel; break; }
+          }
+          if (!vel) spin.y = full * 0.2;
+        }
+        if (!vel) vel = solveShot(from, { x: tx, y: ty, z: tz }, speed, spin);
         info.shot = true; info.target = -1; info.point = { x: tx, z: tz };
         break;
       }
@@ -1102,6 +1261,53 @@ export class MatchSim {
     // scaling it would overshoot that point.
     if (p.glitch && (kind === 'ground' || kind === 'through')) vel = { x: vel.x * 1.8, y: vel.y, z: vel.z * 1.8 };
     return { vel, spin, info, from };
+  }
+
+  // Fly a struck ball (from, vel, spin) at goal end `side` with the real ball physics (posts, bar, net included).
+  // -> { z, y } where the ball centre crosses the goal line, and `goal` = the whole ball ends up over the line inside the mouth.
+  _flightAtGoal(from, vel, spin, side) {
+    const pr = predictBall({ p: { ...from }, v: { ...vel }, w: { ...spin } }, 6, 0.02);
+    let cross = null;
+    for (let i = 1; i < pr.length; i++) {
+      const a = pr[i - 1], c = pr[i];
+      const ba = behindLine(a, side), bc = behindLine(c, side);
+      if (!cross && bc > 0 && ba <= 0) {
+        const f = ba === bc ? 0 : -ba / (bc - ba);
+        cross = { z: a.z + (c.z - a.z) * f, y: a.y + (c.y - a.y) * f };
+      }
+      if (bc > BALL_R) return { ...cross, goal: !!cross && Math.abs(c.z) < GOAL.HW && c.y < GOAL.H };
+    }
+    return { ...cross, goal: false };
+  }
+
+  // 500+ shot: a hard curler placed in the top corner (gx, ty, tz). Sidespin bends it in progressively (Magnus),
+  // so it leaves outside the frame and arcs back; from long range the spin is eased so the flight stays a
+  // drive rather than a boomerang. Tries less and less curl (then a less extreme corner, for the sharpest
+  // angles where the far post is unreachable) until a real trajectory scores.
+  _sureShot(from, gx, tz, ty) {
+    const side = Math.sign(gx) || 1, sgn = Math.sign(tz) || 1;
+    const corners = [[tz, ty], [sgn * (GOAL.HW - 1.0), ty - 0.05], [sgn * (GOAL.HW - 1.9), ty - 0.15], [sgn * 1.0, ty - 0.4]];
+    for (const [cz, cy] of corners) {
+      const D = Math.hypot(gx - from.x, cz - from.z);
+      const speed = clamp(33 + D * 0.16, 33, 50);
+      const W0 = clamp(64 - D * 0.6, 14, 64);
+      const want = Math.sign(from.z - cz) || 1;
+      const dist = D || 1, fx = (gx - from.x) / dist, fz = (cz - from.z) / dist;
+      // aim a little beyond the line along the approach so shallow angles still cross the line inside the frame
+      const beyond = clamp(0.3 / Math.max(0.15, Math.abs(fx)), 0.3, 2.2);
+      const tgt = { x: gx + fx * beyond, y: cy, z: cz + fz * beyond };
+      for (const k of [1, 0.6, 0.3, 0]) {
+        const spin = { x: fz * 8, y: -want * side * W0 * k, z: -fx * 8 };
+        for (const sp of [speed, speed * 1.15, speed * 1.3]) {
+          const sol = solveShotCurl(from, tgt, sp, spin);
+          const vel = sol && sol.err < 0.2 ? sol.vel : null;
+          if (!vel || !Number.isFinite(vel.x + vel.y + vel.z)) continue;
+          const c = this._flightAtGoal(from, vel, spin, side);
+          if (c.goal && Math.abs(c.z - cz) < 0.35 && Math.abs(c.y - cy) < 0.25) return { vel, spin };
+        }
+      }
+    }
+    return null;
   }
 
   _errMul(p) { return this.human[p.team] ? 1 : this.diff.err; }
@@ -1119,6 +1325,11 @@ export class MatchSim {
   _execute(p, plan) {
     const { info } = plan;
     let vel = plan.vel;
+    // 500+ shots are struck exactly as solved: no aiming error, no speed error, no matter how weak the tap
+    if (info.sure && !info.glitch) {
+      if (plan.from && plan.from.y !== this.ball.p.y) this.ball.p.y = plan.from.y;
+      return this._release(p, vel, plan.spin, info);
+    }
     const a = p.a, em0 = p.glitch ? 0 : this._errMul(p);
     // admin cards: passes / shots are (near) perfect. "The Shawky" (p.glitch): em0 is already 0 above, so
     // every error multiplier below is exactly zero — instant, perfectly accurate passing and shooting from
@@ -1173,7 +1384,8 @@ export class MatchSim {
     } else {
       let sm = info.errMul ?? 1;
       if (k === 'finesse') sm *= 1 - ps(p, 'finesse') * 0.3;
-      if (k === 'powershot') sm *= 1.3;
+      // power shot: raw and hard, so it strays much more for a low shooter (60 SHO ~1.7x, 90 ~1.4x)
+      if (k === 'powershot') sm *= (1.25 + (100 - a.sho) * 0.012) * (1 - ps(p, 'power') * 0.25);
       if (k === 'lowdriven') sm *= 0.9 - ps(p, 'lowdriven') * 0.15;
       if (k === 'chip') sm *= 1.1 - ps(p, 'chip') * 0.4;
       if (k === 'trivela') sm *= ps(p, 'trivela') ? 1 - ps(p, 'trivela') * 0.2 : a.sho + a.dri > 165 ? 1.1 : 1.8;
@@ -1240,6 +1452,7 @@ export class MatchSim {
       b.v = { x: gs * 9, y: 0, z: 0 }; b.w = { x: 0, y: 0, z: 0 };
     }
     b.lastTouch = p.idx; b.lastTeam = p.team; b.kicker = p.idx; b.kickT = t;
+    b.sure = info.sure || info.glitch ? t : -1; // 500+ / Shawky shot in flight: nobody can touch it (see _interactions)
     b.intended = info.target ?? -1;
     // "The Shawky": a short teleport-flicker fx for the renderer (ball.js) — pure visual, no gameplay effect.
     if (info.glitch && info.glitchTo) this.fxPush('glitch', { pi: p.idx, x: info.glitchTo.x, y: info.glitchTo.y, z: info.glitchTo.z });
@@ -1254,7 +1467,11 @@ export class MatchSim {
     const hard = k === 'shot' || k === 'fk' || k === 'penalty' || k === 'punt' || k === 'powershot' || k === 'lowdriven' || k === 'trivela';
     if (k === 'throw' || k === 'gkthrow') p.act = { type: 'throw', t0: t, dur: 0.45 };
     else if (k === 'header') { if (!p.act || p.act.type !== 'head') p.act = { type: 'head', t0: t - 0.25, dur: 0.45, jh: 0.2 }; }
-    else if (!p.act || p.act.type === 'kick' || p.act.type === 'skill' || p.act.type === 'chest') p.act = { type: 'kick', t0: t, dur: 0.38, pw: hard ? 1 : k === 'ground' ? 0.4 : 0.7 };
+    else if (!p.act || p.act.type === 'kick' || p.act.type === 'skill' || p.act.type === 'chest') {
+      // animP for KICK: 0.4 pass / 0.7 lofted / 1 shot / 1.5 finesse (inside-foot curl) / 2.5 power shot (see snapshot.js)
+      const pw = k === 'powershot' ? 2.5 : k === 'finesse' || (info.finesse && info.shot) ? 1.5 : hard ? 1 : k === 'ground' ? 0.4 : 0.7;
+      p.act = { type: 'kick', t0: t, dur: k === 'powershot' ? 0.5 : 0.38, pw };
+    }
     if (info.shot && Math.hypot(vel.x, vel.y, vel.z) > 29) this.fxPush('rocket', { pi: p.idx });
     this.fxPush('kick', { s: Math.round(Math.hypot(vel.x, vel.y, vel.z)) });
     this.pendingOffside = null;
@@ -1328,7 +1545,7 @@ export class MatchSim {
               const s = at < 0.2 ? Math.max(3.2, Math.hypot(p.vx, p.vz)) : Math.hypot(p.vx, p.vz) * 0.9;
               p.vx = Math.cos(p.face) * s; p.vz = Math.sin(p.face) * s; locked = true; break;
             }
-            case 'fall': case 'down': case 'throw': case 'wall': { p.vx *= 0.85; p.vz *= 0.85; locked = true; break; }
+            case 'fall': case 'down': case 'throw': case 'wall': case 'getup': { p.vx *= 0.85; p.vz *= 0.85; locked = true; break; }
             case 'skill': if (this.ball.owner === p.idx) { this._skillMove(p, a, at); locked = true; } break;
             case 'kick': mul = 0.55; break;
             case 'head': case 'chest': mul = 0.6; break;
@@ -1346,6 +1563,7 @@ export class MatchSim {
         const hold = p.faceHoldT > t;
         if (hold) tf = p.faceHold;
         else if (p.faceLock > t) tf = p.face;
+        else if (p.isGK && (p.ready || this.isHumanCtrl(p)) && sp < 5.5 && this.ball.owner !== p.idx) tf = Math.atan2(this.ball.p.z - p.z, this.ball.p.x - p.x); // a keeper shuffles side-on, eyes on the ball
         else if (sp > 0.8) tf = Math.atan2(p.vz, p.vx);
         else if (p.faceBall != null) tf = p.faceBall;
         const own = this.ball.owner === p.idx;
@@ -1412,10 +1630,10 @@ export class MatchSim {
     const ps = this.players;
     for (let i = 0; i < ps.length; i++) {
       const a = ps[i];
-      if (a.sentOff || (a.act && (a.act.type === 'slide' || a.act.type === 'dive'))) continue;
+      if (a.sentOff || (a.act && (a.act.type === 'slide' || a.act.type === 'dive' || a.act.type === 'getup'))) continue;
       for (let j = i + 1; j < ps.length; j++) {
         const b = ps[j];
-        if (b.sentOff || (b.act && (b.act.type === 'slide' || b.act.type === 'dive'))) continue;
+        if (b.sentOff || (b.act && (b.act.type === 'slide' || b.act.type === 'dive' || b.act.type === 'getup'))) continue;
         const dx = b.x - a.x, dz = b.z - a.z;
         const d2 = dx * dx + dz * dz;
         if (d2 > 0.5184 || d2 < 1e-8) continue;
@@ -1433,17 +1651,17 @@ export class MatchSim {
   _dribble(dt) {
     const b = this.ball, p = this.players[b.owner];
     if (b.inHands) {
-      const low = p.act && (p.act.type === 'dive' || p.act.type === 'down');
+      const low = p.act && (p.act.type === 'dive' || p.act.type === 'down' || p.act.type === 'getup');
       b.p.x = p.x + Math.cos(p.face) * 0.3; b.p.z = p.z + Math.sin(p.face) * 0.3; b.p.y = low ? 0.35 : 1.05;
       b.v.x = p.vx; b.v.z = p.vz; b.v.y = 0;
       return;
     }
     const sp = Math.hypot(p.vx, p.vz);
     let fx = Math.cos(p.face), fz = Math.sin(p.face);
-    let side = 0;
-    if (p.act && p.act.type === 'skill' && p.act.kind === 'ballroll') side = 0.18 * p.act.side;
+    let side = 0, forced = null;
+    if (p.act && p.act.type === 'skill') { const sb = this._skillBall(p, p.act); side = sb.side; forced = sb.off; }
     const reach = (p.shieldT > this.t - 0.1 ? 0.5 : 0.42) + sp * 0.05 * (1.3 - p.a.dri / 100) * (p.ctrlSprintT > this.t - 0.1 ? 0.6 : 1);
-    const off = reach + Math.max(0, Math.sin(this.t * (2 + sp * 1.4) + p.idx)) * 0.14 * Math.min(1, sp / 4);
+    const off = forced != null ? forced : reach + Math.max(0, Math.sin(this.t * (2 + sp * 1.4) + p.idx)) * 0.14 * Math.min(1, sp / 4);
     const tx = p.x + fx * off - fz * side, tz = p.z + fz * off + fx * side;
     const k = Math.min(1, dt * 16);
     b.p.x += (tx - b.p.x) * k; b.p.z += (tz - b.p.z) * k; b.p.y = BALL_R;
@@ -1539,7 +1757,7 @@ export class MatchSim {
     // signature celebration per player (the human scorer can pick another with pass / lob / shoot)
     celeb.celebKind = celeb.hash % 3;
     this.celebPicked = false;
-    for (const p of this.players) { p.run = null; p.gkPlan = null; if (p.act && p.act.type !== 'dive') p.act = null; }
+    for (const p of this.players) { p.run = null; p.gkPlan = null; if (p.act && p.act.type !== 'dive' && p.act.type !== 'getup') p.act = null; }
   }
 
   _stepGoal(dt) {
@@ -1584,12 +1802,14 @@ export class MatchSim {
       const g = this.gk(team);
       if (!g.sentOff && this._gkTouch(g)) return;
     }
+    // a 500+ / Shawky shot in flight cannot be blocked, headed or intercepted by anybody
+    if (b.sure === b.kickT && b.lastTouch === b.kicker) return;
     let best = null, bd = 1e9, bz = null;
     const heads = [];
     const bs = Math.hypot(b.v.x, b.v.z);
     for (const p of this.players) {
       if (p.sentOff || p.cool.touch > t) continue;
-      if (p.act && ['fall', 'down', 'dive', 'slide', 'sentoff', 'throw'].includes(p.act.type)) continue;
+      if (p.act && ['fall', 'down', 'dive', 'slide', 'sentoff', 'throw', 'getup'].includes(p.act.type)) continue;
       const dx = b.p.x - p.x, dz = b.p.z - p.z;
       const hd = Math.hypot(dx, dz);
       if (hd > 1.5 + bst(p, 'def')) continue;
@@ -1897,7 +2117,7 @@ export class MatchSim {
     // "The Shawky": nothing the keeper does here can stop it — no catch, no parry, no punch — the ball just
     // keeps going (its trajectory already aims at a top corner, see _plan's `p.glitch` block above).
     const skGlitch = b.kicker >= 0 ? this.players[b.kicker] : null;
-    if (skGlitch && skGlitch.team !== g.team && skGlitch.glitch) return false;
+    if (skGlitch && skGlitch.team !== g.team && (skGlitch.glitch || b.sure === b.kickT)) return false;
     // an admin card's shot beats the keeper (unless he's an admin keeper himself); decided once per shot
     const sk = b.kicker >= 0 ? this.players[b.kicker] : null;
     if (sk && sk.team !== g.team && bst(sk, 'sho') > 0 && b.beatKick !== b.kickT) {
@@ -1979,6 +2199,22 @@ export class MatchSim {
     return { tReact: t + react, tc: t + cross.t, x: cross.x, y: cross.y, z: cross.z, gz: goal ? goal.z : cross.z, gy: goal ? goal.y : cross.y };
   }
 
+  // Keeper dive act (all three dives share it): turn to face the ball / shooter first, so the dive is side-on with the
+  // chest toward the shot, then fly, land, lie briefly and get up ('getup' act, a slow recovery instead of a snap).
+  // animP for DIVE (see snapshot.js): side * (1 + h + 4 * (1 + travelBucket + 4 * flightBucket)); h = hand height (m).
+  _diveAct(g, o) {
+    const t = this.t, b = this.ball;
+    const bd = Math.hypot(b.p.x - g.x, b.p.z - g.z);
+    g.face = bd > 0.4 ? Math.atan2(b.p.z - g.z, b.p.x - g.x) : this.dir[g.team] > 0 ? 0 : Math.PI;
+    const lie = 0.38;
+    const travel = Math.abs(o.vz * o.flight);
+    const tb = travel < 0.9 ? 0 : travel < 1.7 ? 1 : travel < 2.5 ? 2 : 3;
+    const fb = clamp(Math.round((o.flight - 0.24) / 0.09), 0, 3);
+    g.act = { type: 'dive', t0: t, dur: o.flight + lie, flight: o.flight, side: o.side, h: o.h, vx: o.vx, vz: o.vz, hx: 0, dx: o.dx, dz: o.dz, fromLoose: o.fromLoose, next: { type: 'getup', dur: 0.5, at0: o.flight + lie } };
+    g.animP = o.side * (1 + o.h + 4 * (1 + tb + 4 * fb));
+    g.setStance = 0;
+  }
+
   startDive(g, plan) {
     const t = this.t;
     const side = Math.sign(plan.z - g.z) || 1;
@@ -1994,8 +2230,7 @@ export class MatchSim {
     const vmax = 3.6 + g.a.div * 0.03 + g.a.spd * 0.012 + ps(g, 'farreach') * 0.3;
     const travel = clamp(need, 0.1, Math.min(maxBody, vmax * flight));
     const h = clamp(plan.y, 0.15, g.h + 0.35 + g.a.div * 0.003);
-    g.act = { type: 'dive', t0: t, dur: flight + 0.9, flight, side, h, vz: (side * travel) / flight, vx: ((plan.x - g.x) / flight) * 0.4, hx: 0 };
-    g.animP = side * (1 + h);
+    this._diveAct(g, { flight, side, h, vz: (side * travel) / flight, vx: ((plan.x - g.x) / flight) * 0.4 });
   }
 
   // keeper dives onto a loose ball (low, toward the ball) — smothers it if he gets there
@@ -2006,8 +2241,7 @@ export class MatchSim {
     const reach = Math.min(dl, 1.2 + g.a.div * 0.012 + (g.h - 1.85) * 1.2 + ps(g, 'rushout') * 0.2);
     const side = Math.sign(dz) || 1;
     g.cool.tackle = t + 1.3;
-    g.act = { type: 'dive', t0: t, dur: 1.1, flight, side, h: 0.3, vx: ((dx / dl) * reach * 0.7) / flight, vz: ((dz / dl) * reach * 0.7) / flight, hx: 0, dx: dx / dl, dz: dz / dl, fromLoose: true };
-    g.animP = side * 1.3;
+    this._diveAct(g, { flight, side, h: 0.3, vx: ((dx / dl) * reach * 0.7) / flight, vz: ((dz / dl) * reach * 0.7) / flight, dx: dx / dl, dz: dz / dl, fromLoose: true });
     g.gkPlan = null;
   }
 
@@ -2015,14 +2249,12 @@ export class MatchSim {
     const t = this.t;
     g.cool.tackle = t + 1.5;
     const side = Math.sign(owner.z - g.z) || 1;
-    g.act = { type: 'dive', t0: t, dur: 1.1, flight: 0.3, side, h: 0.3, vz: (owner.z - g.z) / 0.3 * 0.6, vx: (owner.x - g.x) / 0.3 * 0.6, hx: 0 };
-    g.animP = side * 1.3;
+    this._diveAct(g, { flight: 0.3, side, h: 0.3, vz: (owner.z - g.z) / 0.3 * 0.6, vx: (owner.x - g.x) / 0.3 * 0.6 });
     const pr = clamp(0.3 + (g.a.div + g.a.pos) / 400 - owner.a.dri / 300 + ps(g, 'rushout') * 0.1, 0.12, 0.75);
     if (this.rng() < pr) {
+      // he smothers it: the ball goes into his hands mid-dive and he stays down with it (the dive act carries on)
       this.ball.owner = -1;
-      g.act = null;
       this._gain(g, 'hands');
-      g.act = { type: 'down', t0: t, dur: 0.6 };
     }
   }
 
@@ -2131,7 +2363,7 @@ export class MatchSim {
       }
     }
     for (const o of this.teamList[1 - p.team]) {
-      if (o.act && (o.act.type === 'fall' || o.act.type === 'dive')) continue;
+      if (o.act && (o.act.type === 'fall' || o.act.type === 'dive' || o.act.type === 'getup')) continue;
       const d1 = Math.hypot(o.x - foot.x, o.z - foot.z), d2 = Math.hypot(o.x - p.x, o.z - p.z);
       if (d1 < 0.6 - (a.ballDone ? ps(p, 'slidetackle') * 0.15 : 0) || d2 < 0.55) {
         a.res = true;
@@ -2817,6 +3049,7 @@ export class MatchSim {
           case 'head': code = ANIM.HEAD; pp = a.jh || 0.4; break;
           case 'wall': code = ANIM.WALL; pp = a.jh || 0.4; break;
           case 'dive': code = ANIM.DIVE; pp = p.animP; break;
+          case 'getup': code = ANIM.DIVE; pp = p.animP; at += a.at0 || 0; break;
           case 'gkjump': code = ANIM.GKJUMP; pp = a.punch ? 1 : 0; break;
           case 'celeb': code = ANIM.CELEB; pp = p.celebKind ?? 0; break;
           case 'throw': code = ANIM.THROW; break;
@@ -2829,7 +3062,7 @@ export class MatchSim {
       } else if (this.ball.owner === p.idx && this.ball.inHands) code = ANIM.HOLD;
       else if (this.ball.owner === p.idx && (this.phase === PHASE.SETPIECE) && this.sp && this.sp.type === SP.THROW) code = ANIM.THROW, at = 0;
       else if (p.windup > 0) { code = ANIM.WINDUP; pp = p.windup; }
-      else if (p.isGK && p.ready && p.speed < 2) code = ANIM.GKREADY;
+      else if (p.isGK && p.ready && p.speed < 2) { code = ANIM.GKREADY; pp = p.gkPlan && !p.gkPlan.acted ? 1 : 0; } // 1 = set for the shot (split step)
       p.anim = code; p.animT = at; p.animP = code === ANIM.DIVE ? p.animP : pp;
     }
   }

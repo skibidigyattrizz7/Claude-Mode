@@ -46,6 +46,19 @@ export function selectAnimationState(anim, speed, acceleration = 0, turn = 0, po
   }
 }
 
+// Decode the DIVE animP written by core/sim.js `_diveAct`: side * (1 + h + 4 * rest), rest = 0 (older / hand-built
+// values: only side + hand height) or 1 + travelBucket + 4 * flightBucket. Returns the dive side (world z sign), the
+// hand height h (m), how far he travels laterally (0 short .. 3 full stretch) and the flight time (s).
+export function decodeDive(pp) {
+  const side = Math.sign(pp) || 1;
+  const v = Math.max(0, Math.abs(pp) - 1);
+  const rest = Math.floor(v / 4 + 1e-6);
+  const h = v - rest * 4;
+  if (!rest) return { side, h, travel: 2, flight: 0.4, legacy: true };
+  const r = rest - 1;
+  return { side, h, travel: r % 4, flight: 0.24 + 0.09 * Math.floor(r / 4), legacy: false };
+}
+
 // ---------------------------------------------------------------- shared geometry
 let GEO = null;
 let GEO_REFS = 0;
@@ -466,7 +479,10 @@ export class PlayerRig {
       }
       if (anim === ANIM.DIVE) {
         const lateral = (ctx.ballX - x) * -Math.sin(this.face) + (ctx.ballZ - z) * Math.cos(this.face);
-        this.diveSide = Math.abs(lateral) > .05 ? Math.sign(lateral) : (Math.sign(animP * Math.cos(this.face)) || 1);
+        // the sim tells us the world-z side of the dive and has already turned him to face the ball: roll toward that side
+        const dv = decodeDive(animP);
+        this.diveSide = !dv.legacy && Math.abs(Math.cos(face)) > 0.05 ? Math.sign(dv.side * Math.cos(face))
+          : Math.abs(lateral) > .05 ? Math.sign(lateral) : (Math.sign(animP * Math.cos(this.face)) || 1);
       }
     }
     this.lastAnimT = animT;
@@ -588,12 +604,14 @@ export class PlayerRig {
     const oz = R > 0 ? 1 : -1; // abduction sign for opposite (left) arm
     switch (anim) {
       case ANIM.KICK: {
-        const pw = clamp(Number.isFinite(pp) ? pp : 0.6, 0, 1);
+        // animP: 0.4 pass / 0.7 lofted / 1 shot / 1.5 finesse (inside-foot curl) / 2.5 power shot
+        const style = pp > 2 ? 2 : pp > 1 ? 1 : 0;
+        const pw = style ? 1 : clamp(Number.isFinite(pp) ? pp : 0.6, 0, 1);
         // u=0 is ball release, not the beginning of the backswing. WINDUP
         // provides anticipation before release; instant AI kicks start at contact.
         const pass = pw <= .45;
-        const follow = easeOut(seg(u, 0, pass ? .09 : .12));
-        const recover = smooth(seg(u, pass ? .12 : .19, .38));
+        const follow = easeOut(seg(u, 0, style === 2 ? .1 : pass ? .09 : .12));
+        const recover = smooth(seg(u, style === 2 ? .27 : pass ? .12 : .19, style === 2 ? .5 : .38));
         const thru = pass ? -.62 : -(.75 + .85 * pw);
         T[KH] = lerp(lerp(-.35, thru, follow), T[KH], recover);
         T[KK] = lerp(lerp(.12, pass ? .3 : .4, follow), T[KK], recover);
@@ -606,6 +624,28 @@ export class PlayerRig {
         T[P.spX] = 0.12 - 0.18 * pw * follow; T[P.spY] = R * (pass ? .12 : .35) * (1 - recover);
         T[P.nkX] = 0.35; T[P.nkY] = 0;
         T[P.roll] = R * 0.1 * (1 - recover); T[P.lift] = 0;
+        if (style === 1) {
+          // finesse: inside of the boot, the leg opens out and sweeps ACROSS the body, the hips and shoulders turning
+          // with it, and the kick leg wraps up toward the far side (the curl); standing foot planted, arms out
+          const across = easeOut(seg(u, 0, .17));
+          T[KH] = lerp(lerp(-.4, -.95, across), T[KH], recover);
+          T[KK] = lerp(lerp(.15, .55, across), T[KK], recover);
+          T[KA] = lerp(-.3, T[KA], recover);
+          T[KZ] = lerp(-oz * .34, oz * .9, across) * (1 - recover);
+          T[R > 0 ? P.rhY : P.lhY] = lerp(oz * -.55, oz * .35, across) * (1 - recover);
+          T[P.spY] = lerp(-R * .3, R * .5, across) * (1 - recover);
+          T[P.roll] = R * (.2 * (1 - across) - .12 * across) * (1 - recover); T[P.spX] = .16;
+          T[OAZ] = oz * 1.15; T[OAX] = -.2; T[KAZ] = -oz * .8;
+        } else if (style === 2) {
+          // power: straight through the ball, torso over it, big follow-through, long recovery
+          T[KH] = lerp(lerp(-.55, -1.6, follow), T[KH], recover);
+          T[KK] = lerp(lerp(.05, .2, follow), T[KK], recover);
+          T[KA] = lerp(.35, T[KA], recover);
+          T[KZ] = 0; T[R > 0 ? P.rhY : P.lhY] = 0;
+          T[P.spX] = lerp(.5, .18, recover); T[P.spY] = R * .25 * (1 - recover); T[P.nkX] = .5;
+          T[OAX] = -.9; T[OAZ] = oz * 1.35; T[KAX] = .5; T[KAZ] = -oz * .8; T[P.roll] = R * -.06 * (1 - recover);
+          T[SH] = -.35; T[SK] = .55;
+        }
         // "The Shawky": one of 3 acrobatic overlays on top of the normal strike pose (see `glitchKind`
         // above) — a bicycle kick, a scissor/overhead volley, or a spinning heel, picked per shot.
         if (this.glitch && !pass) {
@@ -625,10 +665,28 @@ export class PlayerRig {
         break;
       }
       case ANIM.WINDUP: {
-        const p = clamp(pp, 0, 1);
-        T[KH] = lerp(T[KH], 0.35 + 0.35 * p, 0.8); T[KK] = lerp(T[KK], 0.9 + 0.6 * p, 0.8);
-        T[OAZ] = oz * (0.3 + 0.7 * p); T[OAX] = -0.3 * p;
-        T[P.spY] = -R * 0.2 * p; T[P.nkX] = 0.25 * p;
+        // animP: 0..1 normal, 1.x finesse (x = charge), 2.x power shot (x = charge)
+        const style = pp >= 2 ? 2 : pp > 1 ? 1 : 0;
+        const p = clamp(style ? pp - style : pp, 0, 1);
+        if (style === 2) {
+          // power shot: the whole leg cocked back and up, heel to the seat, torso leaning back, arms flung wide
+          const c = easeOut(p);
+          T[KH] = lerp(T[KH], .95 * c + .1, .9); T[KK] = lerp(T[KK], 1.95 * c + .2, .9); T[KA] = .4 * c;
+          T[SH] = lerp(T[SH], -.15, .5); T[SK] = lerp(T[SK], .35 * c, .6);
+          T[OAZ] = oz * (.5 + .95 * c); T[OAX] = -.35 * c; T[KAZ] = -oz * (.4 + .6 * c); T[KAX] = .2 * c;
+          T[P.spX] = -.34 * c; T[P.spY] = -R * .3 * c; T[P.nkX] = -.1 * c;
+        } else if (style === 1) {
+          // finesse: the foot opens out to the side, hips turned, arms out for balance
+          const c = easeOut(p);
+          T[KH] = lerp(T[KH], .3 + .3 * c, .85); T[KK] = lerp(T[KK], .8 + .7 * c, .85);
+          T[KZ] = -oz * .5 * c; T[R > 0 ? P.rhY : P.lhY] = oz * -.5 * c;
+          T[OAZ] = oz * (.5 + .7 * c); T[OAX] = -.2 * c; T[KAZ] = -oz * .5 * c;
+          T[P.spY] = R * .3 * c; T[P.roll] = R * .12 * c; T[P.nkX] = .2 * c;
+        } else {
+          T[KH] = lerp(T[KH], 0.35 + 0.35 * p, 0.8); T[KK] = lerp(T[KK], 0.9 + 0.6 * p, 0.8);
+          T[OAZ] = oz * (0.3 + 0.7 * p); T[OAX] = -0.3 * p;
+          T[P.spY] = -R * 0.2 * p; T[P.nkX] = 0.25 * p;
+        }
         break;
       }
       case ANIM.TACKLE: {
@@ -686,42 +744,64 @@ export class PlayerRig {
         break;
       }
       case ANIM.DIVE: {
-        const side = Math.sign(pp) || 1;
-        const hgt = Math.max(0, Math.abs(pp) - 1);
+        // Keeper dive. The sim turns him to face the ball before he goes (core/sim.js `_diveAct`), so the body rolls side-on
+        // with the chest toward the shot. Shapes, chosen from the hand height / distance the sim encodes:
+        //   low     hands near the grass: flat along the ground (belly-down scoop for a short step)
+        //   mid     body horizontal at chest height, both arms stretched to the side
+        //   high    stretched: near-vertical flight, top arm fully extended, tip-over at the bar
+        //   diag    far and high: body angled ~55 degrees, rising, head leading
+        // then land on the side, lie a moment and get up (push up, knee, stand).
+        const D = decodeDive(pp);
+        const side = D.side, hgt = D.h;
         const lateral = (ctx.ballX - this.px) * -Math.sin(this.face) + (ctx.ballZ - this.pz) * Math.cos(this.face);
         const cosF = Math.cos(this.face);
         const dr = this.diveSide || (Math.abs(lateral) > 0.05 ? Math.sign(lateral) : (Math.sign(side * cosF) || side));
-        const F = 0.4;
+        const F = D.flight, LIE = 0.38;
+        const tr = D.legacy ? 1 : [0.5, 0.75, 0.95, 1][D.travel];
         const load = seg(u, 0, 0.1);
-        const fl = seg(u, 0.08, F + 0.05);
-        const land = seg(u, F + 0.05, F + 0.3);
-        const rise = seg(u, F + 0.75, F + 1.05);
-        const high = clamp((hgt - 1.2) / 1.0, 0, 1);
-        const low = clamp((0.6 - hgt) / 0.4, 0, 1); // low scoop / smother: flat along the grass
-        const peak = clamp(hgt * 0.8, 0.28, 1.65) - low * 0.1;
-        const rollMax = lerp(lerp(1.5, 1.05, high), 1.58, low);
-        let y = lerp(STAND_Y - 0.2 * load, STAND_Y, 0);
-        y = STAND_Y - 0.22 * load * (1 - fl);
-        const flightY = lerp(STAND_Y - 0.2, peak, easeOut(fl)) ;
-        y = fl > 0 ? flightY : y;
+        const fl = seg(u, 0.06, F);
+        const land = seg(u, F, F + 0.2);
+        const rise = seg(u, F + LIE, F + LIE + 0.5);
+        const kneel = smooth(seg(rise, 0, 0.5)), stand = smooth(seg(rise, 0.5, 1));
+        const high = clamp((hgt - 1.35) / 0.9, 0, 1);
+        const low = clamp((0.65 - hgt) / 0.4, 0, 1);
+        const diag = D.legacy ? 0 : clamp((D.travel - 1) / 2, 0, 1) * clamp((hgt - 0.8) / 0.5, 0, 1) * (1 - high * 0.4);
+        const tip = clamp((hgt - 2.05) / 0.35, 0, 1);
+        const scoop = !D.legacy && D.travel === 0 && low > 0.4 ? 1 : 0; // short low dive onto the ball: belly down
+        // roll of the body about its chest axis: 1.5 = lying on its side
+        const rollFly = lerp(0.85, lerp(lerp(1.5, 1.28, high), 1.12, diag), tr) - 0.3 * tip;
+        const peak = clamp(hgt * (0.85 - 0.25 * high) + 0.1, 0.34, 1.6) - low * 0.08;
+        let y = STAND_Y - 0.24 * load * (1 - fl);
+        if (fl > 0) y = lerp(STAND_Y - 0.24, peak, easeOut(fl));
         y = lerp(y, 0.2, easeIn(land));
-        y = lerp(y, 0.62, rise);
-        const roll = dr * lerp(lerp(0.12 * load, rollMax, easeOut(fl)), 1.5, land) * (1 - 0.5 * rise);
-        T[P.gl] = fl > 0 ? 0 : 1;
-        // fingertip tip-over for balls near the bar: lean back, top arm fully extended
-        const tip = clamp((hgt - 2.0) / 0.4, 0, 1);
-        T[P.bodyY] = y; T[P.roll] = roll; T[P.pitch] = -0.1 * fl + 0.25 * rise - 0.35 * tip * fl;
-        const reach = easeOut(fl) * (1 - 0.6 * rise);
-        // arms stretch "overhead" (toward the dive side after roll)
-        T[P.lsZ] = lerp(0.3, 2.85 - (dr > 0 ? 0.25 : 0), reach); T[P.lsX] = lerp(-0.3, -0.25, reach); T[P.leX] = lerp(-0.6, -0.1, reach);
-        T[P.rsZ] = lerp(-0.3, -2.85 + (dr < 0 ? 0.25 : 0), reach); T[P.rsX] = lerp(-0.3, -0.25, reach); T[P.reX] = lerp(-0.6, -0.1, reach);
-        // legs: lead leg straight, trailing bent
+        y = lerp(y, 0.46, kneel);
+        y = lerp(y, STAND_Y, stand);
+        let roll = lerp(0.14 * load, rollFly, easeOut(fl));
+        roll = lerp(roll, 1.5, land);
+        roll = lerp(roll, 0.55, kneel);
+        roll = lerp(roll, 0, stand);
+        T[P.gl] = Math.max(1 - smooth(seg(u, 0.04, 0.09)), smooth(seg(stand, 0.7, 1)));
+        T[P.bodyY] = y;
+        T[P.roll] = dr * roll;
+        T[P.yaw] = dr * (0.32 * diag * (1 - land) + 0.1 * high * fl * (1 - land)) * (1 - kneel);
+        // chest: belly-down scoop for short low dives, leaning back at the bar, a little forward otherwise
+        T[P.pitch] = (scoop * 0.55 * (1 - kneel) + (-0.1 - 0.5 * tip - 0.16 * diag) * fl * (1 - land) * (1 - scoop) + 0.2 * kneel) * (1 - stand);
+        const reach = easeOut(fl) * (1 - 0.7 * kneel);
+        const arm = (z, up) => lerp(0.3, z, reach) * (1 - 0.15 * up);
+        // arms: both overhead toward the dive side; the top arm (left when diving to the right) stretches furthest on a high save
+        const topL = dr > 0, hiK = 0.35 * high;
+        T[P.lsZ] = arm(2.85 - (topL ? 0 : hiK), 0); T[P.lsX] = lerp(-0.3, topL ? -0.1 : -0.55 - 0.3 * high, reach); T[P.leX] = lerp(-0.6, topL ? -0.05 : -0.35 * high - 0.1, reach);
+        T[P.rsZ] = -arm(2.85 - (topL ? hiK : 0), 0); T[P.rsX] = lerp(-0.3, topL ? -0.55 - 0.3 * high : -0.1, reach); T[P.reX] = lerp(-0.6, topL ? -0.35 * high - 0.1 : -0.05, reach);
+        // legs: trailing leg bent, lead leg trailing straight; load = crouch before take-off
         const leadH = dr > 0 ? P.rhX : P.lhX, leadK = dr > 0 ? P.rkX : P.lkX, trH = dr > 0 ? P.lhX : P.rhX, trK = dr > 0 ? P.lkX : P.rkX;
-        T[leadH] = lerp(-0.35 * load, -0.15, fl); T[leadK] = lerp(0.6 * load, 0.15, fl);
-        T[trH] = lerp(-0.35 * load, -0.55, fl); T[trK] = lerp(0.6 * load, 1.1, fl);
-        T[P.lhZ] = dr < 0 ? 0.25 * fl : 0.05; T[P.rhZ] = dr > 0 ? -0.25 * fl : -0.05;
-        T[P.spX] = 0.25 * load + 0.1 * fl; T[P.spZ] = -dr * 0.15 * fl; T[P.spY] = 0;
-        T[P.nkY] = 0; T[P.nkX] = 0;
+        T[leadH] = lerp(-0.55 * load, -0.15 - 0.2 * high, fl); T[leadK] = lerp(0.9 * load, 0.15 + 0.3 * low, fl);
+        T[trH] = lerp(-0.55 * load, -0.55 + 0.35 * diag, fl); T[trK] = lerp(0.9 * load, 1.1 - 0.4 * high, fl);
+        T[P.lhZ] = (dr < 0 ? 0.25 * fl : 0.05); T[P.rhZ] = (dr > 0 ? -0.25 * fl : -0.05);
+        // getting up: knees under the body, then stand
+        T[P.lkX] = lerp(T[P.lkX], 1.5, kneel * (1 - stand)); T[P.rkX] = lerp(T[P.rkX], 1.1, kneel * (1 - stand));
+        T[P.lhX] = lerp(T[P.lhX], -0.7, kneel * (1 - stand)); T[P.rhX] = lerp(T[P.rhX], -0.35, kneel * (1 - stand));
+        T[P.spX] = 0.25 * load * (1 - fl) + 0.1 * fl + 0.3 * kneel * (1 - stand); T[P.spZ] = -dr * 0.15 * fl * (1 - kneel); T[P.spY] = 0;
+        T[P.nkY] = 0; T[P.nkX] = -0.15 * fl * (1 - land);
         T[P.lift] = 0;
         break;
       }
@@ -845,10 +925,49 @@ export class PlayerRig {
           T[hX] = -0.35; T[kX] = 0.65; T[aX] = -0.45;
           T[hZ] = zs * lerp(0.25, -0.35, smooth(v));
           T[P.roll] = zs * 0.12; T[P.spX] = 0.18;
-        } else { // heel flick
+        } else if (idx === 3) { // heel flick
           const v = clamp(u / 0.4, 0, 1);
           T[hX] = lerp(-0.5, 0.65, smooth(v)); T[kX] = lerp(0.3, 1.5, smooth(v)); T[aX] = 0.3;
           T[P.spX] = 0.25; T[P.nkX] = 0.3;
+        } else if (idx === 4) { // drag back: sole on top of the ball rolls it back, a low half turn, then away
+          const v = clamp(u / 0.28, 0, 1), w = seg(u, 0.28, 0.62);
+          T[hX] = lerp(-0.2, -0.75, smooth(v)) * (1 - w); T[kX] = lerp(0.2, 0.35, smooth(v)) * (1 - w); T[aX] = -0.5 * (1 - w) * v;
+          const crouch = Math.sin(Math.PI * clamp(u / 0.62, 0, 1));
+          T[P.spX] = 0.18 + 0.22 * crouch; T[P.lift] = 0; T[P.roll] = zs * -0.1 * v * (1 - w);
+          T[P.lkX] = Math.max(T[P.lkX], 0.4 * crouch); T[P.rkX] = Math.max(T[P.rkX], 0.4 * crouch);
+          T[P.lsZ] = 0.9; T[P.rsZ] = -0.9;
+        } else if (idx === 5) { // La Croqueta: the ball passed from one foot to the other with quick short touches
+          const ph = u * 26;
+          const wf = Math.sin(Math.PI * clamp(u / 0.6, 0, 1));
+          T[P.lhZ] = 0.05 + 0.32 * Math.sin(ph) * wf * sd; T[P.rhZ] = -0.05 + 0.32 * Math.sin(ph) * wf * sd;
+          T[P.lhX] = -0.25 * Math.max(0, Math.sin(ph)) * wf; T[P.rhX] = -0.25 * Math.max(0, -Math.sin(ph)) * wf;
+          T[P.lkX] = 0.35 * wf; T[P.rkX] = 0.35 * wf;
+          T[P.roll] = sd * 0.13 * Math.sin(ph * 0.5) * wf; T[P.spX] = 0.2; T[P.lift] = 0;
+          T[P.lsZ] = 0.85; T[P.rsZ] = -0.85;
+        } else if (idx === 6) { // elastico: outside of the boot pushes it one way, the same foot snaps it back inside
+          const a1 = seg(u, 0, 0.22), a2 = seg(u, 0.22, 0.36), a3 = seg(u, 0.4, 0.62);
+          T[hX] = -0.35 - 0.1 * Math.sin(Math.PI * a2);
+          T[kX] = 0.5 + 0.2 * a1;
+          // leg opens outward (outside of the foot), then sweeps back across the ball
+          T[hZ] = zs * lerp(lerp(0.05, -0.55, smooth(a1)), 0.6, smooth(a2)) * (1 - a3);
+          T[P.roll] = -zs * (0.16 * a1 - 0.3 * a2) * (1 - a3); T[P.spY] = zs * (0.2 * a1 - 0.35 * a2) * (1 - a3);
+          T[P.spX] = 0.2 + 0.1 * a2; T[P.lift] = 0;
+          T[P.lsZ] = 0.9; T[P.rsZ] = -0.9;
+        } else if (idx === 7) { // rainbow flick: heels trap the ball, a hop, the ball goes up and over
+          const wind = seg(u, 0, 0.2), hop = Math.sin(Math.PI * seg(u, 0.16, 0.5));
+          T[P.lkX] = 1.35 * wind * (1 - 0.3 * hop) + 0.5 * hop; T[P.rkX] = 1.35 * wind * (1 - 0.3 * hop) + 0.5 * hop;
+          T[P.lhX] = 0.3 * wind - 0.15 * hop; T[P.rhX] = 0.3 * wind - 0.15 * hop;
+          T[P.laX] = 0.35 * wind; T[P.raX] = 0.35 * wind;
+          T[P.lift] = 0.4 * hop; T[P.spX] = 0.14 + 0.25 * hop; T[P.nkX] = -0.3 * hop;
+          T[P.lsZ] = 1.05; T[P.rsZ] = -1.05; T[P.lsX] = -0.3 * hop; T[P.rsX] = -0.3 * hop;
+        } else { // fake shot: the leg goes back and swings through, but the ball stays; then a step past
+          const back = seg(u, 0, 0.16), sw = seg(u, 0.16, 0.3), out = seg(u, 0.3, 0.5);
+          const kh = R > 0 ? P.rhX : P.lhX, kk = R > 0 ? P.rkX : P.lkX;
+          T[kh] = lerp(lerp(-0.1, 0.8, back), -0.95, easeOut(sw)) * (1 - out);
+          T[kk] = lerp(lerp(0.2, 1.7, back), 0.3, easeOut(sw)) * (1 - out);
+          T[P.spX] = lerp(0.1, -0.2, back) + 0.4 * sw * (1 - out); T[P.nkX] = 0.35 * sw;
+          T[R > 0 ? P.lsX : P.rsX] = -0.5 * sw; T[P.lift] = 0;
+          T[P.lsZ] = 0.85; T[P.rsZ] = -0.85;
         }
         break;
       }
@@ -871,12 +990,16 @@ export class PlayerRig {
         break;
       }
       case ANIM.GKREADY: {
-        const bob = Math.sin(ctx.t * 5 + this.seed) * 0.02;
-        T[P.lhX] = -0.55; T[P.rhX] = -0.55; T[P.lkX] = 0.95 + bob; T[P.rkX] = 0.95 + bob; T[P.laX] = -0.35; T[P.raX] = -0.35;
-        T[P.lhZ] = 0.2; T[P.rhZ] = -0.2; T[P.lhY] = -0.2; T[P.rhY] = 0.2;
-        T[P.spX] = 0.5; T[P.nkX] = -0.42; T[P.nkY] = this.headYaw * 0.5;
-        T[P.lsX] = -0.55; T[P.rsX] = -0.55; T[P.lsZ] = 0.5; T[P.rsZ] = -0.5; T[P.leX] = -0.55; T[P.reX] = -0.55;
-        T[P.lift] = 0; T[P.roll] = 0; T[P.spY] = 0;
+        // ready (animP 0): feet a bit wider than the shoulders, knees soft, hands out in front, facing the ball.
+        // set (animP 1, a shot is on its way): deeper, wider, weight on the toes, a small split-step hop.
+        const st = clamp(pp, 0, 1);
+        const bob = Math.sin(ctx.t * (5 + 8 * st) + this.seed) * (0.02 + 0.03 * st);
+        const knee = lerp(0.62, 1.0, st) + bob;
+        T[P.lhX] = -lerp(0.38, 0.6, st); T[P.rhX] = -lerp(0.38, 0.6, st); T[P.lkX] = knee; T[P.rkX] = knee; T[P.laX] = -lerp(0.25, 0.4, st); T[P.raX] = -lerp(0.25, 0.4, st);
+        T[P.lhZ] = lerp(0.14, 0.3, st); T[P.rhZ] = -lerp(0.14, 0.3, st); T[P.lhY] = -0.15; T[P.rhY] = 0.15;
+        T[P.spX] = lerp(0.3, 0.55, st); T[P.nkX] = -lerp(0.25, 0.45, st); T[P.nkY] = this.headYaw * 0.5;
+        T[P.lsX] = -lerp(0.45, 0.7, st); T[P.rsX] = -lerp(0.45, 0.7, st); T[P.lsZ] = lerp(0.4, 0.62, st); T[P.rsZ] = -lerp(0.4, 0.62, st); T[P.leX] = -lerp(0.55, 0.75, st); T[P.reX] = -lerp(0.55, 0.75, st);
+        T[P.lift] = st * 0.045 * Math.max(0, Math.sin(ctx.t * 13 + this.seed)); T[P.roll] = 0; T[P.spY] = 0;
         break;
       }
       default: break;

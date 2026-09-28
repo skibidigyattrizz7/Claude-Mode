@@ -355,7 +355,7 @@ export class AdminFx {
       for (const team of this.teams(e.tg)) {
         for (const p of sim.teamList[team]) {
           p.cool.touch = Math.max(p.cool.touch, t + 0.05); p.cool.tackle = Math.max(p.cool.tackle, t + 0.05); p.cool.steal = Math.max(p.cool.steal, t + 0.05);
-          if (p.act && p.act.type !== 'dive') p.act = null;
+          if (p.act && p.act.type !== 'dive' && p.act.type !== 'getup') p.act = null;
           p.vx = 0; p.vz = 0; p.windup = 0;
           if (b.owner === p.idx) { b.owner = -1; b.inHands = false; b.v.x = b.v.z = 0; b.intended = -1; sim.path = null; }
         }
