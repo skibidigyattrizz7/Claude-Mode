@@ -704,7 +704,7 @@ test('staff match tokens: owner/mod only, bound to the room, verified server-sid
   const P = mkAcc(be);
   await P.account.signup({ username: 'Plain', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal((await P.admin.matchToken('ROOM1')).ok, false);
-  assert.equal(O.admin.level, 'owner');
+  assert.equal(O.admin.level, 'super'); // 009: the owner account is Owner Access
   const t = await O.admin.matchToken('ROOM1');
   assert.equal(t.ok, true);
   const v = await P.admin.verifyMatchToken(t.token, 'ROOM1');
@@ -804,10 +804,23 @@ test('global config: owner/code writes (validated), everyone reads; tax applies 
   assert.equal((await A.coins.get()).coins, 5800);
 });
 
+test('009: the owner ACCOUNT is Owner Access: gifts a 500 OVR card with no code this session (laptop needs_super bug)', async () => {
+  const { O, B, b } = await world3();
+  O.admin.forget(); // no code token in this browser session, like a fresh laptop session
+  assert.equal(O.admin.codeLevel, null);
+  assert.equal(O.admin.level, 'super');
+  const r = await O.owner.gift({ to: b.id, kind: 'card', card: { id: 'adm9', name: 'Admin Nine', pos: 'ST', ovr: 500 } });
+  assert.equal(r.ok, true, r.error);
+  assert.ok((await B.gifts.inbox()).items.some((g) => g.kind === 'card' && g.card.ovr === 500));
+});
+
 test('gifts: giveaway to everyone + direct card (tradable, >99 needs super), claim once, presence counts', async () => {
   const { be, A, B, O, b } = await world3();
   assert.equal((await O.owner.gift({ to: 'all', kind: 'coins', coins: 1000, message: 'Enjoy!' })).ok, true);
-  assert.equal((await O.owner.gift({ to: b.id, kind: 'card', card: { id: 'adm1', name: 'Admin Guy', ovr: 500, untradable: true } })).error, 'needs_super');
+  // A FULL code (not Owner Access) still can't gift cards above 99; the owner ACCOUNT can (009), without any code.
+  const F = mk3(be);
+  await F.admin.verifyLevel('full-code-1');
+  assert.equal((await F.owner.gift({ to: b.id, kind: 'card', card: { id: 'adm1', name: 'Admin Guy', ovr: 500, untradable: true } })).error, 'needs_super');
   const X = mk3(be);
   await X.admin.verifyLevel('super-code-1');
   assert.equal((await X.owner.gift({ to: b.id, kind: 'card', card: { id: 'adm1', name: 'Admin Guy', pos: 'ST', ovr: 500, untradable: true } })).ok, true);
@@ -844,7 +857,9 @@ test('card creator gift: a created card (photo, OVR 500) sent by username lands 
   assert.equal((await X.players.resolve(b.id)).id, b.id);
   const payload = giftPayloadCard(created);
   assert.equal(payload.photo, photo);
-  assert.equal((await O.owner.gift({ to: who.id, kind: 'card', card: payload })).error, 'needs_super'); // owner account: OVR > 99 needs SUPER
+  const F = mk3(be);
+  await F.admin.verifyLevel('full-code-1');
+  assert.equal((await F.owner.gift({ to: who.id, kind: 'card', card: payload })).error, 'needs_super'); // FULL code: OVR > 99 needs Owner Access
   const sent = await X.owner.gift({ to: who.id, kind: 'card', card: payload, minutes: 60 });
   assert.equal(sent.ok, true);
   const g = (await B.gifts.inbox()).items.find((x) => x.kind === 'card');
@@ -1037,9 +1052,9 @@ test('shared adminauth: local PBKDF2 levels, session level + account role, caps'
   assert.equal(await AA.verifyAdminCodeLocal('definitely-wrong'), null); // real constants (3 x 600k PBKDF2)
   const fakeOnline = { account: { current: () => ({ state: 'account', role: 'owner' }) }, admin: { codeLevel: null } };
   AA.bindOnline(fakeOnline);
-  assert.equal(AA.getAdminLevel(), 'full');
+  assert.equal(AA.getAdminLevel(), 'super'); // 009: owner account = Owner Access, no code needed
   AA.setAdminSessionLevel('temp');
-  assert.equal(AA.getAdminLevel(), 'full');
+  assert.equal(AA.getAdminLevel(), 'super');
   fakeOnline.admin.codeLevel = 'super';
   assert.equal(AA.getAdminLevel(), 'super');
   assert.equal(AA.adminCaps('super').maxOvr, 999);

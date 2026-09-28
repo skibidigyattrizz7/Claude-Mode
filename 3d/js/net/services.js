@@ -567,7 +567,7 @@ export function createOnline(deps) {
       get codeLevel() { return adminLevelNow(); },
       forget() { adminCode = null; sdel(volatile, ADM_KEY); emitAcc(); },
       /** 'super' | 'full' (server-verified code) | 'owner' | 'mod' (account role) | null */
-      get level() { return adminLevelNow() || staffRole(); },
+      get level() { return adminLevelNow() || (staffRole() === 'owner' ? 'super' : staffRole()); },
       /** true when owner powers will be accepted (code token or owner account). */
       canOwner() { return !restrictedNow('admin') && !restrictedNow('codes') && (!!adminSecret() || staffRole() === 'owner'); },
       /** Owner restrictions currently on this profile: { codes, admin, market, packs, messages } (true | until ISO). */

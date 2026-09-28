@@ -109,12 +109,12 @@ function accountRole(online = boundOnline) {
 
 /**
  * Effective admin level: highest of the code session, the server-verified code level and the account
- * role (owner -> 'full', mod -> 'mod'). -> 'super' | 'full' | 'mod' | 'temp' | null
+ * role (owner -> 'super', mod -> 'mod'). -> 'super' | 'full' | 'mod' | 'temp' | null
  */
 export function getAdminLevel(now = Date.now(), online = boundOnline) {
   const cands = [adminSessionLevel(now)];
   const role = accountRole(online);
-  if (role === 'owner') cands.push('full');
+  if (role === 'owner') cands.push('super'); // 009: the owner account is Owner Access (no code needed)
   else if (role === 'mod') cands.push('mod');
   try { const lv = online && online.admin ? online.admin.codeLevel : null; if (lv === 'super' || lv === 'full') cands.push(lv); } catch { /* ignore */ }
   return cands.filter(Boolean).sort((a, b) => ADMIN_RANK[b] - ADMIN_RANK[a])[0] || null;

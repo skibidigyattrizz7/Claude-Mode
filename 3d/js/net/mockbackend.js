@@ -204,7 +204,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
   const cfgVersion = (db) => db.configAt || 0;
   function actor(db, p_code, p_id, p_secret) {
     let role = null, a = null;
-    if (p_id && p_secret) { a = auth(db, p_id, p_secret); if (a && restricted(a, 'admin')) return null; if (a && (a.role === 'owner' || a.role === 'mod')) role = a.role; }
+    if (p_id && p_secret) { a = auth(db, p_id, p_secret); if (a && restricted(a, 'admin')) return null; if (a && a.role === 'owner') role = 'super'; else if (a && a.role === 'mod') role = 'mod'; } // 009: owner account = Owner Access
     const lv = p_code && !(a && restricted(a, 'codes')) ? adminLevel(db, p_code) : null;
     return lv || role;
   }
