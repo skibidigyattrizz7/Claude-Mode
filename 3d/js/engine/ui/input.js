@@ -138,6 +138,7 @@ export class InputManager {
         const t = this.touchState;
         if (t.mx || t.my) { out.mx = t.mx; out.my = t.my; }
         for (const a of ACTIONS) out[a] ||= !!t[a];
+        out.power ||= !!t.powerArmed; // touch POWER is a toggle: tap to arm, then shoot
       }
       const l = Math.hypot(out.mx, out.my);
       if (l > 1) { out.mx /= l; out.my /= l; }
@@ -214,6 +215,13 @@ export class InputManager {
           cx = rect.left + rect.width / 2; cy = rect.top + rect.height / 2;
           moveJoy(t.clientX, t.clientY);
           e.preventDefault();
+        } else if (el.dataset && el.dataset.a === 'power') {
+          // Holding two buttons is awkward on a phone: POWER toggles. Tap to arm (stays lit), then shoot;
+          // it disarms itself after the shot, or tap again to cancel.
+          st.powerArmed = !st.powerArmed;
+          el.classList.toggle('on', st.powerArmed);
+          this.onCommand('any', 'touch');
+          e.preventDefault();
         } else if (el.dataset && el.dataset.a) {
           st[el.dataset.a] = t.identifier + 1;
           el.classList.add('on');
@@ -233,6 +241,10 @@ export class InputManager {
         if (t.identifier === joyId) { joyId = null; st.mx = 0; st.my = 0; knob.style.transform = ''; }
         for (const a of ACTIONS) if (st[a] === t.identifier + 1) {
           st[a] = 0;
+          if ((a === 'shoot' || a === 'finesse') && st.powerArmed) {
+            // keep it armed a few frames past the release so the sim reads the power shot, then disarm
+            setTimeout(() => { st.powerArmed = false; const pb = wrap.querySelector('[data-a="power"]'); if (pb) pb.classList.remove('on'); }, 250);
+          }
           const b = wrap.querySelector(`[data-a="${a}"]`);
           if (b) b.classList.remove('on');
         }

@@ -639,7 +639,7 @@ export class Hud {
       <div style="font-weight:800;margin-top:6px">Skill moves (needs the skill-move stars shown)</div><table>
         <tr><td>Skill + direction (relative to where you face)</td><td>none step-over (1) · forward heel flick (1) · back roulette (1) · side ball roll (1)</td></tr>
         <tr><td>Advanced: hold Jockey, or press Skill again straight after a move (touch: double tap)</td><td>none fake shot (1) · forward rainbow flick (5) · diagonal elastico (4) · side La Croqueta (3) · back drag back (2)</td></tr>
-        <tr><td>Gamepad</td><td>flick the right stick, or R3 with the left stick. Power shot: LB + RB with Shoot. Touch: POWER button with SHOOT</td></tr></table>
+        <tr><td>Gamepad</td><td>flick the right stick, or R3 with the left stick. Power shot: LB + RB with Shoot. Touch: tap POWER (it lights up), then SHOOT</td></tr></table>
       <table><tr><td>Toggle camera</td><td><kbd>C</kbd></td></tr><tr><td>Quick tactics · mentality</td><td><kbd>1</kbd>–<kbd>4</kbd> · <kbd>-</kbd> <kbd>=</kbd></td></tr><tr><td>Set pieces</td><td>move = aim, curve = switch/tackle keys, hold kick key for power</td></tr></table>`;
     const back = el('button', '', b, 'Back');
     back.addEventListener('click', () => this._menuMain(info));
