@@ -52,13 +52,15 @@ function lsGet(key, fallback) {
 function lsSet(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } }
 
 const SETTINGS_KEY = 'pitchside.settings';
-const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear' };
+const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'classic' };
 const DIFFICULTIES = [['amateur', 'Amateur'], ['pro', 'Pro'], ['world', 'World Class'], ['legendary', 'Legendary']];
 const HALF_LENGTHS = [2, 3, 4, 6, 8];
 const CAMERAS = [['broadcast', 'Broadcast'], ['pro', 'Pro (player lock)']];
 const QUALITIES = [['low', 'Low'], ['med', 'Medium'], ['high', 'High']];
 const STADIUMS = [['day', 'Day'], ['night', 'Night']];
 const WEATHERS = [['clear', 'Clear'], ['rain', 'Rain'], ['snow', 'Snow'], ['random', 'Random']];
+// Interface style: Classic is the original look; Stadium is the alternate theme (css/theme-stadium.css, scoped under html[data-ui="stadium"]).
+const UI_STYLES = [['classic', 'Classic'], ['stadium', 'Stadium']];
 
 export function loadSettings() {
   const s = { ...DEFAULT_SETTINGS, ...lsGet(SETTINGS_KEY, {}) };
@@ -70,9 +72,15 @@ export function loadSettings() {
   s.volume = Math.max(0, Math.min(100, Math.round(s.volume)));
   if (s.stadium !== 'night') s.stadium = 'day';
   if (!WEATHERS.some(([k]) => k === s.weather)) s.weather = DEFAULT_SETTINGS.weather;
+  if (!UI_STYLES.some(([k]) => k === s.ui)) s.ui = DEFAULT_SETTINGS.ui;
   return s;
 }
 function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
+/** Apply the interface style to <html>. js/uistyle.js (in index.html <head>) already did this before first paint; this keeps it live when Settings changes it. */
+function applyUiStyle(v) {
+  const root = document.documentElement;
+  if (v === 'stadium') root.dataset.ui = 'stadium'; else delete root.dataset.ui;
+}
 
 // Gameplay assists: P1 uses shared/gameplay.js storage; P2 (local 2-player) has its own profile.
 const GP_P2_KEY = 'pitchside.gameplay.p2';
@@ -809,6 +817,7 @@ function settingsScreen(tab = 'general') {
     segmented('Weather', WEATHERS, s.weather, upd('weather'), 'set-weather'),
     segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
     segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
+    segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); upd('ui')(v); }, 'set-ui'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
     h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
     adminCodesField());
@@ -1242,6 +1251,7 @@ function startOnlineServices() {
 }
 
 // ------------------------------------------------------------------ boot
+applyUiStyle(loadSettings().ui);
 mountStadium(document.querySelector('.bg'));
 mainMenu();
 document.documentElement.classList.add('ready');
