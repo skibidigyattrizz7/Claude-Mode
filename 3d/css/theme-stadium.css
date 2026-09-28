@@ -1,0 +1,463 @@
+/* ==========================================================================================
+   Pitchside 3D  -  "Stadium" interface style (Settings > General > Interface style)
+   Every rule is scoped under html[data-ui="stadium"], so Classic is untouched. Loaded last.
+
+   Look    A night match under the lights. One blue-steel hue in seven surface/line/text shades,
+           ONE flat flare-orange accent (primary action, active tab bar, focus, progress), green and
+           red only for results. No decorative gradients: fills, borders and glows are flat.
+   Shape   Angled corners on buttons, tiles and tags (like a kit panel), everything else square.
+   Type    Russo One (display headings + the numbers that matter) + Chakra Petch (body / UI).
+   Space   4 / 8 / 12 / 16 / 24 / 32 / 48 (tokens.css scale).
+   Motion  Screens slide in, grids rise in a 50ms stagger, one flare bar slides between tabs, buttons wipe a
+           fill on hover and sink on press, cards lean toward the pointer, toasts drain their own timer.
+           Enter 300-460ms, press/hover 90-200ms, exits faster than entrances. All off under
+           prefers-reduced-motion. Nothing fades in on scroll.
+   Shadow  Only on things that float (modal, toast, a lifted card). Tiles and panels are flat.
+   ========================================================================================== */
+
+/* ------------------------------------------------------------------ 1. tokens */
+html[data-ui="stadium"],
+html[data-ui="stadium"] .pm-root {
+  --bg: #070b11; --bg2: #0b111a; --panel: #101823; --panel-solid: #101823;
+  --panel2: #172232; --panel3: #1f2d42; --line: #223146; --line2: #354a66;
+  --txt: #eef3f9; --mut: #a8b5c7; --dim: #8593a8;
+  --acc: #ff6a1f; --acc-ink: #0a0f14; --acc-soft: rgba(255, 106, 31, .16); --acc-hi: #ff8447;
+  --acc2: #a8b5c7; --acc3: #8fb4dc;
+  --ok: #34d987; --good: #34d987; --warn: #ffc542; --bad: #ff5a6a; --hot: #ff3b5c;
+  --font-display: "Russo One", "Bahnschrift", "DIN Alternate", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Chakra Petch", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius-xs: 2px; --radius-sm: 3px; --radius-md: 4px; --radius-lg: 6px; --r: 4px; --r-sm: 3px;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+  --shadow-md: none; --shadow-lg: 0 30px 70px -24px rgba(0, 0, 0, .95);
+  /* angled-corner shapes (clip-path) */
+  --cut: 10px;
+  --shape-btn: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+  --shape-tile: polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%);
+  --shape-tag: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  color-scheme: dark;
+}
+html[data-ui="stadium"] { font-synthesis: none; }   /* Russo One has one weight: never fake a bold */
+html[data-ui="stadium"] body, html[data-ui="stadium"] .pm-root { font-size: 16px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+
+/* The pack-opening cinematic and walkout keep the original look: give them the original tokens back. */
+html[data-ui="stadium"] .pm-po, html[data-ui="stadium"] .pm-wo, html[data-ui="stadium"] .pm-walkout {
+  --bg: #0b0d10; --bg2: #101317; --panel: #15181d; --panel2: #1c2027; --panel3: #242933; --line: #262b33; --line2: #353b46;
+  --txt: #f3f5f7; --mut: #a3abb8; --dim: #7b8390; --acc: #cdfb3c; --acc-ink: #0b0d10; --acc-soft: rgba(205, 251, 60, .14);
+  --font-display: "Barlow Condensed", "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius-xs: 3px; --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px;
+  font-size: 15px; font-synthesis: weight style;
+}
+
+html[data-ui="stadium"] :focus-visible { outline: 2px solid var(--txt); outline-offset: 3px; box-shadow: 0 0 0 5px var(--acc); }
+html[data-ui="stadium"] .pm-root :focus-visible { outline: 2px solid var(--txt); outline-offset: 3px; }
+html[data-ui="stadium"] ::selection { background: var(--acc); color: var(--acc-ink); }
+
+/* ------------------------------------------------------------------ 2. backdrop: the blurred stadium, dimmed flat for legibility */
+html[data-ui="stadium"] .bg-shade { background: linear-gradient(180deg, rgba(7, 11, 17, .58) 0%, rgba(7, 11, 17, .82) 45%, rgba(7, 11, 17, .96) 80%, var(--bg) 100%); }
+html[data-ui="stadium"] .pm-bgfx::after { background: linear-gradient(180deg, rgba(7, 11, 17, .62) 0%, rgba(7, 11, 17, .85) 40%, rgba(7, 11, 17, .96) 75%, var(--bg) 100%); }
+
+/* ------------------------------------------------------------------ 3. type */
+html[data-ui="stadium"] h1, html[data-ui="stadium"] h2, html[data-ui="stadium"] h3, html[data-ui="stadium"] h4 { font-weight: 400; letter-spacing: .015em; }
+html[data-ui="stadium"] .kicker, html[data-ui="stadium"] .pm-kicker { font-family: var(--font-body); font-weight: 600; font-size: 13px; letter-spacing: .14em; color: var(--dim); }
+html[data-ui="stadium"] .topbar-title h1, html[data-ui="stadium"] .pm-top-title h1 { font-size: 28px; letter-spacing: .03em; }
+html[data-ui="stadium"] .topbar-title .kicker, html[data-ui="stadium"] .pm-top-title .pm-kicker { font: 500 15px/1.2 var(--font-body); letter-spacing: .02em; text-transform: none; color: var(--dim); }
+html[data-ui="stadium"] .panel h3, html[data-ui="stadium"] .pm-panel h3 { font-size: 20px; letter-spacing: .05em; }
+html[data-ui="stadium"] .pm-h { font-size: 22px; letter-spacing: .05em; }
+/* section headings carry a small flare mark, like a scoreboard section flag */
+html[data-ui="stadium"] .pm-h::before, html[data-ui="stadium"] .panel > h3::before, html[data-ui="stadium"] .pm-panel > h3::before {
+  content: ""; display: inline-block; width: 10px; height: .8em; margin-right: 10px; background: var(--acc); clip-path: var(--shape-tag); vertical-align: -.04em;
+}
+html[data-ui="stadium"] .hint, html[data-ui="stadium"] .pm-hint, html[data-ui="stadium"] .pm-dim { color: var(--mut); }
+html[data-ui="stadium"] kbd { border-radius: 2px; background: var(--panel3); border-color: var(--line2); font-family: var(--font-body); font-weight: 700; }
+html[data-ui="stadium"] a { color: var(--acc); }
+
+/* ------------------------------------------------------------------ 4. buttons */
+/* angled corners; secondary = flat fill, primary = flare fill. Hover wipes a new fill in from the left, press sinks. */
+html[data-ui="stadium"] .btn, html[data-ui="stadium"] .pm-btn, html[data-ui="stadium"] .arrow, html[data-ui="stadium"] .pm-x {
+  --wipe-a: #2b3d57; --wipe-b: var(--panel3);
+  border: 0; border-radius: 0; clip-path: var(--shape-btn); box-shadow: inset 0 0 0 1px var(--line2);
+  background: linear-gradient(90deg, var(--wipe-a) 50%, var(--wipe-b) 50%) 100% 0 / 202% 100% no-repeat;
+  color: var(--txt); font-size: 15px; letter-spacing: .06em;
+  transition: background-position var(--dur-slow) var(--ease-out), color var(--dur-fast), box-shadow var(--dur-fast), transform 90ms var(--ease-out), filter var(--dur-fast);
+}
+html[data-ui="stadium"] .btn:hover:not(:disabled), html[data-ui="stadium"] .pm-btn:hover:not(:disabled),
+html[data-ui="stadium"] .arrow:hover, html[data-ui="stadium"] .pm-x:hover { background-position: 0 0; color: #fff; border-color: transparent; }
+html[data-ui="stadium"] .btn:hover:not(:disabled), html[data-ui="stadium"] .pm-btn:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--mut); }
+html[data-ui="stadium"] .btn:active:not(:disabled), html[data-ui="stadium"] .pm-btn:active:not(:disabled), html[data-ui="stadium"] .arrow:active {
+  transform: translateY(1px) scale(.965); filter: brightness(.88);
+}
+html[data-ui="stadium"] .btn--primary, html[data-ui="stadium"] .pm-btn--primary, html[data-ui="stadium"] .pm-btn--accent { --wipe-a: var(--acc-hi); --wipe-b: var(--acc); color: var(--acc-ink); }
+html[data-ui="stadium"] .btn--primary, html[data-ui="stadium"] .pm-btn--primary, html[data-ui="stadium"] .pm-btn--accent,
+html[data-ui="stadium"] .btn--primary:hover:not(:disabled), html[data-ui="stadium"] .pm-btn--primary:hover:not(:disabled), html[data-ui="stadium"] .pm-btn--accent:hover:not(:disabled) { box-shadow: none; }
+html[data-ui="stadium"] .btn--primary:hover:not(:disabled), html[data-ui="stadium"] .pm-btn--primary:hover:not(:disabled), html[data-ui="stadium"] .pm-btn--accent:hover:not(:disabled) { color: var(--acc-ink); }
+html[data-ui="stadium"] .btn--danger, html[data-ui="stadium"] .pm-btn--danger { --wipe-a: rgba(255, 90, 106, .3); --wipe-b: rgba(255, 90, 106, .1); color: #ffc7cd; }
+html[data-ui="stadium"] .btn--danger, html[data-ui="stadium"] .pm-btn--danger { box-shadow: inset 0 0 0 1px rgba(255, 90, 106, .55); }
+html[data-ui="stadium"] .btn--ok { --wipe-a: rgba(52, 217, 135, .3); --wipe-b: rgba(52, 217, 135, .12); color: var(--ok); }
+html[data-ui="stadium"] .btn--ghost, html[data-ui="stadium"] .pm-btn--ghost { --wipe-b: transparent; }
+html[data-ui="stadium"] .btn--ghost, html[data-ui="stadium"] .pm-btn--ghost { box-shadow: none; }
+html[data-ui="stadium"] .btn:disabled, html[data-ui="stadium"] .pm-btn:disabled { opacity: 1; color: var(--dim); --wipe-b: var(--panel); --wipe-a: var(--panel); cursor: not-allowed; }
+html[data-ui="stadium"] .btn:disabled, html[data-ui="stadium"] .pm-btn:disabled { box-shadow: inset 0 0 0 1px var(--line); }
+html[data-ui="stadium"] .btn:focus-visible, html[data-ui="stadium"] .pm-btn:focus-visible, html[data-ui="stadium"] .tile:focus-visible, html[data-ui="stadium"] .pm-tile:focus-visible,
+html[data-ui="stadium"] .arrow:focus-visible, html[data-ui="stadium"] .pm-x:focus-visible { outline: 2px solid var(--txt); outline-offset: -4px; box-shadow: none; }
+html[data-ui="stadium"] .btn--lg, html[data-ui="stadium"] .pm-btn--lg { --cut: 12px; font-size: 17px; letter-spacing: .07em; }
+html[data-ui="stadium"] .btn--xl { --cut: 14px; font-size: 20px; letter-spacing: .08em; min-height: 60px; padding-inline: 44px; }
+html[data-ui="stadium"] .pm-btn--sm { --cut: 7px; font-size: 13px; }
+html[data-ui="stadium"] .pm-x { --cut: 7px; width: 44px; height: 44px; }
+/* back: arrow + label, with a flare underline that slides out on hover */
+html[data-ui="stadium"] .back, html[data-ui="stadium"] .pm-back {
+  border: 0; border-radius: 0; background: none; padding: 0 12px 0 4px; color: var(--mut); font-size: 14px; letter-spacing: .1em;
+  background-image: linear-gradient(var(--acc), var(--acc)); background-repeat: no-repeat; background-position: 4px 100%; background-size: 0 3px;
+  transition: background-size var(--dur-base) var(--ease-out), color var(--dur-fast), transform 90ms var(--ease-out); min-height: 44px;
+}
+html[data-ui="stadium"] .back:hover, html[data-ui="stadium"] .pm-back:hover { color: var(--txt); background-size: calc(100% - 16px) 3px; }
+html[data-ui="stadium"] .back span:first-child, html[data-ui="stadium"] .pm-back span:first-child { transition: transform var(--dur-base) var(--ease-out); }
+html[data-ui="stadium"] .back:hover span:first-child, html[data-ui="stadium"] .pm-back:hover span:first-child { transform: translateX(-4px); }
+html[data-ui="stadium"] .back:active, html[data-ui="stadium"] .pm-back:active { transform: scale(.95); }
+
+/* ------------------------------------------------------------------ 5. bars, tabs, sliding indicator */
+html[data-ui="stadium"] .topbar, html[data-ui="stadium"] .pm-top { background: rgba(7, 11, 17, .97); border-bottom: 1px solid var(--line); min-height: 68px; }
+html[data-ui="stadium"] .topbar::after, html[data-ui="stadium"] .pm-top::after {
+  content: ""; position: absolute; left: 0; bottom: -1px; height: 3px; width: 96px; background: var(--acc); clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+html[data-ui="stadium"] .mm-bar { border-bottom: 1px solid var(--line); position: relative; min-height: 72px; }
+html[data-ui="stadium"] .mm-brand { font-size: 28px; letter-spacing: .06em; font-weight: 400; }
+html[data-ui="stadium"] .mm-brand span { display: inline-block; padding: 4px 9px 3px 11px; margin-left: 10px; border-radius: 0; clip-path: var(--shape-tag); vertical-align: 9px; font-size: .48em; line-height: 1; letter-spacing: .08em; }
+html[data-ui="stadium"] .pm-logo-sm { border-radius: 0; clip-path: var(--shape-tag); padding: 0 9px; }
+html[data-ui="stadium"] .mm-games { border-radius: 0; }
+html[data-ui="stadium"] .mm-games:hover { background: var(--panel2); color: var(--txt); }
+html[data-ui="stadium"] .mm-tab, html[data-ui="stadium"] .pm-uttab { font-size: 15px; font-weight: 400; letter-spacing: .07em; transition: color var(--dur-fast); }
+html[data-ui="stadium"] .mm-tab { padding: 0 14px; }
+html[data-ui="stadium"] .pm-uttab { padding: 0 16px; min-height: 52px; }
+html[data-ui="stadium"] .mm-tab:hover, html[data-ui="stadium"] .pm-uttab:hover { color: var(--txt); }
+html[data-ui="stadium"] .mm-tab.on, html[data-ui="stadium"] .pm-uttab.on { color: var(--txt); }
+/* no-JS fallback: a plain underline per tab */
+html[data-ui="stadium"] .mm-tab::after, html[data-ui="stadium"] .pm-uttab::after { height: 4px; left: 14px; right: 14px; background: var(--acc); }
+html[data-ui="stadium"] .mm-tab:hover::after, html[data-ui="stadium"] .pm-uttab:hover::after { background: var(--line2); transform: scaleX(.5); }
+html[data-ui="stadium"] .mm-tab.on::after, html[data-ui="stadium"] .pm-uttab.on::after { background: var(--acc); transform: none; }
+/* with JS: ONE flare bar that slides between tabs (uistyle.js sets --st-x / --st-w on the bar) */
+html[data-ui="stadium"] [data-st-ind]:not(.pm-uttabs) { position: relative; }
+html[data-ui="stadium"] [data-st-ind] > .on::after, html[data-ui="stadium"] [data-st-ind] > [aria-current="page"]::after, html[data-ui="stadium"] [data-st-ind] > [aria-selected="true"]::after { transform: scaleX(0); background: transparent; }
+html[data-ui="stadium"] [data-st-ind]:not(.seg)::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 4px; width: var(--st-w, 0); pointer-events: none;
+  transform: translateX(var(--st-x, 0)); background: var(--acc); clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  transition: transform var(--dur-slow) var(--ease-out), width var(--dur-slow) var(--ease-out);
+}
+html[data-ui="stadium"] .mm-tabs[data-st-ind]::after { bottom: -1px; }
+html[data-ui="stadium"] .pm-uttabs { background: rgba(7, 11, 17, .97); border-bottom: 1px solid var(--line); top: 68px; }
+html[data-ui="stadium"] .pm-dotbadge { border-radius: 0; clip-path: var(--shape-tag); padding-inline: 8px; background: var(--hot); color: #fff; }
+/* sub-tab rows inside a section (objectives, market) */
+html[data-ui="stadium"] .pm-tabs { border-bottom: 1px solid var(--line); gap: 0; }
+html[data-ui="stadium"] .pm-tab { font-size: 15px; font-weight: 400; letter-spacing: .06em; padding: 6px 20px; transition: color var(--dur-fast); }
+html[data-ui="stadium"] .pm-tab.on { box-shadow: none; color: var(--txt); }
+html[data-ui="stadium"] .pm-tabs:not([data-st-ind]) .pm-tab.on { box-shadow: inset 0 -4px 0 var(--acc); }
+html[data-ui="stadium"] .pm-tab b { font-weight: 400; }
+html[data-ui="stadium"] .pm-tab small { font-family: var(--font-body); font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--dim); }
+/* plain tab rows (settings, gameplay profile): flat underline tabs, not pills */
+html[data-ui="stadium"] .tabs { background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0; gap: 0; }
+html[data-ui="stadium"] .tab { flex: 0 1 auto; min-height: 52px; padding: 0 22px; border-radius: 0; font-size: 15px; font-weight: 400; letter-spacing: .07em; background: none; transition: color var(--dur-fast); }
+html[data-ui="stadium"] .tab:hover { background: none; color: var(--txt); }
+html[data-ui="stadium"] .tab.on { background: none; box-shadow: none; color: var(--txt); }
+html[data-ui="stadium"] .tabs--sm .tab { min-height: 44px; font-size: 14px; }
+html[data-ui="stadium"] .tabs:not([data-st-ind]) .tab.on { box-shadow: inset 0 -4px 0 var(--acc); }
+
+/* status chips in the menu bar */
+html[data-ui="stadium"] .online-pill, html[data-ui="stadium"] .mm-status .acc-count, html[data-ui="stadium"] .mm-bar > .acc-chip {
+  border: 0; border-radius: 0; clip-path: var(--shape-tag); background: var(--panel2); padding-inline: 16px; color: var(--txt); font-size: 14px;
+  transition: background var(--dur-fast), color var(--dur-fast), transform 90ms var(--ease-out);
+}
+html[data-ui="stadium"] .online-pill { font-size: 13px; letter-spacing: .06em; }
+html[data-ui="stadium"] .online-pill:hover, html[data-ui="stadium"] .mm-bar > .acc-chip:hover { background: var(--panel3); color: #fff; }
+html[data-ui="stadium"] .online-pill:active, html[data-ui="stadium"] .mm-bar > .acc-chip:active { transform: scale(.96); }
+html[data-ui="stadium"] .online-pill[data-state="on"] .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 217, 135, .22); }
+html[data-ui="stadium"] .mm-bar > .acc-chip:not([data-state="account"]):not([data-state="banned"]) { background: var(--acc); color: var(--acc-ink); }
+html[data-ui="stadium"] .mm-bar > .acc-chip:not([data-state="account"]):not([data-state="banned"]):hover { background: var(--acc-hi); color: var(--acc-ink); }
+html[data-ui="stadium"] .mm-hints { color: var(--dim); }
+html[data-ui="stadium"] .mm-hints kbd { background: var(--panel2); }
+
+/* the numbers are the heroes: coin readout and stat chips are big, their labels small and muted */
+html[data-ui="stadium"] .pm-coins { font-size: 24px; font-weight: 400; }
+html[data-ui="stadium"] .pm-stat-chip { border: 0; border-radius: 0; clip-path: var(--shape-tag); background: var(--panel2); padding: 8px 20px; align-items: baseline; }
+html[data-ui="stadium"] .pm-stat-chip span { font-size: 12px; letter-spacing: .1em; color: var(--dim); }
+html[data-ui="stadium"] .pm-stat-chip b { font: 400 28px/1 var(--font-display); }
+html[data-ui="stadium"] .pm-hx-meta { color: var(--dim); font-size: 13px; letter-spacing: .04em; }
+html[data-ui="stadium"] .pm-hx-meta b { font: 400 24px/1 var(--font-display); color: var(--txt); }
+html[data-ui="stadium"] .pm-budget b { font-family: var(--font-display); font-weight: 400; font-size: 22px; }
+
+/* ------------------------------------------------------------------ 6. panels, fields, controls (flat surfaces) */
+html[data-ui="stadium"] .panel, html[data-ui="stadium"] .pm-panel, html[data-ui="stadium"] .pm-filterbar, html[data-ui="stadium"] .pm-sq-toolbar,
+html[data-ui="stadium"] .pm-packitem, html[data-ui="stadium"] .online-card, html[data-ui="stadium"] .pm-obj {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px; box-shadow: none;
+}
+html[data-ui="stadium"] .panel, html[data-ui="stadium"] .pm-panel { padding: 24px; }
+html[data-ui="stadium"] .pm-filterbar, html[data-ui="stadium"] .pm-sq-toolbar { padding: 12px 16px; }
+html[data-ui="stadium"] .pm-empty, html[data-ui="stadium"] .hint-box { border-color: var(--line2); border-radius: 3px; }
+html[data-ui="stadium"] .field-label, html[data-ui="stadium"] .pm-lbl, html[data-ui="stadium"] .pm-form label > span { font-family: var(--font-body); font-size: 13px; font-weight: 700; letter-spacing: .12em; color: var(--mut); }
+
+/* text inputs / selects: flat, with a flare rule that draws in on focus */
+html[data-ui="stadium"] .input, html[data-ui="stadium"] .pm-input, html[data-ui="stadium"] .pm-select, html[data-ui="stadium"] input[type="text"], html[data-ui="stadium"] input[type="search"],
+html[data-ui="stadium"] input[type="password"], html[data-ui="stadium"] input[type="number"], html[data-ui="stadium"] input[type="email"], html[data-ui="stadium"] select {
+  min-height: 48px; border: 0; border-radius: 3px 3px 0 0; background-color: var(--bg2); color: var(--txt);
+  background-image: linear-gradient(var(--acc), var(--acc)); background-repeat: no-repeat; background-position: 0 100%; background-size: 0 3px;
+  box-shadow: inset 0 -1px 0 var(--line2); transition: background-size var(--dur-slow) var(--ease-out), box-shadow var(--dur-fast), background-color var(--dur-fast);
+}
+html[data-ui="stadium"] .input:hover, html[data-ui="stadium"] .pm-input:hover, html[data-ui="stadium"] .pm-select:hover, html[data-ui="stadium"] select:hover { background-color: var(--panel2); }
+html[data-ui="stadium"] .input:focus, html[data-ui="stadium"] .pm-input:focus, html[data-ui="stadium"] .pm-select:focus, html[data-ui="stadium"] input:focus, html[data-ui="stadium"] select:focus {
+  outline: none; background-size: 100% 3px; box-shadow: inset 0 -1px 0 var(--acc); background-color: var(--panel2);
+}
+html[data-ui="stadium"] input[type="color"] { padding: 2px; border-radius: 2px; }
+html[data-ui="stadium"] .pm-select, html[data-ui="stadium"] select { padding-inline: 14px 30px; font-size: 15px; }
+
+/* segmented options: flat row, the flare bar slides to the chosen one */
+html[data-ui="stadium"] .seg { background: var(--bg2); border: 0; border-radius: 3px; padding: 0; gap: 0; position: relative; box-shadow: inset 0 -1px 0 var(--line2); }
+html[data-ui="stadium"] .seg button { min-height: 48px; border-radius: 0; font-size: 13px; font-weight: 400; letter-spacing: .04em; padding: 8px 6px; overflow-wrap: normal; word-break: normal; hyphens: none; transition: color var(--dur-fast), background var(--dur-fast); }
+/* four or more long options in a narrow column (team select): two per row instead of breaking words */
+html[data-ui="stadium"] .opts .seg:has(> button:nth-child(4)):not(:has(> button:nth-child(5))) { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+html[data-ui="stadium"] .seg button:hover { background: var(--panel2); color: var(--txt); }
+html[data-ui="stadium"] .seg button:active { background: var(--panel3); }
+html[data-ui="stadium"] .seg button.on { background: var(--acc-soft); color: var(--txt); }
+html[data-ui="stadium"] .seg[data-st-ind]::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 4px; width: var(--st-w, 0); pointer-events: none;
+  transform: translateX(var(--st-x, 0)); background: var(--acc); transition: transform var(--dur-slow) var(--ease-out), width var(--dur-slow) var(--ease-out);
+}
+html[data-ui="stadium"] .seg:not([data-st-ind]) button.on { box-shadow: inset 0 -4px 0 var(--acc); }
+html[data-ui="stadium"] .pm-chip { border: 0; border-radius: 0; clip-path: var(--shape-tag); background: var(--panel2); padding-inline: 16px; color: var(--mut); font-size: 13px; font-weight: 400; transition: background var(--dur-fast), color var(--dur-fast), transform 90ms var(--ease-out); }
+html[data-ui="stadium"] .pm-chip:hover { background: var(--panel3); color: var(--txt); }
+html[data-ui="stadium"] .pm-chip:active { transform: scale(.95); }
+html[data-ui="stadium"] .pm-chip.on { background: var(--acc); color: var(--acc-ink); }
+html[data-ui="stadium"] .tag, html[data-ui="stadium"] .pm-tagmini { border-radius: 0; }
+html[data-ui="stadium"] input[type="range"] { accent-color: var(--acc); }
+
+/* ------------------------------------------------------------------ 7. home hub tiles (menu + UT): flat, angled, real content */
+html[data-ui="stadium"] .tiles, html[data-ui="stadium"] .pm-hub { gap: 14px; }
+html[data-ui="stadium"] .tile, html[data-ui="stadium"] .pm-tile {
+  border: 0; border-radius: 0; clip-path: var(--shape-tile); background: var(--panel); box-shadow: none;
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base);
+}
+html[data-ui="stadium"] .tile:hover, html[data-ui="stadium"] .pm-tile:hover { transform: translateY(-5px); border-color: transparent; }
+html[data-ui="stadium"] .tile:active, html[data-ui="stadium"] .pm-tile:active { transform: translateY(-1px) scale(.992); transition-duration: 80ms; }
+html[data-ui="stadium"] .tile:focus-visible, html[data-ui="stadium"] .pm-tile:focus-visible { box-shadow: none; outline: 3px solid var(--txt); outline-offset: -6px; }
+/* a flare bar draws across the foot of a tile on hover / focus */
+html[data-ui="stadium"] .tile::after, html[data-ui="stadium"] .pm-tile::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 5px; width: calc(100% - 22px); background: var(--acc); z-index: 3; pointer-events: none;
+  transform: scaleX(0); transform-origin: left; transition: transform var(--dur-slow) var(--ease-out);
+}
+html[data-ui="stadium"] .tile:hover::after, html[data-ui="stadium"] .tile:focus-visible::after, html[data-ui="stadium"] .pm-tile:hover::after, html[data-ui="stadium"] .pm-tile:focus-visible::after { transform: scaleX(1); }
+html[data-ui="stadium"] .tile--small::after, html[data-ui="stadium"] .pm-hx--mini::after { width: 100%; }
+html[data-ui="stadium"] .pm-hub .pm-tile--hero::after { height: 5px; top: auto; inset: auto auto 0 0; background: var(--acc); }
+html[data-ui="stadium"] .tile-media { transition: transform 420ms var(--ease-out); }
+html[data-ui="stadium"] .tile:hover .tile-media, html[data-ui="stadium"] .tile:focus-visible .tile-media { transform: scale(1.06); }
+html[data-ui="stadium"] .pm-hx:hover .pm-hx-art, html[data-ui="stadium"] .pm-hx:focus-visible .pm-hx-art { transform: scale(1.06); }
+html[data-ui="stadium"] .tile-media::after { background: linear-gradient(180deg, transparent 34%, rgba(7, 11, 17, .62) 60%, rgba(7, 11, 17, .96) 100%); }
+html[data-ui="stadium"] .tile-text { padding: 20px 24px; }
+html[data-ui="stadium"] .tile--small .tile-text { padding-left: 68px; }
+html[data-ui="stadium"] .tile-ico { left: 24px; color: var(--acc); }
+html[data-ui="stadium"] .tile-title { font-size: 28px; font-weight: 400; letter-spacing: .02em; width: fit-content; max-width: 100%;
+  background: linear-gradient(var(--acc), var(--acc)) 0 100% / 0 4px no-repeat; padding-bottom: 5px; transition: background-size var(--dur-slow) var(--ease-out); }
+html[data-ui="stadium"] .tile:hover .tile-title, html[data-ui="stadium"] .tile:focus-visible .tile-title { background-size: 100% 4px; }
+html[data-ui="stadium"] .tile--kickoff .tile-title { font-size: clamp(40px, 4.4vw, 64px); line-height: .96; }
+html[data-ui="stadium"] .tile--local .tile-title, html[data-ui="stadium"] .tile--practice .tile-title { font-size: 24px; }
+html[data-ui="stadium"] .tile--small .tile-title { font-size: 21px; }
+html[data-ui="stadium"] .tile-sub { color: #d0d9e4; font-size: 15px; }
+html[data-ui="stadium"] .tile-cta { border-radius: 0; clip-path: var(--shape-btn); --cut: 8px; padding: 13px 20px; font-size: 16px; font-weight: 400; letter-spacing: .07em; transition: background var(--dur-fast); }
+html[data-ui="stadium"] .tile:hover .tile-cta { background: var(--acc-hi); }
+html[data-ui="stadium"] .tile-cta span { transition: transform var(--dur-base) var(--ease-out); }
+html[data-ui="stadium"] .tile:hover .tile-cta span { transform: translateX(6px); }
+html[data-ui="stadium"] .tile--small { background: var(--panel); }
+html[data-ui="stadium"] .tile--small:hover { background: var(--panel2); }
+html[data-ui="stadium"] .tile-badge { border-radius: 0; clip-path: var(--shape-tag); background: var(--hot); }
+html[data-ui="stadium"] .pm-tile h2 { font-weight: 400; letter-spacing: .02em; }
+html[data-ui="stadium"] .pm-hx h2 { font-size: 28px; }
+html[data-ui="stadium"] .pm-hx--squad h2 { font-size: 44px; }
+html[data-ui="stadium"] .pm-hx--mini h2 { font-size: 20px; }
+html[data-ui="stadium"] .pm-tile p, html[data-ui="stadium"] .pm-hx p { color: #d0d9e4; font-size: 15px; }
+html[data-ui="stadium"] .pm-hx-art::after, html[data-ui="stadium"] .pm-art-obj::after { background: linear-gradient(180deg, transparent 38%, rgba(7, 11, 17, .66) 64%, rgba(7, 11, 17, .96) 100%); }
+html[data-ui="stadium"] .pm-badge { border-radius: 0; clip-path: var(--shape-tag); background: var(--hot); color: #fff; }
+
+/* ------------------------------------------------------------------ 8. team select / play screen */
+html[data-ui="stadium"] .picker-card { border-radius: 0; clip-path: var(--shape-tile); border: 0; background: var(--panel); transition: transform var(--dur-base) var(--ease-out); }
+html[data-ui="stadium"] .picker-card::after { height: 6px; }
+html[data-ui="stadium"] button.picker-card:hover { transform: translateY(-4px); }
+html[data-ui="stadium"] button.picker-card:active { transform: scale(.99); }
+html[data-ui="stadium"] .picker.is-ready .picker-card { box-shadow: none; }
+html[data-ui="stadium"] .picker-name { font-size: 28px; font-weight: 400; }
+html[data-ui="stadium"] .picker-meta .ovr { font: 400 34px/1 var(--font-display); }
+html[data-ui="stadium"] .picker-lines b { font: 400 18px/1.2 var(--font-display); }
+html[data-ui="stadium"] .picker-side { font-size: 15px; font-weight: 400; letter-spacing: .12em; }
+html[data-ui="stadium"] .pickers-vs { font-weight: 400; font-size: 28px; color: var(--acc); }
+html[data-ui="stadium"] .arrow { font-size: 26px; }
+html[data-ui="stadium"] .ctrl-chip { border-radius: 0; clip-path: var(--shape-tag); border: 0; font-weight: 400; }
+html[data-ui="stadium"] .ctrl-chip.cpu { background: var(--panel2); }
+html[data-ui="stadium"] .ctrl-chip.hum { background: var(--acc); color: var(--acc-ink); }
+
+/* ------------------------------------------------------------------ 9. UT specific surfaces */
+html[data-ui="stadium"] .pm-storeitem, html[data-ui="stadium"] .pm-sbc, html[data-ui="stadium"] .pm-packitem {
+  border-radius: 0; clip-path: var(--shape-tile); border: 0; background: var(--panel); box-shadow: none;
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base);
+}
+html[data-ui="stadium"] .pm-storeitem:hover, html[data-ui="stadium"] .pm-sbc:hover { transform: translateY(-4px); background: var(--panel2); }
+html[data-ui="stadium"] .pm-storeitem h4 { font-size: 21px; font-weight: 400; }
+html[data-ui="stadium"] .pm-pack { transition: transform var(--dur-base) var(--ease-out); }
+html[data-ui="stadium"] .pm-storeitem:hover .pm-pack { transform: translateY(-4px) rotate(-2deg); }
+html[data-ui="stadium"] .pm-obj.is-ready { border-color: var(--acc); }
+html[data-ui="stadium"] .pm-prow { border-radius: 3px; transition: background var(--dur-fast), transform 90ms var(--ease-out); }
+html[data-ui="stadium"] .pm-prow:hover, html[data-ui="stadium"] .pm-prow:focus-visible { border-color: var(--line2); background: var(--panel3); }
+html[data-ui="stadium"] .pm-prow:active { transform: scale(.985); }
+html[data-ui="stadium"] .pm-sq-picker { background: var(--panel) !important; border-color: var(--line2) !important; }
+html[data-ui="stadium"] .pm-progress { height: 8px; border-radius: 0; background: var(--panel3); }
+html[data-ui="stadium"] .pm-progress i { border-radius: 0; background: var(--acc); }
+html[data-ui="stadium"] .pm-table tbody tr[tabindex]:hover, html[data-ui="stadium"] .pm-table tbody tr[tabindex]:focus-visible { background: var(--acc-soft); }
+html[data-ui="stadium"] .pm-table tr.me td, html[data-ui="stadium"] .pm-fx.me, html[data-ui="stadium"] .pm-leaders li.me { background: var(--acc-soft); }
+html[data-ui="stadium"] .pm-status.s-active, html[data-ui="stadium"] .pm-po-chip.new { background: var(--acc-soft); color: var(--acc); }
+html[data-ui="stadium"] .pm-clubpick.on { border-color: var(--acc); background: var(--acc-soft); }
+
+/* cards: lift + lean toward the pointer (uistyle.js sets --st-rx / --st-ry while a mouse hovers a card) */
+html[data-ui="stadium"] .pm-main .pm-card, html[data-ui="stadium"] .pm-modal .pm-card { transition: transform 360ms var(--ease-out), filter 240ms var(--ease-out); }
+html[data-ui="stadium"] .pm-main .pm-card.st-tilt, html[data-ui="stadium"] .pm-modal .pm-card.st-tilt {
+  transform: perspective(640px) translateY(-8px) scale(1.06) rotateX(var(--st-rx, 0deg)) rotateY(var(--st-ry, 0deg));
+  transition: transform 90ms linear, filter 200ms; filter: drop-shadow(0 18px 14px rgba(0, 0, 0, .55)); z-index: 4;
+}
+html[data-ui="stadium"] .pm-main .pm-card[role="button"]:active { transform: translateY(-2px) scale(.98); transition-duration: 80ms; }
+
+/* ------------------------------------------------------------------ 10. modal + toast (the things that float get a shadow) */
+html[data-ui="stadium"] .pm-modal-back { background: rgba(3, 6, 10, .88); }
+html[data-ui="stadium"] .pm-modal { border: 1px solid var(--line2); border-radius: 4px; background: var(--panel); box-shadow: var(--shadow-lg); }
+html[data-ui="stadium"] .pm-modal::before { content: ""; position: sticky; top: 0; display: block; height: 4px; margin-bottom: -4px; background: var(--acc); transform-origin: left; z-index: 2; }
+html[data-ui="stadium"] .pm-modal-head { padding: 22px 24px 8px; }
+html[data-ui="stadium"] .pm-modal-head h3 { font-size: 24px; letter-spacing: .03em; }
+html[data-ui="stadium"] .pm-modal-body { padding: 8px 24px 16px; }
+html[data-ui="stadium"] .pm-modal-actions { padding: 12px 24px 24px; }
+html[data-ui="stadium"] .toast, html[data-ui="stadium"] .pm-toast {
+  border: 1px solid var(--line2); border-radius: 3px; background: var(--panel2); color: var(--txt); font-weight: 600; font-size: 16px; padding: 14px 20px 17px;
+  box-shadow: 0 18px 40px -16px #000; overflow: hidden;
+}
+html[data-ui="stadium"] .toast::after, html[data-ui="stadium"] .pm-toast::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--acc); transform-origin: left; }
+html[data-ui="stadium"] .pm-toast { position: relative; }
+html[data-ui="stadium"] .toast.bad, html[data-ui="stadium"] .pm-toast--bad { color: #ffd3d8; }
+html[data-ui="stadium"] .toast.bad::after, html[data-ui="stadium"] .pm-toast--bad::after { background: var(--bad); }
+html[data-ui="stadium"] .pm-toast--good::after, html[data-ui="stadium"] .toast.good::after { background: var(--ok); }
+html[data-ui="stadium"] .pm-toast--warn::after { background: var(--warn); }
+html[data-ui="stadium"] .pm-toast.out { transition-duration: 180ms; }
+html[data-ui="stadium"] .alert { border-radius: 3px; }
+
+/* account gate + account pane (account.css classes; colours and fonts already follow the tokens) */
+html[data-ui="stadium"] .acc-card { border-radius: 4px; border: 1px solid var(--line2); }
+html[data-ui="stadium"] .acc-card h2 { font-weight: 400; font-size: 28px; }
+html[data-ui="stadium"] .acc-logo { border-radius: 0; clip-path: var(--shape-tag); width: 44px; }
+html[data-ui="stadium"] .acc-btn {
+  border: 0; border-radius: 0; clip-path: var(--shape-btn); --cut: 9px; box-shadow: inset 0 0 0 1px var(--line2); font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: .06em; text-transform: uppercase;
+  transition: background var(--dur-fast), box-shadow var(--dur-fast), transform 90ms var(--ease-out);
+}
+html[data-ui="stadium"] .acc-btn:hover:not(:disabled) { transform: none; background: var(--panel3); box-shadow: inset 0 0 0 1px var(--mut); }
+html[data-ui="stadium"] .acc-btn:active:not(:disabled) { transform: translateY(1px) scale(.97); }
+html[data-ui="stadium"] .acc-btn--primary, html[data-ui="stadium"] .acc-btn--primary:hover:not(:disabled) { box-shadow: none; }
+html[data-ui="stadium"] .acc-btn--primary:hover:not(:disabled) { background: var(--acc-hi); filter: none; }
+html[data-ui="stadium"] .acc-btn:disabled { opacity: 1; color: var(--dim); }
+html[data-ui="stadium"] .acc-input {
+  border: 0; border-radius: 3px 3px 0 0; min-height: 48px; background-color: var(--bg2); box-shadow: inset 0 -1px 0 var(--line2);
+  background-image: linear-gradient(var(--acc), var(--acc)); background-repeat: no-repeat; background-position: 0 100%; background-size: 0 3px;
+  transition: background-size var(--dur-slow) var(--ease-out), box-shadow var(--dur-fast);
+}
+html[data-ui="stadium"] .acc-input:focus { outline: none; background-size: 100% 3px; box-shadow: inset 0 -1px 0 var(--acc); }
+html[data-ui="stadium"] .acc-sec { border-radius: 3px; }
+
+/* ------------------------------------------------------------------ 11. skeleton loaders (shimmer blocks in the shape of what is coming) */
+html[data-ui="stadium"] .spinner, html[data-ui="stadium"] .pm-loading .pm-spinner { display: none; }
+html[data-ui="stadium"] .loading, html[data-ui="stadium"] .pm-loading { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: stretch; gap: 16px; text-align: left; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+html[data-ui="stadium"] .loading { padding: 32px 0; }
+html[data-ui="stadium"] .pm-loading { border-style: solid; border-color: var(--line); padding: 24px; }
+html[data-ui="stadium"] .loading::before, html[data-ui="stadium"] .pm-loading::before {
+  content: ""; display: block; width: 100%; height: 152px; order: -1;
+  background: linear-gradient(100deg, var(--panel2) 30%, var(--panel3) 50%, var(--panel2) 70%) 0 0 / 300% 100%;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 116px, transparent 116px 132px), repeating-linear-gradient(180deg, #000 0 152px, transparent 152px 168px);
+  -webkit-mask-composite: source-in; mask-composite: intersect;
+  mask: repeating-linear-gradient(90deg, #000 0 116px, transparent 116px 132px), repeating-linear-gradient(180deg, #000 0 152px, transparent 152px 168px);
+  mask-composite: intersect;
+}
+html[data-ui="stadium"] .loading--sm::before { height: 64px; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ui="stadium"] .loading::before, html[data-ui="stadium"] .pm-loading::before { animation: st-shimmer 1.4s linear infinite; }
+}
+@keyframes st-shimmer { to { background-position: -300% 0; } }
+
+/* ------------------------------------------------------------------ 12. motion */
+/* fill-mode is 'backwards' on purpose: a finished transform animation must not keep acting as a containing block for the fixed-position modal inside it */
+@media (prefers-reduced-motion: no-preference) {
+  /* screen change: the new screen slides in from the right edge; sections and grids rise in one after another */
+  html[data-ui="stadium"] .screen:not(.screen--menu) { animation: st-screen 340ms var(--ease-out) backwards; }
+  html[data-ui="stadium"] .screen--menu .mm-bar { animation: st-drop 380ms var(--ease-out) backwards; }
+  html[data-ui="stadium"] .pm-main > *:not(.pm-uttabs):not(.pm-tabs) { animation: st-rise 420ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-main > *:nth-child(2) { animation-delay: 50ms; } html[data-ui="stadium"] .pm-main > *:nth-child(3) { animation-delay: 100ms; }
+  html[data-ui="stadium"] .pm-main > *:nth-child(4) { animation-delay: 150ms; } html[data-ui="stadium"] .pm-main > *:nth-child(5) { animation-delay: 200ms; }
+  html[data-ui="stadium"] .pm-main > *:nth-child(n+6) { animation-delay: 240ms; }
+  html[data-ui="stadium"] .pm-hx, html[data-ui="stadium"] .pm-storeitem, html[data-ui="stadium"] .pm-sbc, html[data-ui="stadium"] .pm-packitem { animation: st-rise 440ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-hub > *:nth-child(2), html[data-ui="stadium"] .pm-storegrid > *:nth-child(2) { animation-delay: 50ms; }
+  html[data-ui="stadium"] .pm-hub > *:nth-child(3), html[data-ui="stadium"] .pm-storegrid > *:nth-child(3) { animation-delay: 100ms; }
+  html[data-ui="stadium"] .pm-hub > *:nth-child(4), html[data-ui="stadium"] .pm-storegrid > *:nth-child(4) { animation-delay: 150ms; }
+  html[data-ui="stadium"] .pm-hub > *:nth-child(n+5), html[data-ui="stadium"] .pm-storegrid > *:nth-child(n+5) { animation-delay: 200ms; }
+  html[data-ui="stadium"] .pm-cardgrid > *:nth-child(-n+18) { animation: st-rise 380ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-cardgrid > *:nth-child(2) { animation-delay: 30ms; } html[data-ui="stadium"] .pm-cardgrid > *:nth-child(3) { animation-delay: 60ms; }
+  html[data-ui="stadium"] .pm-cardgrid > *:nth-child(4) { animation-delay: 90ms; } html[data-ui="stadium"] .pm-cardgrid > *:nth-child(5) { animation-delay: 120ms; }
+  html[data-ui="stadium"] .pm-cardgrid > *:nth-child(6) { animation-delay: 150ms; } html[data-ui="stadium"] .pm-cardgrid > *:nth-child(n+7) { animation-delay: 180ms; }
+  html[data-ui="stadium"] .topbar::after, html[data-ui="stadium"] .pm-top::after { animation: st-draw 520ms 120ms var(--ease-out) backwards; transform-origin: left; }
+  html[data-ui="stadium"] .tile { animation: st-rise 460ms var(--ease-spring) backwards; animation-delay: calc(var(--i, 0) * 50ms); }
+  html[data-ui="stadium"] .pm-modal-back { animation: pm-fade 140ms; }
+  html[data-ui="stadium"] .pm-modal { animation: st-modal 300ms var(--ease-spring) backwards; }
+  html[data-ui="stadium"] .pm-modal::before { animation: st-draw 480ms 100ms var(--ease-out) backwards; }
+  html[data-ui="stadium"] .toast::after { animation: st-drain 2200ms linear forwards; }
+  html[data-ui="stadium"] .pm-toast::after { animation: st-drain 2600ms linear forwards; }
+  html[data-ui="stadium"] .toast { transform: translate(-50%, 28px) scale(.98); transition: transform 320ms var(--ease-spring), opacity 140ms; }
+  html[data-ui="stadium"] .toast.in { transform: translate(-50%, 0) scale(1); }
+  html[data-ui="stadium"] .pm-toast { animation: st-toast 320ms var(--ease-spring) backwards; }
+}
+@keyframes st-screen { from { transform: translateX(36px); opacity: 0; } 50% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes st-rise { from { transform: translateY(12px) scale(.96); opacity: 0; } 45% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes st-drop { from { transform: translateY(-16px); opacity: 0; } 50% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes st-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes st-modal { from { transform: translateY(16px) scale(.96); opacity: 0; } 45% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes st-toast { from { transform: translateY(20px) scale(.97); opacity: 0; } 45% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes st-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ------------------------------------------------------------------ 13. sizes: narrow desktop, phone, touch */
+@media (max-width: 1280px) {
+  html[data-ui="stadium"] .mm-tab { padding: 0 10px; font-size: 14px; }
+  html[data-ui="stadium"] .mm-brand { font-size: 24px; }
+  html[data-ui="stadium"] .mm-bar { gap: 14px; }
+}
+@media (max-width: 960px) {
+  html[data-ui="stadium"] .pm-uttab { font-size: 14px; padding: 0 14px; }
+}
+@media (max-width: 600px) {
+  html[data-ui="stadium"] .mm-brand { font-size: 24px; }
+  html[data-ui="stadium"] .mm-brand span { margin-left: 8px; }
+  html[data-ui="stadium"] .mm-bar > .acc-chip { padding-inline: 12px; font-size: 13px; }
+  html[data-ui="stadium"] .topbar-title h1, html[data-ui="stadium"] .pm-top-title h1 { font-size: 22px; }
+  html[data-ui="stadium"] .tile-title { font-size: 24px; }
+  html[data-ui="stadium"] .tile--kickoff .tile-title { font-size: 38px; }
+  html[data-ui="stadium"] .tile--small .tile-title { font-size: 17px; }
+  html[data-ui="stadium"] .tile--small .tile-text { padding: 12px 12px 12px 52px; }
+  html[data-ui="stadium"] .tile-ico { left: 16px; }
+  html[data-ui="stadium"] .pm-hx h2 { font-size: 24px; }
+  html[data-ui="stadium"] .pm-hx--squad h2 { font-size: 34px; }
+  html[data-ui="stadium"] .tile-text { padding: 14px 16px; }
+  html[data-ui="stadium"] .panel, html[data-ui="stadium"] .pm-panel { padding: 16px; }
+  html[data-ui="stadium"] .tab { padding: 0 14px; font-size: 14px; }
+  html[data-ui="stadium"] .btn--xl { padding-inline: 28px; }
+  html[data-ui="stadium"] .pm-modal-head, html[data-ui="stadium"] .pm-modal-body, html[data-ui="stadium"] .pm-modal-actions { padding-inline: 18px; }
+  html[data-ui="stadium"] .picker-name { font-size: 22px; }
+  html[data-ui="stadium"] .pm-stat-chip b { font-size: 24px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  /* phone held sideways: keep the two sticky bars short so the content has room */
+  html[data-ui="stadium"] .topbar, html[data-ui="stadium"] .pm-top { min-height: 52px; padding-block: 4px; }
+  html[data-ui="stadium"] .pm-uttabs { top: 52px; }
+  html[data-ui="stadium"] .pm-uttab { min-height: 44px; }
+  html[data-ui="stadium"] .topbar-title h1, html[data-ui="stadium"] .pm-top-title h1 { font-size: 22px; }
+  html[data-ui="stadium"] .mm-bar { min-height: 56px; }
+}
+@media (pointer: coarse) {
+  html[data-ui="stadium"] .pm-btn--sm, html[data-ui="stadium"] .pm-chip, html[data-ui="stadium"] .btn { min-height: 44px; }
+  html[data-ui="stadium"] .online-pill, html[data-ui="stadium"] .mm-status .acc-count, html[data-ui="stadium"] .mm-bar > .acc-chip { min-height: 44px; }
+}
