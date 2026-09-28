@@ -620,6 +620,7 @@ export class Hud {
       const r = (label, key) => `<tr><td>${label}</td><td><kbd>${esc(keyName(k[key]))}</kbd></td></tr>`;
       return `<table>${r('Move up', 'up')}${r('Move down', 'down')}${r('Move left', 'left')}${r('Move right', 'right')}${r('Sprint', 'sprint')}${r('Ground pass (hold = power)', 'pass')}${r('Through ball', 'through')}${r('Lob / cross', 'lob')}${r('Shoot (hold = power)', 'shoot')}${r('Finesse shot', 'finesse')}${r('Switch player', 'switchP')}${r('Tackle (hold / double tap = slide)', 'tackle')}${r('Skill move (+ direction)', 'skill')}${r('Jockey / shield (hold)', 'jockey')}${r('Control keeper (hold)', 'keeper')}${r('Pause', 'pause')}</table>
       <table><tr><td>Chip shot</td><td><kbd>${esc(keyName(k.switchP))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd></td></tr>
+      <tr><td>Power shot (hold to charge, long wind-up)</td><td><kbd>${esc(keyName(k.power))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd></td></tr>
       <tr><td>Low driven (tap) / power shot (hold)</td><td><kbd>${esc(keyName(k.finesse))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd></td></tr>
       <tr><td>Trivela · flair pass</td><td><kbd>${esc(keyName(k.jockey))}</kbd> + <kbd>${esc(keyName(k.shoot))}</kbd> · <kbd>${esc(keyName(k.jockey))}</kbd> + <kbd>${esc(keyName(k.pass))}</kbd></td></tr>
       <tr><td>Controlled sprint</td><td><kbd>${esc(keyName(k.jockey))}</kbd> + <kbd>${esc(keyName(k.sprint))}</kbd></td></tr>
@@ -631,9 +632,14 @@ export class Hud {
       `<div style="font-weight:800;margin-top:6px">Gamepad</div><table>
         <tr><td>Pass / Through / Lob / Shoot</td><td><kbd>A</kbd> <kbd>Y</kbd> <kbd>B</kbd> <kbd>X</kbd></td></tr>
         <tr><td>Finesse · Sprint · Switch · Jockey</td><td><kbd>RB</kbd> <kbd>RT</kbd> <kbd>LB</kbd> <kbd>LT</kbd></td></tr>
+        <tr><td>Power shot (with Shoot)</td><td><kbd>LB</kbd> + <kbd>RB</kbd></td></tr>
         <tr><td>Tackle (hold = slide) · Keeper</td><td><kbd>B</kbd> <kbd>L3</kbd></td></tr>
         <tr><td>Set-piece crosshair · contact point</td><td>right stick · d-pad</td></tr>
         <tr><td>Skill move · Camera · Pause</td><td><kbd>R3</kbd> <kbd>Back</kbd> <kbd>Start</kbd></td></tr></table>
+      <div style="font-weight:800;margin-top:6px">Skill moves (needs the skill-move stars shown)</div><table>
+        <tr><td>Skill + direction (relative to where you face)</td><td>none step-over (1) · forward heel flick (1) · back roulette (1) · side ball roll (1)</td></tr>
+        <tr><td>Advanced: hold Jockey, or press Skill again straight after a move (touch: double tap)</td><td>none fake shot (1) · forward rainbow flick (5) · diagonal elastico (4) · side La Croqueta (3) · back drag back (2)</td></tr>
+        <tr><td>Gamepad</td><td>flick the right stick, or R3 with the left stick. Power shot: LB + RB with Shoot. Touch: POWER button with SHOOT</td></tr></table>
       <table><tr><td>Toggle camera</td><td><kbd>C</kbd></td></tr><tr><td>Quick tactics · mentality</td><td><kbd>1</kbd>–<kbd>4</kbd> · <kbd>-</kbd> <kbd>=</kbd></td></tr><tr><td>Set pieces</td><td>move = aim, curve = switch/tackle keys, hold kick key for power</td></tr></table>`;
     const back = el('button', '', b, 'Back');
     back.addEventListener('click', () => this._menuMain(info));

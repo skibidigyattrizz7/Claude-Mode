@@ -955,9 +955,10 @@ export class PlayerRig {
           T[P.lsZ] = 0.9; T[P.rsZ] = -0.9;
         } else if (idx === 7) { // rainbow flick: heels trap the ball, a hop, the ball goes up and over
           const wind = seg(u, 0, 0.2), hop = Math.sin(Math.PI * seg(u, 0.16, 0.5));
-          T[P.lkX] = 1.35 * wind * (1 - 0.3 * hop) + 0.5 * hop; T[P.rkX] = 1.35 * wind * (1 - 0.3 * hop) + 0.5 * hop;
-          T[P.lhX] = 0.3 * wind - 0.15 * hop; T[P.rhX] = 0.3 * wind - 0.15 * hop;
-          T[P.laX] = 0.35 * wind; T[P.raX] = 0.35 * wind;
+          // one boot folds up behind the ball (heel up), the standing leg stays long, both tuck on the hop
+          const ohX = L ? P.lhX : P.rhX, okX = L ? P.lkX : P.rkX;
+          T[kX] = 1.7 * wind * (1 - 0.5 * hop) + 0.7 * hop; T[hX] = 0.15 * wind - 0.25 * hop; T[aX] = 0.4 * wind;
+          T[okX] = 0.12 + 0.6 * hop; T[ohX] = -0.05 - 0.2 * hop;
           T[P.lift] = 0.4 * hop; T[P.spX] = 0.14 + 0.25 * hop; T[P.nkX] = -0.3 * hop;
           T[P.lsZ] = 1.05; T[P.rsZ] = -1.05; T[P.lsX] = -0.3 * hop; T[P.rsX] = -0.3 * hop;
         } else { // fake shot: the leg goes back and swings through, but the ball stays; then a step past

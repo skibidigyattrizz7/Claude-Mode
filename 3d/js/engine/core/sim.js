@@ -884,9 +884,13 @@ export class MatchSim {
     if (dir && Math.hypot(dir.x, dir.z) > 0.2) {
       const fwd = dir.x * f.x + dir.z * f.z, lat = dir.x * r.x + dir.z * r.z;
       side = lat >= 0 ? 1 : -1;
-      sector = fwd > 0.6 ? 'fwd' : fwd < -0.45 ? 'back' : fwd > 0.2 && Math.abs(lat) > 0.4 ? 'fdiag' : 'side';
+      if (adv) {
+        // angle off the facing direction: 0-30 forward, 30-75 diagonal, 75-120 sideways, beyond that backwards
+        const ang = Math.abs(Math.atan2(lat, fwd)) * (180 / Math.PI);
+        sector = ang < 30 ? 'fwd' : ang < 75 ? 'fdiag' : ang < 120 ? 'side' : 'back';
+      } else sector = fwd > 0.6 ? 'fwd' : fwd < -0.45 ? 'back' : 'side';
     }
-    const BASIC = { none: 'stepover', fwd: 'heel', back: 'roulette', fdiag: 'ballroll', side: 'ballroll' };
+    const BASIC = { none: 'stepover', fwd: 'heel', back: 'roulette', fdiag: 'ballroll', side: 'ballroll' }; // (a locked advanced move falls back to the basic move for its direction)
     const ADV = { none: 'fakeshot', fwd: 'rainbow', back: 'dragback', fdiag: 'elastico', side: 'croqueta' };
     let kind = adv ? ADV[sector] : BASIC[sector];
     if (SKILL_INFO[kind].stars > p.sm) {
@@ -958,7 +962,7 @@ export class MatchSim {
           const b = this.ball, t = this.t;
           b.owner = -1; b.inHands = false;
           b.p.y = 0.3;
-          b.v = { x: f.x * 4.4 + p.vx * 0.5, y: 6.6, z: f.z * 4.4 + p.vz * 0.5 };
+          b.v = { x: f.x * 4.2 + p.vx * 0.5, y: 7.6, z: f.z * 4.2 + p.vz * 0.5 };
           b.w = { x: -f.z * 6, y: 0, z: f.x * 6 };
           b.lastTouch = p.idx; b.lastTeam = p.team; b.intended = p.idx; b.throughBall = false;
           p.cool.touch = t + 0.45; p.drib = null; p.burst = t + 1.2;
