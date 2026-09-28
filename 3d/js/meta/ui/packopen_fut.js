@@ -185,7 +185,7 @@ export function runFut(root, opts) {
       h('div', { class: 'pk2-bn-base' }, h('span', null, 'P')),
       h('div', { class: 'pk2-bn-promo' }, promo ? promo.tag : pull.prestige ? (best.special === 'lotg' ? 'LEGEND OF THE GAME' : 'CLASSIC') : ''),
       h('div', { class: 'pk2-bn-flag' }, frag(flagSVG(best.nat, 'pk2-flagsvg'))),
-      h('div', { class: 'pk2-bn-top' }, h('b', null, String(best.ovr)), h('span', null, best.pos)),
+      h('div', { class: 'pk2-bn-top' }, h('b', null, best.glitch === true ? '∞' : String(best.ovr)), h('span', null, best.pos)),
       h('div', { class: 'pk2-bn-crest' }, frag(crestSVG(club || best.club, 'pk2-crestsvg')))));
   const bannerL = banner('l'), bannerR = banner('r');
 
@@ -199,7 +199,7 @@ export function runFut(root, opts) {
   const back = h('div', { class: 'pk2-back' },
     h('div', { class: 'pk2-bk-in' },
       h('div', { class: 'pk2-bk-mark' }, 'P'),
-      h('div', { class: 'pk2-bk-ovr' }, h('b', null, String(best.ovr)), h('span', null, best.pos)),
+      h('div', { class: 'pk2-bk-ovr' }, h('b', null, best.glitch === true ? '∞' : String(best.ovr)), h('span', null, best.pos)),
       h('div', { class: 'pk2-bk-flag' }, frag(flagSVG(best.nat, 'pk2-flagsvg'))),
       h('div', { class: 'pk2-bk-crest' }, frag(crestSVG(club || best.club, 'pk2-crestsvg')))));
   const front = h('div', { class: 'pk2-front' }, playerCard(best, { size: 'lg' }));
@@ -346,7 +346,7 @@ export function runFut(root, opts) {
         say(nation ? nation.name : best.nat);
         break;
       }
-      case 'rating': setState('s-rating'); sfx.hit(); shake(true); punch(bannerL); punch(bannerR); punch(back); sideBursts(40); say(`${best.ovr} ${best.pos}`, positionName(best.pos)); break;
+      case 'rating': setState('s-rating'); sfx.hit(); shake(true); punch(bannerL); punch(bannerR); punch(back); sideBursts(40); say(`${best.glitch === true ? '∞' : best.ovr} ${best.pos}`, positionName(best.pos)); break;
       case 'club': {
         setState('s-coin'); sfx.riser(); say(club ? club.name : String(best.club));
         at(dur * 0.66, () => { if (phase !== 'playing') return; setState('s-club'); sfx.hit(); shake(true); punch(bannerL); punch(bannerR); punch(back); sideBursts(50); });

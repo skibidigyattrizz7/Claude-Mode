@@ -385,6 +385,8 @@ export class PlayerRig {
     const hairStyle = (h >>> 9) % 6; // 5 = bald
     const bootI = (h >>> 13) % BOOTS.length;
     this.leftFoot = pd?.foot === 'L' || (pd?.foot !== 'R' && ((h >>> 17) % 5) === 0);
+    // "The Shawky" (core/teams.js `glitch`): unique acrobatic shot animations (see _oneShot's KICK case).
+    this.glitch = pd && pd.glitch === true;
     // V2.1: rig height follows the player's real height (model is ~1.80 m at scale 1)
     const ht = pd && Number.isFinite(+pd.height) && +pd.height > 1.4 ? Math.min(2.1, +pd.height) : 0;
     this.scale = ht ? ht / 1.8 : 0.95 + ((h >>> 19) % 100) / 100 * 0.09;
@@ -455,6 +457,13 @@ export class PlayerRig {
     const changed = anim !== this.curAnim || (anim !== ANIM.RUN && animT + 0.05 < this.lastAnimT);
     if (changed) {
       this.diveSide = 0;
+      // "The Shawky": pick one of 3 acrobatic shot poses (bicycle / scissor-volley / spinning heel) per
+      // shot — seeded off his own identity + the ball's synced position/time, so host and guest agree
+      // closely without any extra network field, and re-running the exact same shot picks the same pose.
+      if (anim === ANIM.KICK && this.glitch) {
+        const gs = (this.seed ^ Math.round((ctx.ballX || 0) * 53) ^ Math.round((ctx.ballZ || 0) * 97) ^ Math.round((ctx.t || 0) * 211)) >>> 0;
+        this.glitchKind = gs % 3;
+      }
       if (anim === ANIM.DIVE) {
         const lateral = (ctx.ballX - x) * -Math.sin(this.face) + (ctx.ballZ - z) * Math.cos(this.face);
         this.diveSide = Math.abs(lateral) > .05 ? Math.sign(lateral) : (Math.sign(animP * Math.cos(this.face)) || 1);
@@ -597,6 +606,22 @@ export class PlayerRig {
         T[P.spX] = 0.12 - 0.18 * pw * follow; T[P.spY] = R * (pass ? .12 : .35) * (1 - recover);
         T[P.nkX] = 0.35; T[P.nkY] = 0;
         T[P.roll] = R * 0.1 * (1 - recover); T[P.lift] = 0;
+        // "The Shawky": one of 3 acrobatic overlays on top of the normal strike pose (see `glitchKind`
+        // above) — a bicycle kick, a scissor/overhead volley, or a spinning heel, picked per shot.
+        if (this.glitch && !pass) {
+          const env = follow * (1 - recover);
+          if (this.glitchKind === 0) { // bicycle kick: lean back and up, both legs swing overhead
+            T[P.pitch] -= 0.55 * env; T[P.lift] += 0.6 * env;
+            T[SH] = -0.9 * env; T[SK] = 0.9 * env; T[KH] -= 0.35 * env;
+            T[OAX] -= 0.3 * env; T[KAX] += 0.25 * env; T[P.nkX] -= 0.3 * env;
+          } else if (this.glitchKind === 1) { // scissor / overhead volley: torso twist, leg crosses over
+            T[P.spY] += R * 0.55 * env; T[P.roll] += R * 0.35 * env;
+            T[KZ] -= oz * 0.35 * env; T[SH] = -0.55 * env; T[SK] = 0.55 * env; T[P.lift] += 0.35 * env;
+          } else { // spinning heel: a full-turn wind-up, ankle flicks back for the heel strike
+            T[P.spY] += R * 0.85 * env; T[KA] -= 0.5 * env;
+            T[SH] = -0.4 * env; T[SK] = 0.5 * env; T[P.roll] += R * 0.5 * env;
+          }
+        }
         break;
       }
       case ANIM.WINDUP: {

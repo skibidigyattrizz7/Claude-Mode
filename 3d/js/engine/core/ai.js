@@ -552,6 +552,9 @@ function decideCarrier(sim, p, pressure) {
     if (D < 12 && ang < 0.9) q += 0.35;
     if (D < 7) q += 0.3;
     opts.push({ type: 'shoot', s: q * (D < 17 ? 2.1 : 1.35) + ment * 0.04 + noise() });
+  } else if (p.glitch && D < 105) {
+    // "The Shawky": shoots (and scores) from literally anywhere on the pitch
+    opts.push({ type: 'shoot', s: 8 + noise() });
   } else if (bst(p, 'sho') > 0.3 && D < 60) {
     // admin cards shoot (and score) from anywhere in the opposition half
     opts.push({ type: 'shoot', s: 0.6 + bst(p, 'sho') + noise() });

@@ -363,6 +363,35 @@
   --pat: repeating-linear-gradient(60deg, rgba(110,231,255,.16) 0 .1em, transparent .1em 1em); }
 .pm-card.is-headliner { filter: drop-shadow(0 0 .55em rgba(255,200,60,.8)) drop-shadow(0 .3em .5em rgba(0,0,0,.5)); }
 
+/* ---- Secret card ("The Shawky", secretcard.js special:'secret') — a one-off "glitch in the matrix" design,
+   not built from the banned-look list (CLAUDE.md): near-black + a single acid-green signal colour (never a
+   purple/blue gradient), no glassmorphism/blur, no gradient hero text. --pat layers a faint falling-code
+   texture and CRT scanlines (static, cheap); a rare, brief RGB-split "glitch" flicker and the code's slow
+   scroll are real motion but both stay off entirely under prefers-reduced-motion (see below). Chromebook-
+   cheap: only background-position and small transform/filter changes animate, nothing per-frame/JS. */
+.pm-card.pm-card.sp-secret { --bord: linear-gradient(135deg, #eafff2 0%, #14e6a0 20%, #063526 42%, #00c389 60%, #0a2a20 78%, #14e6a0 92%, #eafff2 100%);
+  --face: radial-gradient(60% 42% at 60% 18%, rgba(20,255,160,.14), transparent 70%), linear-gradient(178deg, #060c09 0%, #030503 55%, #000000 100%);
+  --ink: #d8fff0; --num: #baffe0; --ovr: #baffe0;
+  --pat: repeating-linear-gradient(180deg, rgba(20,255,160,.16) 0 2px, transparent 2px 15px) 0 0/100% 34px,
+    repeating-linear-gradient(0deg, rgba(180,255,225,.05) 0 1px, transparent 1px 3px),
+    var(--art-common) 0 0/100% 100%;
+  filter: drop-shadow(0 0 .42em rgba(20,255,160,.5)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); overflow: hidden; }
+.pm-card.sp-secret .pc-tag { color: #9bffce; text-shadow: 0 0 .5em rgba(20,255,160,.7); }
+.pm-card.sp-secret .pc-ovr, .pm-card.sp-secret .pc-name { text-shadow: 0 0 .3em rgba(20,255,160,.55); }
+.pm-card.sp-secret .pc-flag { box-shadow: 0 0 0 .06em rgba(0,0,0,.25), 0 0 .5em rgba(20,255,160,.35); }
+@media (prefers-reduced-motion: no-preference) {
+  .pm-card--md.sp-secret .pc-in::after, .pm-card--lg.sp-secret .pc-in::after { animation: pc-code-fall 5.5s linear infinite; }
+  .pm-card--md.sp-secret, .pm-card--lg.sp-secret { animation: pc-glitch-rgb 6.4s steps(1, end) infinite; }
+}
+@keyframes pc-code-fall { from { background-position: 0 0, 0 0, 0 0; } to { background-position: 0 340px, 0 0, 0 0; } }
+/* ~3 frames of RGB-split "teleport" flicker every cycle, then holds clean for readability. */
+@keyframes pc-glitch-rgb {
+  0%, 96.4%, 100% { filter: drop-shadow(0 0 .42em rgba(20,255,160,.5)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); transform: none; }
+  96.7% { filter: drop-shadow(-2px 0 0 #ff2b6b) drop-shadow(2px 0 0 #14e6ff) drop-shadow(0 0 .6em rgba(20,255,160,.75)); transform: translate(-1px, 0); }
+  97.5% { filter: drop-shadow(2px 0 0 #ff2b6b) drop-shadow(-2px 0 0 #14e6ff) drop-shadow(0 0 .8em rgba(20,255,160,.85)); transform: translate(1px, 0); }
+  98.3% { filter: drop-shadow(-1px 0 0 #ff2b6b) drop-shadow(1px 0 0 #14e6ff) drop-shadow(0 0 .5em rgba(20,255,160,.6)); transform: translate(0, 0); }
+}
+
 /* ---- promos: full-art cards. Colours come from core/promos.js (--pa dark / --pb main / --pc light, injected
    by card.js); each campaign supplies its own art via --pfx and may override --face/--bord/--num/--band.
    The lower band is the darker stats panel. ---- */
@@ -622,6 +651,25 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-pack--lotg { --pk: linear-gradient(160deg, #2a2208, #0b0b0b 50%, #6b4e0a 90%, #d4af37 120%); --pkink: #f6d56a; }
 .pm-pack--lotg .pk-foil { background: repeating-linear-gradient(120deg, rgba(212,175,55,0) 0 1em, rgba(212,175,55,.35) 1em 1.12em) !important; }
 .pm-pack--totw { --pk: linear-gradient(160deg, #3a3a3a, #111 55%, #f7d774 140%); --pkink: #f7d774; }
+/* Secret Vault pack — matches the card's own "glitch in the matrix" design (dark + one acid-green signal
+   colour, no purple/blue gradient, no glassmorphism): calmer than the card at this small size — a static
+   scanline texture, no flicker, so the pack list/store stays readable. */
+.pm-pack--secret { --pk: linear-gradient(160deg, #0c1a13, #030805 65%); --pkink: #b6ffe0; }
+.pm-pack--secret .pk-foil { background: repeating-linear-gradient(0deg, rgba(20,255,160,.16) 0 1px, transparent 1px 3px), repeating-linear-gradient(180deg, rgba(20,255,160,.1) 0 2px, transparent 2px 16px); mix-blend-mode: screen; }
+.pm-pack--secret .pk-logo { border-color: #14e6a0; box-shadow: 0 0 .6em rgba(20,230,160,.45); }
+/* Admin Vault pack (admin-panel only, owner request Sep 28) — its own green "matrix" look: dark tile, thin
+   falling 0/1 columns via a tiled SVG text pattern reused on the existing .pk-foil layer (no extra markup).
+   Static/readable by default; the slow downward scroll is real motion, off under reduced-motion. */
+.pm-pack--adminvault { --pk: linear-gradient(160deg, #081a10, #020602 65%); --pkink: #34ff9e; }
+.pm-pack--adminvault .pk-foil {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='34'%3E%3Ctext x='1' y='11' font-family='monospace' font-size='10' fill='%2334ff9e' opacity='.6'%3E1%3C/text%3E%3Ctext x='11' y='22' font-family='monospace' font-size='10' fill='%2334ff9e' opacity='.4'%3E0%3C/text%3E%3Ctext x='2' y='33' font-family='monospace' font-size='10' fill='%2334ff9e' opacity='.5'%3E0%3C/text%3E%3C/svg%3E") 0 0/22px 34px;
+  mix-blend-mode: screen; opacity: .8;
+}
+.pm-pack--adminvault .pk-logo { border-color: #34ff9e; box-shadow: 0 0 .6em rgba(52,255,158,.5); }
+@media (prefers-reduced-motion: no-preference) {
+  .pm-pack--adminvault.pm-pack--md .pk-foil, .pm-pack--adminvault.pm-pack--lg .pk-foil { animation: pk-code-fall 4.5s linear infinite; }
+}
+@keyframes pk-code-fall { from { background-position: 0 0; } to { background-position: 0 340px; } }
 .pk-foil { position: absolute; inset: 0; background: repeating-linear-gradient(120deg, rgba(255,255,255,0) 0 1.4em, rgba(255,255,255,.22) 1.4em 1.6em); mix-blend-mode: overlay; }
 .pk-shine { position: absolute; inset: -30%; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.7) 50%, transparent 60%); animation: pc-shine 3.6s ease-in-out infinite; }
 .pk-logo { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); width: 3.6em; height: 3.6em; border-radius: 50%; display: grid; place-items: center; border: .2em solid currentColor; background: rgba(255,255,255,.12); }
@@ -926,6 +974,16 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-admin-sec h3 { font-size: 16px; text-transform: uppercase; }
 .pm-admin-danger { border-color: rgba(255,77,109,.35); }
 .pm-admin-results { display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+/* Admin panel "open any pack for free" — small tiles using each pack's own look (packArt/.pm-pack--<look>),
+   same simple system the Store and My Packs already use (owner request Sep 28: every pack button should
+   match its pack). */
+.pm-adminpacks { display: flex; flex-wrap: wrap; gap: 10px; }
+.pm-adminpack { display: grid; justify-items: center; gap: 4px; width: 84px; padding: 8px 6px; border-radius: var(--r); border: 1px solid var(--line2); background: var(--panel); color: inherit; font: inherit; cursor: pointer; text-align: center; }
+.pm-adminpack:hover, .pm-adminpack:focus-visible { border-color: var(--acc); }
+.pm-adminpack:disabled { opacity: .5; cursor: default; }
+.pm-adminpack .pm-pack { pointer-events: none; }
+.pm-adminpack span { font-size: 10.5px; font-weight: 700; line-height: 1.15; }
+.pm-adminpack-badge { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #34ff9e; }
 .pm-wrap { flex-wrap: wrap; }
 .pm-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; }
 .pm-toggle input { width: 20px; height: 20px; accent-color: var(--acc); }

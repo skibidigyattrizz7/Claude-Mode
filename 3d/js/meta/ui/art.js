@@ -6,6 +6,27 @@ import { esc } from './dom.js';
 let uid = 0;
 const nid = (p) => `${p}${++uid}`;
 
+// Simplified gold Eagle of Saladin (owner request, Sep 28: the EGY flag was missing it) — a spread-wing
+// silhouette + small head, centred in the flag's middle band. Not heraldically exact, just recognisable
+// at flag-icon size.
+function eagleGlyph(cx, cy, fill) {
+  return `<g fill="${fill}" stroke="#6b4f10" stroke-width=".12">`
+    + `<path d="M${cx} ${(cy - 1.5).toFixed(2)}`
+    + `C${(cx - 0.5).toFixed(2)} ${(cy - 1.85).toFixed(2)} ${(cx - 1.4).toFixed(2)} ${(cy - 1.6).toFixed(2)} ${(cx - 3.3).toFixed(2)} ${(cy - 2.5).toFixed(2)}`
+    + `C${(cx - 2.1).toFixed(2)} ${(cy - 1).toFixed(2)} ${(cx - 2.5).toFixed(2)} ${(cy - 0.4).toFixed(2)} ${(cx - 4.1).toFixed(2)} ${(cy - 0.25).toFixed(2)}`
+    + `C${(cx - 2.5).toFixed(2)} ${(cy + 0.35).toFixed(2)} ${(cx - 2.15).toFixed(2)} ${(cy + 0.55).toFixed(2)} ${(cx - 3.4).toFixed(2)} ${(cy + 1.35).toFixed(2)}`
+    + `C${(cx - 1.7).toFixed(2)} ${(cy + 0.95).toFixed(2)} ${(cx - 0.85).toFixed(2)} ${(cy + 0.7).toFixed(2)} ${(cx - 0.45).toFixed(2)} ${(cy + 0.15).toFixed(2)}`
+    + `L${cx} ${(cy + 1.9).toFixed(2)}`
+    + `L${(cx + 0.45).toFixed(2)} ${(cy + 0.15).toFixed(2)}`
+    + `C${(cx + 0.85).toFixed(2)} ${(cy + 0.7).toFixed(2)} ${(cx + 1.7).toFixed(2)} ${(cy + 0.95).toFixed(2)} ${(cx + 3.4).toFixed(2)} ${(cy + 1.35).toFixed(2)}`
+    + `C${(cx + 2.15).toFixed(2)} ${(cy + 0.55).toFixed(2)} ${(cx + 2.5).toFixed(2)} ${(cy + 0.35).toFixed(2)} ${(cx + 4.1).toFixed(2)} ${(cy - 0.25).toFixed(2)}`
+    + `C${(cx + 2.5).toFixed(2)} ${(cy - 0.4).toFixed(2)} ${(cx + 2.1).toFixed(2)} ${(cy - 1).toFixed(2)} ${(cx + 3.3).toFixed(2)} ${(cy - 2.5).toFixed(2)}`
+    + `C${(cx + 1.4).toFixed(2)} ${(cy - 1.6).toFixed(2)} ${(cx + 0.5).toFixed(2)} ${(cy - 1.85).toFixed(2)} ${cx} ${(cy - 1.5).toFixed(2)}Z"/>`
+    + `<circle cx="${cx}" cy="${(cy - 1.55).toFixed(2)}" r=".5"/>`
+    + `<rect x="${(cx - 0.55).toFixed(2)}" y="${(cy + 0.15).toFixed(2)}" width="1.1" height="1.35" rx=".18"/>`
+    + `</g>`;
+}
+
 function star(cx, cy, r, fill) {
   const pts = [];
   for (let i = 0; i < 10; i++) {
@@ -43,6 +64,7 @@ export function flagSVG(code, cls = 'pm-flag') {
   if (f.star && f.t === 'solid') body += f.star === '#FFFFFF' ? `${star(8, 6, 2.5, '#fff')}${star(22, 13, 2.2, '#fff')}${star(7, 15, 1.4, '#fff')}` : star(15, 10, 4.4, 'none').replace('fill="none"', `fill="none" stroke="${f.star}" stroke-width="1"`);
   else if (f.star) body += star(15, 10, 2.8, f.star);
   if (f.crescent) body += `<circle cx="12.5" cy="10" r="5" fill="${f.crescent}"/><circle cx="13.8" cy="10" r="4" fill="${c[0]}"/>${star(18.5, 10, 2.1, f.crescent)}`;
+  if (f.eagle) body += eagleGlyph(15, 10, f.eagle);
   return `<svg class="${cls}" viewBox="0 0 30 20" preserveAspectRatio="none" role="img" aria-label="${esc(n.name)}">${body}<rect width="30" height="20" fill="none" stroke="rgba(0,0,0,.25)" stroke-width=".6"/></svg>`;
 }
 

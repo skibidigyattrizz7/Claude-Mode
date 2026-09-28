@@ -196,6 +196,7 @@ export function createRenderer(container, opts = {}) {
   let lastFx = 0;
   const excite = [0, 0, 0];
   let scorer = -1, scorerT = -99, goalSign = 0;
+  let glitchFx = null; // "The Shawky" — { at, to:{x,y,z} } for the short teleport-flicker, see ball.js
   let lastView = null;
   let destroyed = false;
 
@@ -272,6 +273,9 @@ export function createRenderer(container, opts = {}) {
       } else if (f.k === 'admin' && !rep) {
         adm.onFx(f, view);
         excite[2] = Math.max(excite[2], 0.6);
+      } else if (f.k === 'glitch') {
+        glitchFx = { at: t, to: { x: f.x, y: f.y, z: f.z } };
+        excite[2] = Math.max(excite[2], 0.4);
       }
     }
     // a restarted simulation (new match in the same renderer) resets ids
@@ -314,7 +318,10 @@ export function createRenderer(container, opts = {}) {
         ctx.idx = -1;
         refs[k].update(s.x, s.z, s.face, ANIM.RUN, 0, 0, s.spd, ctx);
       }
-      ball.update(b, dt, t, camera, { owner: view.bo ?? -1, marker: view.ph === PHASE.PLAY, trail: q.trail, scale: admLook.scale, mat: adm.ballMaterial(admLook.look), gm: admLook.gm });
+      ball.update(b, dt, t, camera, {
+        owner: view.bo ?? -1, marker: view.ph === PHASE.PLAY, trail: q.trail, scale: admLook.scale, mat: adm.ballMaterial(admLook.look), gm: admLook.gm,
+        glitchAt: glitchFx && t - glitchFx.at < 0.09 ? glitchFx.at : null, glitchTo: glitchFx && glitchFx.to,
+      });
       for (const net of goals.nets) net.update(t, b);
       // crowd excitement
       for (let k = 0; k < 3; k++) excite[k] = Math.max(0, excite[k] - dt * (view.ph === PHASE.GOAL ? 0.03 : 0.12));

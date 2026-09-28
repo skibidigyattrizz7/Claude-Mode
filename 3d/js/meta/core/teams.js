@@ -97,6 +97,10 @@ export function toMatchPlayer(p, pos, number, scale = 1) {
     id: p.id, name: p.name, number, pos, ovr: Math.max(1, Math.min(99, fit === 2 ? Math.round(p.ovr * scale) : ovr)),
     // admin / Owner-Access cards (OVR > 99): the engine turns the excess into their OP boost
     ...(p.ovr > 99 ? { rawOvr: Math.round(p.ovr) } : {}),
+    // "The Shawky" (secretcard.js `glitch`): a stronger, dedicated OP tier on top of the admin boost above —
+    // see engine/core/sim.js `_applyData` (p.glitch) and ai.js/render/player.js. Carried through the contract
+    // the same way `rawOvr` is, so it reaches the client identically online and offline (no net/** changes).
+    ...(p.glitch === true ? { glitch: true } : {}),
     ...matchPhysique(p),
     attrs: {
       pac: sc(p.stats.pac), sho: sc(p.stats.sho), pas: sc(p.stats.pas), dri: sc(p.stats.dri), def: sc(p.stats.def), phy: sc(p.stats.phy),
