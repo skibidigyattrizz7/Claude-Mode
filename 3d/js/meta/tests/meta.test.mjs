@@ -1258,20 +1258,27 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
 });
 
-test('B2: Admin Vault pack — admin-only (never in the public store), a fixed 50-card pool', () => {
+test('B2: Admin Vault pack — admin-only (never in the public store), 10 varied random players per opening', () => {
   const pack = UT.PACK_BY_ID[UT.ADMIN_VAULT_PACK_ID];
   assert.ok(pack.adminOnly, 'must be flagged admin-only');
   assert.ok(!UT.storePacks().some((p) => p.id === UT.ADMIN_VAULT_PACK_ID), 'must never be in the public store');
-  const pool = UT.adminVaultPool();
-  assert.equal(pool.length, UT.ADMIN_VAULT_SIZE);
-  assert.equal(new Set(pool.map((p) => p.id)).size, pool.length, 'no duplicate cards in the pool');
-  assert.ok(!pool.some((p) => p.id === SC.SECRET_CARD_ID), 'the Secret card is layered on by pack odds, not part of the 50');
-  // A real, seeded pack open never errors and always returns 5 items, only from the pool (or the Secret card).
-  for (let i = 0; i < 200; i++) {
+  for (const s of pack.slots) assert.ok(Math.abs(Object.values(s.odds).reduce((a, b) => a + b, 0) - 1) < 1e-9, 'slot odds sum to 1');
+  const top50 = new Set(getDB().all.slice().sort((a, b) => b.ovr - a.ovr).slice(0, 50).map((p) => p.id));
+  let outsideTop = 0; const ovrs = new Set();
+  for (let i = 0; i < 100; i++) {
     const items = UT.openPack(UT.ADMIN_VAULT_PACK_ID, new Set(), new Rng(`av-size-${i}`));
-    assert.equal(items.length, 5);
-    for (const it of items) assert.ok(it.pid === SC.SECRET_CARD_ID || pool.some((p) => p.id === it.pid), `unexpected card ${it.pid}`);
+    assert.equal(items.length, UT.ADMIN_VAULT_SIZE);
+    assert.equal(UT.ADMIN_VAULT_SIZE, 10);
+    for (const it of items) {
+      const p = getPlayer(it.pid);
+      assert.ok(p, `unknown card ${it.pid}`);
+      if (!top50.has(p.id)) outsideTop++;
+      ovrs.add(p.ovr);
+    }
+    assert.ok(items.filter((it) => it.pid === SC.SECRET_CARD_ID).length <= 1);
   }
+  assert.ok(outsideTop > 100 * 7, 'not just the highest-rated cards');
+  assert.ok(ovrs.size > 15, 'a varied spread of ratings');
 });
 
 test('B2: Manager cards contribute chemistry in both styles, and never regress an unmanaged squad', () => {

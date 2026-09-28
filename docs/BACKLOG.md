@@ -123,3 +123,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - Unfinished work saved on branch `wip/paused-work`: packs Chromebook fix + send-all buttons, admin Players/Moderation merge + Card Creator bugs + edit saved cards + custom ban time, FUT Draft redesign + odds + subs, mobile pass, security (migration 008 drafted, not applied).
 - Hosting: GitHub Pages, Render (pitchside-xl8m.onrender.com, auto-updates), Replit (manual copy, doesn't auto-update).
 - Owner access bug: every time the owner joins, opening Owner commands → owner-only tasks says they're only an admin (outside it shows Owner), and they must re-enter the code every session. Owner level should persist and be recognized inside the owner panel.
+- Owner (2026-09-28, later): Admin Vault pack = **10** random players per opening (not 5 top-rated, not 50), 0.5% Shawky.
+- Owner: more versions of The Shawky card (same ∞ glitch card, own name + nation): Kilner (Scotland), Collins (South Korea), Patel (India), Oelke (Germany), BraydenMasilang (Philippines), Nickerson (Kenya), Dammad (Palestine).
+- Owner: start/finish ALL paused work on `wip/paused-work` (see list above).

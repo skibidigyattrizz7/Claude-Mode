@@ -13,8 +13,8 @@ import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased,
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 import { restoreCustomCards } from './customreg.js';
 import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, secretCard } from './secretcard.js';
-import { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, adminVaultPool } from './adminvault.js';
-export { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, adminVaultPool } from './adminvault.js';
+import { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX, ADMIN_VAULT_TOP } from './adminvault.js';
+export { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX } from './adminvault.js';
 import { MANAGERS, getManager } from './managers.js';
 export { MANAGERS, getManager } from './managers.js';
 
@@ -38,9 +38,6 @@ export const CATEGORIES = {
   // Secret card: never in db.all (see secretcard.js), so `test` always misses — its pool is filled in
   // categoryPools() below, exactly like `totw`, and only `SECRET_PACK_ID` ever references this category.
   secret: { label: 'Secret', test: () => false },
-  // Admin Vault's 50-card pool (adminvault.js) — filled in categoryPools() below; only ADMIN_VAULT_PACK_ID
-  // references this category, and that pack is admin-only (see storePacks).
-  adminvault: { label: 'Admin Vault', test: () => false },
 };
 // V3 promo categories (one per campaign)
 for (const pr of PROMOS) CATEGORIES[`promo_${pr.id}`] = { label: pr.name, test: (p) => p.special === pr.id };
@@ -53,7 +50,6 @@ export function categoryPools() {
   for (const [k, c] of Object.entries(CATEGORIES)) _pools[k] = db.all.filter(c.test);
   _pools.totw = totwCards(weekNumber());
   _pools.secret = [secretCard()];
-  _pools.adminvault = adminVaultPool();
   _pools._week = weekNumber();
   return _pools;
 }
@@ -104,13 +100,13 @@ export const PACKS = [
     slots: [{ n: 1, odds: { secret: SECRET_ODDS, lotg: 1 - SECRET_ODDS } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
   },
   // Admin Vault (owner request, Sep 28): admin-only (see storePacks' `adminOnly` filter — never on sale,
-  // never a reward, never in "My Packs"), a 50-card pool of the game's best ordinary cards (adminvault.js),
+  // never a reward, never in "My Packs"), 10 random players per opening (adminvault.js),
   // and the other of the two packs that can ever contain the Secret card, at a higher (still tiny)
-  // ADMIN_VAULT_SECRET_ODDS (0.005) — an admin testing tool, not a way to farm him.
+  // ADMIN_VAULT_SECRET_ODDS (0.005) per opening — an admin testing tool, not a way to farm him.
   {
     id: ADMIN_VAULT_PACK_ID, name: 'Admin Vault Pack', price: 0, look: 'adminvault', adminOnly: true,
-    desc: `Admin only — 1 of the 50 best cards in the game (guaranteed) + 4 more from that pool, plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of the Secret card instead`,
-    slots: [{ n: 1, odds: { secret: ADMIN_VAULT_SECRET_ODDS, adminvault: 1 - ADMIN_VAULT_SECRET_ODDS } }, { n: 4, odds: { adminvault: 1 } }],
+    desc: `Admin only — ${ADMIN_VAULT_SIZE} random players (golds, rares, In-Forms, Heroes, Legends), plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of the Secret card`,
+    slots: [{ n: 1, odds: ADMIN_VAULT_TOP }, { n: ADMIN_VAULT_SIZE - 1, odds: ADMIN_VAULT_MIX }],
   },
 ];
 // V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)
@@ -153,7 +149,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
       let pool = pools[cat] && pools[cat].length ? pools[cat] : pools.gold;
       if (promoDrop.length && PROMO_DROP_CATS.has(cat) && rng.chance(PROMO_DROP_CHANCE)) pool = promoDrop;
       let p = rng.pick(pool);
-      for (let t = 0; t < 4 && seen.has(p.id); t++) p = rng.pick(pool);
+      for (let t = 0; t < 12 && seen.has(p.id); t++) p = rng.pick(pool);
       if (pool === promoDrop) cat = `promo_${p.special}`;
       items.push({ pid: p.id, cat, dup: ownedSet.has(p.id) || seen.has(p.id) });
       seen.add(p.id);

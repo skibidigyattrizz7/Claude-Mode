@@ -676,7 +676,9 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pk-logo span { font-size: 2.2em; font-weight: 700; }
 .pk-brand { position: absolute; left: 0; right: 0; top: 55%; text-align: center; font-weight: 700; font-size: .9em; letter-spacing: .12em; line-height: 1.1; }
 .pk-brand small { font-size: .62em; letter-spacing: .2em; }
-.pk-name { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; font-weight: 700; font-size: 1.15em; letter-spacing: .08em; padding: 0 .3em; }
+.pk-name { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; font-weight: 700; font-size: 1em; line-height: 1.1; letter-spacing: .03em; padding: 0 .2em; }
+.pm-pack--sm .pk-brand { top: 50%; } .pm-pack--sm .pk-brand small { display: none; }
+.pm-pack--sm .pk-name { font-size: 1.05em; line-height: 1.1; letter-spacing: .03em; padding: 0 .15em; }
 
 /* ---------- pack opening ---------- */
 .pm-po { position: fixed; inset: 0; z-index: 1000; overflow: hidden; background: #050608; color: #fff; --flare: #ffc933; --accent: #ffc933; }

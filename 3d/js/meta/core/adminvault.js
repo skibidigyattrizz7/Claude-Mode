@@ -1,25 +1,22 @@
 // Admin Vault (owner request, Sep 28): a second, admin-only pack — never in the public store (see ut.js
 // `storePacks`, which filters out any pack with `adminOnly: true`) or in "My Packs"; admins open it for
-// free from the admin panel's "Open any pack for free" list, same as every other pack there. Its pool is
-// the 50 highest-rated ordinary cards in the game (icons/Legends of the Game first, then the very best
-// regular golds) — nothing invented, all real `getDB().all` cards. Every draw from this pool also has a
-// small, separate chance (`ADMIN_VAULT_SECRET_ODDS`, 10x the Secret Vault pack's own odds — still an admin
-// tool, not a way to farm him) of landing the Secret card ("The Shawky") instead, exactly like the Secret
-// Vault pack's own slot: he still cannot be admin-granted directly (admin.js `grantPlayer` blocks his id
-// unconditionally, whichever pack a caller is opening), so pulling him from one of these two packs' odds
-// remains the only way into (or out of) a club. DOM-free.
-import { getDB } from './players.js';
+// free from the admin panel's "Open any pack for free" list. Each opening is ADMIN_VAULT_SIZE (10) random
+// players — a varied mix across the normal pack categories (golds, rares, In-Forms, Heroes, Legends, LOTG),
+// NOT just the highest-rated cards (owner: 10 random players, not the top-rated ones). The pack as a whole also has
+// ADMIN_VAULT_SECRET_ODDS (0.5%) of containing the Secret card ("The Shawky"), on its first slot only, like
+// the Secret Vault pack: he still cannot be admin-granted directly (admin.js `grantPlayer` blocks his id).
+// DOM-free.
 
 export const ADMIN_VAULT_PACK_ID = 'adminvault';
 export const ADMIN_VAULT_SECRET_ODDS = 0.005;
-export const ADMIN_VAULT_SIZE = 50;
+export const ADMIN_VAULT_SIZE = 10;
 
-let _pool = null;
-/** The Admin Vault's fixed 50-card pool — the highest-rated cards in `getDB().all` (never the Secret card,
- * which lives outside `db.all` entirely and is layered on top by the pack's own odds — see ut.js). */
-export function adminVaultPool() {
-  if (_pool) return _pool;
-  const db = getDB();
-  _pool = db.all.slice().sort((a, b) => b.ovr - a.ovr).slice(0, ADMIN_VAULT_SIZE);
-  return _pool;
-}
+/** Odds for the 9 ordinary slots: mostly golds, with a healthy sprinkle of specials so it's never samey. */
+export const ADMIN_VAULT_MIX = {
+  gold: 0.24, goldRare: 0.26, gold83: 0.16, gold86: 0.1, silverRare: 0.04,
+  inform: 0.08, hero: 0.05, legend: 0.04, lotg: 0.03,
+};
+/** The first slot: 0.5% Secret card, otherwise a good card (so every opening has a real walkout). */
+export const ADMIN_VAULT_TOP = {
+  secret: ADMIN_VAULT_SECRET_ODDS, gold86: 0.5 - ADMIN_VAULT_SECRET_ODDS, legend: 0.2, lotg: 0.15, hero: 0.15,
+};
