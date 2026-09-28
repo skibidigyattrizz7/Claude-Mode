@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Content-Security-Policy: scripts only from this site (+ the PeerJS CDN fallbacks), no inline scripts. connect-src stays open to https:/wss: because the online screen lets players pick their own PeerJS server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://baxzjrueelirgcstjbdc.supabase.co wss://baxzjrueelirgcstjbdc.supabase.co https://0.peerjs.com wss://0.peerjs.com https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0d10">
 <meta name="description" content="Pitchside 3D — a 3D football game in your browser: quick matches, career mode, ultimate team, local and online multiplayer.">
@@ -10,11 +12,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/main.css">
-<link rel="stylesheet" href="css/meta.css">
+<link rel="stylesheet" href="css/tokens.css?v=20260928">
+<link rel="stylesheet" href="css/main.css?v=20260928">
+<link rel="stylesheet" href="css/meta.css?v=20260928">
 <link rel="stylesheet" href="css/account.css?v=20260927m" data-account-css="1">
-<link rel="modulepreload" href="js/main.js">
+<link rel="modulepreload" href="js/main.js?v=20260928">
 </head>
 <body>
 <div class="bg" aria-hidden="true"><div class="bg-shade"></div></div>
@@ -26,12 +28,7 @@
   <p>On a school or work network, a web filter may be blocking the game's script files: reload, or ask IT to allow this site.</p>
   <p><a href="../index.html">Back to all games</a></p>
 </div>
-<script>
-  // If the ES module never boots (old browser, file://, syntax error), show a message instead of a blank page.
-  setTimeout(function () {
-    if (!document.documentElement.classList.contains('ready')) document.getElementById('boot-fail').hidden = false;
-  }, 5000);
-</script>
-<script type="module" src="js/main.js" onerror="document.getElementById('boot-fail').hidden=false"></script>
+<script src="js/boot.js?v=20260928"></script>
+<script type="module" src="js/main.js?v=20260928"></script>
 </body>
 </html>

@@ -89,10 +89,20 @@ export function attributeBlock(p) {
     g.subs.map((x) => h('div', { class: 'pm-subattr', 'data-attr': x.key }, h('span', null, x.label), h('b', { class: cls(x.value) }, x.value), h('i', { style: { '--v': `${x.value}%` } }))))));
 }
 
+// Real players show surname only (FIFA/FC convention: "Ronaldo", not "Cristiano Ronaldo"). Card Creator admin
+// cards have no separate first/last name — the owner types one name for the card, so it must show in full
+// ("pain man", not "man") rather than through cardName()'s last-word-only rule.
+function nameOnCard(p) { return p.customAdmin && typeof p.name === 'string' && p.name.trim() ? p.name.trim() : cardName(p); }
+
+// Card fields can come from other players (market listings, shared squads, gifts): anything that goes into the
+// HTML string below is escaped or forced to a number / a CSS-class-safe token.
+const tok = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+const num = (v, lo = 0, hi = 999) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo; };
+
 export function cardClasses(p) {
-  const c = ['pm-card', `t-${p.tier}`];
+  const c = ['pm-card', `t-${tok(p.tier)}`];
   if (p.rare) c.push('rare');
-  if (p.special) c.push(`sp-${p.special}`);
+  if (p.special) c.push(`sp-${tok(p.special)}`);
   if (p.era === 'prime') c.push('era-prime');
   if (p.evo) c.push('is-evo');
   if (p.totw) c.push('is-totw');
@@ -113,35 +123,40 @@ export function playerCard(p, opts = {}) {
   const cls = cardClasses(p);
   cls.push(`pm-card--${size}`);
   if (opts.className) cls.push(opts.className);
+  const upg = p.upg ? { level: num(p.upg.level, 0, 20), max: num(p.upg.max, 0, 20) } : null;
+  const evo = num(p.evo, 0, 99);
   const club = opts.club || clubById(p.club) || { id: p.club, name: p.club, short: String(p.club).slice(0, 3), colors: { primary: '#445', secondary: '#99a' } };
   const vals = p.pos === 'GK' ? [p.gk.div, p.gk.han, p.gk.kic, p.gk.ref, p.gk.spd, p.gk.pos] : [p.stats.pac, p.stats.sho, p.stats.pas, p.stats.dri, p.stats.def, p.stats.phy];
   const labels = p.pos === 'GK' ? GK_LABELS : STAT_LABELS;
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
-  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${v}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
+  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${num(v, 0, 999)}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : sortedStyles(p).slice(0, 3).map((x) => psBadge(x)).join('');
-  const others = [p.pos, ...(p.alt || [])].filter((x) => x !== posLabel).slice(0, 3);
-  const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(others.join(', '))}">+${esc(others.join(' '))}</div>`;
+  // Card Creator admin cards can carry more than 3 alt positions; the card face only has room for 3 badges,
+  // but the hover title lists every one of them.
+  const othersAll = [p.pos, ...(p.alt || [])].filter((x) => x !== posLabel);
+  const others = othersAll.slice(0, 3);
+  const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(othersAll.join(', '))}">+${esc(others.join(' '))}${othersAll.length > 3 ? '…' : ''}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
   // above it unclipped, so special cards can let the player break out of the top edge of the frame.
-  const tag = p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? SPECIAL_LABEL[p.special] || '' : 'EVOLUTION') : '';
-  const html = `<div class="${cls.join(' ')}" data-pid="${esc(p.id)}">
+  const tag = p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
+  const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.photo ? `<img class="pc-avatar pc-photo" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
-      <div class="pc-ovr">${p.ovr}</div>
+      <div class="pc-ovr">${num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>
       ${altHtml}
       <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>
     </div>
     ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
     ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}
-    <div class="pc-name">${esc(cardName(p))}</div>
+    <div class="pc-name">${esc(nameOnCard(p))}</div>
     ${statsHtml}
-    ${tag ? `<div class="pc-tag">${tag}</div>` : ''}
-    ${p.upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${p.upg.level}/${p.upg.max}">${Array.from({ length: p.upg.max }, (_, i) => `<i class="${i < p.upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}
+    ${tag ? `<div class="pc-tag">${esc(tag)}</div>` : ''}
+    ${upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${upg.level}/${upg.max}">${Array.from({ length: upg.max }, (_, i) => `<i class="${i < upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}
     ${p.era === 'prime' ? '<div class="pc-era">PRIME</div>' : ''}
-    ${p.evo ? `<div class="pc-evo" title="Evolved ×${p.evo}">EVO${p.evo > 1 ? ` ${p.evo}` : ''}</div>` : ''}
+    ${p.evo ? `<div class="pc-evo" title="Evolved ×${evo}">EVO${evo > 1 ? ` ${evo}` : ''}</div>` : ''}
   </div>`;
   const el = frag(html);
   el.setAttribute('aria-label', `${p.name}, ${p.ovr} ${posLabel}`);

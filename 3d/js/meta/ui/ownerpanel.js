@@ -13,13 +13,38 @@ import { listCustomCards } from './customcards.js';
 import { save as saveLocal } from '../core/storage.js';
 
 const RESTRICTIONS = [['market', 'Transfer market'], ['packs', 'Packs'], ['messages', 'Messages'], ['codes', 'Using admin codes'], ['admin', 'Activating admin (all staff powers)']];
-const DURATIONS = [['', 'Permanent'], ['60', '1 hour'], ['1440', '1 day'], ['10080', '7 days'], ['43200', '30 days']];
+const DURATION_UNITS = [['s', 'sec'], ['m', 'min'], ['h', 'hr'], ['d', 'day']];
+const DURATION_MS = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
 const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
 const DESIGNS = [['', 'None'], ['inform', 'In-Form'], ['hero', 'Hero'], ['legend', 'Icon'], ['lotg', 'Legend of the Game'], ['objective', 'Pathfinder'], ...PROMOS.map((p) => [p.id, p.name])];
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString() : '—');
 const errText = (r) => (r && (r.message || r.error)) || 'failed';
 const owner = (app) => app.online && app.online.owner;
+
+/** Parse a length like "30s", "10m", "2h", "1d" (a bare number = minutes) into whole milliseconds, at least
+ * one second. -> ms | null (blank = no length given, i.e. permanent) | NaN (typed but not a valid length). */
+export function parseDuration(v) {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (!s) return null;
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)?$/);
+  if (!m) return NaN;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return NaN;
+  const ms = Math.round(n * DURATION_MS[(m[2] || 'm')[0]]);
+  return ms >= 1000 ? ms : NaN;
+}
+
+/** A number + unit (s/m/h/d) control for ban/timeout/restriction lengths, down to 1 second (blank number =
+ * permanent). -> { el, ms(): number | null } */
+function durationInput(label, unit = 'm') {
+  const n = h('input', { class: 'pm-input pm-input--num', type: 'number', min: '1', step: 'any', placeholder: 'Permanent', style: { maxWidth: '92px' }, 'aria-label': `${label} length` });
+  const u = select(DURATION_UNITS, unit, () => {}, { 'aria-label': `${label} unit`, style: { maxWidth: '84px' } });
+  return {
+    el: h('span', { class: 'pm-btnrow', style: { display: 'inline-flex', gap: '4px', flexWrap: 'nowrap' } }, n, u),
+    ms() { const v = Number(n.value); return n.value.trim() && Number.isFinite(v) && v > 0 ? Math.round(v * DURATION_MS[u.value]) : null; },
+  };
+}
 
 /** Parse a whole coin amount (commas / spaces allowed); safe integers only (up to 9e15). -> number | null */
 export function parseCoins(v) {
@@ -41,6 +66,12 @@ function restrictionChips(r) {
   return keys.map((k) => h('span', { class: 'pm-chip on', style: { minHeight: '22px', fontSize: '11px', padding: '2px 8px', marginLeft: '4px' }, title: r[k] === true ? 'Permanent' : `Until ${when(r[k])}` }, `no ${k}`));
 }
 
+/** Readable name for any player: username, else the guest's display name, else their club, else "Guest". */
+export function displayName(u) {
+  const nm = u && typeof u.name === 'string' && u.name.trim() && !/^player$/i.test(u.name.trim()) ? u.name.trim() : '';
+  return (u && u.username) || nm || (u && u.clubName) || 'Guest';
+}
+
 // ---------------------------------------------------------------- all players
 export function playersPanel(app) {
   const svc = owner(app);
@@ -60,39 +91,44 @@ export function playersPanel(app) {
     if (!r || r.ok === false) { st.items = null; st.error = errText(r); } else { st.items = r.items; st.error = ''; }
     draw();
   }
+  const mod = app.online && app.online.moderation;
+  const quick = async (label, fn, confirmText, danger = false) => { const r = await run(app, label, fn, confirmText ? { confirm: confirmText, danger } : {}); if (r && r.ok !== false) load(); };
   function draw() {
     clear(body);
     if (st.error) { body.appendChild(h('p', { class: 'pm-warnline' }, `Could not load players: ${st.error}.`)); return; }
     if (!st.items) return;
     const f = st.filter;
     const rows = !f ? st.items : st.items.filter((u) => [u.username, u.name, u.clubName, u.friendCode, u.id].some((x) => x && String(x).toLowerCase().includes(f)));
-    count.textContent = `${rows.length} of ${st.items.length} players (accounts and device guests).`;
-    const table = h('table', { class: 'pm-table' },
-      h('thead', null, h('tr', null, ['', 'Player', 'Type', 'Role', 'Club', 'Coins', 'Rating', 'W-D-L', 'Joined', 'Last seen', 'Status'].map((t, i) => h('th', { class: i === 1 || i === 4 ? 'l' : '' }, t)))),
-      h('tbody', null, rows.map((u) => {
-        const tr = h('tr', { tabindex: '0', 'data-player': u.id, title: 'Open player' },
-          h('td', null, h('span', { class: `pm-onlinedot ${u.online ? 'is-on' : ''}` })),
-          h('td', { class: 'l' }, h('b', null, u.username || u.name || 'Player'), u.username ? null : h('small', { class: 'pm-dim' }, ` · ${u.friendCode || u.id.slice(0, 8)}`)),
-          h('td', null, u.account ? 'Account' : 'Guest'),
-          h('td', null, u.role),
-          h('td', { class: 'l' }, u.clubName || (u.hasSave ? 'Saved club' : '—')),
-          h('td', null, u.infinite ? '∞' : fmtNum(u.coins)),
-          h('td', null, `${u.rating} · D${u.division}`),
-          h('td', null, `${u.wins}-${u.draws}-${u.losses}`),
-          h('td', null, day(u.createdAt)),
-          h('td', null, u.lastSeenAt ? when(u.lastSeenAt) : '—'),
-          h('td', null, u.banned ? h('b', { class: 'pm-warnline' }, u.bannedUntil ? 'TIMEOUT' : 'BANNED') : 'OK', ...restrictionChips(u.restrictions)));
-        const open = () => app.push(playerDetailView(u.id, u));
-        tr.addEventListener('click', open);
-        tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-        return tr;
-      })));
-    body.appendChild(h('div', { class: 'pm-tablewrap' }, table));
+    count.textContent = `${rows.length} of ${st.items.length} players (accounts and device guests), online first.`;
+    const sorted = rows.slice().sort((x, y) => (y.online ? 1 : 0) - (x.online ? 1 : 0) || String(y.lastSeenAt || '').localeCompare(String(x.lastSeenAt || '')));
+    const list = h('ul', { class: 'pm-plist' }, sorted.map((u) => {
+      const name = displayName(u);
+      const open = () => app.push(playerDetailView(u.id, u));
+      const meta = [u.account ? 'Account' : 'Guest', u.role !== 'player' ? u.role : null, u.clubName || (u.hasSave ? 'Saved club' : null),
+        u.infinite ? '∞ coins' : `${fmtNum(u.coins)} coins`, `Rating ${u.rating}`, `${u.wins}-${u.draws}-${u.losses}`].filter(Boolean).join(' · ');
+      const btn = (label, ico, onclick, cls = '') => h('button', { class: `pm-btn pm-btn--sm ${cls}`, type: 'button', onclick: (e) => { e.stopPropagation(); onclick(); } }, ico ? icon(ico) : null, ico ? ` ${label}` : label);
+      return h('li', { class: `pm-prow ${u.banned ? 'is-banned' : ''}`, 'data-player': u.id },
+        h('button', { class: 'pm-prow-main', type: 'button', title: `Open ${name}`, onclick: open },
+          h('span', { class: 'pm-prow-av', 'aria-hidden': 'true' }, name.slice(0, 1).toUpperCase(), h('i', { class: `pm-onlinedot ${u.online ? 'is-on' : ''}` })),
+          h('span', { class: 'pm-prow-who' },
+            h('b', null, name, u.banned ? h('span', { class: 'pm-prow-flag' }, u.bannedUntil ? 'Timeout' : 'Banned') : null, ...restrictionChips(u.restrictions)),
+            h('small', null, meta),
+            h('small', null, `${u.friendCode ? `Code ${u.friendCode} · ` : ''}Joined ${day(u.createdAt)} · Last seen ${u.online ? 'now' : u.lastSeenAt ? when(u.lastSeenAt) : '—'}`))),
+        h('div', { class: 'pm-prow-acts' },
+          btn('Message', 'bell', async () => { const t = (prompt(`Message to ${name}:`, '') || '').trim(); if (t) quick('Message', () => svc.message(u.id, t)); }),
+          btn('Coins', 'coins', async () => { const n = parseCoins(prompt(`Coins for ${name} (e.g. 5000 or -5000):`, '')); if (n) quick(n > 0 ? 'Add coins' : 'Remove coins', () => svc.giveCoins(u.id, n, { reason: 'owner panel' })); }),
+          u.banned
+            ? btn('Unban', null, () => quick('Unban', () => mod.unban(u.id)))
+            : [btn('Timeout', null, () => quick('Timeout (1 day)', () => mod.ban(u.id, 'Timeout', new Date(Date.now() + 1440 * 60000)), `Time out ${name} for 1 day?`, true)),
+              btn('Ban', 'ban', () => { const reason = (prompt(`Ban ${name}. Reason (shown to the player):`, 'Owner decision') || '').trim(); if (reason) quick('Ban', () => mod.ban(u.id, reason, null)); }, 'pm-btn--danger')],
+          btn('Manage', null, open, 'pm-btn--accent')));
+    }));
+    body.appendChild(list);
   }
   load();
   add(wrap,
     h('h3', null, icon('squad'), ' Every player'),
-    h('p', { class: 'pm-dim' }, 'Everyone who ever signed in, played or made a team. Open a player to see and control their club, coins, account and access.'),
+    h('p', { class: 'pm-dim' }, 'Everyone who ever signed in, played or made a team. Message, coins, timeout and ban right here; Manage opens their club, account, access and history.'),
     h('div', { class: 'pm-btnrow pm-wrap' }, filterInp,
       h('button', { class: 'pm-btn', onclick: load }, 'Refresh'),
       h('button', {
@@ -191,7 +227,7 @@ export function playerDetailView(id, summary = null) {
 
         // -- info
         const info = h('section', { class: 'pm-panel pm-admin-sec' },
-          h('h3', null, icon('squad'), ` ${p.username || p.name}`, h('span', { class: `pm-onlinedot ${p.online ? 'is-on' : ''}`, style: { marginLeft: '8px' } })),
+          h('h3', null, icon('squad'), ` ${displayName(p)}`, h('span', { class: `pm-onlinedot ${p.online ? 'is-on' : ''}`, style: { marginLeft: '8px' } })),
           h('div', { class: 'pm-dim' }, [
             `${p.account ? 'Account' : 'Device guest'} · role ${p.role} · friend code ${p.friendCode || '—'} · id ${p.id}`, h('br'),
             `Coins ${p.infinite ? '∞ (infinite)' : fmtNum(p.coins)} · rating ${p.rating} · Rivals ${p.rivalsDivision === 0 ? 'Elite' : `D${p.rivalsDivision}`} · ${p.wins}W ${p.draws}D ${p.losses}L`, h('br'),

@@ -1,7 +1,8 @@
 // UT feature screens: reward claim flow, Player Picks, Objectives hub, Evolutions, Draft, Tournaments,
 // Team of the Week, Season track, club customisation and Tactics.
 import { h, clear, frag, modal, confirmBox, fmtNum, add, select } from './dom.js';
-import { playerCard } from './card.js';
+import { playerCard, emptyCard } from './card.js';
+import * as DP from './draftpick.js';
 import { crestSVG, badgeSVG } from './art.js';
 import { squadEditor } from './squad.js';
 import { resultView } from './app.js';
@@ -312,7 +313,7 @@ export function draftView() {
       if (!d) {
         add(main, h('section', { class: 'pm-panel pm-draftintro' },
           h('h2', null, 'Pitchside Draft'),
-          h('p', null, 'Pick a formation, choose a captain from 5, then 1 of 5 players for every position — real Legends of the Game included. Win a 4-round knockout for big rewards.'),
+          h('p', null, 'Pick a formation and a captain from 5, then 1 of 5 players for every position and all 7 subs, in any order. Real Legends of the Game included. Win a 4-round knockout for big rewards.'),
           h('div', { class: 'pm-draftrewards' }, DR.DRAFT_REWARDS.map((r, i) => h('div', null, h('b', null, `${i} win${i === 1 ? '' : 's'}`), h('small', null, rewardText(r))))),
           h('div', { class: 'pm-btnrow' },
             h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', disabled: s.coins < DR.DRAFT_ENTRY, onclick: async () => {
@@ -329,33 +330,75 @@ export function draftView() {
         return;
       }
       if (d.stage === 'captain') {
-        add(main, h('h3', { class: 'pm-h' }, '2 · Choose your captain'), h('div', { class: 'pm-draftopts' }, d.captainOptions.map((pid) => playerCard(getPlayer(pid), { size: 'md', onClick: () => { DR.chooseCaptain(d, pid); persist(app); app.refresh(); } }))));
+        const stage = h('section', { class: 'dp-stage' },
+          h('div', { class: 'dp-title' }, h('h2', null, 'Choose your captain'), h('p', null, 'Your captain goes straight into the XI.')));
+        add(main, stage);
+        DP.fitHeight(stage, app);
+        stage.appendChild(DP.dealRow(d.captainOptions.map((pid) => ({ p: getPlayer(pid) })), (it, card) => {
+          const idx = DR.chooseCaptain(d, it.p.id);
+          DP.queueFly(`s${idx}`, card);
+          persist(app);
+          setTimeout(() => app.refresh(), DP.reducedMotion() ? 0 : 170);
+        }, { cls: 'dp-row--cap' }));
         return;
       }
+      DR.ensureBench(d);
       const info = DR.draftInfo(d);
       const f = FORMATIONS[d.formation];
-      const pitch = h('div', { class: 'pm-pitch pm-draftpitch' }, h('div', { class: 'pm-pitch-lines' }));
-      const open = DR.nextOpenSlot(d);
+      const picking = d.stage === 'slots';
+      const board = h('section', { class: 'dp-board' });
+      const pickAnd = (fn) => (it, card, close) => {
+        fn(it.p.id);
+        DP.queueFly(it.key, card);
+        persist(app);
+        setTimeout(() => { close(); app.refresh(); }, DP.reducedMotion() ? 0 : 170);
+      };
+      const openSlot = (i, btn) => {
+        const pos = f.slots[i].pos;
+        const items = DR.slotOptions(d, i).map((pid) => {
+          const trial = d.slots.slice(); trial[i] = pid;
+          const ch = calcChemistry(d.formation, trial.map((id) => (id ? getPlayer(id) : null)));
+          return { p: getPlayer(pid), pos, key: `s${i}`, note: h('span', null, 'Chem → ', h('b', null, String(ch.scaled)), ` (${ch.players[i]}/3)`) };
+        });
+        persist(app); // options are generated on first open and must stay the same when re-opened
+        DP.openPicker(app.root, { title: `Pick your ${pos}`, sub: 'Choose 1 of 5. Chemistry shown for each card.', items, returnFocus: btn, onPick: pickAnd((pid) => DR.pickSlot(d, i, pid)) });
+      };
+      const benchPos = DR.benchPositions(d.formation);
+      const openSub = (j, btn) => {
+        const items = DR.benchOptions(d, j).map((pid) => ({ p: getPlayer(pid), key: `b${j}`, note: `Sub · ${benchPos[j]}` }));
+        persist(app);
+        DP.openPicker(app.root, { title: `Pick a sub: ${benchPos[j]}`, sub: 'Subs can come on in every draft match. They do not change chemistry.', items, returnFocus: btn, onPick: pickAnd((pid) => DR.pickBench(d, j, pid)) });
+      };
+      const pitch = h('div', { class: 'pm-pitch dp-pitch' }, h('div', { class: 'pm-pitch-grass' }), h('div', { class: 'pm-pitch-lines' }));
       f.slots.forEach((sl, i) => {
         const p = info.slots[i];
-        pitch.appendChild(h('div', { class: 'pm-slotpos', style: { left: `${5 + sl.x * 0.9}%`, top: `${2 + (96 - sl.y) * 1.03}%` } },
-          h('div', { class: `pm-slot ${i === open ? 'is-sel' : ''}` }, p ? playerCard(p, { size: 'xs', pos: sl.pos }) : h('div', { class: 'pm-card pm-card--xs pm-card--empty' }, h('div', { class: 'pc-in' }, h('div', { class: 'pc-emptypos' }, sl.pos)))),
+        const pos = { left: `${5 + sl.x * 0.9}%`, top: `${2 + (96 - sl.y) * 1.03}%` };
+        const slot = p
+          ? h('div', { class: 'pm-slot', 'data-k': `s${i}` }, playerCard(p, { size: 'xs', pos: sl.pos }))
+          : h('button', { class: 'pm-slot dp-slot', 'data-k': `s${i}`, 'aria-label': `Pick your ${sl.pos}`, disabled: !picking, onclick: (e) => openSlot(i, e.currentTarget) }, emptyCard(sl.pos, 'xs'));
+        pitch.appendChild(h('div', { class: 'pm-slotpos', style: pos }, slot,
           p ? h('div', { class: `pm-chempip c${info.chem.players[i] || 0}` }, String(info.chem.players[i] || 0)) : null));
       });
-      const head = h('div', { class: 'pm-sq-info' }, h('div', { class: 'pm-stat-chip' }, h('span', null, 'Rating'), h('b', null, info.rating || '–')), h('div', { class: 'pm-stat-chip' }, h('span', null, 'Chemistry'), h('b', null, info.chem.scaled)), h('div', { class: 'pm-stat-chip' }, h('span', null, d.formation)));
-      const side = h('div', { class: 'pm-draftside' });
-      if (d.stage === 'slots' && open >= 0) {
-        const pos = f.slots[open].pos;
-        side.appendChild(h('h3', { class: 'pm-h' }, `3 · Pick your ${pos}`));
-        const opts = DR.slotOptions(d, open);
-        side.appendChild(h('div', { class: 'pm-draftopts' }, opts.map((pid) => {
-          const p = getPlayer(pid);
-          const trial = d.slots.slice(); trial[open] = pid;
-          const ch = calcChemistry(d.formation, trial.map((id) => (id ? getPlayer(id) : null)));
-          return h('div', { class: 'pm-draftopt' }, playerCard(p, { size: 'sm', pos, onClick: () => { DR.pickSlot(d, open, pid); persist(app); app.refresh(); } }),
-            h('small', { class: 'pm-dim' }, `Chem → ${ch.scaled} (${ch.players[open]}/3)`));
+      const benchIds = d.bench.length ? d.bench : [];
+      const subsIn = benchIds.filter(Boolean).length;
+      const bench = h('div', { class: 'dp-benchwrap' },
+        h('h3', null, 'Subs', h('span', null, `${subsIn}/${benchIds.length || DR.BENCH_SIZE}`)),
+        h('div', { class: 'dp-bench' }, benchIds.map((pid, j) => {
+          const p = pid ? getPlayer(pid) : null;
+          const label = benchPos[j] || (p && p.pos) || 'SUB';
+          return p
+            ? h('div', { class: 'dp-sub', 'data-k': `b${j}` }, playerCard(p, { size: 'xs' }), h('small', null, 'SUB'))
+            : h('button', { class: 'pm-slot dp-slot dp-sub', 'data-k': `b${j}`, 'aria-label': `Pick a sub: ${label}`, disabled: !picking, onclick: (e) => openSub(j, e.currentTarget) }, emptyCard(label, 'xs'), h('small', null, 'SUB'));
         })));
-      } else if (!d.done) {
+      const left = DR.picksLeft(d);
+      const bar = h('div', { class: 'dp-bar' },
+        h('div', { class: 'pm-stat-chip' }, h('span', null, 'Rating'), h('b', null, info.rating || '–')),
+        h('div', { class: 'pm-stat-chip' }, h('span', null, 'Chemistry'), h('b', null, info.chem.scaled)),
+        h('div', { class: 'pm-stat-chip' }, h('span', null, 'Formation'), h('b', null, d.formation)),
+        picking ? h('span', { class: 'dp-rule' }, `${left} pick${left === 1 ? '' : 's'} left · tap any position · fill the XI and all 7 subs to play`) : null,
+        !d.done ? h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm dp-forfeit', onclick: async () => { if (await confirmBox(app.root, 'Forfeit draft', 'Forfeit now and claim the rewards for your current wins?', 'Forfeit', true)) { d.done = true; d.stage = 'done'; persist(app); app.refresh(); } } }, 'Forfeit') : null);
+      const side = h('div', { class: 'dp-side' });
+      if (!picking && !d.done) {
         const opp = DR.draftOpponent(d);
         side.appendChild(h('section', { class: 'pm-panel' }, h('div', { class: 'pm-kicker' }, `${DR.DRAFT_ROUNDS[d.round]} · ${DIFF_LABEL[DR.roundDifficulty(d)]}`),
           h('h3', null, `vs ${opp.name}`), h('p', { class: 'pm-dim' }, `Rating ${opp.rating} · ${opp.team.formation}`),
@@ -372,14 +415,16 @@ export function draftView() {
       }
       if (d.done) {
         const r = DR.draftReward(d);
-        side.appendChild(h('section', { class: 'pm-panel pm-draftdone' }, h('h2', null, d.wins >= 4 ? '🏆 Draft Champions!' : `Draft over — ${d.wins} win${d.wins === 1 ? '' : 's'}`),
+        side.appendChild(h('section', { class: 'pm-panel pm-draftdone' }, h('h2', null, d.wins >= 4 ? 'Draft Champions' : `Draft over: ${d.wins} win${d.wins === 1 ? '' : 's'}`),
           h('p', null, `Rewards: ${rewardText(r)}`),
           h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
             rewardFlow(app, () => { const out = UT.grantReward(s, r, 'Draft'); s.draft = null; return out; }, 'Draft rewards');
           } }, 'Claim rewards')));
       }
-      add(main, h('div', { class: 'pm-draftgrid' }, h('div', null, head, pitch), side),
-        !d.done ? h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: async () => { if (await confirmBox(app.root, 'Forfeit draft', 'Forfeit now and claim the rewards for your current wins?', 'Forfeit', true)) { d.done = true; d.stage = 'done'; persist(app); app.refresh(); } } }, 'Forfeit') : null);
+      add(board, bar, h('div', { class: 'dp-field' }, pitch, benchIds.length ? bench : null, side.childNodes.length ? side : null));
+      add(main, board);
+      DP.fitHeight(board, app);
+      DP.landFly(board);
     },
   };
 }

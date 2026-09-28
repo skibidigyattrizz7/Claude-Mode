@@ -315,6 +315,28 @@ function clubView() {
             cardMeta(p, onTl ? h('span', { class: 'pm-cardmeta-tl', title: 'On your transfer list' }, 'TL') : null)));
         }
         if (!list.length) grid.appendChild(h('p', { class: 'pm-empty' }, 'No players match these filters.'));
+        drawBulk(list, inSquad);
+      };
+      // bulk moves for the cards shown that are NOT in the XI or on the bench
+      const bulk = h('div', { class: 'pm-clubbulk' });
+      const drawBulk = (list, inSquad) => {
+        clear(bulk);
+        const spare = list.filter((p) => !inSquad.has(p.id));
+        const untr = spare.filter((p) => (s.untradeable || []).includes(p.id));
+        const trade = spare.filter((p) => !(s.untradeable || []).includes(p.id) && !PM.onTransferList(s, p.id));
+        if (!untr.length && !trade.length) return;
+        add(bulk, h('span', { class: 'pm-dim' }, `${spare.length} shown not in your squad`),
+          untr.length ? h('button', { class: 'pm-btn pm-btn--sm', onclick: async () => {
+            if (!(await confirmBox(app.root, 'Send to SBC storage', `Move ${untr.length} untradeable card${untr.length === 1 ? '' : 's'} (not in your squad) to SBC storage?`, 'Send all'))) return;
+            for (const p of untr) { UT.removeFromClub(s, p.id); UT.sendToVault(s, p.id); }
+            persist(app); app.toast(`${untr.length} card${untr.length === 1 ? '' : 's'} moved to SBC storage`, 'good'); draw();
+          } }, `Send all untradeables to SBC storage (${untr.length})`) : null,
+          trade.length ? h('button', { class: 'pm-btn pm-btn--sm', onclick: async () => {
+            if (!(await confirmBox(app.root, 'Send to transfer list', `Put ${trade.length} tradeable card${trade.length === 1 ? '' : 's'} (not in your squad) on your transfer list?`, 'Send all'))) return;
+            let n = 0, err = '';
+            for (const p of trade) { const r = PM.sendToTransferList(s, p.id); if (r.ok) n++; else { err = r.error; break; } }
+            persist(app); app.toast(err ? `${n} sent. ${err}` : `${n} card${n === 1 ? '' : 's'} sent to your transfer list`, err ? 'warn' : 'good'); draw();
+          } }, `Send all to transfer list (${trade.length})`) : null);
       };
       const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search name…', value: f.q, 'aria-label': 'Search club' });
       search.addEventListener('input', () => { f.q = search.value; draw(); });
@@ -326,7 +348,7 @@ function clubView() {
           select([['', 'All leagues'], ...LEAGUES.map((l) => [l.id, l.name]), ['ICN', 'Legends of the Game'], ['LEG', 'Classics'], ['HER', 'Heroes']], f.league, (v) => { f.league = v; draw(); }, { 'aria-label': 'League' }),
           select([['ovr', 'Sort: Rating'], ['name', 'Sort: Name'], ['pos', 'Sort: Position'], ['value', 'Sort: Value'], ['nation', 'Sort: Nation'], ['league', 'Sort: League']], f.sort, (v) => { f.sort = v; draw(); }, { 'aria-label': 'Sort' }),
           count),
-        grid);
+        bulk, grid);
       draw();
     },
   };
@@ -501,10 +523,10 @@ function sbcListView() {
           const avail = UT.sbcAvailable(s, sbc);
           const rt = rewardText(sbc.reward);
           return h('button', { class: `pm-sbc ${avail ? '' : 'is-done'}`, disabled: !avail, onclick: () => app.push(sbcDetailView(sbc.id)) },
-            sbc.repeatable || done ? h('div', { class: 'pm-sbc-tags' },
-              sbc.repeatable ? h('span', { class: 'pm-tagmini' }, 'Repeatable') : null,
-              done ? h('span', { class: 'pm-tagmini pm-tagmini--done' }, avail ? `Done ×${done}` : '✓ Completed') : null) : null,
             h('h4', { title: sbc.name }, sbc.name),
+            sbc.repeatable || done ? h('div', { class: 'pm-sbc-tags' },
+              sbc.repeatable ? h('span', null, 'Repeatable') : null,
+              done ? h('span', { class: 'is-done' }, avail ? `Completed ×${done}` : '✓ Completed') : null) : null,
             h('div', { class: 'pm-sbc-head' },
               h('div', { class: 'pm-sbc-headt' },
                 h('p', null, sbc.desc),

@@ -10,6 +10,10 @@ export const PHOTO_MAX = 200000; // chars of the data URL (the server accepts th
 const PHOTO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const ID_RE = /^[A-Za-z0-9_.:-]{1,40}$/;
 const TIERS = new Set(['bronze', 'silver', 'gold', 'icon']);
+// Card Creator cards are fully custom (not part of formation-fit generation), so the owner can give one more
+// than the usual 3 alt positions. The card face still only has room to show 3 badges (art.js/card.js); the
+// rest are kept in the data and listed in the card's title/tooltip.
+export const ALT_MAX = 8;
 const int = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Math.round(Number(v)))) : d);
 
 /** A valid card photo data URL (png/jpeg/webp, bounded) or null. */
@@ -32,6 +36,8 @@ export function sanitizeCustomCard(c) {
   base.pot = Math.max(base.ovr, base.pot || 0);
   base.name = String(c.name || base.name).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 32) || 'Custom Player';
   if (typeof c.last === 'string' && c.last.trim()) base.last = c.last.trim().slice(0, 30);
+  // sanitizeCard() clamps alt to the usual 3 (real-player generation rule); Card Creator cards get more room.
+  if (Array.isArray(c.alt)) base.alt = [...new Set(c.alt)].filter((x) => typeof x === 'string' && x !== base.pos && POS.has(x)).slice(0, ALT_MAX);
   if (typeof c.special === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(c.special)) base.special = c.special;
   if (TIERS.has(c.tier)) base.tier = c.tier;
   base.rare = c.rare === true || base.tier === 'icon';

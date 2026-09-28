@@ -690,7 +690,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const k = usernameKey(u);
       const win = Math.floor(now() / 900000);
       const fk = `${win}:${k}`;
-      if ((db.loginFails[fk] || 0) >= 10) return err('too_many_attempts');
+      if ((db.loginFails[fk] || 0) >= 5) return err('too_many_attempts'); // migration 008: 5 per username / 15 min
       const p = Object.values(db.profiles).find((x) => x.username && usernameKey(x.username) === k);
       if (!p || p.pwHash !== fnv(`pw:${p_password}`)) {
         db.loginFails = { ...Object.fromEntries(Object.entries(db.loginFails).filter(([key]) => key.startsWith(`${win}:`))), [fk]: (db.loginFails[fk] || 0) + 1 };
@@ -698,6 +698,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         store.save(db);
         return err('bad_credentials');
       }
+      if (db.loginFails[fk]) delete db.loginFails[fk]; // the right password clears the counter (008)
       if (isBanned(p)) { audit(db, p.id, 'login_banned'); store.save(db); return { ok: false, error: 'banned', ban: banJson(p) }; }
       p.lastLoginAt = now(); seen(p);
       const token = newSession(db, p.id);
