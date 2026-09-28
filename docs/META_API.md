@@ -200,3 +200,26 @@ Fictional manager identities that contribute chemistry when assigned to a squad 
 Not documented here beyond: it exists, resolves `ad_<baseId>` ids via `getPlayer`, and is intentionally kept
 out of `db.all`/`db.players` so no pool that iterates those (packs, AI market, AI-opponent squads) can ever
 surface one. Ask agent C for its current export list before integrating against it.
+
+## PlayStyles, real player info, leagues (Sep 27 owner requests)
+- **PlayStyles** (`core/physique.js`): the full FC 25/26 set (38) incl. new `gamechanger`, `inventive`, `enforcer`.
+  `powerheader` / `aerial` keep their ids but display as "Precision Header" / "Aerial Fortress"; `PS_ALIASES` +
+  `canonStyle(id)` / `normalizeStyles(list)` map FC-style ids (`precisionheader`, `aerialfortress`, …) onto them —
+  `parseStyles`, `ensurePhysique`, `matchPhysique` and the engine's `parsePlaystyles` all accept aliases.
+  `PS_TIER` = owner tier list; `assignPlus(p, list, {fill})` re-picks which styles carry the `+` (chart first via
+  `bestPlaystylesFor(pos)`, then tier) — used for every real player. Every id has a sim effect
+  (`engine/tests/playstyles.test.mjs` enforces it).
+- **Icons** (`ui/playstyleicons.js`): `psIconSvg(id, plus)` (normal = dark diamond/white glyph, PlayStyle+ = gold
+  gem/dark glyph), `psBadge({id, plus})` (inline `<i class="psi">`), `PS_GLYPHS`. `card.js#psBadgeHtml` now returns
+  these. Cards show ≤3 icons (+ first); grids no longer show PlayStyle chips; the details view lists all.
+- **Real personal info** (`core/bios.js`): `BIOS[person]` = real DOB / height / foot / weight / death date.
+  `profileFacts(p, now)` → the details-view rows; `personalInfo(p, now)`; `ageOn(dob, date)`. Age is always
+  computed from the DOB; unknown values (and every fictional player's personal fields) read "Unknown". Real
+  cards get `p.physReal` (true = row height/weight are hand-authored, false = compact rows whose generated values
+  must never be shown). `p.age` stays a gameplay field (career/market) and is not displayed in UT.
+- **Sub-stats** (`core/substats.js`): `subStats(p)` → FC's 29 detailed attributes grouped under the face stats
+  (deterministic, re-centred on the face stat; display only).
+- **Leagues** (`core/data.js`): display names are now the real leagues (ISL Premier League, SOL LaLiga, MEI
+  Bundesliga, AUR Serie A, ETO Ligue 1, CON Rest of World); ids unchanged, old name in `fictional`, badge code in
+  `badge`. `ui/leaguebadge.js#leagueBadgeSVG(id)` draws the badge (card face + details view). Player Market search
+  has a (client-side) league filter.

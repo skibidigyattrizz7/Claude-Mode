@@ -3,26 +3,34 @@
 // (search for `ps(p, '<id>')`). Short labels are shown in the HUD for the controlled player. DOM-free.
 export const PLAYSTYLES = {
   // attack
-  finesse: 'FIN', power: 'PWR', chip: 'CHP', deadball: 'DBL', trivela: 'TRV', lowdriven: 'LOW', powerheader: 'PHD', acrobatic: 'ACR',
+  finesse: 'FIN', power: 'PWR', chip: 'CHP', deadball: 'DBL', trivela: 'TRV', lowdriven: 'LOW', powerheader: 'PRH', acrobatic: 'ACR', gamechanger: 'GCH',
   // passing
-  incisive: 'INC', tikitaka: 'TIK', pinged: 'PNG', longball: 'LBP', whipped: 'WHP',
+  incisive: 'INC', tikitaka: 'TIK', pinged: 'PNG', longball: 'LBP', whipped: 'WHP', inventive: 'INV',
   // ball control
   firsttouch: '1ST', technical: 'TEC', rapid: 'RAP', flair: 'FLR', trickster: 'TRK', pressproven: 'PRS',
   // defending
   anticipate: 'ANT', intercept: 'INT', block: 'BLK', jockey: 'JKY', slidetackle: 'SLD', bruiser: 'BRU', aerial: 'AER',
   // physical
-  quickstep: 'QST', relentless: 'REL', longthrow: 'LTH',
+  quickstep: 'QST', relentless: 'REL', longthrow: 'LTH', enforcer: 'ENF',
   // goalkeeping
   farreach: 'FAR', footwork: 'FTW', rushout: 'RSH', crossclaimer: 'CRC', quickreflexes: 'QRF', deflector: 'DFL',
 };
 export const PS_PLUS = 1.6;
+// FC 25/26 names for the two styles that kept their original ids (Precision Header / Aerial Fortress), plus
+// spelled-out variants — so cards from any source resolve to the one id the sim reads.
+export const PS_ALIASES = {
+  precisionheader: 'powerheader', precision: 'powerheader', aerialfortress: 'aerial', fortress: 'aerial',
+  powershot: 'power', finesseshot: 'finesse', chipshot: 'chip', lowdrivenshot: 'lowdriven', incisivepass: 'incisive',
+  pingedpass: 'pinged', longballpass: 'longball', whippedpass: 'whipped', game_changer: 'gamechanger',
+};
+const canon = (id) => (PLAYSTYLES[id] ? id : PS_ALIASES[id] || null);
 
 export function parsePlaystyles(list) {
   const o = {};
   if (!Array.isArray(list)) return o;
   for (const e of list) {
-    const id = typeof e === 'string' ? e : e && e.id;
-    if (!id || !PLAYSTYLES[id]) continue;
+    const id = canon(typeof e === 'string' ? e : e && e.id);
+    if (!id) continue;
     o[id] = Math.max(o[id] || 0, e && e.plus ? PS_PLUS : 1);
   }
   return o;

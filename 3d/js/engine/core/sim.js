@@ -192,7 +192,7 @@ export class MatchSim {
     p.acc = (2.6 + pace * 0.09 + ps(p, 'quickstep') * 0.9 - (p.w - 75) * 0.025 - (p.h - 1.8) * 2.5) * (1 + bst(p, 'pac') * 1.6);
     // agility (turning) from dribbling/pace, strength from physical + body mass
     p.agil = clamp((a.dri * 0.7 + a.pac * 0.3) / 100 - 0.08 - (p.h - 1.8) * 0.4 - Math.max(0, p.w - 80) * 0.004, 0.25, 1.05) + bst(p, 'dri') * 0.9;
-    p.str = a.phy * 0.9 - 10 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10 + bst(p, 'phy') * 250;
+    p.str = a.phy * 0.9 - 10 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10 + ps(p, 'enforcer') * 6 + bst(p, 'phy') * 250;
     // standing reach / jump used for headers and keeper handling
     p.jump = 0.28 + a.phy * 0.0025 + (p.isGK ? a.div * 0.002 : 0) + ps(p, 'aerial') * 0.08;
     p.hash = strHash(String(pd.id ?? pd.name ?? p.idx));
@@ -1117,12 +1117,14 @@ export class MatchSim {
     turn = 1 + (turn - 1) * (1 - ps(p, 'trivela') * 0.35);
     const style = human ? (gp.gameplayStyle === 'authentic' ? 1.18 : 0.92) : 1;
     const ey = info.errYaw ?? 1, es = info.errSpeed ?? 1;
-    const flair = info.flair ? (1.3 + Math.max(0, 80 - a.dri) * 0.03) * (1 - ps(p, 'flair') * 0.3) : 1;
+    // flair / no-look passes: Flair and Inventive both steady them
+    const flair = info.flair ? (1.3 + Math.max(0, 80 - a.dri) * 0.03) * (1 - ps(p, 'flair') * 0.3) * (1 - ps(p, 'inventive') * 0.3) : 1;
     const g = this.rng.gauss;
     const pdist = info.point ? Math.hypot(info.point.x - p.x, info.point.z - p.z) : 15;
     if (k === 'ground' || k === 'through' || k === 'gkthrow') {
       let psm = 1;
       if (k === 'through') psm -= ps(p, 'incisive') * 0.25;
+      if (k === 'through' || pdist > 18) psm -= ps(p, 'inventive') * 0.08; // Inventive: creative / line-breaking balls
       if (k === 'ground' && pdist < 16) psm -= ps(p, 'tikitaka') * 0.25;
       if (k === 'ground' && pdist > 25) psm -= ps(p, 'pinged') * 0.2;
       if (k === 'gkthrow') psm -= ps(p, 'footwork') * 0.2;
@@ -1152,6 +1154,8 @@ export class MatchSim {
       if (k === 'trivela') sm *= ps(p, 'trivela') ? 1 - ps(p, 'trivela') * 0.2 : a.sho + a.dri > 165 ? 1.1 : 1.8;
       if (k === 'fk') sm *= 1 - ps(p, 'deadball') * 0.15;
       if (info.volley) sm *= 1.35 - ps(p, 'acrobatic') * 0.3;
+      // Gamechanger (FC26): improvised finishes — chips, trivelas, curlers and volleys — are sharper
+      if (k === 'chip' || k === 'trivela' || k === 'finesse' || info.volley) sm *= 1 - ps(p, 'gamechanger') * 0.18;
       if (info.timed === 0) sm *= 0.35; else if (info.timed === 1) sm *= 0.9; else if (info.timed === 2) sm *= 1.9;
       const s = (0.02 + (100 - a.sho) * 0.0024) * (1 + Math.max(0, info.power - 0.75) * 2.2) * (1 + fatigue * 0.5) * press * turn * em * sm * style;
       vel = this._applyErr(vel, s, s * 0.75, 0.03, false);
@@ -2033,7 +2037,7 @@ export class MatchSim {
       if (!victim) won = true;
       else {
         const pr = clamp(0.5 + (p.a.def - victim.a.dri) * 0.012 + (behind ? -0.2 : 0.12) + (victim.act && victim.act.type === 'skill' ? -0.15 : 0)
-          + ps(p, 'anticipate') * 0.1 + (p.jockeyT > this.t - 0.4 ? 0.06 : 0) - ps(victim, 'pressproven') * 0.05, 0.1, 0.93);
+          + ps(p, 'anticipate') * 0.1 + ps(p, 'enforcer') * 0.05 + (p.jockeyT > this.t - 0.4 ? 0.06 : 0) - ps(victim, 'pressproven') * 0.05, 0.1, 0.93);
         // admin defenders win it from anywhere; admin dribblers are nearly impossible to dispossess
         won = this.rng() < (pr + (1 - pr) * bst(p, 'def')) * (1 - 0.92 * bst(victim, 'dri') * (1 - bst(p, 'def')));
       }
@@ -2082,7 +2086,7 @@ export class MatchSim {
       const shielding = o.shieldT > t - 0.1;
       if (bd < 0.8 + bst(d, 'def') * 1.4) {
         d.cool.steal = t + 0.35 * (1 - bst(d, 'def') * 0.7);
-        let pr = clamp(0.2 + (d.a.def - o.a.dri) * 0.007 + (this.fromBehind(d, o) ? -0.12 : 0) + (d.jockeyT > t - 0.3 ? 0.06 : 0) + ps(d, 'jockey') * 0.03, 0.03, 0.45);
+        let pr = clamp(0.2 + (d.a.def - o.a.dri) * 0.007 + (this.fromBehind(d, o) ? -0.12 : 0) + (d.jockeyT > t - 0.3 ? 0.06 : 0) + ps(d, 'jockey') * 0.03 + ps(d, 'enforcer') * 0.03, 0.03, 0.45);
         if (this.isHumanCtrl(d)) pr *= 0.6;
         if (this.isHumanCtrl(o)) pr *= 0.8;
         pr *= 1 - ps(o, 'pressproven') * 0.25;

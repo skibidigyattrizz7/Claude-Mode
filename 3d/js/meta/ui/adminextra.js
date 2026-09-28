@@ -1,7 +1,7 @@
 // Admin panel extensions: card creator + Admin Cards gallery (super/owner only), moderation, global
 // broadcast, giveaways and global config toggles. Every call into `app.online.*` is feature-detected —
 // docs/ONLINE_API.md may not exist yet, so nothing here assumes a shape that isn't checked first.
-import { h, clear, add, fmtNum, confirmBox, select, modal } from './dom.js';
+import { h, clear, add, fmtNum, confirmBox, select, modal, frag } from './dom.js';
 import { icon } from './icons.js';
 import { playerCard } from './card.js';
 import { safeCall } from './app.js';
@@ -12,8 +12,8 @@ import { NATIONS } from '../core/data.js';
 import { sendLocalGift } from './giftsview.js';
 import { getConfig, syncConfig } from './config.js';
 import { PROMOS } from '../core/promos.js';
-import { PLAYSTYLES } from '../core/physique.js';
-import { psBadgeHtml } from './card.js';
+import { PLAYSTYLES, bestPlaystylesFor } from '../core/physique.js';
+import { psBadge, ensurePsiStyles } from './playstyleicons.js';
 
 const TIERS = ['bronze', 'silver', 'gold', 'icon'];
 // Every card "design": base specials + every live/upcoming promo campaign (not capped to a handful).
@@ -76,21 +76,30 @@ export function cardCreatorPanel(app, { level }) {
     }, p))));
   };
   const psRow = h('div', { class: 'pm-cc-ps' });
+  const PS_GROUPS = [['attack', 'Shooting'], ['passing', 'Passing'], ['control', 'Ball control'], ['defending', 'Defending'], ['physical', 'Physical'], ['gk', 'Goalkeeping']];
   const drawPs = () => {
     clear(psRow);
-    add(psRow, h('span', { class: 'pm-dim' }, 'PlayStyles (tap to add, tap again for +)'),
-      h('div', { class: 'pm-chips pm-wrap' }, Object.entries(PLAYSTYLES).map(([id, d]) => {
-        const cur = st.playstyles.find((x) => x.id === id);
-        return h('button', {
-          class: `pm-chip ${cur ? 'on' : ''} ${cur && cur.plus ? 'is-plus' : ''}`, title: d[3],
-          onclick: () => {
-            if (!cur) st.playstyles = [...st.playstyles, { id, plus: false }];
-            else if (!cur.plus) st.playstyles = st.playstyles.map((x) => (x.id === id ? { ...x, plus: true } : x));
-            else st.playstyles = st.playstyles.filter((x) => x.id !== id);
-            drawPs(); drawPreview();
-          },
-        }, `${d[2]}${cur && cur.plus ? '+' : ''}`);
-      })));
+    ensurePsiStyles();
+    const best = bestPlaystylesFor(st.pos);
+    const chip = (id, d) => {
+      const cur = st.playstyles.find((x) => x.id === id);
+      const b = h('button', {
+        class: `pm-chip psi-chip ${cur ? 'on' : ''} ${cur && cur.plus ? 'is-plus' : ''}`, title: `${d[0]} — ${d[3]}`, 'aria-pressed': cur ? 'true' : 'false',
+        onclick: () => {
+          if (!cur) st.playstyles = [...st.playstyles, { id, plus: false }];
+          else if (!cur.plus) st.playstyles = st.playstyles.map((x) => (x.id === id ? { ...x, plus: true } : x));
+          else st.playstyles = st.playstyles.filter((x) => x.id !== id);
+          drawPs(); drawPreview();
+        },
+      });
+      b.appendChild(frag(psBadge({ id, plus: !!(cur && cur.plus) })));
+      b.appendChild(document.createTextNode(`${d[0]}${cur && cur.plus ? '+' : ''}${best.includes(id) ? ' ★' : ''}`));
+      return b;
+    };
+    add(psRow, h('span', { class: 'pm-dim' }, `PlayStyles (tap to add, tap again for PlayStyle+, again to remove). ★ = best for ${st.pos}.`),
+      h('div', { class: 'psi-legend' }, frag(psBadge({ id: 'finesse', plus: false })), 'PlayStyle', frag(psBadge({ id: 'finesse', plus: true })), 'PlayStyle+'),
+      PS_GROUPS.map(([cat, label]) => h('div', { class: 'pm-cc-psgroup' }, h('small', { class: 'pm-dim' }, label),
+        h('div', { class: 'pm-chips pm-wrap' }, Object.entries(PLAYSTYLES).filter(([, d]) => d[1] === cat).map(([id, d]) => chip(id, d))))));
   };
   const statRow = (key, label) => {
     const row = h('div', { class: 'pm-cc-stat' }, h('span', null, label), h('input', { type: 'range', min: '1', max: String(cap), step: '1', 'aria-label': label }), h('b', null, String(st.stats[key])));
@@ -145,7 +154,7 @@ export function cardCreatorPanel(app, { level }) {
       h('div', { class: 'pm-cc-form' },
         nameInp,
         h('div', { class: 'pm-btnrow' },
-          select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; st.alt = st.alt.filter((x) => x !== v); drawAlt(); drawPreview(); }, { 'aria-label': 'Position' }),
+          select(POSITIONS_ALL, st.pos, (v) => { st.pos = v; st.alt = st.alt.filter((x) => x !== v); drawAlt(); drawPs(); drawPreview(); }, { 'aria-label': 'Position' }),
           select(NATIONS.slice(0, 60).map((n) => [n.code, n.name]), st.nat, (v) => { st.nat = v; drawPreview(); }, { 'aria-label': 'Nation' }),
           select(TIERS, st.tier, (v) => { st.tier = v; drawPreview(); }, { 'aria-label': 'Tier' })),
         altRow,

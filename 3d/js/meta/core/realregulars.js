@@ -642,7 +642,6 @@ const EXT_ROWS_COMPACT = [
 ["hamdifathi","Hamdi Fathi","H. Fathi","EGY","CDM",["CB"],"R",78,35,4,"CON"],
 ["emamashour","Emam Ashour","Ashour","EGY","CDM",["CM"],"R",79,25,4,"CON"],
 ["elneny","Mohamed Elneny","Elneny","EGY","CM",["CDM"],"R",78,33,3,"CON"],
-["ahmedrefaat","Ahmed Refaat","Refaat","EGY","CM",["CDM"],"R",78,32,3,"CON"],
 ["koka","Ahmed Koka","Koka","EGY","RW",["RM"],"R",78,30,4,"CON"],
 ["zizosayed","Ahmed Sayed Zizo","Zizo","EGY","RW",["RM","CAM"],"R",80,28,3,"CON"],
 ["trezeguethassan","Mahmoud Hassan","Trezeguet","EGY","LW",["RW","RM"],"R",80,31,3,"CON"],

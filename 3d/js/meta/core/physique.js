@@ -4,43 +4,84 @@
 import { Rng, clamp } from './rng.js';
 import { ALT_OPTIONS } from './formations.js';
 
-// id -> [name, category, short code, description]
+// id -> [name, category, short code, description]. The full FC 25/26 PlayStyles set (owner request, Sep 27).
+// Two ids keep their original (pre-FC25) keys so every save / network card stays valid: `powerheader` is
+// FC's "Precision Header" and `aerial` is "Aerial Fortress" — PS_ALIASES maps the FC-style ids onto them.
 export const PLAYSTYLES = {
   finesse: ['Finesse Shot', 'attack', 'FS', 'Curled finesse shots are faster and more accurate.'],
-  power: ['Power Shot', 'attack', 'PS', 'Power shots are faster and more accurate.'],
-  chip: ['Chip Shot', 'attack', 'CS', 'Chip shots are more accurate and harder to read.'],
-  deadball: ['Dead Ball', 'attack', 'DB', 'Free kicks and corners have more curve and accuracy.'],
+  power: ['Power Shot', 'attack', 'PS', 'Power shots are struck harder and stay on target more often.'],
+  chip: ['Chip Shot', 'attack', 'CS', 'Chip shots are more accurate and harder for keepers to read.'],
+  deadball: ['Dead Ball', 'attack', 'DB', 'Free kicks, corners and penalties have more curve and accuracy.'],
   trivela: ['Trivela', 'attack', 'TV', 'Outside-of-the-foot passes and shots are more accurate.'],
   lowdriven: ['Low Driven Shot', 'attack', 'LD', 'Low driven shots are faster and more accurate.'],
-  powerheader: ['Power Header', 'attack', 'PH', 'Headers are more powerful and accurate.'],
-  acrobatic: ['Acrobatic', 'attack', 'AC', 'Volleys and bicycle kicks are more accurate.'],
+  powerheader: ['Precision Header', 'attack', 'PH', 'Headers are more powerful and more accurate.'],
+  acrobatic: ['Acrobatic', 'attack', 'AC', 'Volleys, bicycle and scissor kicks are more accurate.'],
+  gamechanger: ['Gamechanger', 'attack', 'GC', 'Improvised finishes (chips, trivelas, flicks, curlers) are sharper.'],
   incisive: ['Incisive Pass', 'passing', 'IP', 'Through balls are faster and more accurate.'],
   tikitaka: ['Tiki Taka', 'passing', 'TT', 'Short first-time passes are more accurate.'],
   pinged: ['Pinged Pass', 'passing', 'PP', 'Driven passes travel faster and are more accurate.'],
-  longball: ['Long Ball Pass', 'passing', 'LP', 'Long passes are more accurate.'],
-  whipped: ['Whipped Pass', 'passing', 'WP', 'Crosses are faster and more accurate.'],
+  longball: ['Long Ball Pass', 'passing', 'LP', 'Long lofted passes are more accurate.'],
+  whipped: ['Whipped Pass', 'passing', 'WP', 'Crosses are whipped in faster and more accurately.'],
+  inventive: ['Inventive', 'passing', 'IV', 'Flair and no-look passes are more accurate.'],
   firsttouch: ['First Touch', 'control', 'FT', 'Receiving the ball is cleaner, even at speed.'],
-  technical: ['Technical', 'control', 'TE', 'Close control while dribbling at speed.'],
+  technical: ['Technical', 'control', 'TE', 'Tighter close control while dribbling at speed.'],
   rapid: ['Rapid', 'control', 'RA', 'Faster when sprinting with the ball.'],
   flair: ['Flair', 'control', 'FL', 'Flair passes and shots are more accurate.'],
   trickster: ['Trickster', 'control', 'TR', 'Skill moves are quicker and more effective.'],
   pressproven: ['Press Proven', 'control', 'PR', 'Keeps the ball better under pressure.'],
   anticipate: ['Anticipate', 'defending', 'AN', 'Standing tackles win the ball more often.'],
   intercept: ['Intercept', 'defending', 'IN', 'Reads and cuts out passes more often.'],
-  block: ['Block', 'defending', 'BL', 'Blocks more shots and passes.'],
-  jockey: ['Jockey', 'defending', 'JO', 'Moves faster while jockeying.'],
-  slidetackle: ['Slide Tackle', 'defending', 'SL', 'Slide tackles win the ball more often.'],
-  bruiser: ['Bruiser', 'defending', 'BR', 'Stronger in shoulder challenges and shielding.'],
-  aerial: ['Aerial', 'defending', 'AE', 'Wins more aerial duels.'],
-  quickstep: ['Quick Step', 'physical', 'QS', 'Faster acceleration when sprinting.'],
-  relentless: ['Relentless', 'physical', 'RL', 'Recovers stamina faster.'],
+  block: ['Block', 'defending', 'BL', 'Reaches further to block shots and passes.'],
+  jockey: ['Jockey', 'defending', 'JO', 'Moves faster and stays balanced while jockeying.'],
+  slidetackle: ['Slide Tackle', 'defending', 'SL', 'Slide tackles reach further and win the ball more often.'],
+  bruiser: ['Bruiser', 'defending', 'BR', 'Stronger in shoulder challenges and when shielding.'],
+  aerial: ['Aerial Fortress', 'defending', 'AF', 'Jumps higher and wins more aerial duels.'],
+  quickstep: ['Quick Step', 'physical', 'QS', 'Explosive acceleration when sprinting.'],
+  relentless: ['Relentless', 'physical', 'RL', 'Tires less and recovers stamina faster.'],
   longthrow: ['Long Throw', 'physical', 'LT', 'Throw-ins travel much further.'],
-  farreach: ['Far Reach', 'gk', 'FR', 'Wider diving reach.'],
-  footwork: ['Footwork', 'gk', 'FW', 'Better saves with the feet and passing.'],
-  rushout: ['Rush Out', 'gk', 'RO', 'Comes off the line quickly to close down.'],
+  enforcer: ['Enforcer', 'physical', 'EN', 'Wins more physical duels; tackles knock carriers off the ball.'],
+  farreach: ['Far Reach', 'gk', 'FR', 'Dives further to reach shots in the corners.'],
+  footwork: ['Footwork', 'gk', 'FW', 'Better saves with the feet and cleaner distribution.'],
+  rushout: ['Rush Out', 'gk', 'RO', 'Comes off the line quickly to close down attackers.'],
   crossclaimer: ['Cross Claimer', 'gk', 'CC', 'Claims crosses more reliably.'],
   quickreflexes: ['Quick Reflexes', 'gk', 'QR', 'Reacts faster to close-range shots.'],
   deflector: ['Deflector', 'gk', 'DF', 'Parries shots away from danger.'],
+};
+/** FC-style / legacy id -> canonical id (so 'precisionheader', 'aerialfortress', etc. keep working). */
+export const PS_ALIASES = {
+  precisionheader: 'powerheader', precision: 'powerheader', aerialfortress: 'aerial', fortress: 'aerial',
+  powershot: 'power', finesseshot: 'finesse', chipshot: 'chip', lowdrivenshot: 'lowdriven', incisivepass: 'incisive',
+  pingedpass: 'pinged', longballpass: 'longball', whippedpass: 'whipped', game_changer: 'gamechanger',
+};
+/** Canonical PlayStyle id for any known id or alias (null if unknown). */
+export function canonStyle(id) {
+  if (typeof id !== 'string') return null;
+  const k = id.toLowerCase().replace(/[\s-]+/g, '');
+  if (PLAYSTYLES[k]) return k;
+  return PS_ALIASES[k] || PS_ALIASES[id] || null;
+}
+/** Normalise a [{id, plus}] list: aliases -> canonical ids, unknown ids dropped, duplicates merged (plus wins). */
+export function normalizeStyles(list) {
+  if (!Array.isArray(list)) return list;
+  const out = [];
+  for (const x of list) {
+    const id = canonStyle(typeof x === 'string' ? x : x && x.id);
+    if (!id) continue;
+    const plus = !!(x && x.plus);
+    const have = out.find((y) => y.id === id);
+    if (have) have.plus = have.plus || plus; else out.push({ id, plus });
+  }
+  return out;
+}
+/** Owner tier list (scratchpad/promorefs/playstyles_tierlist.png) as a 0..5 priority used when picking which
+ * of a player's PlayStyles become PlayStyle+ (higher = better +). */
+export const PS_TIER = {
+  finesse: 5, power: 5, anticipate: 5, incisive: 5, rapid: 5, quickstep: 5, technical: 5, bruiser: 5, acrobatic: 5,
+  pressproven: 5, tikitaka: 5, longball: 5, pinged: 5, trickster: 5, relentless: 5, farreach: 5, gamechanger: 5,
+  intercept: 4, block: 4, slidetackle: 4, firsttouch: 4, lowdriven: 4, jockey: 4, quickreflexes: 4, enforcer: 4,
+  aerial: 3, whipped: 3, powerheader: 3, footwork: 3, deflector: 3, inventive: 3, deadball: 3,
+  chip: 2, trivela: 2, flair: 2, rushout: 2, crossclaimer: 2,
+  longthrow: 0,
 };
 export const PLAYSTYLE_IDS = Object.keys(PLAYSTYLES);
 
@@ -61,15 +102,15 @@ const WIDE = new Set(['LW', 'RW', 'LM', 'RM']);
 // which PlayStyles a position's '+' upgrades should land on first. Never changes which styles a player draws
 // or the OVR-band count/plus rules (styleCountRange/maxPlus) — only which of the drawn styles gets the '+'.
 const BEST_BY_POS = {
-  ST: ['finesse', 'power'], CF: ['finesse', 'power'],
-  LW: ['rapid', 'quickstep', 'technical'], RW: ['rapid', 'quickstep', 'technical'],
-  LM: ['rapid', 'quickstep', 'technical'], RM: ['rapid', 'quickstep', 'technical'],
-  CAM: ['incisive', 'finesse'],
-  CM: ['tikitaka', 'incisive', 'intercept'],
-  CDM: ['intercept', 'anticipate', 'bruiser'],
-  CB: ['anticipate', 'jockey', 'block'],
-  LB: ['quickstep', 'whipped', 'jockey'], RB: ['quickstep', 'whipped', 'jockey'],
-  LWB: ['quickstep', 'whipped', 'jockey'], RWB: ['quickstep', 'whipped', 'jockey'],
+  ST: ['finesse', 'power', 'lowdriven'], CF: ['finesse', 'power', 'technical'],
+  LW: ['finesse', 'rapid', 'quickstep'], RW: ['finesse', 'rapid', 'quickstep'],
+  LM: ['finesse', 'rapid', 'quickstep'], RM: ['finesse', 'rapid', 'quickstep'],
+  CAM: ['technical', 'incisive', 'finesse', 'power'],
+  CM: ['pinged', 'tikitaka', 'incisive'],
+  CDM: ['longball', 'intercept', 'pinged'],
+  CB: ['intercept', 'anticipate', 'bruiser'],
+  LB: ['intercept', 'bruiser', 'anticipate'], RB: ['intercept', 'bruiser', 'anticipate'],
+  LWB: ['intercept', 'bruiser', 'anticipate'], RWB: ['intercept', 'bruiser', 'anticipate'],
   GK: ['farreach', 'quickreflexes'],
 };
 /** The PlayStyles that best suit a position (owner's reference chart), best first. Card creator (and
@@ -91,12 +132,14 @@ function candidates(p, height) {
     add('finesse', s.sho >= 78 ? 2.4 : att ? 1 : 0.3); add('power', s.sho >= 80 && s.phy >= 72 ? 2.2 : att ? 0.8 : 0.3);
     add('chip', att ? 0.8 : 0.2); add('lowdriven', att ? 1 : 0.3); add('trivela', s.dri >= 80 ? 0.6 : 0.1); add('deadball', s.pas >= 80 ? 0.9 : 0.2);
     add('acrobatic', att && s.dri >= 75 ? 0.9 : 0.1);
+    add('gamechanger', att && s.sho >= 82 && s.dri >= 82 ? 1.1 : att ? 0.25 : 0.05);
   }
   if (['ST', 'CF'].includes(pos)) add('powerheader', height >= 186 ? 3 : height >= 181 ? 1 : 0.2);
   if (mid || att) {
     add('incisive', s.pas >= 80 ? 2 : 0.6); add('tikitaka', s.pas >= 78 ? 1.6 : 0.5); add('pinged', s.pas >= 75 ? 1.2 : 0.4);
     add('longball', ['CM', 'CDM'].includes(pos) ? 1.3 : 0.3); add('firsttouch', s.dri >= 78 ? 1.8 : 0.7); add('technical', s.dri >= 80 ? 2.2 : 0.6);
     add('flair', s.dri >= 82 ? 1 : 0.2); add('trickster', p.sm >= 4 ? 1.6 : 0.2); add('pressproven', s.dri >= 76 ? 1.2 : 0.5);
+    add('inventive', s.pas >= 82 && s.dri >= 80 ? 0.9 : 0.15);
   }
   if (WIDE.has(pos) || ['LB', 'RB', 'LWB', 'RWB'].includes(pos)) add('whipped', s.pas >= 70 ? 2 : 0.8);
   add('rapid', s.pac >= 88 ? 3 : s.pac >= 82 ? 1.4 : s.pac >= 75 ? 0.4 : 0);
@@ -110,6 +153,7 @@ function candidates(p, height) {
     add('longball', pos === 'CB' && s.pas >= 70 ? 0.8 : 0);
   }
   if (['LB', 'RB', 'LWB', 'RWB'].includes(pos)) add('longthrow', 0.35);
+  if (DEF.has(pos) || ['CDM', 'CM', 'ST'].includes(pos)) add('enforcer', s.phy >= 80 ? 1 : 0.2);
   if (pos === 'CM' || pos === 'CDM') add('intercept', 1);
   return c;
 }
@@ -154,6 +198,7 @@ export function genPhysique(p) {
 /** Fill missing physique fields (old career saves, network cards). Mutates and returns p. */
 export function ensurePhysique(p) {
   if (!p) return p;
+  if (Array.isArray(p.playstyles) && p.playstyles.some((x) => !x || !PLAYSTYLES[x.id])) p.playstyles = normalizeStyles(p.playstyles);
   if (Number.isFinite(p.height) && Number.isFinite(p.weight) && Array.isArray(p.playstyles)) return p;
   const g = genPhysique(p);
   if (!Number.isFinite(p.height)) p.height = g.height;
@@ -164,7 +209,25 @@ export function ensurePhysique(p) {
 
 /** Parse authored style strings like 'finesse+' into [{id, plus}]. */
 export function parseStyles(list) {
-  return (list || []).map((s) => ({ id: s.replace(/\+$/, ''), plus: s.endsWith('+') }));
+  return normalizeStyles((list || []).map((s) => ({ id: s.replace(/\+$/, ''), plus: s.endsWith('+') })));
+}
+
+/**
+ * Re-pick which of a player's PlayStyles carry the '+' (owner tier list + per-position chart): the number of
+ * PlayStyle+ stays what the player had (capped by maxPlus(ovr); `fill` tops it up to maxPlus), but they go to the styles
+ * that matter most for the position — chart styles first, then tier-list priority, with the player's own
+ * authored '+' as a tie-breaker so signature styles survive when they rank close. Returns a new list.
+ */
+export function assignPlus(p, list, { fill = false } = {}) {
+  const styles = normalizeStyles(list || []);
+  const had = styles.filter((x) => x.plus).length;
+  const want = Math.min(fill ? Math.max(had, maxPlus(p.ovr)) : had, maxPlus(p.ovr), styles.length);
+  const best = bestPlaystylesFor(p.pos);
+  const score = (x) => (best.includes(x.id) ? 10 - best.indexOf(x.id) * 1.5 : 0) + (PS_TIER[x.id] ?? 1) + (x.plus ? 1.5 : 0);
+  const ranked = styles.map((x, i) => [x, score(x), i]).sort((a, b) => b[1] - a[1] || a[2] - b[2]);
+  const plusIds = new Set(ranked.slice(0, want).map((r) => r[0].id));
+  const out = styles.map((x) => ({ id: x.id, plus: plusIds.has(x.id) }));
+  return out.sort((a, b) => (b.plus ? 1 : 0) - (a.plus ? 1 : 0)); // PlayStyles+ first, like FC
 }
 
 /** Contract-shaped physique for a Team player. */
@@ -173,7 +236,7 @@ export function matchPhysique(p) {
   return {
     height: Math.round(clamp(p.height / 100, 1.62, 2.02) * 100) / 100,
     weight: clamp(Math.round(p.weight), 58, 100),
-    playstyles: p.playstyles.filter((x) => PLAYSTYLES[x.id]).slice(0, 4).map((x) => ({ id: x.id, plus: !!x.plus })),
+    playstyles: normalizeStyles(p.playstyles).slice(0, 4).map((x) => ({ id: x.id, plus: !!x.plus })),
   };
 }
 
