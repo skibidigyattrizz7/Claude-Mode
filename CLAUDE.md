@@ -1,5 +1,7 @@
 # Notes for Claude (owner's standing rules)
 
+**New chat? Read `docs/HANDOFF.md` (how we work: tests, push procedure, Supabase, hosting, agents, gotchas) and `docs/BACKLOG.md` (what to do) first.**
+
 ## "Looks vibecoded" list — ask first, with a picture
 The owner shared a reference list of 20 things that make an app look AI-made.
 These are **not banned**, but before using ANY of them anywhere (either game, menus,
@@ -40,7 +42,7 @@ rather than silently keeping or adding more of it. See also `docs/UI_DIRECTION.m
 - "Notes mode": when the owner sends info to save for later, append it to docs/BACKLOG.md and reply with one word ("Saved"). Minimal usage.
 
 ## Saving usage (owner's request)
-- Start a fresh chat for each new batch of work; begin with "read CLAUDE.md and docs/BACKLOG.md and continue".
+- Start a fresh chat for each new batch of work; begin with "read CLAUDE.md, docs/HANDOFF.md and docs/BACKLOG.md and continue".
 - Owner sends requests in batches; keep to 1–2 agents at a time.
 - Give big standalone jobs to other AIs via docs/AI_PROMPTS.md; Claude reviews and merges their branches.
 - Don't post "still working" chatter; report only when something finishes or needs a decision.
