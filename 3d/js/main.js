@@ -53,7 +53,7 @@ function lsGet(key, fallback) {
 function lsSet(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } }
 
 const SETTINGS_KEY = 'pitchside.settings';
-const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'classic' };
+const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'classic', lineupCards: 'cards' };
 const DIFFICULTIES = [['amateur', 'Amateur'], ['pro', 'Pro'], ['world', 'World Class'], ['legendary', 'Legendary']];
 const HALF_LENGTHS = [2, 3, 4, 6, 8];
 const CAMERAS = [['broadcast', 'Broadcast'], ['pro', 'Pro (player lock)']];
@@ -62,6 +62,8 @@ const STADIUMS = [['day', 'Day'], ['night', 'Night']];
 const WEATHERS = [['clear', 'Clear'], ['rain', 'Rain'], ['snow', 'Snow'], ['random', 'Random']];
 // Interface style: Classic is the original look; Stadium is the alternate theme (css/theme-stadium.css, scoped under html[data-ui="stadium"]).
 const UI_STYLES = [['classic', 'Classic'], ['stadium', 'Stadium']];
+// Online lineup reveal: full player cards per line (default) or the simple shirt tiles.
+const LINEUP_STYLES = [['cards', 'Full cards'], ['simple', 'Simple']];
 
 export function loadSettings() {
   const s = { ...DEFAULT_SETTINGS, ...lsGet(SETTINGS_KEY, {}) };
@@ -74,6 +76,7 @@ export function loadSettings() {
   if (s.stadium !== 'night') s.stadium = 'day';
   if (!WEATHERS.some(([k]) => k === s.weather)) s.weather = DEFAULT_SETTINGS.weather;
   if (!UI_STYLES.some(([k]) => k === s.ui)) s.ui = DEFAULT_SETTINGS.ui;
+  if (!LINEUP_STYLES.some(([k]) => k === s.lineupCards)) s.lineupCards = DEFAULT_SETTINGS.lineupCards;
   return s;
 }
 function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
@@ -445,7 +448,7 @@ async function openMatchWithReveal(opts) {
   const opp = role === 'host' ? opts.away : opts.home;
   if (!opp || !Array.isArray(opp.players)) return m;
   try { m.handle.pause(); } catch { return m; }
-  const renderCard = await revealCardRenderer();
+  const renderCard = loadSettings().lineupCards === 'simple' ? null : await revealCardRenderer();
   showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr, renderCard }).then(() => {
     // still in this match, and not held by the disconnect overlay: let the game begin
     if (m.layer.isConnected && !m.layer.querySelector('.dc-overlay')) { try { m.handle.resume(); } catch { /* ignore */ } }
@@ -861,6 +864,7 @@ function settingsScreen(tab = 'general') {
     segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
     segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
     segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); upd('ui')(v); }, 'set-ui'),
+    segmented('Online lineup reveal', LINEUP_STYLES, s.lineupCards, upd('lineupCards'), 'set-lineup'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
     h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
     adminCodesField());
