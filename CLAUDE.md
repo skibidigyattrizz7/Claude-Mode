@@ -38,3 +38,11 @@ rather than silently keeping or adding more of it. See also `docs/UI_DIRECTION.m
 - Keep answers to the owner short and simple.
 - Subagents: Haiku for small/simple tasks, Sonnet or an older (cheaper) Opus for bigger coding tasks. Not the newest Opus unless the owner says so.
 - "Notes mode": when the owner sends info to save for later, append it to docs/BACKLOG.md and reply with one word ("Saved"). Minimal usage.
+
+## Saving usage (owner's request)
+- Start a fresh chat for each new batch of work; begin with "read CLAUDE.md and docs/BACKLOG.md and continue".
+- Owner sends requests in batches; keep to 1–2 agents at a time.
+- Give big standalone jobs to other AIs via docs/AI_PROMPTS.md; Claude reviews and merges their branches.
+- Don't post "still working" chatter; report only when something finishes or needs a decision.
+- Everything the owner asks for goes into docs/BACKLOG.md right away so nothing is lost between chats.
+- Unfinished work lives on branch `wip/paused-work`.
