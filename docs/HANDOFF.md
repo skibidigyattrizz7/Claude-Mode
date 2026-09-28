@@ -26,7 +26,7 @@ Read this, `CLAUDE.md` and `docs/BACKLOG.md` at the start of every new chat. Thi
 
 ## 3. Branches
 - `claude/compassionate-gates-n9kfni`: live code.
-- `wip/paused-work`: **unfinished, untested** work from earlier agents (packs Chromebook fix + send-all buttons, admin Players/Moderation merge, Card Creator bugs, edit saved cards, custom ban time, Draft redesign + odds + subs, mobile pass, security incl. a drafted `supabase/migrations/20260928000000_pitchside_008_security.sql` **not applied**). Base is older, so merge carefully and re-test.
+- `wip/paused-work`: merged into the live branch and tested (2026-09-29). Its security migration 008 is parked in `supabase/drafts/` and **not applied**.
 - `wip/shawky`: snapshot of The Shawky work (already pushed to the live branch since).
 - `chatgpt/*`: ChatGPT's branches. Review, test-merge in a worktree, merge (leave out screenshot folders).
 

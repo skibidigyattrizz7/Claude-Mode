@@ -42,7 +42,7 @@ Passing still weak; receiver free-roams; AI passes perfect vs user's weak; add A
 Receiver free-roam; weak passes; AI defending/marking + interceptions for user team; 3D doesn't load on school Chromebook/proxy → robust loading + fallback + clear errors; **stadiums load faster**; more kit designs; walkout needs a reusable rig API for D.
 
 ## New owner requests (Sep 26)
-- Super admin code is now `12345678910` (client hash updated in `3d/js/shared/adminauth.js`; server hash inserted by coordinator). It "didn't work at all" before — verify the whole flow end-to-end in the UI.
+- Super admin code was changed (client hash updated in `3d/js/shared/adminauth.js`; server hash inserted by coordinator). It "didn't work at all" before — verify the whole flow end-to-end in the UI.
 - **SBC storage vault**: untradable duplicates go to an SBC storage (max 200, duplicates allowed) usable in SBCs.
 - **Send to transfer list** without listing (FUT "transfer list" pile), list from there later.
 - Transfer market + coins + **market refresh** bugs still broken — must be fixed and proven.
@@ -127,4 +127,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - Owner: more versions of The Shawky card (same ∞ glitch card, own name + nation): Kilner (Scotland), Collins (South Korea), Patel (India), Oelke (Germany), BraydenMasilang (Philippines), Nickerson (Kenya), Dammad (Palestine).
 - Owner: start/finish ALL paused work on `wip/paused-work` (see list above).
 - DONE 2026-09-28 (on claude/compassionate-gates-n9kfni): Shawky WIP tested (all 403 tests pass, walkout/∞/Egypt eagle checked in browser); Admin Vault = 10 random players; 7 extra Secret card versions + nations IND/PHI/KEN/PLE; pack tile name overlap fixed.
-- NEXT (paused by owner): finish everything on `wip/paused-work` (not started yet).
+- DONE 2026-09-29: `wip/paused-work` merged + tested (all 410 tests; browser: Card Creator, Draft desktop/phone, phone HUD, CSP pages). Includes: Draft redesign + 7 subs + better odds, Card Creator (full names like "pain man", GK stats no longer 65, up to 8 alt positions, edit/duplicate saved cards), Players/Moderation merged, ban length down to 1 second, mobile HUD, stricter password rules, CSP.
+- Security migration 008 is PARKED in `supabase/drafts/pitchside_008_security.sql` (owner's choice). Not applied. Apply later in its own session (move back to migrations/, apply, rename to Supabase's version).
+- STILL TO DO (owner notes above, not in paused work): gift "Claim all"; `needs_super` when gifting on laptop; timed finishing only for penalties; online lineup reveal; team shows old rating (96 vs 99); 500+ shooting always top bins; more skill moves; GK dive revamp; Power/Finesse shots; owner level not remembered in owner panel.
