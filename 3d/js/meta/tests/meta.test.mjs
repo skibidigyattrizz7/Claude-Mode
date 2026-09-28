@@ -983,6 +983,87 @@ test('promo cards job: 20+ campaigns, each with theme, colours, card class and a
   for (const pr of PR.PROMOS) assert.deepEqual(SEQ.classifyPull({ ovr: 90, tier: 'gold', special: pr.id }, PR.PROMO_BY_ID).colors, pr.colors);
 });
 
+test('pack opening safety nets: watchdog limit/trip, time-boxing, CSS gate + fixed overlay wiring', async () => {
+  const SEQ = await import('../ui/packopen_seq.js');
+  const PR = await import('../core/promos.js');
+  // watchdog limit = longest gap between beats + grace, for every kind of pull
+  for (const best of [{ ovr: 70, tier: 'silver' }, { ovr: 84, tier: 'gold', rare: true }, { ovr: 91, tier: 'gold', special: 'lotg' }, { ovr: 90, tier: 'gold', special: PR.PROMOS[0].id }]) {
+    const steps = SEQ.buildPackSequence(SEQ.classifyPull(best, PR.PROMO_BY_ID), { figure: true });
+    const lim = SEQ.watchdogLimit(steps);
+    let gap = 0; for (let i = 1; i < steps.length; i++) gap = Math.max(gap, steps[i].at - steps[i - 1].at);
+    assert.equal(lim, gap + SEQ.WATCHDOG_GRACE_MS);
+    assert.ok(lim <= 2000 + SEQ.WATCHDOG_GRACE_MS, `a beat gap of ${gap}ms is too long for the watchdog`);
+  }
+  assert.equal(SEQ.watchdogLimit([], 100), 100);
+  // trips only while actively playing, and only after the limit
+  assert.equal(SEQ.watchdogTripped({ phase: 'playing', lastProgress: 0, now: 3000, limit: 2500 }), true);
+  assert.equal(SEQ.watchdogTripped({ phase: 'playing', lastProgress: 0, now: 2000, limit: 2500 }), false);
+  for (const phase of ['ready', 'reveal', 'grid']) assert.equal(SEQ.watchdogTripped({ phase, lastProgress: 0, now: 1e9, limit: 1 }), false, phase);
+  assert.equal(SEQ.watchdogTripped({ phase: 'flag', lastProgress: 0, now: 9000, limit: 6000, active: ['intro', 'flag'] }), true);
+  // time-boxing: resolves in time, times out on a promise that never settles, reports rejections, never rejects
+  assert.deepEqual(await SEQ.timeBox(Promise.resolve(7), 50), { ok: true, value: 7 });
+  const never = new Promise(() => {});
+  const t0 = Date.now();
+  assert.deepEqual(await SEQ.timeBox(never, 30), { ok: false, timedOut: true });
+  assert.ok(Date.now() - t0 < 1000);
+  const rej = await SEQ.timeBox(Promise.reject(new Error('no webgl')), 50);
+  assert.equal(rej.ok, false); assert.equal(rej.error.message, 'no webgl');
+  // injectable timers: the timeout path fires without real time passing
+  let fire = null;
+  const fake = { setTimeout: (fn) => { fire = fn; return 1; }, clearTimeout: () => {} };
+  const pending = SEQ.timeBox(never, 99999, fake); fire();
+  assert.equal((await pending).timedOut, true);
+  assert.ok(SEQ.CSS_WAIT_MS <= 1500, 'the 2D fallback must appear within 1.5 s when packs.css is missing');
+  // wiring guards (the laptop/Chromebook "blank blue stage" bug): the CSS is preloaded, the overlay is pinned
+  // with inline fixed styles, page scroll is locked, and both animations are watched
+  const fs = await import('node:fs');
+  const src = (f) => fs.readFileSync(new URL(`../ui/${f}`, import.meta.url), 'utf8');
+  assert.match(src('packopen.js'), /^if \(typeof document !== 'undefined'\) ensureCss\(\);/m);
+  for (const f of ['packopen_fut.js', 'packopen_classic.js']) {
+    const code = src(f);
+    for (const k of ['pinOverlay(ov)', 'pinSkip(skipBtn)', 'lockScroll()', 'unlockScroll()', 'watchdogTripped(', 'clearInterval(watchdog)']) assert.ok(code.includes(k), `${f} is missing ${k}`);
+  }
+  assert.ok(src('packopen_fut.js').includes('waitPackCss(CSS_WAIT_MS)'));
+  assert.ok(src('packopen_classic.js').includes('timeBox(scene.introSequence()'));
+});
+
+test('pack summary bulk actions: send all to club / SBC storage / transfer list, quick sell', async () => {
+  const SEQ = await import('../ui/packopen_seq.js');
+  const s = UT.createUTState({ clubName: 'Bulk FC' }, new Rng(71));
+  UT.migrateUT(s);
+  const owned = s.club[0];
+  const fresh = getDB().players.filter((p) => !s.club.includes(p.id)).slice(0, 4).map((p) => p.id);
+  s.untradeable.push(fresh[3]); // e.g. an untradeable reward card
+  const mk = () => [
+    { pid: fresh[0], dup: false, state: 'new' }, { pid: fresh[1], dup: false, state: 'new' },
+    { pid: owned, dup: true, state: 'new' }, { pid: fresh[2], dup: false, state: 'sold' },
+    { pid: fresh[3], dup: false, state: 'new' },
+  ];
+  const ids = (xs) => xs.map((x) => x.pid);
+  const tradeable = (pid) => !s.untradeable.includes(pid);
+  assert.deepEqual(ids(SEQ.bulkTargets(mk(), 'club')), [fresh[0], fresh[1], fresh[3]]);
+  assert.deepEqual(ids(SEQ.bulkTargets(mk(), 'vault')), [fresh[0], fresh[1], owned, fresh[3]], 'SBC storage takes every pending item, duplicates too');
+  assert.deepEqual(ids(SEQ.bulkTargets(mk(), 'transfer', tradeable)), [fresh[0], fresh[1]], 'transfer list skips duplicates and untradeables');
+  assert.deepEqual(ids(SEQ.bulkTargets(mk(), 'sellDups')), [owned]);
+  assert.deepEqual(ids(SEQ.bulkTargets(mk(), 'sellAll')), [fresh[0], fresh[1], owned, fresh[3]]);
+  assert.deepEqual(SEQ.bulkTargets(mk(), 'nope'), []);
+  // "Send all to transfer list" through the real store functions (what utview's onTransfer does)
+  for (const x of SEQ.bulkTargets(mk(), 'transfer', tradeable)) { UT.addToClub(s, x.pid); assert.ok(PM.sendToTransferList(s, x.pid).ok); }
+  assert.ok(PM.onTransferList(s, fresh[0]) && PM.onTransferList(s, fresh[1]));
+  assert.ok(s.club.includes(fresh[0]), 'listed cards stay in the club until sold');
+  assert.ok(!PM.onTransferList(s, owned));
+  // "Send all to SBC storage" through the vault store function
+  const before = (s.vault || []).length;
+  for (const x of SEQ.bulkTargets(mk(), 'vault')) assert.ok(UT.sendToVault(s, x.pid));
+  assert.equal(s.vault.length, before + 4);
+  assert.equal(s.vault.filter((id) => id === owned).length, 1, 'the duplicate copy is parked in storage');
+  // the summary wires both buttons to those callbacks
+  const common = (await import('node:fs')).readFileSync(new URL('../ui/packopen_common.js', import.meta.url), 'utf8');
+  assert.ok(common.includes("'Send all to SBC storage'") && common.includes("'Send all to transfer list'"));
+  const utv = (await import('node:fs')).readFileSync(new URL('../ui/utview.js', import.meta.url), 'utf8');
+  assert.match(utv, /onTransfer: \(pid\) => \{ UT\.addToClub\(s, pid\); const r = PM\.sendToTransferList\(s, pid\)/);
+});
+
 test('transfer list (pmarket): flag a club card for sale without listing it yet, then list or return it', async () => {
   const s = UT.createUTState({ clubName: 'TL FC' }, new Rng(33));
   UT.migrateUT(s);

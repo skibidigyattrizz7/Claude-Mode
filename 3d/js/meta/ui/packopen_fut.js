@@ -10,8 +10,8 @@ import { playerCard } from './card.js';
 import { flagSVG, crestSVG } from './art.js';
 import { NATION_BY_CODE, clubById } from '../core/data.js';
 import { PROMO_BY_ID } from '../core/promos.js';
-import { SPECIAL_BADGE, walkoutKit, pseudoNumber, ensureCss, packArt, positionName, makeGrid, animToggle } from './packopen_common.js';
-import { classifyPull, buildPackSequence } from './packopen_seq.js';
+import { SPECIAL_BADGE, walkoutKit, pseudoNumber, ensureCss, packArt, positionName, makeGrid, animToggle, pinOverlay, pinSkip, lockScroll, packCssReady, waitPackCss, fallbackReveal } from './packopen_common.js';
+import { classifyPull, buildPackSequence, watchdogLimit, watchdogTripped, CSS_WAIT_MS } from './packopen_seq.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
@@ -226,11 +226,48 @@ export function runFut(root, opts) {
     class: `pm-po pk2 lvl-${pull.level} ${pull.walkout ? 'is-walk' : ''} k-${pull.key}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': `Opening ${pack.name}`,
     style: { '--c1': cDark, '--c2': cMain, '--c3': cLight, '--flare': cMain, '--accent': cMain },
   }, bgEl, rays, scene, canvas, flash, black, skipBtn, toggle);
+  pinOverlay(ov); pinSkip(skipBtn); // viewport-sized + Skip in the safe area even before any stylesheet applies
+  const unlockScroll = lockScroll();
   root.appendChild(ov);
-  const sparks = new Sparks(canvas);
+  let sparks;
+  try { sparks = new Sparks(canvas); if (!sparks.ctx) throw new Error('no 2D canvas'); } catch (err) {
+    // particles are decoration only: a device without a 2D canvas context still gets the whole sequence
+    if (sparks) sparks.destroy();
+    const noop = () => {};
+    sparks = { w: window.innerWidth, h: window.innerHeight, burst: noop, spray: noop, rain: noop, column: noop, fireworks: noop, clearAll: noop, destroy: noop };
+  }
   ov.tabIndex = -1;
   setTimeout(() => { try { if (phase === 'ready') ov.focus({ preventScroll: true }); } catch { /* ignore */ } }, 30);
   requestAnimationFrame(() => ov.classList.add('s-in'));
+  setTimeout(() => ov.classList.add('s-in'), 150); // rAF can be paused (background tab); never leave the black cover up
+
+  // ---------------- packs.css gate: the stage is pure CSS; without it nothing would be visible or tappable.
+  let cssOk = packCssReady(), fallback = null;
+  if (!cssOk) {
+    scene.style.visibility = 'hidden'; if (toggle) toggle.style.visibility = 'hidden';
+    waitPackCss(CSS_WAIT_MS).then((ok) => {
+      if (phase !== 'ready') return;
+      if (ok) { cssOk = true; scene.style.visibility = ''; if (toggle) toggle.style.visibility = ''; } else useFallback('pack stylesheet unavailable');
+    });
+  }
+  /** Self-styled 2D reveal (packopen_common.js) in place of the CSS stage. */
+  function useFallback(why) {
+    if (phase === 'grid' || fallback) return;
+    console.warn(`Pack animation: ${why}; using the 2D reveal.`);
+    cancelTimers(); sparks.clearAll();
+    phase = 'reveal';
+    scene.remove(); black.remove(); if (toggle) toggle.remove();
+    fallback = fallbackReveal(ov, pack, best, toGrid);
+  }
+
+  // ---------------- watchdog: if the timed beats stop advancing, jump to the reveal (never hang mid-sequence)
+  const stallLimit = watchdogLimit(steps);
+  let lastProgress = performance.now();
+  const watchdog = setInterval(() => {
+    if (!watchdogTripped({ phase, lastProgress, now: performance.now(), limit: stallLimit })) return;
+    console.warn('Pack animation stalled; jumping to the reveal.');
+    try { toReveal(); } catch (err) { useFallback(String(err && err.message || err)); }
+  }, 400);
 
   // ---------------- input: tap/Space opens, then tap/Space skips to the reveal; Esc -> summary
   const onKey = (e) => {
@@ -243,10 +280,11 @@ export function runFut(root, opts) {
     }
   };
   document.addEventListener('keydown', onKey, true);
-  scene.addEventListener('click', () => { if (phase === 'ready') start(); else if (phase === 'playing') toReveal(); });
+  // the whole overlay is the tap target (not just the stage), so a tap always does something
+  ov.addEventListener('click', () => { if (phase === 'ready') start(); else if (phase === 'playing') toReveal(); });
 
   // ---------------- helpers
-  const at = (ms, fn) => { const id = setTimeout(() => { try { fn(); } catch (err) { console.warn('pack beat failed', err); toReveal(); } }, Math.max(0, ms)); timers.push(id); };
+  const at = (ms, fn) => { const id = setTimeout(() => { lastProgress = performance.now(); try { fn(); } catch (err) { console.warn('pack beat failed', err); toReveal(); } }, Math.max(0, ms)); timers.push(id); };
   const cancelTimers = () => { timers.forEach(clearTimeout); timers.length = 0; cancelAnimationFrame(ripRaf); };
   const rectOf = (el) => { const r = el.getBoundingClientRect(), o = ov.getBoundingClientRect(); return { x: r.left - o.left, y: r.top - o.top, w: r.width, h: r.height }; };
   const shake = (big) => { retrigger(cam, big ? 'shake-big' : 'shake'); };
@@ -255,8 +293,9 @@ export function runFut(root, opts) {
   const setState = (cls) => ov.classList.add(cls);
 
   function start() {
-    if (phase !== 'ready') return;
+    if (phase !== 'ready' || !cssOk) return; // still waiting on packs.css (<= CSS_WAIT_MS, then the 2D fallback)
     phase = 'playing';
+    lastProgress = performance.now();
     sfx.unlock();
     if (toggle) toggle.remove();
     setState('s-go');
@@ -345,7 +384,7 @@ export function runFut(root, opts) {
 
   function startFigure() {
     if (!figPromise || figure) return;
-    const deadline = performance.now() + 2500; // too slow (first load on a slow network) -> just skip the figure
+    const deadline = performance.now() + 1500; // too slow (first load / software GL) -> the 2D card reveal stays
     figPromise.then((mod) => {
       if (!mod || phase !== 'reveal' || performance.now() > deadline) return;
       try {
@@ -384,7 +423,8 @@ export function runFut(root, opts) {
     cancelTimers();
     if (figure) { figure.dispose(); figure = null; }
     sparks.clearAll();
-    scene.remove(); skipBtn.remove(); if (toggle) toggle.remove();
+    scene.remove(); skipBtn.remove(); if (toggle) toggle.remove(); if (fallback) { fallback.remove(); fallback = null; }
+    ov.style.overflowY = 'auto'; // the summary scrolls inside the overlay (page scroll stays locked)
     ov.classList.add('is-grid', 'is-flare', `flare-${pull.walkout ? 'walkout' : best.tier}`);
     ov.appendChild(stage);
     grid.render();
@@ -393,12 +433,12 @@ export function runFut(root, opts) {
   const stage = h('div', { class: 'pm-po-stage' });
   function destroy() {
     phase = 'grid';
-    cancelTimers();
+    cancelTimers(); clearInterval(watchdog); unlockScroll();
     document.removeEventListener('keydown', onKey, true);
     if (figure) { figure.dispose(); figure = null; }
     sparks.destroy(); sfx.dispose();
     ov.remove();
   }
   const grid = makeGrid(stage, pack, players, opts, destroy);
-  return { destroy, skip: toGrid, _debug: { pull, steps, toReveal, get phase() { return phase; } } };
+  return { destroy, skip: toGrid, _debug: { pull, steps, toReveal, useFallback, stallLimit, get phase() { return phase; }, get fallback() { return !!fallback; } } };
 }

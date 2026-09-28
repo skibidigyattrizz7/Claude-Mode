@@ -85,3 +85,67 @@ export function beatAt(steps, kind) {
   const s = steps.find((x) => x.kind === kind);
   return s ? s.at : -1;
 }
+
+// ---------------------------------------------------------------- safety nets (laptop / Chromebook fix)
+// The cinematic must never hang: every optional piece (packs.css, WebGL, the 3D walkout) is time-boxed and a
+// watchdog forces the reveal if the timed beats stop advancing. Kept pure so node tests can check them.
+
+/** How long packs.css may take to load before the overlay falls back to the self-styled 2D reveal. */
+export const CSS_WAIT_MS = 1500;
+/** Extra slack on top of the longest beat gap before the watchdog forces the reveal. */
+export const WATCHDOG_GRACE_MS = 1500;
+
+/** Longest wait between two consecutive beats of a sequence, plus `grace` — the watchdog's stall limit (ms). */
+export function watchdogLimit(steps, grace = WATCHDOG_GRACE_MS) {
+  let gap = 0;
+  for (let i = 1; i < (steps || []).length; i++) gap = Math.max(gap, steps[i].at - steps[i - 1].at);
+  return gap + grace;
+}
+
+/**
+ * Watchdog decision: true when an animation that is actively playing has not advanced for longer than `limit`.
+ * Waiting phases (the "tap to open" pack, the final reveal, the item grid) never trip it.
+ * @param st { phase, lastProgress, now, limit, active?: string[] } — `active` lists the phases that must keep moving.
+ */
+export function watchdogTripped({ phase, lastProgress, now, limit, active = ['playing'] }) {
+  if (!active.includes(phase)) return false;
+  return now - lastProgress > limit;
+}
+
+/**
+ * Time-box an optional promise (3D scene, stylesheet, lazy module). Resolves { ok:true, value } if it settles in
+ * time, { ok:false, timedOut:true } after `ms`, or { ok:false, error } if it rejects. Never rejects, never hangs.
+ * `timers` is injectable for tests ({ setTimeout, clearTimeout }).
+ */
+export function timeBox(promise, ms, timers = globalThis) {
+  return new Promise((resolve) => {
+    let done = false;
+    const id = timers.setTimeout(() => { if (!done) { done = true; resolve({ ok: false, timedOut: true }); } }, Math.max(0, ms));
+    Promise.resolve(promise).then(
+      (value) => { if (!done) { done = true; timers.clearTimeout(id); resolve({ ok: true, value }); } },
+      (error) => { if (!done) { done = true; timers.clearTimeout(id); resolve({ ok: false, error }); } },
+    );
+  });
+}
+
+/**
+ * Pack summary bulk actions (FC-style). Returns the pending items an action applies to:
+ *   'club'     new (non-duplicate) items          -> club
+ *   'vault'    every pending item                 -> SBC storage (duplicates included; storage allows repeats)
+ *   'transfer' new items that are tradeable       -> club + transfer list (a duplicate has no second slot in the club)
+ *   'sellDups' pending duplicates                 -> quick sell
+ *   'sellAll'  every pending item                 -> quick sell
+ * @param players [{ pid, dup, state, p }] — the summary's items (state 'new' = still pending)
+ * @param isTradeable optional (pid) => boolean for 'transfer'
+ */
+export function bulkTargets(players, action, isTradeable = () => true) {
+  const pending = (players || []).filter((x) => x.state === 'new');
+  switch (action) {
+    case 'club': return pending.filter((x) => !x.dup);
+    case 'vault': return pending;
+    case 'transfer': return pending.filter((x) => !x.dup && isTradeable(x.pid));
+    case 'sellDups': return pending.filter((x) => x.dup);
+    case 'sellAll': return pending;
+    default: return [];
+  }
+}

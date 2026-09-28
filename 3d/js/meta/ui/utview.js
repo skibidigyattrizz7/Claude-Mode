@@ -400,6 +400,9 @@ export function openPackFlow(app, packType, onDone) {
     sellValue: (p) => quickSellValue(p),
     onSend: (pid) => { UT.addToClub(s, pid); persist(app); },
     onVault: (pid) => { UT.sendToVault(s, pid); persist(app); },
+    // FC-style "Send all to transfer list": the card joins the club, then is flagged for sale (pmarket.js).
+    canTransfer: (pid) => !(s.untradeable || []).includes(pid),
+    onTransfer: (pid) => { UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); return r; },
     onSell: (pid) => { const v = quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
     onDone: (sum) => { persist(app); app.refresh(); if (onDone) onDone(sum); },
   });

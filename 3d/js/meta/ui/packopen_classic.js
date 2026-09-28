@@ -8,7 +8,12 @@ import { NATION_BY_CODE, clubById } from '../core/data.js';
 import { isWalkout } from '../core/ut.js';
 import { PROMO_BY_ID } from '../core/promos.js';
 import { TunnelScene, supports3D } from './walkout3d.js';
-import { FLARE, SPECIAL_FLARE, SPECIAL_BADGE, walkoutKit, ensureCss, packArt, positionName, makeGrid, animToggle } from './packopen_common.js';
+import { FLARE, SPECIAL_FLARE, SPECIAL_BADGE, walkoutKit, ensureCss, packArt, positionName, makeGrid, animToggle, pinOverlay, pinSkip, lockScroll, packCssReady } from './packopen_common.js';
+import { timeBox, watchdogTripped, WATCHDOG_GRACE_MS } from './packopen_seq.js';
+
+// Expected 3D beat lengths (walkout3d.js timelines); each is time-boxed to this + WATCHDOG_GRACE_MS.
+const INTRO_MS = 2400, WALKOUT_MS = 3100;
+const CLASSIC_ACTIVE = ['intro', 'flare', 'promo', 'lotg', 'flag', 'pos', 'club'];
 
 // The card is 3D-rendered / promoted "unmistakably" from ovr 86 up.
 const WALKOUT3D_OVR = 86;
@@ -153,8 +158,30 @@ export function runClassic(root, opts) {
   const skipBtn = h('button', { class: 'pm-po-skip pm-btn pm-btn--ghost', onclick: () => toGrid() }, 'Skip ›');
   const ov = h('div', { class: 'pm-po', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Opening ${pack.name}`, style: { '--flare': flare, '--accent': accent } },
     bgEl, rays, canvas, canvas3d, flash, stage, skipBtn);
+  pinOverlay(ov); pinSkip(skipBtn); // viewport-sized + Skip in the safe area even before any stylesheet applies
+  const unlockScroll = lockScroll();
   root.appendChild(ov);
-  particles = new Particles(canvas);
+  try { particles = new Particles(canvas); } catch {
+    const noop = () => {}; particles = { w: window.innerWidth, h: window.innerHeight, burst: noop, fountain: noop, destroy: noop };
+  }
+  // Watchdog: a phase that should be moving (3D intro, walkout stages) never sits still for long.
+  let forced = false, lastProgress = performance.now();
+  const halted = () => stopped || forced;
+  const progress = (p) => { if (p) phase = p; lastProgress = performance.now(); };
+  const watchdog = setInterval(() => {
+    if (forced || !watchdogTripped({ phase, lastProgress, now: performance.now(), limit: WALKOUT_MS + WATCHDOG_GRACE_MS * 2, active: CLASSIC_ACTIVE })) return;
+    console.warn('Classic pack animation stalled; jumping to the card reveal.');
+    forceReveal();
+  }, 400);
+  function forceReveal() {
+    forced = true;
+    cancels.forEach((c) => c()); cancels.length = 0;
+    if (scene) { scene.dispose(); scene = null; }
+    canvas3d.classList.remove('show');
+    ov.classList.remove('is-3d', 'is-walkout3d');
+    ov.classList.add('is-flare', `flare-${flareKey}`);
+    revealCard();
+  }
 
   const onKey = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (phase !== 'grid') toGrid(); }
@@ -167,7 +194,7 @@ export function runClassic(root, opts) {
   stage.appendChild(h('div', { class: 'pm-po-center' }, openBtn));
   const toggle = opts.onSwitchAnim ? animToggle('classic', (m) => opts.onSwitchAnim(m)) : null;
   if (toggle) ov.appendChild(toggle);
-  setTimeout(() => openBtn.focus(), 30);
+  setTimeout(() => { try { openBtn.focus({ preventScroll: true }); } catch { /* ignore */ } }, 30);
 
   function sideFireworks(count) {
     particles.burst(accent, count, 5, particles.w * 0.14, particles.h * 0.45, [accent, flare]);
@@ -176,7 +203,7 @@ export function runClassic(root, opts) {
 
   async function start() {
     if (phase !== 'pack') return;
-    phase = 'intro';
+    progress('intro');
     openBtn.disabled = true;
     if (toggle) toggle.remove();
     ov.classList.add('is-shaking');
@@ -184,7 +211,8 @@ export function runClassic(root, opts) {
     if (promo) { ov.classList.add('is-promo', `promo-${promo.id}`); ov.style.setProperty('--pa', promo.colors[0]); ov.style.setProperty('--pb', promo.colors[1]); ov.style.setProperty('--pc', promo.colors[2]); }
     packEl.classList.add('shake');
 
-    if (!reduce && supports3D()) {
+    // 3D needs packs.css (canvas layout) and WebGL; both optional — the 2D shake/burst path is the fallback.
+    if (!reduce && packCssReady() && supports3D()) {
       try { scene = new TunnelScene(canvas3d, { theme, flare, accent }); } catch { scene = null; }
     }
     if (scene) {
@@ -193,17 +221,24 @@ export function runClassic(root, opts) {
       canvas3d.classList.add('show');
       try {
         cancels.push(() => scene && scene.skipAll());
-        await scene.introSequence();
+        const intro = await timeBox(scene.introSequence(), INTRO_MS + WATCHDOG_GRACE_MS);
+        if (halted()) return;
+        if (!intro.ok) throw intro.error || new Error('3D intro timed out');
+        progress();
         if (!stopped) {
           flash.classList.add('go');
           particles.burst(flare, reduce ? 60 : 200, walk ? 13 : 9, null, null, walk ? [flare, accent, '#ffffff'] : null);
         }
         if (walk3d && !stopped) {
           ov.classList.add('is-walkout3d');
-          await scene.walkoutSequence(best, walkoutKit(best, opts.userKit));
+          const wo = await timeBox(scene.walkoutSequence(best, walkoutKit(best, opts.userKit)), WALKOUT_MS + WATCHDOG_GRACE_MS);
+          if (halted()) return;
+          if (!wo.ok) throw wo.error || new Error('3D walkout timed out');
+          progress();
         }
         if (!stopped && scene) scene.hold();
       } catch (error) {
+        if (halted()) return;
         console.warn('Pack cinematic unavailable; continuing with card reveal.', error);
         if (scene) { scene.dispose(); scene = null; }
         canvas3d.classList.remove('show');
@@ -220,14 +255,15 @@ export function runClassic(root, opts) {
         particles.burst(flare, reduce ? 40 : 160, walk ? 11 : 7, null, null, walk ? [flare, accent, '#ffffff'] : null);
         await wait(reduce ? 200 : 450);
       }
+      if (halted()) return;
       clear(stage);
     }
-    if (stopped) return;
+    if (halted()) return;
 
-    phase = 'flare';
+    progress('flare');
     ov.classList.add('is-flare', `flare-${flareKey}`);
     const plan = promo ? STAGE_PLANS.promo : lotg ? STAGE_PLANS.lotg : walk ? STAGE_PLANS.walk : STAGE_PLANS.plain;
-    if (!plan.kinds.length) { if (!reduce) sideFireworks(24); await wait(350 * T); if (stopped) return; }
+    if (!plan.kinds.length) { if (!reduce) sideFireworks(24); await wait(350 * T); if (halted()) return; }
     await runStages(plan);
   }
 
@@ -235,13 +271,13 @@ export function runClassic(root, opts) {
     for (let i = 0; i < plan.kinds.length; i++) {
       showStage(plan.kinds[i]);
       await wait(plan.gaps[i] * T);
-      if (stopped) return;
+      if (halted()) return;
     }
     revealCard();
   }
 
   function showStage(kind) {
-    phase = kind;
+    progress(kind);
     clear(stage);
     let inner;
     if (kind === 'promo') {
@@ -262,7 +298,7 @@ export function runClassic(root, opts) {
   }
 
   function revealCard() {
-    if (stopped) return;
+    if (stopped || phase === 'reveal') return;
     phase = 'reveal';
     ov.classList.add('is-card-reveal');
     clear(stage);
@@ -274,7 +310,7 @@ export function runClassic(root, opts) {
       cont));
     particles.burst(accent, reduce ? 50 : 200, 11, null, null, [accent, flare, '#ffffff']);
     if (walk && !reduce) particles.fountain(accent, lotg || promo ? 5200 : 2600, promo ? promo.colors.concat('#ffffff') : [accent, flare, '#ffffff']);
-    setTimeout(() => cont.focus(), 50);
+    setTimeout(() => { try { cont.focus({ preventScroll: true }); } catch { /* ignore */ } }, 50);
   }
 
   function toGrid() {
@@ -287,6 +323,7 @@ export function runClassic(root, opts) {
     ov.classList.remove('is-shaking');
     ov.classList.add('is-grid', 'is-flare', `flare-${flareKey}`);
     skipBtn.remove();
+    ov.style.overflowY = 'auto'; // the summary scrolls inside the overlay (page scroll stays locked)
     renderGrid();
   }
 
@@ -294,6 +331,7 @@ export function runClassic(root, opts) {
   function renderGrid() { grid.render(); }
   function destroy() {
     stopped = true;
+    clearInterval(watchdog); unlockScroll();
     cancels.forEach((c) => c()); cancels.length = 0;
     document.removeEventListener('keydown', onKey, true);
     if (scene) { scene.dispose(); scene = null; }
