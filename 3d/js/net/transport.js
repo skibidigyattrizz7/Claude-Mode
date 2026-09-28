@@ -249,6 +249,8 @@ export const ICE_SERVERS = [
   { urls: 'stun:global.stun.twilio.com:3478' },
   { urls: 'stun:stun.cloudflare.com:3478' },
   { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+  // Open Relay (free public TURN): TCP/TLS on 80/443 gets through school / Chromebook / office firewalls
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp', 'turns:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
 ];
 export const P2P_FAIL_MSG = 'A direct connection could not be opened — one of your networks blocks peer-to-peer play (common on mobile data, school or office Wi-Fi). Try another network, or retry.';
 
@@ -409,7 +411,7 @@ export class PeerTransport extends BaseTransport {
         this._connectFail = null;
         if (err) reject(new Error(err)); else resolve();
       };
-      const t = setTimeout(() => fin(`Timed out connecting. ${P2P_FAIL_MSG}`), 20000);
+      const t = setTimeout(() => fin(`Timed out connecting. ${P2P_FAIL_MSG}`), 30000);
       this._connectFail = (msg) => fin(msg);
       this._connect(() => fin(null));
     });
