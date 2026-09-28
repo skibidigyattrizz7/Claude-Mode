@@ -28,6 +28,24 @@ const easeIn = (t) => t * t;
 const sstep = (a, b, x) => smooth(clamp((x - a) / (b - a), 0, 1));
 const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
+// Render-only states. The simulation's action codes and network snapshots stay unchanged.
+// KICK power <= .45 is the ground-pass convention used by Sim._release.
+export function selectAnimationState(anim, speed, acceleration = 0, turn = 0, power = 0.6) {
+  switch (anim) {
+    case ANIM.KICK: return power <= 0.45 ? 'pass' : 'strike';
+    case ANIM.WINDUP: return 'windup';
+    case ANIM.HEAD: return 'header';
+    case ANIM.SLIDE: return 'slide';
+    case ANIM.DIVE: return 'dive';
+    case ANIM.CELEB: return 'celebrate';
+    case ANIM.RUN:
+      if (speed > 0.8 && acceleration < -3) return 'brake';
+      if (speed > 1.2 && Math.abs(turn) > 1.4) return 'plant';
+      return speed > 6 ? 'sprint' : speed > 0.25 ? 'jog' : 'idle';
+    default: return 'action';
+  }
+}
+
 // ---------------------------------------------------------------- shared geometry
 let GEO = null;
 let GEO_REFS = 0;
@@ -298,10 +316,12 @@ export class PlayerRig {
     this.from = new Float32Array(NP);
     this.blendT = 1; this.blendDur = 0.12;
     this.curAnim = -1;
-    this.cyc = Math.random() * 6.28;
+    this.cyc = 0;
     this.face = 0; this.faceInit = false;
     this.px = 0; this.pz = 0; this.vx = 0; this.vz = 0; this.spd = 0;
     this.turn = 0;
+    this.acceleration = 0; this.brake = 0; this.plant = 0;
+    this.visualState = 'idle'; this.lastAnimT = 0; this.diveSide = 0;
     this.seed = 0;
     this.leftFoot = false;
     this.scale = 1;
@@ -359,11 +379,12 @@ export class PlayerRig {
     const id = pd ? (pd.id ?? pd.name ?? idxSeed) : idxSeed;
     const h = hashStr(id);
     this.seed = h;
+    this.cyc = (h % 1000) / 1000 * Math.PI * 2;
     const skin = h % SKINS.length;
     const hairI = (h >>> 5) % HAIRS.length;
     const hairStyle = (h >>> 9) % 6; // 5 = bald
     const bootI = (h >>> 13) % BOOTS.length;
-    this.leftFoot = ((h >>> 17) % 5) === 0;
+    this.leftFoot = pd?.foot === 'L' || (pd?.foot !== 'R' && ((h >>> 17) % 5) === 0);
     // V2.1: rig height follows the player's real height (model is ~1.80 m at scale 1)
     const ht = pd && Number.isFinite(+pd.height) && +pd.height > 1.4 ? Math.min(2.1, +pd.height) : 0;
     this.scale = ht ? ht / 1.8 : 0.95 + ((h >>> 19) % 100) / 100 * 0.09;
@@ -403,9 +424,13 @@ export class PlayerRig {
   update(x, z, face, anim, animT, animP, speed, ctx) {
     const dt = clamp(Number.isFinite(ctx.dt) ? ctx.dt : 0, 0, 0.05);
     speed = clamp(Number.isFinite(speed) ? speed : 0, 0, 14);
+    animT = Math.max(0, Number.isFinite(animT) ? animT : 0);
+    animP = Number.isFinite(animP) ? animP : 0;
     // velocity estimate from positions (for backpedal / strafe)
     if (!this.faceInit || Math.hypot(x - this.px, z - this.pz) > 3) {
       this.faceInit = true; this.face = face; this.px = x; this.pz = z; this.vx = 0; this.vz = 0;
+      this.spd = speed; this.acceleration = 0; this.brake = 0; this.plant = 0;
+      this.turn = 0; this.receiveT = 0; this.receiveArmed = false;
     }
     if (dt > 0) {
       const k = 1 - Math.exp(-dt * 10);
@@ -419,7 +444,23 @@ export class PlayerRig {
     const step = dF * kf;
     this.face = wrap(this.face + step);
     this.turn = lerp(this.turn, dt > 0 ? step / dt : 0, 1 - Math.exp(-dt * 6));
+    const previousSpeed = this.spd;
     this.spd = lerp(this.spd, speed, 1 - Math.exp(-dt * 8));
+    const accel = dt > 0 ? (this.spd - previousSpeed) / dt : 0;
+    this.acceleration = lerp(this.acceleration, accel, 1 - Math.exp(-dt * 12));
+    this.visualState = selectAnimationState(anim, this.spd, this.acceleration, this.turn, animP);
+    this.brake = lerp(this.brake, anim === ANIM.RUN ? sstep(2, 9, -this.acceleration) * sstep(.4, 2, this.spd) : 0, 1 - Math.exp(-dt * 14));
+    this.plant = lerp(this.plant, anim === ANIM.RUN ? clamp(this.turn / 4, -1, 1) * sstep(1, 4, this.spd) : 0, 1 - Math.exp(-dt * 12));
+    // Latch the chosen dive side: a deflected ball must not flip an airborne keeper.
+    const changed = anim !== this.curAnim || (anim !== ANIM.RUN && animT + 0.05 < this.lastAnimT);
+    if (changed) {
+      this.diveSide = 0;
+      if (anim === ANIM.DIVE) {
+        const lateral = (ctx.ballX - x) * -Math.sin(this.face) + (ctx.ballZ - z) * Math.cos(this.face);
+        this.diveSide = Math.abs(lateral) > .05 ? Math.sign(lateral) : (Math.sign(animP * Math.cos(this.face)) || 1);
+      }
+    }
+    this.lastAnimT = animT;
 
     this.root.position.set(x, 0, z);
     this.root.rotation.y = Math.PI / 2 - this.face;
@@ -456,10 +497,13 @@ export class PlayerRig {
     if (anim !== ANIM.RUN) this._oneShot(T, anim, animT, animP, s, ctx);
 
     // crossfade on anim change
-    if (anim !== this.curAnim) {
+    if (changed) {
       this.from.set(this.pose);
+      // A completed somersault is upright; never unwind it during recovery.
+      this.from[P.pitch] = T[P.pitch] + wrap(this.from[P.pitch] - T[P.pitch]);
+      this.from[P.yaw] = T[P.yaw] + wrap(this.from[P.yaw] - T[P.yaw]);
       const low = this.pose[P.bodyY] < 0.7 && this.pose[P.gl] < 0.5;
-      this.blendDur = low ? 0.42 : anim === ANIM.DIVE || anim === ANIM.SLIDE || anim === ANIM.FALL ? 0.08 : anim === ANIM.CELEB ? 0.24 : 0.14;
+      this.blendDur = low ? 0.42 : anim === ANIM.KICK ? 0.035 : anim === ANIM.DIVE || anim === ANIM.SLIDE || anim === ANIM.FALL ? 0.08 : anim === ANIM.CELEB ? 0.24 : 0.14;
       this.blendT = 0;
       this.curAnim = anim;
     }
@@ -480,8 +524,11 @@ export class PlayerRig {
     const lat = Math.abs(side) > 0.75 && !back ? Math.abs(side) : 0;
     const ampH = lerp(0.3, 0.78, clamp((s - 1) / 7, 0, 1)) * run * (back ? 0.6 : 1) * (1 - lat * 0.55);
     const kSw = lerp(0.55, 1.95, clamp((s - 1) / 7.5, 0, 1)) * (back ? 0.6 : 1);
-    const legs = [[P.lhX, P.lkX, P.laX, P.lhZ, ph, 1], [P.rhX, P.rkX, P.raX, P.rhZ, ph + Math.PI, -1]];
-    for (const [hX, kX, aX, hZ, f, sgn] of legs) {
+    // No per-player per-frame array allocations in the gait loop.
+    for (let leg = 0; leg < 2; leg++) {
+      const hX = leg ? P.rhX : P.lhX, kX = leg ? P.rkX : P.lkX;
+      const aX = leg ? P.raX : P.laX, hZ = leg ? P.rhZ : P.lhZ;
+      const f = ph + leg * Math.PI, sgn = leg ? -1 : 1;
       const sn = Math.sin(f), cs = Math.cos(f);
       T[hX] = -ampH * sn - 0.06 * run - 0.08 * sprint;
       T[kX] = 0.06 + run * (kSw * Math.pow(Math.max(0, Math.cos(f + 0.55)), 1.3) + 0.28 * Math.max(0, -cs) * (0.5 + sprint));
@@ -508,6 +555,18 @@ export class PlayerRig {
     T[P.gl] = 1;
     T[P.lift] = run * (0.012 + 0.05 * sprint) * Math.pow(Math.abs(Math.sin(ph)), 2);
     T[P.bodyY] = STAND_Y;
+    // Absorb braking through bent knees; the outside leg plants on a sharp turn.
+    const brake = this.brake || 0, plant = this.plant || 0;
+    T[P.pitch] -= .18 * brake;
+    T[P.lhX] -= .22 * brake; T[P.rhX] -= .22 * brake;
+    T[P.lkX] += .38 * brake; T[P.rkX] += .38 * brake;
+    T[P.lift] *= 1 - .8 * brake;
+    const plantHip = plant > 0 ? P.lhZ : P.rhZ;
+    const plantKnee = plant > 0 ? P.lkX : P.rkX;
+    T[plantHip] += plant * .16;
+    T[plantKnee] += Math.abs(plant) * .22;
+    T[P.spY] -= .12 * plant;
+    T[P.lsZ] += .25 * Math.abs(plant); T[P.rsZ] -= .25 * Math.abs(plant);
   }
 
   _oneShot(T, anim, u, pp, s, ctx) {
@@ -521,17 +580,23 @@ export class PlayerRig {
     switch (anim) {
       case ANIM.KICK: {
         const pw = clamp(Number.isFinite(pp) ? pp : 0.6, 0, 1);
-        const b = easeOut(seg(u, 0, 0.12)), st = easeIn(seg(u, 0.12, 0.21)), fo = seg(u, 0.21, 0.38);
-        const back = 0.5 + 0.4 * pw, thru = -(0.75 + 0.85 * pw);
-        let h = lerp(0, back, b); h = lerp(h, thru, st); h = lerp(h, thru * 0.55, smooth(fo));
-        let k = lerp(0.3, 1.25 + 0.35 * pw, b); k = lerp(k, 0.1, st); k = lerp(k, 0.35, fo);
-        T[KH] = h; T[KK] = k; T[KA] = 0.3 * st; T[KZ] = -oz * 0.08;
+        // u=0 is ball release, not the beginning of the backswing. WINDUP
+        // provides anticipation before release; instant AI kicks start at contact.
+        const pass = pw <= .45;
+        const follow = easeOut(seg(u, 0, pass ? .09 : .12));
+        const recover = smooth(seg(u, pass ? .12 : .19, .38));
+        const thru = pass ? -.62 : -(.75 + .85 * pw);
+        T[KH] = lerp(lerp(-.35, thru, follow), T[KH], recover);
+        T[KK] = lerp(lerp(.12, pass ? .3 : .4, follow), T[KK], recover);
+        T[KA] = lerp(pass ? -.12 : .25, T[KA], recover);
+        T[KZ] = -oz * (pass ? .16 : .08) * (1 - recover);
+        T[R > 0 ? P.rhY : P.lhY] = oz * (pass ? -.5 : -.08) * (1 - recover);
         T[SH] = -0.3; T[SK] = 0.38; T[R > 0 ? P.laX : P.raX] = 0.1;
         T[OAX] = -0.45; T[OAZ] = oz * (0.9 + 0.3 * pw); T[OAE] = -0.3;
         T[KAX] = 0.35; T[KAZ] = -oz * 0.45;
-        T[P.spX] = 0.12 - 0.22 * pw * st; T[P.spY] = R * (-0.25 * b + 0.45 * st);
+        T[P.spX] = 0.12 - 0.18 * pw * follow; T[P.spY] = R * (pass ? .12 : .35) * (1 - recover);
         T[P.nkX] = 0.35; T[P.nkY] = 0;
-        T[P.roll] = R * 0.1 * b; T[P.lift] = 0;
+        T[P.roll] = R * 0.1 * (1 - recover); T[P.lift] = 0;
         break;
       }
       case ANIM.WINDUP: {
@@ -600,7 +665,7 @@ export class PlayerRig {
         const hgt = Math.max(0, Math.abs(pp) - 1);
         const lateral = (ctx.ballX - this.px) * -Math.sin(this.face) + (ctx.ballZ - this.pz) * Math.cos(this.face);
         const cosF = Math.cos(this.face);
-        const dr = Math.abs(lateral) > 0.05 ? Math.sign(lateral) : (Math.sign(side * cosF) || side);
+        const dr = this.diveSide || (Math.abs(lateral) > 0.05 ? Math.sign(lateral) : (Math.sign(side * cosF) || side));
         const F = 0.4;
         const load = seg(u, 0, 0.1);
         const fl = seg(u, 0.08, F + 0.05);
@@ -642,6 +707,7 @@ export class PlayerRig {
         if (!isScorer) kind = 3 + (this.seed % 2);
         else if (kind === 0 && (this.seed % 2)) kind = 5; // fist-pump variant of "arms up"
         if (isScorer && kind === 0 && this.seed % 3 === 0) kind = 6;
+        if (isScorer && kind === 5 && this.seed % 3 === 0) kind = 7;
         if (isScorer && kind === 3) kind = 6;
         if (kind === 1) { // airplane
           T[P.lsZ] = 1.45; T[P.rsZ] = -1.45; T[P.lsX] = 0.1; T[P.rsX] = 0.1; T[P.leX] = -0.05; T[P.reX] = -0.05;
@@ -659,6 +725,22 @@ export class PlayerRig {
             T[P.lift] = 0;
           }
           if (u > 2.8) { T[P.lsZ] = 1.3; T[P.rsZ] = -1.3; }
+        } else if (kind === 7) { // compact backward somersault, then a cushioned landing
+          const takeoff = .35, landing = 1.25;
+          const flight = seg(u, takeoff, landing);
+          const crouch = sstep(.05, .25, u) * (1 - sstep(.25, takeoff, u));
+          const impact = sstep(landing, 1.35, u) * (1 - sstep(1.35, 1.65, u));
+          const airborne = u > takeoff && u < landing;
+          const tuck = Math.sin(Math.PI * flight);
+          T[P.gl] = 0;
+          T[P.bodyY] = STAND_Y - .2 * (crouch + impact) + 1.45 * Math.sin(Math.PI * flight);
+          // Keep the angle unwrapped after landing: -2pi is the same upright pose.
+          T[P.pitch] = -Math.PI * 2 * smooth(flight);
+          T[P.lkX] = T[P.rkX] = .2 + 1.7 * tuck + .5 * (crouch + impact);
+          T[P.lhX] = T[P.rhX] = -.1 - .8 * tuck - .25 * (crouch + impact);
+          T[P.lsX] = T[P.rsX] = airborne ? -2.5 + 1.6 * tuck : -.5;
+          T[P.leX] = T[P.reX] = -.25 - tuck;
+          T[P.spX] = .15 * tuck; T[P.roll] = 0; T[P.lift] = 0;
         } else if (kind === 6) { // badge kiss; hand draws the shirt toward the bowed head
           const k = sstep(0.15, 0.65, u) * (1 - sstep(2.4, 2.9, u));
           T[P.rsX] = lerp(T[P.rsX], -0.95, k); T[P.rsY] = -0.6 * k;
