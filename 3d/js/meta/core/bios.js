@@ -184,7 +184,7 @@ export const BIOS = {
   batistuta: '1969-02-01|185|R', crespo: '1975-07-05|184|R',
   // Egypt (2026 squad) — only what we're sure of
   elshenawy: '1988-12-18||R', ahmedhegazi: '1991-01-25|195|R', abdelmonem: '1999-02-01', elneny: '1992-07-11|180|R',
-  ahmedrefaat: '||||2024-07-06', koka: '1993-03-05', zizosayed: '1996-01-10', trezeguethassan: '1994-10-01|179|R',
+  koka: '1993-03-05', zizosayed: '1996-01-10', trezeguethassan: '1994-10-01|179|R',
   mostafamohamed: '1997-11-28|185|R',
 };
 
