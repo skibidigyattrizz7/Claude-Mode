@@ -316,9 +316,9 @@
 .pm-card .pc-photo.pc-photo--cut { right: .1em; top: .75em; width: 7.3em; height: 7.3em; border-radius: 0; object-fit: contain; object-position: 50% 100%; }
 /* name bar + 6 stats in two columns (PAC SHO PAS | DRI DEF PHY) */
 .pc-name { position: absolute; left: .9em; right: .9em; top: 6.95em; z-index: 3; text-align: center; font-size: 1.12em; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: .06em 0 .1em; border-bottom: 1px solid color-mix(in srgb, currentColor 38%, transparent); }
-.pc-stats { position: absolute; left: 1.45em; right: 1.3em; top: 9.2em; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto); grid-auto-flow: column; column-gap: 1.2em; z-index: 3; }
+.pc-stats { position: absolute; left: 1.3em; right: 1.3em; top: 9.2em; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto); grid-auto-flow: column; column-gap: 1.2em; z-index: 3; }
 .pc-stats::before { content: ""; position: absolute; left: 50%; top: .15em; bottom: .15em; width: 1px; background: currentColor; opacity: .3; }
-.pc-stat { display: flex; align-items: baseline; gap: .3em; font-size: .92em; line-height: 1.06; white-space: nowrap; }
+.pc-stat { display: flex; align-items: baseline; justify-content: center; gap: .3em; font-size: .92em; line-height: 1.06; white-space: nowrap; } /* centred in each half (owner, Sep 29) */
 .pc-stat b { font-weight: 700; min-width: 1.3em; text-align: right; color: var(--num, inherit); }
 .pc-stat span { font-weight: 400; opacity: .82; letter-spacing: .02em; }
 .pc-tag { position: absolute; left: 50%; top: 27.7em; transform: translateX(-50%); z-index: 3; font-size: .46em; font-weight: 700; letter-spacing: .1em; white-space: nowrap; opacity: .92; }
@@ -384,6 +384,7 @@
 /* long names: smaller text, same box (top/left/right are in the name's own em, so they're rescaled from 1.12em) */
 .pc-name.pc-name--long { font-size: .9em; letter-spacing: 0; top: 8.65em; left: 1.12em; right: 1.12em; padding: .2em 0 .22em; }
 .pc-name.pc-name--xl { font-size: .76em; letter-spacing: 0; top: 10.24em; left: 1.33em; right: 1.33em; padding: .3em 0 .32em; }
+.pc-name.pc-name--xxl { font-size: .64em; letter-spacing: 0; top: 12.16em; left: 1.575em; right: 1.575em; padding: .4em 0 .42em; }
 .pm-card.sp-secret .pc-ovr, .pm-card.sp-secret .pc-name { text-shadow: 0 0 .3em rgba(20,255,160,.55); }
 .pm-card.sp-secret .pc-flag { box-shadow: 0 0 0 .06em rgba(0,0,0,.25), 0 0 .5em rgba(20,255,160,.35); }
 @media (prefers-reduced-motion: no-preference) {
@@ -563,6 +564,10 @@
 /* ---- sizes ---- */
 .pm-card--xs { font-size: 6.3px; height: 12.2em; }
 .pm-card--xs .pc-name { font-size: 1.35em; top: 5.95em; left: .5em; right: .5em; }
+/* long names on the small (pitch / list) card: same shrink steps as the big card, rescaled to the xs nameplate */
+.pm-card--xs .pc-name.pc-name--long { font-size: 1.085em; top: 7.4em; left: .62em; right: .62em; letter-spacing: 0; }
+.pm-card--xs .pc-name.pc-name--xl { font-size: .916em; top: 8.77em; left: .74em; right: .74em; letter-spacing: 0; }
+.pm-card--xs .pc-name.pc-name--xxl { font-size: .7em; top: 11.47em; left: .9em; right: .9em; letter-spacing: -.01em; }
 .pm-card--xs .pc-ovr { font-size: 2.7em; }
 .pm-card--xs .pc-pos { font-size: 1.15em; }
 .pm-card--xs .pc-crest, .pm-card--xs .pc-tag, .pm-card--xs .pc-era, .pm-card--xs .pc-evo { display: none; }
@@ -1655,3 +1660,26 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-packfan-item .pm-pack { font-size: clamp(9px, .95vw, 13px); box-shadow: 0 1em 1.8em -0.8em #000; }
 @media (prefers-reduced-motion: reduce) { .pm-packfan-item { transition: none; } }
 .pm-lazymore { grid-column: 1 / -1; justify-self: center; margin: 8px 0 16px; }
+
+/* ---- Full-art secret card (owner, Sep 29: the knight card). The owner's whole picture, title and background
+   included, fills the card face (shield-masked); a navy fade under the nameplate keeps the stats readable;
+   silver + Israeli-blue frame to match the picture. Stats show the card's glyph (✡) via card.js statGlyph. ---- */
+.pm-card.pm-card.sp-secret.is-fullart { --bord: linear-gradient(135deg, #f4f7ff 0%, #9fb4e8 22%, #0038b8 45%, #e9eef8 62%, #0038b8 80%, #f4f7ff 100%);
+  --face: #07142e; --ink: #ffffff; --num: #ffffff; --ovr: #ffffff; --pat: none;
+  filter: drop-shadow(0 0 .45em rgba(90,140,255,.55)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); }
+.pm-card.is-fullart .pc-fullart { position: absolute; inset: .2em; width: calc(100% - .4em); height: calc(100% - .4em); object-fit: cover; object-position: 50% 0;
+  -webkit-mask: var(--shield) 0 0/100% 100% no-repeat; mask: var(--shield) 0 0/100% 100% no-repeat; z-index: 0; pointer-events: none; }
+.pm-card.is-fullart .pc-in { z-index: 0; }
+.pm-card.is-fullart .pc-fullart + * , .pm-card.is-fullart .pc-side, .pm-card.is-fullart .pc-name, .pm-card.is-fullart .pc-stats, .pm-card.is-fullart .pc-tag, .pm-card.is-fullart .pc-ps { z-index: 2; }
+.pm-card.is-fullart .pc-ovr, .pm-card.is-fullart .pc-pos, .pm-card.is-fullart .pc-name, .pm-card.is-fullart .pc-stat b { text-shadow: 0 0 .25em #0038b8, 0 .06em .12em #000; }
+.pm-card.sp-secret.is-fullart .pc-tag { display: none; } /* the picture carries its own title */
+/* full-art fire theme (E-Man / E.L.I.J.A.H.): ember frame, dark face, "FINAL FORM" across the top */
+.pm-card.pm-card.sp-secret.is-fullart.art-fire { --bord: linear-gradient(135deg, #ffe0a8 0%, #ff7a18 22%, #7a0d00 45%, #ffb347 62%, #b31200 80%, #ffe0a8 100%); --face: #140402;
+  filter: drop-shadow(0 0 .5em rgba(255,90,20,.6)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); }
+.pm-card.art-fire .pc-ovr, .pm-card.art-fire .pc-pos, .pm-card.art-fire .pc-name, .pm-card.art-fire .pc-stat b { text-shadow: 0 0 .3em #ff3d00, 0 .06em .12em #000; }
+.pm-card.sp-secret.is-fullart.art-fire .pc-tag { display: block; top: .62em; font-size: .56em; font-weight: 900; letter-spacing: .16em; z-index: 4; color: #fff; text-shadow: 0 0 .3em #ff3d00, 0 0 .7em rgba(255,60,0,.9), 0 .08em .1em #000; }
+.pm-card .pc-ovr--text { font-size: 1.45em; letter-spacing: 0; }
+.pm-card .pc-stat b sup, .pm-card .pc-ovr sup { font-size: .6em; vertical-align: .55em; margin-left: .05em; }
+.pm-card .pc-ovr--text { font-size: 1.2em; white-space: nowrap; }
+.pm-card.has-stattext .pc-stat b { font-size: .8em; white-space: nowrap; }
+.pm-card.has-stattext .pc-stat span { font-size: .85em; }

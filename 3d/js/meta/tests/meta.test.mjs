@@ -1359,7 +1359,10 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   const hasSecret = (s) => Object.keys(s.odds).some((k) => k.startsWith('secret'));
   assert.ok(pack.slots.some(hasSecret));
   // Every version has its OWN chance (adding versions never makes The Shawky rarer).
-  for (const v of SC.SECRET_VERSIONS) assert.ok(Math.abs(pack.slots[0].odds[`secret_${v.id}`] - SC.SECRET_ODDS) < 1e-9, v.id);
+  for (const v of SC.SECRET_VERSIONS) {
+    if (v.adminOnly) assert.ok(!pack.slots[0].odds[`secret_${v.id}`], `${v.id} is Admin Vault only`); // E-Man / E.L.I.J.A.H.
+    else assert.ok(Math.abs(pack.slots[0].odds[`secret_${v.id}`] - SC.SECRET_ODDS) < 1e-9, v.id);
+  }
   for (const p of [pack]) for (const sl of p.slots) assert.ok(Math.abs(Object.values(sl.odds).reduce((a, b) => a + b, 0) - 1) < 1e-9, 'odds sum to 1');
   const avPack = UT.PACK_BY_ID[UT.ADMIN_VAULT_PACK_ID];
   assert.ok(avPack, 'admin vault pack missing');
@@ -1368,12 +1371,12 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   // Statistically confirm both packs' actual pull rates match (large sample, seeded/deterministic).
   let hits = 0, shawky = 0; const N = 40000;
   for (let i = 0; i < N; i++) { const items = UT.openPack(SC.SECRET_PACK_ID, new Set(), new Rng(`secret-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) hits++; if (items.some((it) => it.pid === SC.SECRET_CARD_ID)) shawky++; }
-  const nv = SC.SECRET_VERSIONS.length;
+  const nv = SC.SECRET_VERSIONS.filter((v) => !v.adminOnly).length, nvAll = SC.SECRET_VERSIONS.length;
   assert.ok(hits >= N * SC.SECRET_ODDS * nv * 0.6 && hits <= N * SC.SECRET_ODDS * nv * 1.4, `expected ~${N * SC.SECRET_ODDS * nv} hits, got ${hits}`);
   assert.ok(shawky >= N * SC.SECRET_ODDS * 0.4 && shawky <= N * SC.SECRET_ODDS * 1.8, `The Shawky alone keeps ~${N * SC.SECRET_ODDS}, got ${shawky}`);
   let avHits = 0;
   for (let i = 0; i < N; i++) { const items = UT.openPack(UT.ADMIN_VAULT_PACK_ID, new Set(), new Rng(`av-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) avHits++; }
-  assert.ok(avHits >= N * UT.ADMIN_VAULT_SECRET_ODDS * nv * 0.8 && avHits <= N * UT.ADMIN_VAULT_SECRET_ODDS * nv * 1.2, `expected ~${N * UT.ADMIN_VAULT_SECRET_ODDS * nv} admin-vault hits, got ${avHits}`);
+  assert.ok(avHits >= N * UT.ADMIN_VAULT_SECRET_ODDS * nvAll * 0.8 && avHits <= N * UT.ADMIN_VAULT_SECRET_ODDS * nvAll * 1.2, `expected ~${N * UT.ADMIN_VAULT_SECRET_ODDS * nvAll} admin-vault hits, got ${avHits}`);
   // No admin level can ever grant it (the one generic "give any player id" API is admin.js's grantPlayer).
   const s = UT.createUTState({ clubName: 'X' }, new Rng(1));
   const r = A.grantPlayer(s, SC.SECRET_CARD_ID);
@@ -1381,7 +1384,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
   // Every version (owner's list) is a full ∞ glitch card with its own name + nation, and none can be granted.
   // THE NII (`cursed`) is the one anti-version: OVR 1, floor stats, no glitch, carried into matches as `cursed`.
-  assert.equal(SC.SECRET_VERSIONS.length, 14);
+  assert.equal(SC.SECRET_VERSIONS.length, 17);
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
     if (v.cursed) {
@@ -1389,7 +1392,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
       assert.equal(toMatchPlayer(c, 'ST', 9).cursed, true);
       assert.ok(UT.itemScore(c) > UT.itemScore(getPlayer(SC.SECRET_CARD_ID)), 'THE NII leads the pack reveal');
     } else assert.ok(c && c.glitch && c.ovr === SC.INFINITE_OVR && c.nat === v.nat && c.name === v.name, v.id);
-    assert.ok(NATION_BY_CODE_T[c.nat], `nation ${c.nat} exists`);
+    assert.ok(NATION_BY_CODE_T[c.nat] || v.fullArt, `nation ${c.nat} exists`); // the full-art knight uses a flag-only nation (art.js FLAG_ONLY)
     assert.equal(A.grantPlayer(s, v.id).ok, false);
   }
 });

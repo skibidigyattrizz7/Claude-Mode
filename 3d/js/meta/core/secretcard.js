@@ -50,6 +50,13 @@ export const SECRET_VERSIONS = [
   { id: 'secret_perlita', last: 'Perlita', name: 'Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/perlita.webp' },
   { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp', evil: true, cursed: true, tag: 'EVIL' },
+  // owner request (Sep 29): knight card, the owner's whole picture (title + background) is the card art and every
+  // stat shows a Star of David. Named Rabbi Patel (owner).
+  { id: 'secret_knight', last: 'Rabbi Patel', name: 'Rabbi Patel', nat: 'ISR', skin: 1, fullArt: 'assets/cards/knight-full.webp', statGlyph: '✡' },
+  // owner request (Sep 29): E-Man and his final form. Admin Vault only (`adminOnly`), full fire picture as card art.
+  { id: 'secret_eman', last: 'E-Man', name: 'E-Man', nat: 'ISR', skin: 5, fullArt: 'assets/cards/eman-full.webp', artTheme: 'fire', adminOnly: true },
+  { id: 'secret_elijah', last: 'E.L.I.J.A.H.', name: 'E.L.I.J.A.H.', nat: 'ISR', skin: 5, fullArt: 'assets/cards/elijah-full.webp', artTheme: 'fire', adminOnly: true,
+    statText: '???', statSup: '∞', tag: 'FINAL FORM' }, // every stat reads ???^∞
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
   // Vinson uses the same ultra-rare vault slot but has her own HELL presentation and event hook.
   // The timed event consumes `hell` + HELL_CARD_ID; it does not reuse the existing evil/cursed gameplay.
@@ -95,6 +102,12 @@ function buildSecretCard(id = SECRET_CARD_ID) {
     p.photoCut = false; // the supplied portrait has an opaque background; CSS blends it into the HELL face
     p.cardTag = ver.tag;
   }
+  if (ver.fullArt) {
+    p.fullArt = ver.fullArt; p.statGlyph = ver.statGlyph || null; p.artTheme = ver.artTheme || null;
+    if (ver.statText) { p.statText = ver.statText; p.statSup = ver.statSup || ''; }
+    if (ver.tag) p.cardTag = ver.tag;
+  }
+  if (ver.adminOnly) p.adminOnly = true;
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   if (ver.cursed) {
     // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and

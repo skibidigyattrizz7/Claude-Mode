@@ -43,8 +43,9 @@ export const CATEGORIES = {
 // never makes an existing one (The Shawky) rarer. Pools filled in categoryPools().
 for (const v of SECRET_VERSIONS) CATEGORIES[`secret_${v.id}`] = { label: `Secret: ${v.name}`, test: () => false };
 /** Odds entries giving every Secret card version the same per-version chance `each`. */
-export function secretOdds(each) { return Object.fromEntries(SECRET_VERSIONS.map((v) => [`secret_${v.id}`, each])); }
-const SECRET_TOTAL = (each) => each * SECRET_VERSIONS.length;
+/** Per-version secret odds. `adminOnly` versions (owner, Sep 29: E-Man / E.L.I.J.A.H.) only drop from the Admin Vault. */
+export function secretOdds(each, admin = false) { return Object.fromEntries(SECRET_VERSIONS.filter((v) => admin || !v.adminOnly).map((v) => [`secret_${v.id}`, each])); }
+const SECRET_TOTAL = (each, admin = false) => each * SECRET_VERSIONS.filter((v) => admin || !v.adminOnly).length;
 // V3 promo categories (one per campaign)
 for (const pr of PROMOS) CATEGORIES[`promo_${pr.id}`] = { label: pr.name, test: (p) => p.special === pr.id };
 
@@ -113,7 +114,7 @@ export const PACKS = [
   {
     id: ADMIN_VAULT_PACK_ID, name: 'Admin Vault Pack', price: 0, look: 'adminvault', adminOnly: true,
     desc: `Admin only: ${ADMIN_VAULT_SIZE} random players (golds, rares, In-Forms, Heroes, Legends), plus a ${ADMIN_VAULT_SECRET_ODDS * 100}% chance of each Secret card`,
-    slots: [{ n: 1, odds: { ...secretOdds(ADMIN_VAULT_SECRET_ODDS), ...Object.fromEntries(Object.entries(ADMIN_VAULT_TOP).map(([k, v]) => [k, v * (1 - SECRET_TOTAL(ADMIN_VAULT_SECRET_ODDS))])) } }, { n: ADMIN_VAULT_SIZE - 1, odds: ADMIN_VAULT_MIX }],
+    slots: [{ n: 1, odds: { ...secretOdds(ADMIN_VAULT_SECRET_ODDS, true), ...Object.fromEntries(Object.entries(ADMIN_VAULT_TOP).map(([k, v]) => [k, v * (1 - SECRET_TOTAL(ADMIN_VAULT_SECRET_ODDS, true))])) } }, { n: ADMIN_VAULT_SIZE - 1, odds: ADMIN_VAULT_MIX }],
   },
 ];
 // V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)
