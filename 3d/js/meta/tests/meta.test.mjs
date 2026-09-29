@@ -1334,7 +1334,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.equal(r.ok, false);
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
   // Every version (owner's list) is a full ∞ glitch card with its own name + nation, and none can be granted.
-  assert.equal(SC.SECRET_VERSIONS.length, 8);
+  assert.equal(SC.SECRET_VERSIONS.length, 9);
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
     assert.ok(c && c.glitch && c.ovr === SC.INFINITE_OVR && c.nat === v.nat && c.name === v.name, v.id);

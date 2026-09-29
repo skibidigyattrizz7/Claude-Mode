@@ -158,7 +158,7 @@ export function playerCard(p, opts = {}) {
     </div>
     ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
     ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}
-    <div class="pc-name">${esc(nameOnCard(p))}</div>
+    <div class="pc-name${nameOnCard(p).length > 13 ? ' pc-name--xl' : nameOnCard(p).length > 10 ? ' pc-name--long' : ''}">${esc(nameOnCard(p))}</div>
     ${statsHtml}
     ${tag ? `<div class="pc-tag">${esc(tag)}</div>` : ''}
     ${upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${upg.level}/${upg.max}">${Array.from({ length: upg.max }, (_, i) => `<i class="${i < upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}

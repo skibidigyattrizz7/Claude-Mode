@@ -379,6 +379,9 @@
     var(--art-common) 0 0/100% 100%;
   filter: drop-shadow(0 0 .42em rgba(20,255,160,.5)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); overflow: hidden; }
 .pm-card.sp-secret .pc-tag { color: #9bffce; text-shadow: 0 0 .5em rgba(20,255,160,.7); }
+/* long names: smaller text, same box (top/left/right are in the name's own em, so they're rescaled from 1.12em) */
+.pc-name.pc-name--long { font-size: .9em; letter-spacing: 0; top: 8.65em; left: 1.12em; right: 1.12em; padding: .2em 0 .22em; }
+.pc-name.pc-name--xl { font-size: .76em; letter-spacing: 0; top: 10.24em; left: 1.33em; right: 1.33em; padding: .3em 0 .32em; }
 .pm-card.sp-secret .pc-ovr, .pm-card.sp-secret .pc-name { text-shadow: 0 0 .3em rgba(20,255,160,.55); }
 .pm-card.sp-secret .pc-flag { box-shadow: 0 0 0 .06em rgba(0,0,0,.25), 0 0 .5em rgba(20,255,160,.35); }
 @media (prefers-reduced-motion: no-preference) {

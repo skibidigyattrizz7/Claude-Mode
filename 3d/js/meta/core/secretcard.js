@@ -39,6 +39,8 @@ export const SECRET_VERSIONS = [
   { id: 'secret_masilang', last: 'Masilang', name: 'BraydenMasilang', nat: 'PHI', skin: 2 },
   { id: 'secret_nickerson', last: 'Nickerson', name: 'Nickerson', nat: 'KEN', skin: 5 },
   { id: 'secret_dammad', last: 'Dammad', name: 'Dammad', nat: 'PLE', skin: 3 },
+  // hand-drawn face (meta/ui/art.js CUSTOM_AVATARS.grumpy), owner request Sep 29
+  { id: 'secret_grumpypatel', last: 'Grumpy Patel', name: 'Grumpy Patel', nat: 'IND', skin: 1, avatar: 'grumpy' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
 export const SECRET_CARD_IDS = SECRET_VERSIONS.map((v) => v.id);
@@ -72,6 +74,7 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   // same way `rawOvr` carries admin cards' over-99 — see engine/core/sim.js `_applyData` / ai.js / render).
   p.glitch = true;
   p.skin = ver.skin;
+  if (ver.avatar) p.avatar = ver.avatar;
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   // Every PlayStyle AND PlayStyle+ that exists (owner request) — overrides genPhysique's normal draw/limits,
   // exactly like admincards.js hand-picks its own extra PlayStyle+ list instead of using pickStyles' bands.
