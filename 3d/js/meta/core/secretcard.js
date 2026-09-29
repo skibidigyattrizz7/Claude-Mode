@@ -41,6 +41,10 @@ export const SECRET_VERSIONS = [
   { id: 'secret_dammad', last: 'Dammad', name: 'Dammad', nat: 'PLE', skin: 3 },
   // owner's own photo, cut out (3d/assets/cards/grumpy-patel.webp), owner request Sep 29
   { id: 'secret_grumpypatel', last: 'Grumpy Patel', name: 'Grumpy Patel', nat: 'IND', skin: 1, photo: 'assets/cards/grumpy-patel.webp' },
+  // "THE NII" (owner request, Sep 29): the anti-secret card. Same vault odds, but `cursed` instead of `glitch`:
+  // every stat shows "-∞" and in matches he barely moves, gives the ball away, passes to the opponent and every
+  // shot flies into his own goal for 10 own goals (engine/core/sim.js `p.cursed`). Owner's photo, faded edges.
+  { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
 export const SECRET_CARD_IDS = SECRET_VERSIONS.map((v) => v.id);
@@ -76,6 +80,20 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   p.skin = ver.skin;
   if (ver.photo) { p.photo = ver.photo; p.photoCut = true; }
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
+  if (ver.cursed) {
+    // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and
+    // skills at 1, and he only plays up front. `cursed` rides through core/teams.js toMatchPlayer to the engine.
+    p.stats = { pac: 1, sho: 1, pas: 1, dri: 1, def: 1, phy: 1 };
+    p.gk = { div: 1, han: 1, kic: 1, ref: 1, spd: 1, pos: 1 };
+    p.alt = [];
+    p.ovr = 1; p.pot = 1; p.wf = 1; p.sm = 1; p.wr = ['Low', 'Low'];
+    p.glitch = false; p.cursed = true; p.cardTag = ver.tag;
+    p.playstyles = [];
+    p.value = 0; p.wage = 0;
+    p.look = hashStr(p.id) % 997;
+    _cards.set(id, p);
+    return p;
+  }
   // Every PlayStyle AND PlayStyle+ that exists (owner request) — overrides genPhysique's normal draw/limits,
   // exactly like admincards.js hand-picks its own extra PlayStyle+ list instead of using pickStyles' bands.
   p.playstyles = PLAYSTYLE_IDS.map((id) => ({ id, plus: true }));

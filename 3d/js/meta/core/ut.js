@@ -167,6 +167,7 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   return items;
 }
 export function itemScore(p) {
+  if (p.cursed) return 5000; // THE NII (secretcard.js): always leads the pack reveal, like the other secret cards
   return p.ovr + ({ secret: 50, lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || (PROMO_BY_ID[p.special] ? 35 : 0)) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);
 }
 /** 'bronze' | 'silver' | 'gold' | 'walkout' */

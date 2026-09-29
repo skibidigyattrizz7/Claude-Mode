@@ -4,7 +4,7 @@ import { getDB, _resetDB, computeOvr, tierOf, sanitizeCard } from '../core/playe
 import { Rng } from '../core/rng.js';
 import { calcChemistry, calcChemistryFc26, calcChemistryStyled, CHEM_STYLES, linkStrength, teamRating } from '../core/chemistry.js';
 import { FORMATIONS, FORMATION_NAMES } from '../core/formations.js';
-import { validateTeam, bestLineup, buildTeam, gkKitFor } from '../core/teams.js';
+import { validateTeam, bestLineup, buildTeam, gkKitFor, toMatchPlayer } from '../core/teams.js';
 import { simulateMatch } from '../core/sim.js';
 import * as UT from '../core/ut.js';
 import * as SW from '../core/swaps.js';
@@ -1342,10 +1342,15 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.equal(r.ok, false);
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
   // Every version (owner's list) is a full ∞ glitch card with its own name + nation, and none can be granted.
-  assert.equal(SC.SECRET_VERSIONS.length, 9);
+  // THE NII (`cursed`) is the one anti-version: OVR 1, floor stats, no glitch, carried into matches as `cursed`.
+  assert.equal(SC.SECRET_VERSIONS.length, 10);
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
-    assert.ok(c && c.glitch && c.ovr === SC.INFINITE_OVR && c.nat === v.nat && c.name === v.name, v.id);
+    if (v.cursed) {
+      assert.ok(c && c.cursed && !c.glitch && c.ovr === 1 && c.stats.pac === 1 && c.cardTag === 'THE NII' && c.special === 'secret', v.id);
+      assert.equal(toMatchPlayer(c, 'ST', 9).cursed, true);
+      assert.ok(UT.itemScore(c) > UT.itemScore(getPlayer(SC.SECRET_CARD_ID)), 'THE NII leads the pack reveal');
+    } else assert.ok(c && c.glitch && c.ovr === SC.INFINITE_OVR && c.nat === v.nat && c.name === v.name, v.id);
     assert.ok(NATION_BY_CODE_T[c.nat], `nation ${c.nat} exists`);
     assert.equal(A.grantPlayer(s, v.id).ok, false);
   }

@@ -86,8 +86,9 @@ export function attributeBlock(p) {
   const cls = (v) => (v >= 85 ? 'hi' : v >= 70 ? 'mid' : v < 50 ? 'lo' : '');
   // "The Shawky" (secretcard.js `glitch`): every number here is still a real, 1-99-safe value underneath
   // (see substats.js) — only the display reads "∞", same as the card face and rating.
-  const inf = p.glitch === true;
-  const disp = (v) => (inf ? '∞' : v);
+  // THE NII (secretcard.js `cursed`) is the opposite: every number reads "-∞".
+  const inf = p.glitch === true || p.cursed === true;
+  const disp = (v) => (inf ? infLabel(p) : v);
   return h('div', { class: 'pm-attrs pm-attrs--full' }, subStats(p).map((g) => h('div', { class: 'pm-attrgroup', 'data-attr': g.key },
     h('div', { class: 'pm-attr' }, h('span', null, g.label), h('b', { class: cls(g.value) }, disp(g.value)), h('i', { style: { '--v': `${Math.min(99, g.value)}%` } })),
     g.subs.map((x) => h('div', { class: 'pm-subattr', 'data-attr': x.key }, h('span', null, x.label), h('b', { class: cls(x.value) }, disp(x.value)), h('i', { style: { '--v': `${x.value}%` } }))))));
@@ -96,6 +97,8 @@ export function attributeBlock(p) {
 // Real players show surname only (FIFA/FC convention: "Ronaldo", not "Cristiano Ronaldo"). Card Creator admin
 // cards have no separate first/last name — the owner types one name for the card, so it must show in full
 // ("pain man", not "man") rather than through cardName()'s last-word-only rule.
+/** What an "infinite" number reads as: "∞" for the glitch secret cards, "-∞" for THE NII (cursed). */
+export const infLabel = (p) => (p && p.cursed === true ? '-∞' : '∞');
 function nameOnCard(p) { return p.customAdmin && typeof p.name === 'string' && p.name.trim() ? p.name.trim() : cardName(p); }
 
 // Card fields can come from other players (market listings, shared squads, gifts): anything that goes into the
@@ -105,6 +108,7 @@ const num = (v, lo = 0, hi = 999) => { const n = Math.round(Number(v)); return N
 
 export function cardClasses(p) {
   const c = ['pm-card', `t-${tok(p.tier)}`];
+  if (p.cursed === true) c.push('is-cursed');
   if (p.rare) c.push('rare');
   if (p.special) c.push(`sp-${tok(p.special)}`);
   if (p.era === 'prime') c.push('era-prime');
@@ -134,9 +138,9 @@ export function playerCard(p, opts = {}) {
   const labels = p.pos === 'GK' ? GK_LABELS : STAT_LABELS;
   // "The Shawky" (secretcard.js `glitch`): shown as "∞" everywhere on the face — the underlying numbers stay
   // finite/1-99 (market value, SBC rating math, sorting all use the real number, never this display string).
-  const inf = p.glitch === true;
+  const inf = p.glitch === true || p.cursed === true;
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
-  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${inf ? '∞' : num(v, 0, 999)}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
+  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${inf ? infLabel(p) : num(v, 0, 999)}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : sortedStyles(p).slice(0, 3).map((x) => psBadge(x)).join('');
   // Card Creator admin cards can carry more than 3 alt positions; the card face only has room for 3 badges,
@@ -146,19 +150,19 @@ export function playerCard(p, opts = {}) {
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(othersAll.join(', '))}">+${esc(others.join(' '))}${othersAll.length > 3 ? '…' : ''}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
   // above it unclipped, so special cards can let the player break out of the top edge of the frame.
-  const tag = p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
+  const tag = p.cursed === true && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
-      <div class="pc-ovr">${inf ? '∞' : num(p.ovr, 0, 999)}</div>
+      <div class="pc-ovr">${inf ? infLabel(p) : num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>
       ${altHtml}
       <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>
     </div>
     ${ps ? `<div class="pc-ps">${ps}</div>` : ''}
     ${p.customAdmin ? '<div class="pc-custom" title="Admin-created card">ADMIN CARD</div>' : ''}
-    <div class="pc-name${nameOnCard(p).length > 13 ? ' pc-name--xl' : nameOnCard(p).length > 10 ? ' pc-name--long' : ''}">${esc(nameOnCard(p))}</div>
+    <div class="pc-name${nameOnCard(p).length > 12 ? ' pc-name--xl' : nameOnCard(p).length > 10 ? ' pc-name--long' : ''}">${esc(nameOnCard(p))}</div>
     ${statsHtml}
     ${tag ? `<div class="pc-tag">${esc(tag)}</div>` : ''}
     ${upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${upg.level}/${upg.max}">${Array.from({ length: upg.max }, (_, i) => `<i class="${i < upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}

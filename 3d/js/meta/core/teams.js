@@ -101,6 +101,8 @@ export function toMatchPlayer(p, pos, number, scale = 1) {
     // see engine/core/sim.js `_applyData` (p.glitch) and ai.js/render/player.js. Carried through the contract
     // the same way `rawOvr` is, so it reaches the client identically online and offline (no net/** changes).
     ...(p.glitch === true ? { glitch: true } : {}),
+    // THE NII (secretcard.js `cursed`): the anti-glitch tier, see engine/core/sim.js `p.cursed`
+    ...(p.cursed === true ? { cursed: true } : {}),
     ...matchPhysique(p),
     attrs: {
       pac: sc(p.stats.pac), sho: sc(p.stats.sho), pas: sc(p.stats.pas), dri: sc(p.stats.dri), def: sc(p.stats.def), phy: sc(p.stats.phy),

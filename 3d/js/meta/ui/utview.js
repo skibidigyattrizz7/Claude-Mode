@@ -248,7 +248,7 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
     ['League', h('span', { class: 'pm-factrow' }, frag(leagueBadgeSVG(p.league)), leagueName(p.league))],
     ['Weak foot', stars(p.wf)], ['Skill moves', stars(p.sm)], ['Work rates', `${p.wr[0]} / ${p.wr[1]}`],
     ['Card', p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
-    ['Potential', p.glitch === true ? '∞' : p.pot],
+    ['Potential', p.glitch === true ? '∞' : p.cursed === true ? '-∞' : p.pot],
   ];
   if (p.moment) bio.push(['Moment', p.moment]);
   if (p.upg) bio.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);

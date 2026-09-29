@@ -153,3 +153,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE: Manuel Neuer gets three 99 cards (Flashback, Moments, Fiesta).
 - DONE: admin Global Config tab has a "Store packs" list: tick/untick any pack (not Admin Vault) for everyone (server config `packs.<id>.enabled`).
 - DONE: Secret Vault secret-card chance 0.1% per card (was 0.05%). Owner said "0.1"; if they meant 10%, change SECRET_ODDS.
+- DONE (Sep 29): secret card "AryeetyMensah" (owner's photo, top label "THE NII"): anti-admin card, all stats shown as -inf; in matches he barely moves, his passes go to the opponent, he loses the ball instantly, and any shot he takes goes in his own goal and counts as 10 own goals. (secretcard.js `cursed`, sim.js `_cursePlan`/`_curseFumble`, tests in engine/tests/cursed.test.mjs; nation set to Ghana, owner can change.)

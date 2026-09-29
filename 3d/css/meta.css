@@ -399,6 +399,32 @@
   98.3% { filter: drop-shadow(-1px 0 0 #ff2b6b) drop-shadow(1px 0 0 #14e6ff) drop-shadow(0 0 .5em rgba(20,255,160,.6)); transform: translate(0, 0); }
 }
 
+/* ---- THE NII (secretcard.js `cursed`): the anti-secret card. Same vault card, recoloured blood red on black to
+   match the owner's photo; red lightning strokes in --pat, stats and rating read "-∞". Flicker is red-only and
+   off under prefers-reduced-motion (the shared rule above already gates the animation). */
+.pm-card.pm-card.sp-secret.is-cursed { --bord: linear-gradient(135deg, #ffd9d9 0%, #ff1a1a 20%, #3a0000 42%, #d10000 60%, #1a0000 78%, #ff1a1a 92%, #ffd9d9 100%);
+  --face: radial-gradient(60% 42% at 60% 18%, rgba(255,30,30,.28), transparent 70%), linear-gradient(178deg, #1a0202 0%, #080000 55%, #000 100%);
+  --ink: #ffe0e0; --num: #ffb3b3; --ovr: #ff5a5a;
+  --pat: linear-gradient(115deg, transparent 30%, rgba(255,40,40,.22) 31%, transparent 32.5%, transparent 58%, rgba(255,60,60,.18) 59%, transparent 60.5%),
+    repeating-linear-gradient(0deg, rgba(255,120,120,.05) 0 1px, transparent 1px 3px),
+    var(--art-common) 0 0/100% 100%;
+  filter: drop-shadow(0 0 .45em rgba(255,20,20,.6)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); }
+/* the owner wants "THE NII" across the top of the card, not in the usual bottom tag spot */
+.pm-card.sp-secret.is-cursed .pc-tag { top: .62em; font-size: .6em; font-weight: 900; letter-spacing: .16em; z-index: 4; color: #fff;
+  text-shadow: 0 0 .25em #ff1a1a, 0 0 .6em rgba(255,20,20,.9), 0 .08em .1em #000; }
+.pm-card.is-cursed .pc-photo.pc-photo--cut { top: 1.35em; right: .2em; width: 6.5em; height: 6.5em; }
+.pm-card.is-cursed .pc-ovr { font-size: 1.7em; }
+.pm-card.sp-secret.is-cursed .pc-ovr, .pm-card.sp-secret.is-cursed .pc-name { text-shadow: 0 0 .3em rgba(255,20,20,.7); }
+.pm-card.sp-secret.is-cursed .pc-flag { box-shadow: 0 0 0 .06em rgba(0,0,0,.25), 0 0 .5em rgba(255,20,20,.4); }
+@media (prefers-reduced-motion: no-preference) {
+  .pm-card--md.sp-secret.is-cursed, .pm-card--lg.sp-secret.is-cursed { animation: pc-cursed-flicker 5.2s steps(1, end) infinite; }
+}
+@keyframes pc-cursed-flicker {
+  0%, 95.8%, 100% { filter: drop-shadow(0 0 .45em rgba(255,20,20,.6)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); }
+  96.4% { filter: drop-shadow(0 0 1em rgba(255,40,40,1)) brightness(1.25); }
+  97.6% { filter: drop-shadow(0 0 .2em rgba(255,20,20,.3)) brightness(.8); }
+}
+
 /* ---- promos: full-art cards. Colours come from core/promos.js (--pa dark / --pb main / --pc light, injected
    by card.js); each campaign supplies its own art via --pfx and may override --face/--bord/--num/--band.
    The lower band is the darker stats panel. ---- */

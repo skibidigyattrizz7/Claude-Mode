@@ -9,6 +9,7 @@ import * as KO from './knockout.js';
 import * as HSP from './humansp.js';
 import { normTactics, applyTactic } from './tactics.js';
 import { clamp, lerp, wrapAngle, angleTo, mulberry32, segDist } from './mathx.js';
+const CURSED_SHOT_KINDS = new Set(['shot', 'finesse', 'penalty', 'fk', 'header', 'lowdriven', 'powershot', 'trivela', 'chip']);
 import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine, setWeather } from './physics.js';
 import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
 import { leadPass, rollSpeedFor, rollTimeTo, solveLob, solveShot, solveShotCurl, groundVel } from './passing.js';
@@ -194,6 +195,10 @@ export class MatchSim {
     // _slideContact and ai.js); maxing every `boost` area here also gives him the full admin-tier rockets/
     // near-perfect-ball/win-from-anywhere effects that already exist, with no new numbers to balance.
     p.glitch = pd.glitch === true;
+    // THE NII (secretcard.js `cursed`, owner request Sep 29): the anti-glitch tier. Barely moves (below), gives
+    // the ball straight away (_curseFumble), every pass finds an opponent and every shot is an own goal worth
+    // 10 (_cursePlan / _goal). Never both at once.
+    p.cursed = pd.cursed === true && !p.glitch;
     p.boost = null;
     const bo = {};
     for (const key of ['pac', 'sho', 'pas', 'dri', 'def', 'phy', 'gk']) {
@@ -218,6 +223,7 @@ export class MatchSim {
     p.acc = (2.6 + pace * 0.09 + ps(p, 'quickstep') * 0.9 - (p.w - 75) * 0.025 - (p.h - 1.8) * 2.5) * (1 + bst(p, 'pac') * 1.6);
     // agility (turning) from dribbling/pace, strength from physical + body mass
     p.agil = clamp((a.dri * 0.7 + a.pac * 0.3) / 100 - 0.08 - (p.h - 1.8) * 0.4 - Math.max(0, p.w - 80) * 0.004, 0.25, 1.05) + bst(p, 'dri') * 0.9;
+    if (p.cursed) { p.vmax *= 0.12; p.acc *= 0.15; p.agil = 0.25; } // THE NII: can barely move
     p.str = a.phy * 0.9 - 10 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10 + ps(p, 'enforcer') * 6 + bst(p, 'phy') * 250;
     // standing reach / jump used for headers and keeper handling
     p.jump = 0.28 + a.phy * 0.0025 + (p.isGK ? a.div * 0.002 : 0) + ps(p, 'aerial') * 0.08;
@@ -407,6 +413,7 @@ export class MatchSim {
     if (this.phase !== PHASE.PLAY) return;
     this._glitchSteal();
     if (this.phase !== PHASE.PLAY) return;
+    this._curseFumble();
     this._interactions();
     if (this.phase !== PHASE.PLAY) return;
     this._contests();
@@ -1335,6 +1342,8 @@ export class MatchSim {
   }
 
   _execute(p, plan) {
+    if (p.cursed) plan = this._cursePlan(p, plan);
+    if (!plan) return;
     const { info } = plan;
     let vel = plan.vel;
     // 500+ shots are struck exactly as solved: no aiming error, no speed error, no matter how weak the tap
@@ -1342,7 +1351,7 @@ export class MatchSim {
       if (plan.from && plan.from.y !== this.ball.p.y) this.ball.p.y = plan.from.y;
       return this._release(p, vel, plan.spin, info);
     }
-    const a = p.a, em0 = p.glitch ? 0 : this._errMul(p);
+    const a = p.a, em0 = p.glitch || p.cursed ? 0 : this._errMul(p);
     // admin cards: passes / shots are (near) perfect. "The Shawky" (p.glitch): em0 is already 0 above, so
     // every error multiplier below is exactly zero — instant, perfectly accurate passing and shooting from
     // anywhere, not just "near" perfect.
@@ -1416,6 +1425,51 @@ export class MatchSim {
   }
 
   // assisted shooting: keep the (error-perturbed) shot inside the frame, reducing the error if needed
+  // THE NII (p.cursed): rewrites whatever he tried to do. Any shot (open play, header, free kick, penalty) is
+  // put straight into his OWN goal, like the Shawky's teleport but at the wrong end (worth 10, see _goal); in
+  // a shootout it just dribbles backwards (a miss) so the shootout still resolves. Anything else becomes an
+  // exact pass to the nearest opponent. Deterministic: no rng.
+  _cursePlan(p, plan) {
+    const k = plan.info.kind, team = p.team;
+    if (plan.info.shot || CURSED_SHOT_KINDS.has(k)) {
+      const info = { kind: k, pass: false, shot: false, target: -1, point: null, power: plan.info.power ?? 0.6, cursed: true };
+      if (this.shootout) return { vel: { x: -7, y: 0, z: 0 }, spin: { x: 0, y: 0, z: 0 }, info, from: plan.from };
+      const ox = this.ownGoalX(team);
+      const tz = (p.hash + Math.round(this.t * 10)) % 2 ? GOAL.HW - 0.6 : -(GOAL.HW - 0.6);
+      info.glitch = true; info.glitchTo = { x: ox, y: 1.1, z: tz };
+      return { vel: { x: Math.sign(ox) * 9, y: 0, z: 0 }, spin: { x: 0, y: 0, z: 0 }, info, from: plan.from };
+    }
+    let opp = null, bd = 1e9;
+    for (const o of this.teamList[1 - team]) {
+      if (o.sentOff) continue;
+      const d = Math.hypot(o.x - p.x, o.z - p.z);
+      if (d < bd) { bd = d; opp = o; }
+    }
+    if (!opp) return plan;
+    const kind = k === 'cross' ? 'lob' : ['lob', 'punt', 'throw', 'through', 'gkthrow'].includes(k) ? k : 'ground';
+    return this._plan(p, kind, { target: opp.idx, power: plan.info.power ?? 0.6 }) || plan;
+  }
+  // THE NII on the ball: loses it almost at once, rolled straight to the nearest opponent.
+  _curseFumble() {
+    const b = this.ball, t = this.t, p = this.owner();
+    if (!p || !p.cursed || t - (p.gainT ?? t) < 0.15) return;
+    let opp = null, bd = 1e9;
+    for (const o of this.teamList[1 - p.team]) {
+      if (o.sentOff) continue;
+      const d = Math.hypot(o.x - b.p.x, o.z - b.p.z);
+      if (d < bd) { bd = d; opp = o; }
+    }
+    if (!opp) return;
+    const dx = opp.x - b.p.x, dz = opp.z - b.p.z, dd = Math.hypot(dx, dz) || 1, sp = Math.min(20, 4 + dd * 0.8);
+    b.owner = -1; b.inHands = false;
+    b.v = { x: (dx / dd) * sp, y: 0, z: (dz / dd) * sp }; b.w = { x: 0, y: 0, z: 0 };
+    b.lastTouch = p.idx; b.lastTeam = p.team; b.intended = opp.idx;
+    p.cool.touch = t + 0.6; p.holdStart = null; p.drib = null; p.windup = 0;
+    this.lastLoss[p.team] = { idx: p.idx, t };
+    this.pendingPass = null; this.path = null; this.nextPredict = 0;
+    this.fxPush('kick', { s: 6 });
+  }
+
   _keepOnFrame(p, ideal, noisy, spin) {
     const side = this.dir[p.team];
     const b = this.ball;
@@ -1736,6 +1790,9 @@ export class MatchSim {
     // a shot deflected/parried in by the defending side still belongs to the shooter
     if (toucher.team !== scoring && shot && shot.team === scoring && t - shot.t < 4) toucher = this.players[shot.by];
     const og = toucher.team !== scoring;
+    // THE NII (p.cursed): each of his own goals counts as 10
+    const worth = og && toucher.cursed ? 10 : 1;
+    this.score[scoring] += worth - 1;
     this.shotTracker.onGoal();
     const minute = this.goalMinute();
     this.lastAssist = null;
@@ -1743,11 +1800,11 @@ export class MatchSim {
       toucher.st.goals++;
       const lk = this.passLink[scoring];
       if (lk && lk.to === toucher.idx && lk.from !== toucher.idx && t - lk.t < 8) { this.players[lk.from].st.assists++; this.lastAssist = lk; }
-    } else toucher.st.og++;
+    } else toucher.st.og += worth;
     const ll = this.lastLoss[1 - scoring];
     if (ll && t - ll.t < 10 && !og) this.players[ll.idx].st.err++;
     this.passLink = [null, null]; this.lastLoss = [null, null];
-    this.gk(1 - scoring).st.conceded++;
+    this.gk(1 - scoring).st.conceded += worth;
     let assistId = null;
     if (!og) {
       const lk = this.lastAssist;
@@ -1759,7 +1816,7 @@ export class MatchSim {
       }
     }
     this.lastAssist = null;
-    this.scorers.push({ playerId: toucher.data.id, team: this.sideName(scoring), minute, ownGoal: og, name: toucher.data.name, assistId });
+    for (let i = 0; i < worth; i++) this.scorers.push({ playerId: toucher.data.id, team: this.sideName(scoring), minute, ownGoal: og, name: toucher.data.name, assistId });
     this.emit({ type: 'goal', team: this.sideName(scoring), playerId: toucher.data.id, playerName: toucher.data.name, minute, ownGoal: og, score: [...this.score] });
     this.fxPush('goal', { team: scoring, pi: toucher.idx, og: og ? 1 : 0 });
     this.phase = PHASE.GOAL; this.phaseT = t; this.goalT = t; this.skipReq = false;
@@ -2151,6 +2208,7 @@ export class MatchSim {
     // keeps going (its trajectory already aims at a top corner, see _plan's `p.glitch` block above).
     const skGlitch = b.kicker >= 0 ? this.players[b.kicker] : null;
     if (skGlitch && skGlitch.team !== g.team && (skGlitch.glitch || b.sure === b.kickT)) return false;
+    if (skGlitch && skGlitch.cursed && b.sure === b.kickT) return false; // THE NII's own goal: his keeper can't stop it
     // an admin card's shot beats the keeper (unless he's an admin keeper himself); decided once per shot
     const sk = b.kicker >= 0 ? this.players[b.kicker] : null;
     if (sk && sk.team !== g.team && bst(sk, 'sho') > 0 && b.beatKick !== b.kickT) {
