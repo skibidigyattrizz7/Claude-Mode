@@ -793,6 +793,10 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
   const now = UT.storePacks(PR.ALL_PACKS_ON_SALE_FROM);
   assert.equal(now.filter((p) => p.promo).length, PR.PROMOS.length, 'every promo pack on sale');
   assert.ok(!now.some((p) => p.adminOnly), 'Admin Vault stays out of the store');
+  // admin Store packs list: off hides any pack, on sells a promo pack outside its live weeks; Admin Vault never
+  const cfg = { packsEnabled: true, promosEnabled: true, disabledPacks: ['gold', 'promo_toty'], forcedPacks: ['promo_fiesta', 'adminvault'] };
+  const ids = UT.storePacks(early, cfg).map((p) => p.id);
+  assert.ok(!ids.includes('gold') && !ids.includes('promo_toty') && ids.includes('promo_fiesta') && !ids.includes('adminvault'));
 });
 
 test('promos: SBCs and objectives award promo players; saves with promo/TOTW cards migrate', () => {
@@ -1275,7 +1279,7 @@ test('B2: +500 real players — every club stays a valid Career starting squad (
 });
 
 test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "infinite" stats that stay '
-  + 'math-safe, ~0.0005 odds in the Secret Vault pack + ~0.005 in the admin-only Admin Vault pack only, '
+  + 'math-safe, ~0.001 odds in the Secret Vault pack + ~0.005 in the admin-only Admin Vault pack only, '
   + 'never admin-grantable', () => {
   const card = SC.secretCard();
   assert.equal(card.special, 'secret');
@@ -1328,7 +1332,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   for (let i = 0; i < N; i++) { const items = UT.openPack(SC.SECRET_PACK_ID, new Set(), new Rng(`secret-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) hits++; if (items.some((it) => it.pid === SC.SECRET_CARD_ID)) shawky++; }
   const nv = SC.SECRET_VERSIONS.length;
   assert.ok(hits >= N * SC.SECRET_ODDS * nv * 0.6 && hits <= N * SC.SECRET_ODDS * nv * 1.4, `expected ~${N * SC.SECRET_ODDS * nv} hits, got ${hits}`);
-  assert.ok(shawky >= 5 && shawky <= 45, `The Shawky alone keeps ~${N * SC.SECRET_ODDS}, got ${shawky}`);
+  assert.ok(shawky >= N * SC.SECRET_ODDS * 0.4 && shawky <= N * SC.SECRET_ODDS * 1.8, `The Shawky alone keeps ~${N * SC.SECRET_ODDS}, got ${shawky}`);
   let avHits = 0;
   for (let i = 0; i < N; i++) { const items = UT.openPack(UT.ADMIN_VAULT_PACK_ID, new Set(), new Rng(`av-${i}`)); if (items.some((it) => SC.isSecretCardId(it.pid))) avHits++; }
   assert.ok(avHits >= N * UT.ADMIN_VAULT_SECRET_ODDS * nv * 0.8 && avHits <= N * UT.ADMIN_VAULT_SECRET_ODDS * nv * 1.2, `expected ~${N * UT.ADMIN_VAULT_SECRET_ODDS * nv} admin-vault hits, got ${avHits}`);

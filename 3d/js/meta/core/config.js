@@ -11,6 +11,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
   promosEnabled: true,
   packsEnabled: true,
   disabledPacks: [], // pack ids hidden from the store regardless of promosEnabled/packsEnabled
+  forcedPacks: [], // pack ids the owner put on sale even when their promo isn't live (admin Store packs list)
   packPriceMult: 1, // multiplies every pack's listed price
   rewardMult: 1, // multiplies coin rewards (post-match, objectives, SBCs, rivals, squad battles)
   marketTaxPct: 5, // % kept back on a Player Market sale (see pmarket.js afterTax)
@@ -29,6 +30,7 @@ export function getConfig() {
   if (!live || typeof live !== 'object') return { ...CONFIG_DEFAULTS };
   const out = { ...CONFIG_DEFAULTS, ...live };
   out.disabledPacks = Array.isArray(live.disabledPacks) ? live.disabledPacks.slice() : CONFIG_DEFAULTS.disabledPacks;
+  out.forcedPacks = Array.isArray(live.forcedPacks) ? live.forcedPacks.slice() : CONFIG_DEFAULTS.forcedPacks;
   out.packPriceMult = Number.isFinite(live.packPriceMult) && live.packPriceMult > 0 ? live.packPriceMult : CONFIG_DEFAULTS.packPriceMult;
   out.rewardMult = Number.isFinite(live.rewardMult) && live.rewardMult > 0 ? live.rewardMult : CONFIG_DEFAULTS.rewardMult;
   out.marketTaxPct = Number.isFinite(live.marketTaxPct) && live.marketTaxPct >= 0 && live.marketTaxPct <= 50 ? live.marketTaxPct : CONFIG_DEFAULTS.marketTaxPct;

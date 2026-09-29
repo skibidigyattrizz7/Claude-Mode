@@ -1276,6 +1276,7 @@ function startOnlineServices() {
       return {
         promosEnabled: f.promosEnabled !== false, packsEnabled: f.packsEnabled !== false,
         disabledPacks: Object.keys(packs).filter((k) => packs[k] && packs[k].enabled === false),
+        forcedPacks: Object.keys(packs).filter((k) => packs[k] && packs[k].enabled === true),
         packPriceMult: typeof f.packPriceMult === 'number' && f.packPriceMult > 0 ? f.packPriceMult : 1,
         rewardMult: c && c.rewards && typeof c.rewards.multiplier === 'number' ? c.rewards.multiplier : 1,
         marketTaxPct: c && c.market && typeof c.market.tax === 'number' ? Math.round(c.market.tax * 1000) / 10 : 5,

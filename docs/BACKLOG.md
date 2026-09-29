@@ -151,4 +151,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 ## Sep 29 (owner)
 - DONE: every promo pack on sale in the Store from week 39 (`ALL_PACKS_ON_SALE_FROM` in promos.js); Admin Vault stays out.
 - DONE: Manuel Neuer gets three 99 cards (Flashback, Moments, Fiesta).
-- TODO: admin panel list to add/remove any pack from the Store (uses server config `packs.<id>.enabled`).
+- DONE: admin Global Config tab has a "Store packs" list: tick/untick any pack (not Admin Vault) for everyone (server config `packs.<id>.enabled`).
+- DONE: Secret Vault secret-card chance 0.1% per card (was 0.05%). Owner said "0.1"; if they meant 10%, change SECRET_ODDS.

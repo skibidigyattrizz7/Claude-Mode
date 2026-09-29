@@ -12,6 +12,7 @@ import { NATIONS } from '../core/data.js';
 import { sendLocalGift } from './giftsview.js';
 import { getConfig, syncConfig } from './config.js';
 import { PROMOS } from '../core/promos.js';
+import { PACKS, storePacks } from '../core/ut.js';
 import { PLAYSTYLES, bestPlaystylesFor } from '../core/physique.js';
 import { psBadge, ensurePsiStyles } from './playstyleicons.js';
 
@@ -448,7 +449,42 @@ export function configPanel(app, { level } = {}) {
     row('packsInShop', 'Packs available in the shop'),
     h('label', { class: 'pm-cc-stat' }, h('span', null, 'Shop price multiplier'), mult, multOut),
     h('p', { class: 'pm-dim' }, app.online && app.online.config ? 'Synced to the online service when reachable.' : 'Local to this device: the online config service is not connected yet.')),
+    storePacksPanel(app),
     level === 'super' ? resetEveryonePanel(app) : h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('reset'), ' Reset everyone'), h('p', { class: 'pm-dim' }, 'Owner Access only.')));
+}
+
+/** Store packs on/off: every pack except Admin Vault. Saved to the server config `packs.<id>.enabled`
+ * (false hides it, true puts it on sale even when its promo isn't live), so it applies to every player. */
+function storePacksPanel(app) {
+  const owner = app.online && app.online.owner;
+  const online = !!(owner && typeof owner.setConfig === 'function');
+  const status = h('small', { class: 'pm-dim' });
+  const list = h('div', { class: 'pm-admin-packs' });
+  const draw = () => {
+    const onSale = new Set(storePacks().map((p) => p.id));
+    clear(list);
+    for (const p of PACKS.filter((x) => !x.adminOnly)) {
+      list.appendChild(h('label', { class: 'pm-toggle' },
+        h('input', { type: 'checkbox', checked: onSale.has(p.id), disabled: !online, onchange: async (e) => {
+          const on = e.target.checked;
+          const cur = (app.online.config && app.online.config.current && app.online.config.current.packs) || {};
+          const packs = {};
+          for (const [k, v] of Object.entries(cur)) if (v && typeof v === 'object') packs[k] = { ...v };
+          packs[p.id] = { ...(packs[p.id] || {}), enabled: on };
+          status.textContent = 'Saving…';
+          const r = await safeCall(() => owner.setConfig('packs', packs), { ok: false });
+          if (r && r.ok !== false) { status.textContent = ''; app.toast(`${p.name} ${on ? 'added to' : 'removed from'} the Store.`, 'good'); }
+          else { status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`; }
+          draw(); app.refresh();
+        } }),
+        h('span', null, p.name)));
+    }
+  };
+  draw();
+  return h('section', { class: 'pm-panel pm-admin-sec' },
+    h('h3', null, icon('gear'), ' Store packs'),
+    h('p', { class: 'pm-dim' }, online ? 'Tick a pack to sell it in the Store, untick to remove it. Applies to every player.' : 'Needs the online service: sign in to change the Store for everyone.'),
+    list, status);
 }
 
 /** Owner-only "reset everyone": bumps the server `features.resetEpoch` so every device wipes its local

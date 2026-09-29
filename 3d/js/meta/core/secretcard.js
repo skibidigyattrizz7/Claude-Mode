@@ -1,5 +1,5 @@
 // Secret card (owner request): a single, wholly fictional ultra-rare card — "The Shawky" — that exists in
-// the Secret Vault pack (`SECRET_PACK_ID`) at `SECRET_ODDS` (0.0005) and the admin-only Admin Vault pack
+// the Secret Vault pack (`SECRET_PACK_ID`) at `SECRET_ODDS` (0.001, 0.1% each, owner Sep 29) and the admin-only Admin Vault pack
 // (`ADMIN_VAULT_PACK_ID`, see ut.js) at `ADMIN_VAULT_SECRET_ODDS` (0.005), and cannot be granted directly by
 // any admin level — pulling him from one of those two packs is the only way in or out of a club. He is not
 // tied to any real player (no name/nation to collide with realplayers.js/realregulars.js, no `person`), and
@@ -25,7 +25,7 @@ import { POSITIONS } from './data.js';
 
 export const SECRET_CARD_ID = 'secret_ghost';
 export const SECRET_PACK_ID = 'secret';
-export const SECRET_ODDS = 0.0005;
+export const SECRET_ODDS = 0.001;
 
 // More versions of the same ∞ glitch card (owner request, Sep 28): each has its own name + nation and
 // otherwise identical powers. They share the Secret slot's odds (the slot picks one version at random), and

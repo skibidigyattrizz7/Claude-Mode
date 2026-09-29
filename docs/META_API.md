@@ -178,7 +178,7 @@ from `club` at read time, and always one consistent field for every "same league
 A single, wholly fictional ultra-rare card (`SECRET_CARD_ID`), kept out of `db.all`/`db.players` exactly like
 admin cards (resolved lazily via `addResolver`) so no ordinary pool can ever surface it.
 - `secretCard()` → the card (always the same object).
-- `SECRET_PACK_ID` (`'secret'`) — the **only** pack it can ever come from, at `SECRET_ODDS` (0.0005); every
+- `SECRET_PACK_ID` (`'secret'`) — the **only** pack it can ever come from, at `SECRET_ODDS` (0.001); every
   other pull from that slot is a guaranteed Legend of the Game instead. `UT.PACK_BY_ID[SECRET_PACK_ID]`.
 - No admin level can grant it — `admin.js#grantPlayer` refuses `SECRET_CARD_ID` outright.
 

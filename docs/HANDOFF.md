@@ -81,7 +81,7 @@ Owner videos/screens: extract frames with
 - Real players must use real facts; unknown facts show "Unknown" (`bios.js`). Test: every BIOS key must be a real player. Removed Ahmed Refaat (died 2024).
 - "Couldn't download the 3D files" on the Chromebook came from an S3 mirror/proxy missing files, not our site.
 - Online "connect failed": the likely cause was restrictive networks, so we added TCP/TLS TURN servers and the Supabase relay fallback. This is untested live.
-- Secret card (The Shawky, EGY): only from the Secret Vault (0.05%) or the Admin Vault (0.5%), never admin-grantable. Pushed untested on the owner's request, so if something's broken, check this first.
+- Secret card (The Shawky, EGY): only from the Secret Vault (0.1% each) or the Admin Vault (0.5%), never admin-grantable. Pushed untested on the owner's request, so if something's broken, check this first.
 
 ## 10. How a good turn looks
 1. Read the request, then check `BACKLOG.md` for related notes.

@@ -98,7 +98,7 @@ export const PACKS = [
     slots: [{ n: 1, odds: { lotg: 1 } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
   },
   // Secret card (owner request): one of exactly two packs that can ever contain it (the other is the
-  // admin-only Admin Vault pack below, Sep 28), at SECRET_ODDS (0.0005) — every other pull from that slot
+  // admin-only Admin Vault pack below, Sep 28), at SECRET_ODDS (0.001) — every other pull from that slot
   // is a guaranteed Legend of the Game instead, so the pack is worth opening on its own merits and the
   // Secret card is a true bonus, not the sole reason to buy it. Publicly on sale, normal odds.
   {
@@ -120,12 +120,13 @@ export const PACKS = [
 for (const pr of PROMOS) PACKS.push(promoPack(pr));
 export const PACK_BY_ID = Object.fromEntries(PACKS.map((p) => [p.id, p]));
 /** Packs on sale right now: promo packs while their campaign is live (all of them since week 39, see promos.js), everything gated by
- * the owner's global config (packs enabled, per-pack disable list, promos on/off — see config.js). */
+ * the owner's global config (packs enabled, per-pack on/off list from the admin Store packs panel, promos on/off — see config.js). */
 export function storePacks(week = weekNumber(), cfg = getConfig()) {
   if (!cfg.packsEnabled) return [];
-  const disabled = new Set(cfg.disabledPacks || []);
-  // Admin Vault (adminOnly): never on sale, whatever the owner's disabled-packs config says.
-  return PACKS.filter((p) => !p.adminOnly && !disabled.has(p.id) && (!p.promo || (cfg.promosEnabled && isPromoPackOnSale(p.promo, week))));
+  const disabled = new Set(cfg.disabledPacks || []), forced = new Set(cfg.forcedPacks || []);
+  // Admin Vault (adminOnly): never on sale, whatever the owner's packs config says.
+  return PACKS.filter((p) => !p.adminOnly && !disabled.has(p.id)
+    && (!p.promo || forced.has(p.id) || (cfg.promosEnabled && isPromoPackOnSale(p.promo, week))));
 }
 /** A pack's price after the owner's global multiplier (see config.js). UIs should charge/display this,
  * not `pack.price`, so a config change takes effect without a redeploy. */
