@@ -102,18 +102,19 @@ export function playersPanel(app) {
     const f = st.filter;
     const rows = !f ? st.items : st.items.filter((u) => [u.username, u.name, u.clubName, u.friendCode, u.id].some((x) => x && String(x).toLowerCase().includes(f)));
     count.textContent = `${rows.length} of ${st.items.length} players (accounts and device guests), online first.`;
-    const sorted = rows.slice().sort((x, y) => (y.online ? 1 : 0) - (x.online ? 1 : 0) || String(y.lastSeenAt || '').localeCompare(String(x.lastSeenAt || '')));
+    // Vinson-cursed players first (blood red rows) so the owner can release them fast
+    const sorted = rows.slice().sort((x, y) => (y.vinsonPhase ? 1 : 0) - (x.vinsonPhase ? 1 : 0) || (y.online ? 1 : 0) - (x.online ? 1 : 0) || String(y.lastSeenAt || '').localeCompare(String(x.lastSeenAt || '')));
     const list = h('ul', { class: 'pm-plist' }, sorted.map((u) => {
       const name = displayName(u);
       const open = () => app.push(playerDetailView(u.id, u));
       const meta = [u.account ? 'Account' : 'Guest', u.role !== 'player' ? u.role : null, u.clubName || (u.hasSave ? 'Saved club' : null),
         u.infinite ? '∞ coins' : `${fmtNum(u.coins)} coins`, `Rating ${u.rating}`, `${u.wins}-${u.draws}-${u.losses}`].filter(Boolean).join(' · ');
       const btn = (label, ico, onclick, cls = '') => h('button', { class: `pm-btn pm-btn--sm ${cls}`, type: 'button', onclick: (e) => { e.stopPropagation(); onclick(); } }, ico ? icon(ico) : null, ico ? ` ${label}` : label);
-      return h('li', { class: `pm-prow ${u.banned ? 'is-banned' : ''}`, 'data-player': u.id },
+      return h('li', { class: `pm-prow ${u.banned ? 'is-banned' : ''} ${u.vinsonPhase ? 'is-vinson' : ''}`, 'data-player': u.id },
         h('button', { class: 'pm-prow-main', type: 'button', title: `Open ${name}`, onclick: open },
           h('span', { class: 'pm-prow-av', 'aria-hidden': 'true' }, name.slice(0, 1).toUpperCase(), h('i', { class: `pm-onlinedot ${u.online ? 'is-on' : ''}` })),
           h('span', { class: 'pm-prow-who' },
-            h('b', null, name, u.banned ? h('span', { class: 'pm-prow-flag' }, u.bannedUntil ? 'Timeout' : 'Banned') : null, ...restrictionChips(u.restrictions)),
+            h('b', null, name, u.vinsonPhase ? h('span', { class: 'pm-prow-flag pm-prow-flag--vinson' }, u.vinsonPhase === 'banned' ? 'Vinson ban' : u.vinsonPhase === 'doom' ? 'Vinson countdown' : 'Vinson curse') : u.banned ? h('span', { class: 'pm-prow-flag' }, u.bannedUntil ? 'Timeout' : 'Banned') : null, ...restrictionChips(u.restrictions)),
             h('small', null, meta),
             h('small', null, `${u.friendCode ? `Code ${u.friendCode} · ` : ''}Joined ${day(u.createdAt)} · Last seen ${u.online ? 'now' : u.lastSeenAt ? when(u.lastSeenAt) : '-'}`))),
         h('div', { class: 'pm-prow-acts' },
@@ -124,7 +125,7 @@ export function playersPanel(app) {
             ? btn('Unban', null, () => quick('Unban', () => mod.unban(u.id)))
             : [btn('Timeout', null, () => quick('Timeout (1 day)', () => mod.ban(u.id, 'Timeout', new Date(Date.now() + 1440 * 60000)), `Time out ${name} for 1 day?`, true)),
               btn('Ban', 'ban', () => { const reason = (prompt(`Ban ${name}. Reason (shown to the player):`, 'Owner decision') || '').trim(); if (reason) quick('Ban', () => mod.ban(u.id, reason, null)); }, 'pm-btn--danger')],
-          u.role === 'owner' ? null : btn('Lift Vinson curse', null, () => quick('Lift Vinson curse', () => app.online.vinson.lift(u.id))),
+          u.vinsonPhase && u.role !== 'owner' ? btn('Lift Vinson curse', null, () => quick('Lift Vinson curse', () => app.online.vinson.lift(u.id)), 'pm-btn--vinson') : null,
           btn('Manage', null, open, 'pm-btn--accent'),
           u.role === 'owner' ? null : btn('Delete', null, () => quick('Delete player', () => svc.deletePlayer(u.id), `Delete ${name} completely? Their club, coins, saves and messages are gone for good.`, true), 'pm-btn--danger')));
     }));
@@ -325,7 +326,7 @@ export function playerDetailView(id, summary = null) {
               },
             }, 'Ban / timeout'),
             p.banned ? h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Unban', () => mod.unban(id)); if (r && r.ok) reload(); } }, 'Unban') : null,
-            h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Lift Vinson curse', () => app.online.vinson.lift(id)); if (r && r.ok) reload(); } }, 'Lift Vinson curse')),
+            p.vinsonPhase ? h('button', { class: 'pm-btn pm-btn--vinson', onclick: async () => { const r = await run(app, 'Lift Vinson curse', () => app.online.vinson.lift(id)); if (r && r.ok) reload(); } }, 'Lift Vinson curse') : null),
           h('div', { class: 'pm-admin-results' }, RESTRICTIONS.map(([k, label]) => {
             // length: number + unit like the ban above (blank = permanent); DURATIONS was removed in a refactor
             // but this row still used it, which crashed the whole Manage screen

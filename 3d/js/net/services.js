@@ -1375,7 +1375,14 @@ function sanitizeAdminPlayer(p) {
     createdAt: isoOr(p.createdAt), lastSeenAt: isoOr(p.lastSeenAt), lastLoginAt: isoOr(p.lastLoginAt),
     account: p.account === true || !!base.username, infinite: p.infinite === true, restrictions: sanitizeRestrictions(p.restrictions),
     rating: n(p.rating), division: n(p.division), rivalsDivision: n(p.rivalsDivision), wins: n(p.wins), draws: n(p.draws), losses: n(p.losses),
-    hasSave: p.hasSave === true, saveAt: isoOr(p.saveAt), squadRating: typeof p.squadRating === 'number' ? n(p.squadRating) : null };
+    hasSave: p.hasSave === true, saveAt: isoOr(p.saveAt), squadRating: typeof p.squadRating === 'number' ? n(p.squadRating) : null,
+    vinsonPhase: vinsonPhaseOf(p) };
+}
+/** Active Vinson curse on an owner-list / moderation row ('doom' | 'banned' | 'locked'), else null. */
+const VINSON_BAN_REASON = "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON";
+function vinsonPhaseOf(p) {
+  if (['doom', 'banned', 'locked'].includes(p.vinsonPhase)) return p.vinsonPhase;
+  return p.banned === true && p.banReason === VINSON_BAN_REASON ? 'banned' : null;
 }
 /** { key: true | ISO } for the known restriction keys only. */
 export function sanitizeRestrictions(r) {
@@ -1396,7 +1403,7 @@ export function sanitizeModPlayer(p) {
     id: p.id, username: typeof p.username === 'string' ? cleanStr(p.username, 16, '') || null : null, name: cleanStr(p.name, 16, 'Player'),
     role: roleOf(p.role) || 'player', friendCode: typeof p.friendCode === 'string' && FRIEND_CODE_RE.test(p.friendCode) ? p.friendCode : null,
     coins: n(p.coins), rating: n(p.rating), rivalsDivision: n(p.rivalsDivision), wins: n(p.wins), draws: n(p.draws), losses: n(p.losses),
-    banned: p.banned === true, banReason: typeof p.banReason === 'string' ? cleanStr(p.banReason, 200, '') : null,
+    banned: p.banned === true, banReason: typeof p.banReason === 'string' ? cleanStr(p.banReason, 200, '') : null, vinsonPhase: vinsonPhaseOf(p),
     bannedUntil: isoOr(p.bannedUntil), bannedAt: isoOr(p.bannedAt), createdAt: isoOr(p.createdAt), lastLoginAt: isoOr(p.lastLoginAt), lastSeenAt: isoOr(p.lastSeenAt),
   };
 }

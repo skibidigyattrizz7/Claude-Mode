@@ -187,4 +187,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): ∞ sign lopsided on Chromebooks (one loop bigger): every ∞ in the UI is now a drawn symmetric sign (dom.js infHtml/infNodes, .ps-inf in meta.css).
 - DONE (Sep 29): squad picker hides players already in the XI/bench (and other versions of them); panel is taller; each row shows flag + nation + the six stats.
 - DONE (Sep 29): admin commands near-instant: presence heartbeat 25 s -> 3 s (PRESENCE_MS, server throttle 3600/h, migration 016); Store/UT home redraw when the config changes; owner DMs pop up (Message from X) next to announcements; message box restyled (plain dark panel); Store packs Add all / Remove all; Send card modal has "Add to club" (owner patch, straight into their club) next to Gift.
-- TODO (Sep 29): check the Vinson "lift curse" command and unbanning in general work.
+- DONE (Sep 29): checked Vinson lift + unban: both work server-side (one player lifted OK).
+- DONE (Sep 29): owner panel: Vinson-cursed players show first in blood red (Vinson ban/curse tag); 'Lift Vinson curse' only on cursed players (migration 017 adds vinsonPhase to admin_players).

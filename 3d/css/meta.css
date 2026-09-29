@@ -1735,3 +1735,10 @@ sup .ps-inf { width: .95em; height: .5em; }
   .pm-prow.pm-prow--pick { flex-wrap: wrap; }
   .pm-prow--pick .pm-prow-stats { order: 3; width: 100%; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
+
+/* Owner panel: Vinson-cursed players stand out in blood red so the owner can release them (owner, Sep 29) */
+.pm-prow.is-vinson, html[data-ui="stadium"] .pm-prow.is-vinson { background: #3a0507; border: 1px solid #8a0b10; box-shadow: inset 4px 0 0 #b3000c; }
+.pm-prow.is-vinson .pm-prow-who b { color: #ff4d55; }
+.pm-prow-flag--vinson { background: #b3000c; color: #fff; }
+.pm-btn.pm-btn--vinson { background: #b3000c; border-color: #b3000c; color: #fff; }
+.pm-btn.pm-btn--vinson:hover, .pm-btn.pm-btn--vinson:focus-visible { background: #d1000f; border-color: #d1000f; }
