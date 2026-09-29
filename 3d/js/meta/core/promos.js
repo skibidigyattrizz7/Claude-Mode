@@ -130,6 +130,10 @@ export function promoSchedule(week = weekNumber(), n = 6) {
   return Array.from({ length: n }, (_, i) => ({ week: week + i, promo: promoOfWeek(week + i) }));
 }
 export const isPromoLive = (id, week = weekNumber()) => livePromos(week).includes(id) && isPromoReleased(id, week);
+/** Owner release (Sep 29, week 39): from this week on every campaign's pack is on sale in the Store, whatever the
+ * calendar says. Only the Store uses this; rotation, objectives, SBCs and the market still follow the calendar. */
+export const ALL_PACKS_ON_SALE_FROM = 39;
+export const isPromoPackOnSale = (id, week = weekNumber()) => !!PROMO_BY_ID[id] && (week >= ALL_PACKS_ON_SALE_FROM || isPromoLive(id, week));
 
 // ---------- boosts ----------
 /** In-Form / TOTW boost scaled to the base card: +3 (low 70s) … +8 (90+). */
@@ -354,6 +358,16 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
       const rmax = PROMO_BY_ID[id].range[1];
       const target = Math.min(rmax, salahBase.ovr + 8);
       if (target > salahBase.ovr) make(salahBase, id, target, { milestone: 'Egypt caps & goals record' });
+    }
+  }
+
+  // Owner request (Sep 29): Neuer gets three 99 versions, one in each campaign whose range reaches 99.
+  const neuerBase = actives.find((p) => p.person === 'neuer') || icons.find((p) => p.person === 'neuer');
+  if (neuerBase) {
+    const moments = { flashback: '2014 World Cup sweeper-keeper', moments: '2013 treble wall' };
+    for (const id of ['flashback', 'moments', 'fiesta']) {
+      if (!PROMO_BY_ID[id] || out.some((p) => p.special === id && p.baseId === neuerBase.id)) continue;
+      make(neuerBase, id, 99, moments[id] ? { moment: moments[id] } : {});
     }
   }
 

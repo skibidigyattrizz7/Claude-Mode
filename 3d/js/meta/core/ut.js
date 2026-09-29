@@ -9,7 +9,7 @@ import { load, save } from './storage.js';
 import { ensureTacticSets, activeTactics } from './tactics.js';
 import { totwCards } from './totw.js';
 import { weekNumber } from './calendar.js';
-import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isCardReleased, releasedLivePromos } from './promos.js';
+import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isPromoPackOnSale, isCardReleased, releasedLivePromos } from './promos.js';
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 import { restoreCustomCards } from './customreg.js';
 import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, SECRET_VERSIONS, secretCard, secretCards } from './secretcard.js';
@@ -119,13 +119,13 @@ export const PACKS = [
 // V3: one pack per promo campaign (sold in the Store while the campaign is live; always valid as a reward)
 for (const pr of PROMOS) PACKS.push(promoPack(pr));
 export const PACK_BY_ID = Object.fromEntries(PACKS.map((p) => [p.id, p]));
-/** Packs on sale right now: promo packs only while their (released) campaign is live, everything gated by
+/** Packs on sale right now: promo packs while their campaign is live (all of them since week 39, see promos.js), everything gated by
  * the owner's global config (packs enabled, per-pack disable list, promos on/off — see config.js). */
 export function storePacks(week = weekNumber(), cfg = getConfig()) {
   if (!cfg.packsEnabled) return [];
   const disabled = new Set(cfg.disabledPacks || []);
   // Admin Vault (adminOnly): never on sale, whatever the owner's disabled-packs config says.
-  return PACKS.filter((p) => !p.adminOnly && !disabled.has(p.id) && (!p.promo || (cfg.promosEnabled && isPromoLive(p.promo, week))));
+  return PACKS.filter((p) => !p.adminOnly && !disabled.has(p.id) && (!p.promo || (cfg.promosEnabled && isPromoPackOnSale(p.promo, week))));
 }
 /** A pack's price after the owner's global multiplier (see config.js). UIs should charge/display this,
  * not `pack.price`, so a config change takes effect without a redeploy. */

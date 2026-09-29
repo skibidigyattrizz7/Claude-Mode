@@ -787,8 +787,12 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
     assert.equal(getPlayer(items[0].pid).special, pr.id, 'promo card leads the pack');
     assert.equal(UT.packFlare(items), 'walkout');
   }
-  const live = PR.livePromos();
-  assert.ok(UT.storePacks().filter((p) => p.promo).every((p) => live.includes(p.promo)));
+  // before the owner's all-packs release only live campaigns sell; from then on every promo pack does, never Admin Vault
+  const early = PR.ALL_PACKS_ON_SALE_FROM - 1;
+  assert.ok(UT.storePacks(early).filter((p) => p.promo).every((p) => PR.livePromos(early).includes(p.promo)));
+  const now = UT.storePacks(PR.ALL_PACKS_ON_SALE_FROM);
+  assert.equal(now.filter((p) => p.promo).length, PR.PROMOS.length, 'every promo pack on sale');
+  assert.ok(!now.some((p) => p.adminOnly), 'Admin Vault stays out of the store');
 });
 
 test('promos: SBCs and objectives award promo players; saves with promo/TOTW cards migrate', () => {
@@ -1007,7 +1011,7 @@ test('unreleased promo cards never appear in the AI market, packs, draft or obje
     assert.ok(items.every((it) => getPlayer(it.pid).special !== future.id), `market leaked ${future.id}`);
   }
   // the dedicated pack never shows in the store before release, and never grants the card as a "drop from any pack" bonus
-  assert.ok(!UT.storePacks(before).some((p) => p.promo === future.id));
+  assert.ok(!UT.storePacks(Math.min(before, PR.ALL_PACKS_ON_SALE_FROM - 1)).some((p) => p.promo === future.id));
   for (let seed = 0; seed < 200; seed++) {
     const items = UT.openPack('gold', new Set(), new Rng(`unreleased-gold-${seed}`));
     assert.ok(items.every((it) => getPlayer(it.pid).special !== future.id));

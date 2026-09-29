@@ -147,3 +147,8 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE 2026-09-29: in-match admin menu was never wired into the engine; now opens in every match for owner/mod (key ` or \, crown on touch), 29 effects, pauses offline, restyled (no purple gradient). Online: works when you HOST; a guest admin sees 'only works when you host' (guest relay needs a net/ change).
 - DONE 2026-09-29: keeper AI (sweeper claims, cross catch/punch by handling, real 1v1s: narrow angle, set, smother lunge; win ~40% / rounded ~30% / touch ~20% / pen ~8% vs avg keeper). Goals per match about the same.
 - DONE 2026-09-29: secret card 'Grumpy Patel' (India, owner's photo cut out, 3d/assets/cards/grumpy-patel.webp, own 0.05% / 0.5% chance); long card names shrink to fit instead of '...'.
+
+## Sep 29 (owner)
+- DONE: every promo pack on sale in the Store from week 39 (`ALL_PACKS_ON_SALE_FROM` in promos.js); Admin Vault stays out.
+- DONE: Manuel Neuer gets three 99 cards (Flashback, Moments, Fiesta).
+- TODO: admin panel list to add/remove any pack from the Store (uses server config `packs.<id>.enabled`).
