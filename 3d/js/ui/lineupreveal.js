@@ -168,7 +168,8 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
     const head = el('div', 'lr-head');
     const headText = el('div', 'lr-head-text');
     headText.append(el('span', 'lr-kicker', label), el('b', 'lr-team', team.name));
-    const skip = el('span', 'lr-skip', 'Tap or press any key to skip');
+    // owner (Sep 29): the card stages can't be skipped; once the whole XI is on the pitch, a tap / key starts the match
+    const skip = el('span', 'lr-skip', '');
     head.append(headText, skip);
 
     const stage = el('div', 'lr-stage');
@@ -200,7 +201,8 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
       const gone = () => { root.remove(); resolve(why); };
       if (calm) gone(); else setTimeout(gone, 220);
     };
-    const skipNow = () => { if (performance.now() - openedAt >= SKIP_GUARD_MS) finish('skipped'); };
+    let canSkip = false;
+    const skipNow = () => { if (canSkip && performance.now() - openedAt >= SKIP_GUARD_MS) finish('skipped'); };
     const onTap = (e) => { e.preventDefault(); skipNow(); };
     const swallow = (e) => { e.stopImmediatePropagation(); e.preventDefault(); };
     function onKey(e) { swallow(e); if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) skipNow(); }
@@ -250,6 +252,8 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
     // ---- the whole XI on a pitch, with the team name and rating
     const showFinal = () => {
       setPip(lines.length);
+      canSkip = true;
+      skip.textContent = 'Tap or press any key to start';
       root.classList.add('is-final');
       live.textContent = `${team.name}, rating ${ovr}, ${team.formation || ''}`;
       const wrap = el('div', 'lr-final');
