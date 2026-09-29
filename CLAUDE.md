@@ -33,6 +33,7 @@ If existing UI already uses one of these, flag it to the owner (with a screensho
 rather than silently keeping or adding more of it. See also `docs/UI_DIRECTION.md`.
 
 ## Other standing rules
+- Hosting: GitHub Pages is the live game. Ignore Render and Vercel completely (owner, Sep 29).
 - Don't change the online / multiplayer system unless it's really needed — it works.
 - Admin codes are owner-only secrets: never write them into repo files; store hashes only.
 - Supabase: never edit an applied migration; add a new numbered file, then rename it to
