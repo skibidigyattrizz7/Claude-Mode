@@ -168,3 +168,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): Evil Nickerson secret card (-∞ stats, cursed, EVIL tag, Kenya).
 - DONE (Sep 29): Perlita + Evil Perlita secret cards (∞ powers; evil = red design, EVIL on top; nation Kenya).
 - DONE (Sep 29): Evil Perlita has -∞ stats (cursed like THE NII). Evil Nickerson will be the same once the image is re-sent.
+- DONE (Sep 29): owner badge (Stadium) now a chamfered dark button like its neighbours, accent only on the crown + left edge.
+- DONE (Sep 29): Settings > UI colour: 10 swatches (theme default + 9), css/accent.css, applied before first paint by uistyle.js.
+- TODO (Sep 29): Club and Swaps screens lag when opened.

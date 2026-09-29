@@ -1,0 +1,22 @@
+/* Pitchside 3D — player-chosen UI colour (Settings > UI colour, owner request Sep 29). Overrides only the accent
+   tokens (--acc / --acc-ink / --acc-soft / --acc-hi) for both Classic and Stadium; "default" = no attribute, each
+   theme keeps its own accent. Loaded after theme-stadium.css so equal-specificity rules here win. Ink is chosen per
+   colour so accent buttons keep >= 4.5:1 text contrast. */
+html[data-accent="lime"], html[data-accent="lime"] .pm-root { --acc: #cdfb3c; --acc-ink: #0b0d10; --acc-soft: rgba(205,251,60,.16); --acc-hi: #dcff6a; }
+html[data-accent="orange"], html[data-accent="orange"] .pm-root { --acc: #ff6a1f; --acc-ink: #0a0f14; --acc-soft: rgba(255,106,31,.16); --acc-hi: #ff8447; }
+html[data-accent="red"], html[data-accent="red"] .pm-root { --acc: #ff4757; --acc-ink: #0a0f14; --acc-soft: rgba(255,71,87,.16); --acc-hi: #ff6b78; }
+html[data-accent="gold"], html[data-accent="gold"] .pm-root { --acc: #f5c542; --acc-ink: #0a0f14; --acc-soft: rgba(245,197,66,.16); --acc-hi: #ffd76a; }
+html[data-accent="green"], html[data-accent="green"] .pm-root { --acc: #34d987; --acc-ink: #06140d; --acc-soft: rgba(52,217,135,.16); --acc-hi: #5ce6a0; }
+html[data-accent="cyan"], html[data-accent="cyan"] .pm-root { --acc: #22d3ee; --acc-ink: #04141a; --acc-soft: rgba(34,211,238,.16); --acc-hi: #5ee0f3; }
+html[data-accent="blue"], html[data-accent="blue"] .pm-root { --acc: #4c8dff; --acc-ink: #050b16; --acc-soft: rgba(76,141,255,.18); --acc-hi: #74a7ff; }
+html[data-accent="pink"], html[data-accent="pink"] .pm-root { --acc: #ff4fa3; --acc-ink: #14050c; --acc-soft: rgba(255,79,163,.16); --acc-hi: #ff76b8; }
+html[data-accent="white"], html[data-accent="white"] .pm-root { --acc: #eef2f6; --acc-ink: #0b0d10; --acc-soft: rgba(238,242,246,.14); --acc-hi: #ffffff; }
+
+/* swatch picker (Settings) */
+.accent-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.accent-sw { width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); background: var(--sw); cursor: pointer; padding: 0;
+  display: grid; place-items: center; color: var(--sw-ink, #0b0d10); font-size: 18px; font-weight: 800; transition: transform 90ms ease-out, border-color .15s; }
+.accent-sw:hover { transform: translateY(-2px); }
+.accent-sw[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.18); }
+.accent-sw:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.accent-sw--default { background: conic-gradient(#cdfb3c 0 50%, #ff6a1f 50% 100%); }

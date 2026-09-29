@@ -654,10 +654,15 @@ html[data-ui="stadium"] .pm-admin-sec { border: 0; border-radius: 0; clip-path: 
 html[data-ui="stadium"] .pm-admin-sec h3 { font-size: 18px; letter-spacing: .06em; }
 html[data-ui="stadium"] .pm-admin-danger { background: var(--panel); box-shadow: inset 5px 0 0 var(--bad); }
 html[data-ui="stadium"] .pm-admin-danger h3::before { background: var(--bad); }
-html[data-ui="stadium"] .pm-adminbadge { border-radius: 0; clip-path: var(--shape-tag); border: 0; background: var(--panel3); color: var(--txt); padding: 6px 18px; transition: background var(--dur-fast), transform 90ms var(--ease-out); }
+/* Owner/admin badge: same chamfered dark button as the icon buttons beside it (owner, Sep 29: the solid accent
+   parallelogram looked off). Accent only on the crown and a thin left edge, like the section-heading marks. */
+html[data-ui="stadium"] .pm-adminbadge { --cut: 10px; min-height: 46px; border-radius: 0; clip-path: var(--shape-btn); border: 0; background: var(--panel3); color: var(--txt);
+  box-shadow: inset 0 0 0 1px var(--line2), inset 3px 0 0 var(--acc); padding: 6px 16px 6px 14px; gap: 8px; font-size: 14px; letter-spacing: .1em;
+  transition: background var(--dur-fast), transform 90ms var(--ease-out); }
 html[data-ui="stadium"] .pm-adminbadge:hover { background: var(--panel2); transform: translateY(-2px); }
 html[data-ui="stadium"] .pm-adminbadge:active { transform: scale(.96); }
-html[data-ui="stadium"] .pm-adminbadge.is-owner { background: var(--acc); color: var(--acc-ink); box-shadow: none; }
+html[data-ui="stadium"] .pm-adminbadge.is-owner { background: var(--panel3); color: var(--txt); box-shadow: inset 0 0 0 1px var(--line2), inset 3px 0 0 var(--acc); }
+html[data-ui="stadium"] .pm-adminbadge .pm-crown { color: var(--acc); filter: none; }
 html[data-ui="stadium"] .pm-adminbadge.lv-temp, html[data-ui="stadium"] .pm-adminbadge.lv-mod { background: var(--panel3); color: var(--acc3); }
 html[data-ui="stadium"] .pm-codes-ico { border-radius: 0; clip-path: var(--shape-btn); --cut: 8px; background: var(--acc-soft); color: var(--acc); }
 html[data-ui="stadium"] .pm-goodline { color: var(--ok); }
