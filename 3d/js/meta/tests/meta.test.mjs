@@ -595,6 +595,30 @@ test('evolutions + position modifier create untradeable upgraded cards', () => {
   assert.ok(back.club.includes(pm.card.id || card.id));
 });
 
+test('elite evolutions: 15 more, each takes a 98 card and no 99, and their PlayStyles exist', async () => {
+  const { PLAYSTYLE_IDS } = await import('../core/physique.js');
+  const elite = EVO.EVOLUTIONS.filter((e) => e.id.startsWith('elite-'));
+  assert.equal(elite.length, 15);
+  assert.equal(new Set(EVO.EVOLUTIONS.map((e) => e.id)).size, EVO.EVOLUTIONS.length);
+  const all = getDB().all;
+  for (const e of elite) {
+    assert.equal(e.req.maxOvr, 98, e.id);
+    assert.ok(e.upgrade.styles.every((x) => PLAYSTYLE_IDS.includes(x)), `${e.id} styles`);
+    assert.ok(all.some((p) => p.ovr >= 94 && p.ovr <= 98 && EVO.eligibility(p, e)[0]), `${e.id} takes a top card`);
+    assert.ok(!all.some((p) => p.ovr === 99 && EVO.eligibility(p, e)[0]), `${e.id} must not take a 99`);
+  }
+  // a 98 evolves and the upgrade applies (capped at 99)
+  const s = UT.createUTState({ clubName: 'Elite FC' }, new Rng(7));
+  const p98 = all.find((p) => p.ovr === 98 && p.pos !== 'GK');
+  UT.addToClub(s, p98.id);
+  assert.ok(EVO.startEvolution(s, 'elite-captain', p98.id).ok);
+  const m = { starters: [p98.id], stats: {}, outcome: 'W', cleanSheet: false };
+  for (let i = 0; i < 5; i++) EVO.recordEvoMatch(s, m);
+  const idx = s.evo.active.findIndex((a) => a.evoId === 'elite-captain');
+  const card = EVO.claimEvolution(s, idx);
+  assert.ok(card && card.ovr >= 98 && card.ovr <= 99 && card.evo === 1);
+});
+
 test('draft: formation, captain, 1-of-5 picks, valid team, knockout rewards', () => {
   const d = DR.newDraft('t1');
   DR.chooseFormation(d, '4-2-3-1');

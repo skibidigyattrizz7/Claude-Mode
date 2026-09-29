@@ -157,3 +157,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): gifts find players by club/display name in any capitals (e.g. "oelke fc"), not just exact usernames.
 - DONE (Sep 29): owner panel Players rows have a Card button (send any card, like Coins).
 - WAITING (Sep 29): Oelke secret card photo. Cut-out ready (recovered from the session log) but the photo has DO NOT COPY / (c) 2024 watermarks (school proof); asked the owner before publishing.
+- DONE (Sep 29): 15 more "elite-" Evolutions (evolutions.js) that accept cards rated up to 98, promos included.
