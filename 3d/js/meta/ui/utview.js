@@ -104,6 +104,9 @@ export function utTabs(app, active) {
     class: `pm-uttab ${id === active ? 'on' : ''}`, 'aria-current': id === active ? 'page' : null, 'data-uttab': id,
     onclick: () => {
       if (id === active) return;
+      if ((id === 'sbc' || id === 'transfers') && s?.vinson?.phase === 'locked' && !isOwner(app.online)) {
+        app.toast('The Vinson curse blocks this section.', 'bad'); return;
+      }
       app.popTo((v) => v.utHome);
       if (id !== 'home') app.push(open[id]());
     },
@@ -324,9 +327,10 @@ function squadView() {
         app.toast(`Best squad built (${{ rating: 'highest rating', balanced: 'rating + chemistry', chemistry: 'max chemistry' }[o.priority]}${o.formation === 'best' ? `, best formation: ${s.squad.formation}` : ''}).${short ? ` Only enough matching cards for ${11 - short} of 11: the rest came from your club.` : ''}`, short ? 'warn' : 'good');
       } }, 'Auto-build best squad');
       const autoSettingsBtn = h('button', { class: 'pm-btn', 'aria-label': 'Auto-build settings', title: 'Auto-build settings', onclick: () => autoBuildSettingsModal(app) }, 'Auto-build settings');
-      const ed = squadEditor({
+        const ed = squadEditor({
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
         getPlayer, pool: () => UT.clubPlayers(s),
+        decorate: (p) => p.id === HELL_CARD_ID && s.vinson?.phase === 'locked' ? h('span', { class: 'vinson-chain', 'aria-label': 'Cursed card locked in squad' }, '⛓') : null,
         onChange: (v) => {
           s.squad = v;
           app.vinson?.onSquadChange();
@@ -558,24 +562,28 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   if (curse) {
     items = items.map((_, i) => ({ pid: HELL_CARD_ID, cat: `secret_${HELL_CARD_ID}`, dup: i > 0 || (s.club || []).includes(HELL_CARD_ID) }));
     app.toast("YOU'VE BEEN CURSED BY VINSON", 'bad');
-  } else if (items.some((it) => it.pid === HELL_CARD_ID)) void app.vinson?.onPull();
+  }
   if (n > 1) items.sort((a, b) => UT.itemScore(getPlayer(b.pid)) - UT.itemScore(getPlayer(a.pid)));
   s.stats.packsOpened += n;
   // until each card is resolved it sits in pendingPack, so closing the page mid-opening can't lose it
   s.pendingPack = (Array.isArray(s.pendingPack) ? s.pendingPack : []).concat(items.map((it) => it.pid));
   persist(app);
   const done = (pid) => UT.resolvePending(s, pid);
+  let claimedVinson = false;
+  const claim = (pid) => { if (pid === HELL_CARD_ID && !claimedVinson) { claimedVinson = true; void app.vinson?.onPull(); } };
   runPackOpening(app.root, {
     pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
-    sellValue: (p) => quickSellValue(p),
-    onSend: (pid) => { done(pid); UT.addToClub(s, pid); persist(app); },
-    onVault: (pid) => { done(pid); UT.sendToVault(s, pid); persist(app); },
-    onSave: (pid) => { done(pid); UT.saveCard(s, pid); persist(app); },
+    curse,
+    sellValue: (p) => curse ? 0 : quickSellValue(p),
+    onSend: (pid) => { done(pid); UT.addToClub(s, pid); persist(app); claim(pid); },
+    onVault: (pid) => { done(pid); UT.sendToVault(s, pid); persist(app); claim(pid); },
+    onSave: (pid) => { done(pid); UT.saveCard(s, pid); persist(app); claim(pid); },
     // FC-style "Send all to transfer list": the card joins the club, then is flagged for sale (pmarket.js).
     canTransfer: (pid) => !(s.untradeable || []).includes(pid),
-    onTransfer: (pid) => { done(pid); UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); return r; },
-    onSell: (pid) => { done(pid); const v = quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
-    onDone: (sum) => { UT.rescuePendingPack(s); persist(app); app.refresh(); if (onDone) onDone(sum); },
+    onTransfer: (pid) => { done(pid); UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); claim(pid); return r; },
+    onSell: (pid) => { done(pid); const v = curse ? 0 : quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
+    onCurseExit: () => { UT.rescuePendingPack(s); persist(app); app.popTo((v) => v.utHome); app.refresh(); },
+    onDone: (sum) => { if (s.pendingPack?.includes(HELL_CARD_ID)) claim(HELL_CARD_ID); UT.rescuePendingPack(s); persist(app); app.refresh(); if (onDone) onDone(sum); },
   });
 }
 
@@ -767,6 +775,7 @@ function sbcListView() {
     title: 'Squad Building Challenges', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
+      if (s.vinson?.phase === 'locked' && !isOwner(app.online)) { main.append(h('p', { class: 'pm-warnline' }, 'The Vinson curse blocks SBCs.')); return; }
       const vault = UT.vaultPlayers(s);
       add(main, utTabs(app, 'sbc'), h('div', { class: 'pm-subtabs', role: 'tablist' },
         [['challenges', 'Challenges'], ['storage', `SBC storage${vault.length ? ` (${vault.length})` : ''}`]].map(([id, label]) => h('button', {
@@ -841,6 +850,7 @@ export function sbcDetailView(id) {
     title: sbc.name, kicker: 'SBC', coins: true, cls: 'pm-main--wide',
     render(main, app) {
       const s = app.ut;
+      if (s.vinson?.phase === 'locked' && !isOwner(app.online)) { main.append(h('p', { class: 'pm-warnline' }, 'The Vinson curse blocks SBCs.')); return; }
       const checklist = h('ul', { class: 'pm-checklist', 'aria-live': 'polite' });
       const submit = h('button', { class: 'pm-btn pm-btn--primary pm-btn--lg', disabled: true, onclick: doSubmit }, 'Submit');
       const inSquad = () => new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));

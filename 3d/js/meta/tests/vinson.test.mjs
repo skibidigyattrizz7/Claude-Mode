@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { defaultSquad } from '../core/ut.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
 import { DOOM_MS, FIRST_WARNING_MS, FINAL_WARNING_MS, BAN_MESSAGE, MATCH_MESSAGE,
-  beginDoom, advance, release, squadChanged, enforceLock, inSquad, cursedPack, reconcileServer } from '../core/vinson.js';
+  beginDoom, advance, release, lift, squadChanged, enforceLock, inSquad, cursedPack, reconcileServer } from '../core/vinson.js';
 
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log('ok', name); };
 const s = () => ({ club: [HELL_CARD_ID], squad: defaultSquad() });
 
-test('three-minute deadline survives repeated checks and expires at the exact boundary', () => {
+test('one-minute deadline survives repeated checks and expires at the exact boundary', () => {
   const state = s(); beginDoom(state, 1000);
   assert.equal(state.vinson.doomUntil, 1000 + DOOM_MS);
   assert.equal(advance(state, 1000 + DOOM_MS - 1).phase, 'doom');
@@ -47,11 +47,16 @@ test('server release changes ban to freed, lock persists across devices', () => 
   reconcileServer(state, { ok: true, phase: 'released' }); assert.equal(state.vinson.phase, 'freed');
   reconcileServer(state, { ok: true, phase: 'locked' }); assert.equal(state.vinson.phase, 'locked');
   assert.equal(inSquad(state.squad), true);
+  reconcileServer(state, { ok: true, phase: 'lifted' });
+  assert.equal(state.vinson.phase, 'lifted');
+  assert.equal(cursedPack(state), false);
+  state.squad.slots[9] = null; assert.equal(enforceLock(state), false);
+  lift(state); assert.equal(squadChanged(state)?.phase, 'lifted');
 });
 
 test('server time keeps the countdown accurate when the device clock differs', () => {
   const state = s();
-  reconcileServer(state, { ok: true, phase: 'doom', serverNow: '2026-09-29T00:00:00Z', deadline: '2026-09-29T00:03:00Z' }, 1000);
+  reconcileServer(state, { ok: true, phase: 'doom', serverNow: '2026-09-29T00:00:00Z', deadline: '2026-09-29T00:01:00Z' }, 1000);
   assert.equal(state.vinson.doomUntil, 1000 + DOOM_MS);
 });
 

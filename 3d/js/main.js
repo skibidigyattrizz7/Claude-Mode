@@ -465,7 +465,7 @@ async function openMatchWithReveal(opts) {
   if (!opp || !Array.isArray(opp.players)) return m;
   try { m.handle.pause(); } catch { return m; }
   const renderCard = loadSettings().lineupCards === 'simple' ? null : await revealCardRenderer();
-  showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr, renderCard }).then(() => {
+  m.revealDone = showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr, renderCard }).then(() => {
     // still in this match, and not held by the disconnect overlay: let the game begin
     if (m.layer.isConnected && !m.layer.querySelector('.dc-overlay')) { try { m.handle.resume(); } catch { /* ignore */ } }
   }).catch((e) => { console.error(e); try { m.handle.resume(); } catch { /* ignore */ } });
@@ -475,7 +475,15 @@ async function openMatchWithReveal(opts) {
 /** startMatch(home, away, opts) -> Promise<result>. Handed to mountMeta and used by Kick-Off. */
 export async function startMatch(home, away, opts = {}) {
   const m = await openMatchWithReveal({ ...opts, home, away });
-  try { return await m.done; } finally { m.close(); }
+  try {
+    if (opts.vinsonCurse) {
+      await m.revealDone;
+      await new Promise((resolve) => setTimeout(resolve, 1600)); // pitch and players are visible first
+      await window.__pitchsideVinson?.matchSabotage?.(m.layer);
+      return { abandoned: true, reason: 'vinson_curse' };
+    }
+    return await m.done;
+  } finally { m.close(); }
 }
 
 // ------------------------------------------------------------------ stub engine (?stubEngine=1)

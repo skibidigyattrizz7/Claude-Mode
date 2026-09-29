@@ -757,15 +757,15 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         Object.assign(p, { banned: true, banReason: "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON", bannedUntil: null, bannedAt: now(), bannedBy: 'vinson' });
         audit(db, p.id, 'vinson_ban'); store.save(db);
       }
-      return { ok: true, phase: p.vinson.phase, deadline: p.vinson.deadline ? new Date(p.vinson.deadline).toISOString() : null, serverNow: new Date(now()).toISOString() };
+      return { ok: true, phase: p.vinson.phase, deadline: p.vinson.deadline ? new Date(p.vinson.deadline).toISOString() : null, restrictions: activeRestrictions(p), serverNow: new Date(now()).toISOString() };
     },
     vinson_pull({ p_id, p_secret }) {
       const db = load(), p = authRaw(db, p_id, p_secret);
       if (!p) return err('auth');
       if (p.role === 'owner') return { ok: true, exempt: true };
       if (isBanned(p)) return err('banned');
-      if (!p.vinson || !['doom', 'locked'].includes(p.vinson.phase)) {
-        p.vinson = { phase: 'doom', deadline: now() + 180000 }; audit(db, p.id, 'vinson_pull'); store.save(db);
+      if (!p.vinson || !['doom', 'locked', 'lifted'].includes(p.vinson.phase)) {
+        p.vinson = { phase: 'doom', deadline: now() + 60000 }; audit(db, p.id, 'vinson_pull'); store.save(db);
       }
       return { ok: true, phase: p.vinson.phase, deadline: p.vinson.deadline ? new Date(p.vinson.deadline).toISOString() : null };
     },
@@ -773,7 +773,11 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const db = load(), p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
       if (!p.vinson || !['released', 'locked'].includes(p.vinson.phase)) return err('not_released');
-      p.vinson = { phase: 'locked', deadline: null }; store.save(db);
+      if (p.vinson.phase === 'released') {
+        p.vinson.priorRestrictions = Object.fromEntries(Object.entries(activeRestrictions(p)).filter(([k]) => ['admin', 'codes', 'market', 'sbc'].includes(k)));
+        p.restrictions = { ...p.restrictions, admin: true, codes: true, market: true, sbc: true };
+      }
+      p.vinson.phase = 'locked'; p.vinson.deadline = null; store.save(db);
       return { ok: true, phase: 'locked' };
     },
     vinson_unban({ p_id, p_secret, p_player }) {
@@ -784,6 +788,20 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       p.vinson = { phase: 'released', deadline: null };
       if (p.banReason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") Object.assign(p, { banned: false, banReason: null, bannedUntil: null, bannedAt: null, bannedBy: null });
       audit(db, p.id, 'vinson_unban', { byId: actor.id }); store.save(db);
+      return { ok: true, player: modRow(p) };
+    },
+    vinson_lift({ p_id, p_secret, p_player }) {
+      const db = load(), actor = auth(db, p_id, p_secret), p = db.profiles[p_player];
+      if (!actor || actor.role !== 'owner') return err('not_allowed');
+      if (!p || p.id === actor.id) return err('not_found');
+      if (!p.vinson || p.vinson.phase === 'lifted') return err('not_vinson');
+      if (p.vinson.phase === 'locked') {
+        for (const key of ['admin', 'codes', 'market', 'sbc']) delete p.restrictions[key];
+        Object.assign(p.restrictions, p.vinson.priorRestrictions || {});
+      }
+      p.vinson = { phase: 'lifted', deadline: null };
+      if (p.banReason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") Object.assign(p, { banned: false, banReason: null, bannedUntil: null, bannedAt: null, bannedBy: null });
+      audit(db, p.id, 'vinson_lift', { byId: actor.id }); store.save(db);
       return { ok: true, player: modRow(p) };
     },
     // ---------------------------------------------------------------- moderation (002)

@@ -405,10 +405,7 @@ export class MetaApp {
   // ---- matches ----
   /** Calls the host startMatch. Returns result, or null when abandoned/failed. */
   async playMatch(home, away, opts) {
-    if (this.ut?.vinson?.phase === 'locked' && [...(home?.players || []), ...(home?.bench || [])].some((p) => p.id === HELL_CARD_ID)) {
-      this.toast(MATCH_MESSAGE, 'bad');
-      return null;
-    }
+    const vinsonCurse = this.ut?.vinson?.phase === 'locked' && [...(home?.players || []), ...(home?.bench || [])].some((p) => p.id === HELL_CARD_ID);
     for (const [side, t] of [['home', home], ['away', away]]) {
       const errs = validateTeam(t);
       if (errs.length) { this.toast(`Invalid ${side} team: ${errs[0]}`, 'bad'); console.warn('[meta] invalid team', side, errs); return null; }
@@ -418,8 +415,9 @@ export class MetaApp {
     this.root.appendChild(busy);
     try {
       const lvl = getAdminLevel(); const matchLevel = lvl === 'super' || lvl === 'full' ? 'owner' : lvl === 'mod' ? 'mod' : null;
-      const res = await this.startMatchFn(home, away, { ...opts, adminLevel: matchLevel });
+      const res = await this.startMatchFn(home, away, { ...opts, vinsonCurse, adminLevel: matchLevel });
       if (this.destroyed) return null;
+      if (res?.reason === 'vinson_curse') return null;
       if (!res || res.abandoned) { this.toast('Match abandoned. No result recorded.', 'warn'); return null; }
       return res;
     } catch (err) {

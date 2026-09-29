@@ -36,6 +36,9 @@ export function marketView() {
   const view = {
     title: 'Transfer Market', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
     render(main, app) {
+      if (app.ut?.vinson?.phase === 'locked' && app.online?.account?.current?.().role !== 'owner') {
+        main.append(h('p', { class: 'pm-warnline' }, 'The Vinson curse blocks the Transfer Market.')); return;
+      }
       const tlN = PM.transferList(app.ut).length;
       const tabs = h('div', { class: 'pm-tabs pm-mkttabs', role: 'tablist' },
         [['player', 'Player Market', 'Online · real users'], ['ai', 'AI Market', 'Simulated traders'], ['tl', `Transfer List${tlN ? ` (${tlN})` : ''}`, 'Cards you plan to sell']].map(([id, label, sub]) => h('button', {
