@@ -5,8 +5,9 @@
 // every slot's chemistry pip/line since chemistry is a team-wide calculation, and the small info chips) —
 // it never tears down and rebuilds the whole pitch/bench on every move, so drag/tap swapping stays smooth
 // even on low-end phones.
-import { h, clear, select, add, modal, frag } from './dom.js';
-import { playerCard, emptyCard } from './card.js';
+import { h, clear, select, add, modal, frag, infNodes } from './dom.js';
+import { playerCard, emptyCard, infLabel } from './card.js';
+import { personOf } from '../core/players.js';
 import { flagSVG } from './art.js';
 import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr, playerPositions } from '../core/formations.js';
 import { calcChemistryStyled, CHEM_STYLES } from '../core/chemistry.js';
@@ -18,6 +19,18 @@ const px = (x) => 5 + x * 0.9;
 const py = (y) => 2 + (96 - y) * 1.03;
 const POS_FILTERS = ['ALL', 'GK', 'DEF', 'MID', 'ATT'];
 const CHEM_CLASS = ['c0', 'c1', 'c2', 'c3'];
+const ROW_STATS = [['PAC', 'pac'], ['SHO', 'sho'], ['PAS', 'pas'], ['DRI', 'dri'], ['DEF', 'def'], ['PHY', 'phy']];
+const ROW_GK_STATS = [['DIV', 'div'], ['HAN', 'han'], ['KIC', 'kic'], ['REF', 'ref'], ['SPD', 'spd'], ['POS', 'pos']];
+/** The six face stats in one row for the picker (GK stats for keepers; secret cards read their ∞ label). */
+function statRow(p) {
+  const gk = p.pos === 'GK';
+  const inf = p.glitch === true || p.cursed === true || p.hell === true;
+  const src = (gk ? p.gk : p.stats) || {};
+  return h('div', { class: 'pm-prow-stats' }, (gk ? ROW_GK_STATS : ROW_STATS).map(([lbl, k]) => {
+    const v = Math.round(Number(src[k]) || 0);
+    return h('span', { class: inf ? '' : v >= 85 ? 'hi' : v >= 70 ? 'mid' : v < 50 ? 'lo' : '' }, h('b', null, inf ? infNodes(infLabel(p)) : String(v)), h('small', null, lbl));
+  }));
+}
 
 /**
  * opts: {
@@ -267,15 +280,22 @@ export function squadEditor(opts) {
         search,
         h('div', { class: 'pm-chips' }, POS_FILTERS.map((g) => h('button', { class: `pm-chip ${group === g ? 'on' : ''}`, onclick: () => { st.group = g; renderPicker(); } }, g))),
         select([['ovr', 'Sort: Rating'], ['fit', 'Sort: Best fit'], ['name', 'Sort: Name']], st.sort, (v) => { st.sort = v; renderList(); }, { 'aria-label': 'Sort' })),
-      current ? h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => { const s0 = st.sel; arr(s0.area)[s0.idx] = null; st.sel = null; closePicker(); afterMove([s0]); emit(); } }, 'Remove from slot') : null,
-      current && st.sel.area === 'slot' ? playAs(current) : null,
+      current ? h('div', { class: 'pm-sq-cur' },
+        current && st.sel.area === 'slot' ? playAs(current) : null,
+        h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => { const s0 = st.sel; arr(s0.area)[s0.idx] = null; st.sel = null; closePicker(); afterMove([s0]); emit(); } }, 'Remove from slot')) : null,
       list,
       h('p', { class: 'pm-hint' }, 'Tip: tap a slot, then another slot to swap. Drag cards on desktop.'),
     );
     function renderList() {
       clear(list);
       const q = st.q.trim().toLowerCase();
-      let pool = opts.pool().filter((p) => (group === 'ALL' || POS_GROUP[p.pos] === group) && (!q || p.name.toLowerCase().includes(q)));
+      // players already in the XI or on the bench (and other versions of the same person) are not offered:
+      // moving them is done by tapping two slots. Another version of the player being replaced is fine.
+      const curPerson = current ? personOf(current) : null;
+      const taken = new Set();
+      for (const id of [...st.slots, ...(st.bench || [])]) { const x = player(id); if (x) { taken.add(x.id); const per = personOf(x); if (per !== curPerson) taken.add('person:' + per); } }
+      let pool = opts.pool().filter((p) => !taken.has(p.id) && !taken.has('person:' + personOf(p))
+        && (group === 'ALL' || POS_GROUP[p.pos] === group) && (!q || p.name.toLowerCase().includes(q)));
       const sp = slotPos || null;
       if (st.sort === 'ovr') pool.sort((a, b) => b.ovr - a.ovr);
       else if (st.sort === 'fit' && sp) pool.sort((a, b) => effectiveOvr(b, sp) - effectiveOvr(a, sp));
@@ -283,18 +303,17 @@ export function squadEditor(opts) {
       pool = pool.slice(0, 80);
       if (!pool.length) list.appendChild(h('p', { class: 'pm-empty' }, 'No players match.'));
       for (const p of pool) {
-        const loc = locate(p.id);
         const fit = sp ? positionFit(p, sp) : 2;
         const row = h('button', {
-          class: `pm-prow ${loc ? 'in-use' : ''}`, role: 'listitem', draggable: 'true',
+          class: 'pm-prow pm-prow--pick', role: 'listitem', draggable: 'true',
           onclick: () => { const s0 = st.sel; const touched = place(s0, p.id); st.sel = null; closePicker(); afterMove(touched); emit(); },
         },
         playerCard(p, { size: 'xs' }),
         h('div', { class: 'pm-prow-info' },
           h('b', null, p.name),
-          h('span', null, `${p.pos}${p.alt && p.alt.length ? ' · ' + p.alt.join('/') : ''} · ${NATION_BY_CODE[p.nat]?.name || p.nat}`),
-          h('span', { class: 'pm-dim' }, leagueName(p.league) + (opts.rowInfo ? ' · ' + opts.rowInfo(p) : '')),
-          loc ? h('span', { class: 'pm-tagmini' }, loc.area === 'slot' ? 'In XI' : 'On bench') : null),
+          h('span', { class: 'pm-prow-nat' }, frag(flagSVG(p.nat, 'pm-prow-flagsvg')), `${NATION_BY_CODE[p.nat]?.name || p.nat} · ${p.pos}${p.alt && p.alt.length ? ' · ' + p.alt.slice(0, 3).join('/') : ''}`),
+          opts.rowInfo ? h('span', { class: 'pm-dim' }, opts.rowInfo(p)) : null),
+        statRow(p),
         sp ? h('span', { class: `pm-fit fit${fit}`, title: fit === 2 ? 'Natural position' : fit === 1 ? 'Alternate position' : 'Out of position' }, fit === 2 ? '●' : fit === 1 ? '◐' : '○') : null);
         row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', JSON.stringify({ pid: p.id })); });
         list.appendChild(row);

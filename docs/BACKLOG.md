@@ -185,4 +185,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): owner rule: ignore Render and Vercel (CLAUDE.md + HANDOFF updated).
 - DONE (Sep 29): Codex pack-opening visuals (codex/pack-opening-visuals) were already merged as the "Classic" pack animation; the test link now starts on Classic (toggle on the pack screen switches to New).
 - DONE (Sep 29): ∞ sign lopsided on Chromebooks (one loop bigger): every ∞ in the UI is now a drawn symmetric sign (dom.js infHtml/infNodes, .ps-inf in meta.css).
-- TODO (Sep 29): squad "replace player" list shows players already in the squad; right-side swap panel too small, make it longer; each row shows basic stats + nation.
+- DONE (Sep 29): squad picker hides players already in the XI/bench (and other versions of them); panel is taller; each row shows flag + nation + the six stats.
+- TODO (Sep 29): admin commands reach other players near-instantly without refresh (every admin command); global messages slow, individual messages never appear; message box looks AI-made, restyle; store pack on/off slow to apply; add "remove all" / "add all" packs; granted cards go straight into the player's club instantly (not a slow gift).
