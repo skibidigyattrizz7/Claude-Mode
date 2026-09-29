@@ -4,6 +4,20 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// The "∞" character is drawn lopsided (one loop bigger) by some fonts, e.g. on Chromebooks. Every infinity the
+// UI shows goes through these instead: a drawn, symmetric sign (.ps-inf in meta.css) that reads "∞" to screen readers.
+export const INF_HTML = '<i class="ps-inf" role="img" aria-label="∞"></i>';
+/** HTML-escape `s` and swap every "∞" for the drawn sign. */
+export const infHtml = (s) => esc(s).replace(/∞/g, INF_HTML);
+/** DOM nodes for `s` with every "∞" drawn (a plain string when there is none). */
+export function infNodes(s) {
+  const str = String(s ?? '');
+  if (!str.includes('∞')) return str;
+  const t = document.createElement('template');
+  t.innerHTML = infHtml(str);
+  return t.content;
+}
+
 /** h('div', { class: 'x', onclick: fn, style: {...} }, ...children) */
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);

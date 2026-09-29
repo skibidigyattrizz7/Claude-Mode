@@ -1,5 +1,5 @@
 // Pitchside Ultimate Team screens.
-import { h, clear, frag, modal, confirmBox, fmtNum, select, add, lazyFill, debounce } from './dom.js';
+import { h, clear, frag, modal, confirmBox, fmtNum, select, add, lazyFill, debounce, infNodes } from './dom.js';
 import { playerCard, attributeBlock } from './card.js';
 import { leagueBadgeSVG } from './leaguebadge.js';
 import { profileFacts } from '../core/bios.js';
@@ -269,7 +269,7 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
     ['Weak foot', p.hell === true ? '???' : stars(p.wf)], ['Skill moves', p.hell === true ? '???' : stars(p.sm)],
     ['Work rates', p.hell === true ? '???' : `${p.wr[0]} / ${p.wr[1]}`],
     ['Card', p.hell === true ? 'HELL' : p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
-    ['Potential', p.hell === true ? '???' : p.glitch === true ? '∞' : p.cursed === true ? '-∞' : p.pot],
+    ['Potential', p.hell === true ? '???' : p.glitch === true ? infNodes('∞') : p.cursed === true ? infNodes('-∞') : p.pot],
   ];
   if (p.moment) bio.push(['Moment', p.moment]);
   if (p.upg) bio.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);

@@ -1942,6 +1942,15 @@ test('updateCustomCard keeps the card id, rebuilds stats and refreshes the regis
   } finally { if (!hadLS) delete globalThis.localStorage; }
 });
 
+test('infinity is drawn as a symmetric sign, never the raw font glyph (owner, Sep 29)', async () => {
+  const { infHtml, INF_HTML } = await import('../ui/dom.js');
+  assert.equal(infHtml('∞'), INF_HTML);
+  assert.equal(infHtml('-∞'), '-' + INF_HTML);
+  assert.equal(infHtml('|∞|'), '|' + INF_HTML + '|');
+  assert.equal(infHtml('<b>'), '&lt;b&gt;', 'still escapes');
+  assert.equal(infHtml('87'), '87');
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

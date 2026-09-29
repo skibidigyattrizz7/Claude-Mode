@@ -184,3 +184,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): test link ?test=1 (3d/js/testmode.js): in-memory storage, fake online server, Owner Access, banner; reload = clean slate. See HANDOFF section 7.
 - DONE (Sep 29): owner rule: ignore Render and Vercel (CLAUDE.md + HANDOFF updated).
 - DONE (Sep 29): Codex pack-opening visuals (codex/pack-opening-visuals) were already merged as the "Classic" pack animation; the test link now starts on Classic (toggle on the pack screen switches to New).
+- DONE (Sep 29): ∞ sign lopsided on Chromebooks (one loop bigger): every ∞ in the UI is now a drawn symmetric sign (dom.js infHtml/infNodes, .ps-inf in meta.css).
+- TODO (Sep 29): squad "replace player" list shows players already in the squad; right-side swap panel too small, make it longer; each row shows basic stats + nation.

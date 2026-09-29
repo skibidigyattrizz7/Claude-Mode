@@ -1697,3 +1697,12 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-card.sp-secret.is-angel .pc-stats::before { background: #9a7210; }
 .pm-card.sp-secret.is-angel .pc-in::after { animation: none; }
 .pm-saved { margin-bottom: 16px; } .pm-saved .pm-admin-results { max-height: 360px; overflow-y: auto; }
+
+/* Drawn infinity sign (dom.js infHtml/infNodes): some fonts (Chromebooks) draw "∞" with one loop bigger than the
+   other, so the UI draws a symmetric one in the text colour instead. Sized in em, so it follows the text it sits in. */
+.ps-inf {
+  display: inline-block; width: 1em; height: .54em; vertical-align: .1em; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 15'%3E%3Cpath d='M7.5 2.25C4.6 2.25 2.25 4.6 2.25 7.5S4.6 12.75 7.5 12.75C11.25 12.75 16.75 2.25 20.5 2.25C23.4 2.25 25.75 4.6 25.75 7.5S23.4 12.75 20.5 12.75C16.75 12.75 11.25 2.25 7.5 2.25Z' fill='none' stroke='%23000' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 15'%3E%3Cpath d='M7.5 2.25C4.6 2.25 2.25 4.6 2.25 7.5S4.6 12.75 7.5 12.75C11.25 12.75 16.75 2.25 20.5 2.25C23.4 2.25 25.75 4.6 25.75 7.5S23.4 12.75 20.5 12.75C16.75 12.75 11.25 2.25 7.5 2.25Z' fill='none' stroke='%23000' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+sup .ps-inf { width: .95em; height: .5em; }

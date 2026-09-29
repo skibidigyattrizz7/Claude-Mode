@@ -1,5 +1,5 @@
 // FIFA-style player card component.
-import { h, frag, esc } from './dom.js';
+import { h, frag, esc, infHtml, infNodes } from './dom.js';
 import { flagSVG, crestSVG, avatarSVG } from './art.js';
 import { cardName } from '../core/players.js';
 import { clubById } from '../core/data.js';
@@ -88,7 +88,7 @@ export function attributeBlock(p) {
   // (see substats.js) — only the display reads "∞", same as the card face and rating.
   // THE NII (secretcard.js `cursed`) is the opposite: every number reads "-∞".
   const inf = p.glitch === true || p.cursed === true || p.hell === true;
-  const disp = (v) => (inf ? infLabel(p) : v);
+  const disp = (v) => (inf ? infNodes(infLabel(p)) : v);
   return h('div', { class: 'pm-attrs pm-attrs--full' }, subStats(p).map((g) => h('div', { class: 'pm-attrgroup', 'data-attr': g.key },
     h('div', { class: 'pm-attr' }, h('span', null, g.label), h('b', { class: cls(g.value) }, disp(g.value)), h('i', { style: { '--v': `${Math.min(99, g.value)}%` } })),
     g.subs.map((x) => h('div', { class: 'pm-subattr', 'data-attr': x.key }, h('span', null, x.label), h('b', { class: cls(x.value) }, disp(x.value)), h('i', { style: { '--v': `${x.value}%` } }))))));
@@ -151,9 +151,9 @@ export function playerCard(p, opts = {}) {
   const inf = p.glitch === true || p.cursed === true || p.hell === true;
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
   // custom stat display for full-art secret cards: a glyph (the knight's ✡) or text with a superscript (E.L.I.J.A.H.'s ???^∞)
-  const glyph = typeof p.statText === 'string' && p.statText.length <= 4 ? `${esc(p.statText)}${p.statSup ? `<sup>${esc(String(p.statSup).slice(0, 2))}</sup>` : ''}`
+  const glyph = typeof p.statText === 'string' && p.statText.length <= 4 ? `${infHtml(p.statText)}${p.statSup ? `<sup>${infHtml(String(p.statSup).slice(0, 2))}</sup>` : ''}`
     : typeof p.statGlyph === 'string' && p.statGlyph.length <= 2 ? esc(p.statGlyph) : null;
-  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${glyph || (inf ? infLabel(p) : num(v, 0, 999))}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
+  const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${glyph || (inf ? infHtml(infLabel(p)) : num(v, 0, 999))}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : sortedStyles(p).slice(0, 3).map((x) => psBadge(x)).join('');
   // Card Creator admin cards can carry more than 3 alt positions; the card face only has room for 3 badges,
@@ -169,7 +169,7 @@ export function playerCard(p, opts = {}) {
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
-      <div class="pc-ovr${p.statText ? ' pc-ovr--text' : ''}">${p.statText ? glyph : inf ? infLabel(p) : num(p.ovr, 0, 999)}</div>
+      <div class="pc-ovr${p.statText ? ' pc-ovr--text' : ''}">${p.statText ? glyph : inf ? infHtml(infLabel(p)) : num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>
       ${altHtml}
       <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>

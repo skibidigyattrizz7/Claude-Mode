@@ -1,7 +1,7 @@
 // Admin panel + "Admin Given Codes" entry. Levels come from the shared verifier `3d/js/shared/adminauth.js`
 // (server-verified code, else local PBKDF2 — the code itself is never stored — or an owner/mod account role):
 // 'super' (everything + admin cards to 999 OVR) > 'full' (owner tools) > 'mod' (moderation) > 'temp' (60 min, limited).
-import { h, clear, add, fmtNum, modal, confirmBox, select } from './dom.js';
+import { h, clear, add, fmtNum, modal, confirmBox, select, infNodes } from './dom.js';
 import { playerCard } from './card.js';
 import * as UT from '../core/ut.js';
 import * as C from '../core/career.js';
@@ -149,7 +149,7 @@ export function adminView() {
       const amt = h('input', { class: 'pm-input pm-input--num', type: 'number', value: String(st.amount), 'aria-label': 'Coin amount' });
       amt.addEventListener('input', () => { st.amount = Math.round(Number(amt.value) || 0); });
       const inf = !!(s && s.admin && s.admin.infinite);
-      const balDisplay = h('b', { 'data-coin-display': '1' }, s ? (inf ? '∞' : fmtNum(s.coins)) : '-');
+      const balDisplay = h('b', { 'data-coin-display': '1' }, s ? (inf ? infNodes('∞') : fmtNum(s.coins)) : '-');
       const coins = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('coins'), ' Coins'),
         h('p', { class: 'pm-dim' }, s ? ['Balance shown to the player right now: ', balDisplay, ` (${app.coinSourceLabel()}). Up to ${(RANK[level] || 0) >= 3 ? 'unlimited' : fmtNum(1000000)} coins per grant.`] : ''),
         h('div', { class: 'pm-btnrow' }, amt,

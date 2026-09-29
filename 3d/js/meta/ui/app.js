@@ -1,5 +1,5 @@
 // Meta UI shell: view stack, top bar, hub, shared match + result screens.
-import { h, clear, toast, fmtNum, add } from './dom.js';
+import { h, clear, toast, fmtNum, add, infNodes } from './dom.js';
 import { load, save } from '../core/storage.js';
 import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
@@ -250,7 +250,7 @@ export class MetaApp {
     const inf = isInfinite(this.ut);
     const online = this.wallet.mode === 'online';
     const val = cleanCoins(this.ut.coins, 0);
-    const num = h('span', { class: 'pm-coins-n', 'data-coins': inf ? 'inf' : String(val) }, inf ? '∞' : fmtNum(val));
+    const num = h('span', { class: 'pm-coins-n', 'data-coins': inf ? 'inf' : String(val) }, inf ? infNodes('∞') : fmtNum(val));
     // FC-style currency readout: coin + number (count-up), with a small status dot on the coin (online = server wallet)
     const chip = h('div', { class: `pm-coins ${online ? 'is-online' : 'is-local'} ${inf ? 'is-inf' : ''}`, title: online ? 'Coins: online balance (server)' : 'Coins: local balance (this device)' },
       h('span', { class: 'pm-coins-ico', 'aria-hidden': 'true' }, h('i', { class: 'pm-coin' }), h('i', { class: 'pm-coins-dot' })),
