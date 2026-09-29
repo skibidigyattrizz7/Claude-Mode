@@ -14,6 +14,7 @@ const LINES = [
   { key: 'att', label: 'Attack', pos: ['ST', 'CF', 'LW', 'RW'], hold: 2100 },
 ];
 const FINAL_HOLD = 2000; // includes the 500 ms the pitch takes to fill
+const FINAL_HOLD_CARDS = 3800; // card XI (owner, Sep 29): ~3 s on screen once every card has landed
 const REDUCED_HOLD = 2600;
 const EXIT_MS = 280; // the row pans away (lineup.css lr-pan)
 const SKIP_GUARD_MS = 350; // ignore input right after opening so the tap that started the match cannot skip it
@@ -108,6 +109,19 @@ function card(p, shirtSVG, kit, i, renderCard) {
   return c;
 }
 
+/** A starter as his card on the pitch (card XI views); falls back to the shirt node when no card can be drawn. */
+function pitchCardNode(p, renderCard, u, d, order) {
+  let node = null;
+  try { node = renderCard(p, 'xs'); } catch (e) { console.warn('[lineup] card render failed', e); }
+  if (!node) return null;
+  const n = el('div', 'lr-node lr-node--card');
+  n.style.setProperty('--u', u.toFixed(1));
+  n.style.setProperty('--d', d.toFixed(1));
+  n.style.setProperty('--o', String(order));
+  n.append(node);
+  return n;
+}
+
 function pitchNode(p, shirtSVG, kit, u, d, order) {
   const n = el('div', 'lr-node');
   n.style.setProperty('--u', u.toFixed(1));
@@ -146,9 +160,11 @@ function pitchSVG(vertical) {
  * @param {(team)=>number} o.teamOvr
  * @param {string} [o.label]     small heading, default "Opponent lineup"
  * @param {boolean} [o.reduceMotion]
- * @param {(player)=>HTMLElement|null} [o.renderCard]  draws a full card for the line stages (null = shirt tile)
+ * @param {(player, size?)=>HTMLElement|null} [o.renderCard]  draws a full card (null = shirt tiles everywhere)
+ * @param {boolean} [o.lineCards]  use renderCard for the line stages (default: when renderCard is given)
+ * @param {'shirts'|'cards'|'cards-v'} [o.finalView]  the closing XI: shirts on a pitch, cards on a pitch, cards on an upright pitch
  */
-export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = 'Opponent lineup', reduceMotion, renderCard = null } = {}) {
+export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = 'Opponent lineup', reduceMotion, renderCard = null, lineCards = true, finalView = 'shirts' } = {}) {
   return new Promise((resolve) => {
     if (!team || !container || !Array.isArray(team.players) || !team.players.length) { resolve('gone'); return; }
     const calm = reduceMotion != null ? reduceMotion : !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -162,6 +178,9 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
     root.setAttribute('aria-label', `${label}: ${team.name}`);
     root.tabIndex = -1;
     if (calm) root.classList.add('is-calm');
+    const cardXI = !!renderCard && (finalView === 'cards' || finalView === 'cards-v');
+    if (cardXI) root.classList.add('is-cardxi');
+    if (cardXI && finalView === 'cards-v') root.classList.add('is-vxi');
     root.style.setProperty('--kit1', kit.primary || '#cccccc');
     root.style.setProperty('--kit2', kit.secondary || '#555555');
 
@@ -240,7 +259,7 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
         requestAnimationFrame(tick);
       }
       const row = el('div', 'lr-cards');
-      line.players.forEach((p, i) => row.append(card(p, shirtSVG, line.key === 'gk' ? (team.gkKit || kit) : kit, i, renderCard)));
+      line.players.forEach((p, i) => row.append(card(p, shirtSVG, line.key === 'gk' ? (team.gkKit || kit) : kit, i, lineCards ? renderCard : null)));
       wrap.append(title, row);
       stage.replaceChildren(wrap);
       later(() => {
@@ -271,12 +290,13 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
       const field = el('div', 'lr-field');
       let order = 0;
       for (const node of pitchSlots(team, lines)) {
-        field.append(pitchNode(node.p, shirtSVG, node.p.pos === 'GK' ? (team.gkKit || kit) : kit, node.u, node.d, order++));
+        const o = order++;
+        field.append((cardXI && pitchCardNode(node.p, renderCard, node.u, node.d, o)) || pitchNode(node.p, shirtSVG, node.p.pos === 'GK' ? (team.gkKit || kit) : kit, node.u, node.d, o));
       }
       pitch.append(field);
       wrap.append(info, box);
       stage.replaceChildren(wrap);
-      later(() => finish('done'), calm ? REDUCED_HOLD : FINAL_HOLD);
+      later(() => finish('done'), cardXI ? FINAL_HOLD_CARDS : calm ? REDUCED_HOLD : FINAL_HOLD);
     };
 
     if (calm || !lines.length) showFinal(); else showLine(0);

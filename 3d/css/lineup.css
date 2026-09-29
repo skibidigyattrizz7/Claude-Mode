@@ -186,3 +186,18 @@ html[data-ui] .lr-card.lr-card--full::after { display: none; }
 @keyframes lr-pan { to { transform: translateX(-90px) perspective(900px) rotateY(12deg); opacity: 0; filter: blur(3px); } }
 @keyframes lr-tilt { from { transform: rotateX(58deg) scale(.82) translateY(40px); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
 @keyframes lr-drop { from { transform: translate(-50%, -50%) translateY(-60px) scale(1.5); opacity: 0; } 50% { opacity: 1; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+
+/* Starting XI as cards (Settings > "Starting XI at the end", owner Sep 29). Cards are sized off the pitch itself
+   (container units) so 11 of them never overlap: .is-cardxi = cards on the usual pitch, .is-vxi = upright FIFA-style
+   pitch (goalkeeper at the bottom) on every screen, not only portrait ones. */
+.lr.is-cardxi .lr-pitch { container-type: size; }
+.lr-node--card { width: auto; max-width: none; gap: 0; }
+.lr-node--card .pm-card { font-size: min(1.4cqh, 1.8cqw); pointer-events: none; }
+.lr.is-vxi .lr-pitch { width: min(100cqw, calc(100cqh * 68 / 105)); aspect-ratio: 68 / 105;
+  background-image: repeating-linear-gradient(180deg, rgba(255, 255, 255, .03) 0 9.523%, transparent 9.523% 19.047%); }
+.lr.is-vxi .lr-pitch-lines.is-h { display: none; }
+.lr.is-vxi .lr-pitch-lines.is-v { display: block; }
+.lr.is-vxi .lr-node { left: calc(11% + var(--u) * .78%); top: calc((100 - var(--d)) * 1%); }
+.lr.is-vxi .lr-node--card .pm-card { font-size: min(1.6cqw, 1.25cqh); }
+@media (orientation: portrait) { .lr.is-cardxi:not(.is-vxi) .lr-node--card .pm-card { font-size: min(1.6cqw, 1.25cqh); } }
+@media (orientation: landscape) { .lr.is-cardxi:not(.is-vxi) .lr-node { top: calc(12% + var(--u) * .76%); } }

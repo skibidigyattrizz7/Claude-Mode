@@ -54,7 +54,7 @@ function lsGet(key, fallback) {
 function lsSet(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } }
 
 const SETTINGS_KEY = 'pitchside.settings';
-const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'classic', lineupCards: 'cards', accent: 'default' };
+const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'classic', lineupCards: 'cards', lineupXI: 'shirts', accent: 'default' };
 const DIFFICULTIES = [['amateur', 'Amateur'], ['pro', 'Pro'], ['world', 'World Class'], ['legendary', 'Legendary']];
 const HALF_LENGTHS = [2, 3, 4, 6, 8];
 const CAMERAS = [['broadcast', 'Broadcast'], ['pro', 'Pro (player lock)']];
@@ -65,6 +65,8 @@ const WEATHERS = [['clear', 'Clear'], ['rain', 'Rain'], ['snow', 'Snow'], ['rand
 const UI_STYLES = [['classic', 'Classic'], ['stadium', 'Stadium']];
 // Online lineup reveal: full player cards per line (default) or the simple shirt tiles.
 const LINEUP_STYLES = [['cards', 'Full cards'], ['simple', 'Simple']];
+// How the reveal ends (owner, Sep 29): the XI as shirts on a pitch, as cards on a pitch, or as cards on an upright FIFA-style pitch.
+const LINEUP_XI = [['shirts', 'Shirts'], ['cards', 'Cards'], ['cardsv', 'Cards (vertical)']];
 
 export function loadSettings() {
   const s = { ...DEFAULT_SETTINGS, ...lsGet(SETTINGS_KEY, {}) };
@@ -78,6 +80,7 @@ export function loadSettings() {
   if (!WEATHERS.some(([k]) => k === s.weather)) s.weather = DEFAULT_SETTINGS.weather;
   if (!UI_STYLES.some(([k]) => k === s.ui)) s.ui = DEFAULT_SETTINGS.ui;
   if (!LINEUP_STYLES.some(([k]) => k === s.lineupCards)) s.lineupCards = DEFAULT_SETTINGS.lineupCards;
+  if (!LINEUP_XI.some(([k]) => k === s.lineupXI)) s.lineupXI = DEFAULT_SETTINGS.lineupXI;
   if (s.accent !== 'custom' && !UI_ACCENTS.some(([k]) => k === s.accent)) s.accent = DEFAULT_SETTINGS.accent;
   return s;
 }
@@ -435,7 +438,7 @@ async function revealCardRenderer() {
   try {
     const [{ playerCard }, { getPlayer }] = await Promise.all([import('./meta/ui/card.js'), import('./meta/core/players.js')]);
     const small = () => window.innerWidth < 640 || window.innerHeight < 480;
-    return (mp) => {
+    return (mp, size) => {
       const known = mp.id ? getPlayer(mp.id) : null;
       const a = mp.attrs || {};
       const ovr = Number(mp.rawOvr || mp.ovr) || 0;
@@ -445,7 +448,7 @@ async function revealCardRenderer() {
         stats: { pac: a.pac, sho: a.sho, pas: a.pas, dri: a.dri, def: a.def, phy: a.phy },
         gk: { div: a.div, han: a.han, kic: a.kic, ref: a.ref, spd: a.spd, pos: a.pos },
       };
-      return playerCard(c, { size: small() ? 'sm' : 'md', pos: mp.pos });
+      return playerCard(c, { size: size || (small() ? 'sm' : 'md'), pos: mp.pos });
     };
   } catch (e) { console.warn('[lineup] card UI unavailable, using shirts', e); return null; }
 }
@@ -464,8 +467,10 @@ async function openMatchWithReveal(opts) {
   }
   if (!opp || !Array.isArray(opp.players)) return m;
   try { m.handle.pause(); } catch { return m; }
-  const renderCard = loadSettings().lineupCards === 'simple' ? null : await revealCardRenderer();
-  m.revealDone = showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr, renderCard }).then(() => {
+  const set = loadSettings();
+  const finalView = set.lineupXI === 'cardsv' ? 'cards-v' : set.lineupXI === 'cards' ? 'cards' : 'shirts';
+  const renderCard = set.lineupCards === 'simple' && finalView === 'shirts' ? null : await revealCardRenderer();
+  m.revealDone = showLineupReveal({ team: opp, container: m.layer, shirtSVG, teamOvr, renderCard, lineCards: set.lineupCards !== 'simple', finalView }).then(() => {
     // still in this match, and not held by the disconnect overlay: let the game begin
     if (m.layer.isConnected && !m.layer.querySelector('.dc-overlay')) { try { m.handle.resume(); } catch { /* ignore */ } }
   }).catch((e) => { console.error(e); try { m.handle.resume(); } catch { /* ignore */ } });
@@ -890,6 +895,7 @@ function settingsScreen(tab = 'general') {
     segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); upd('ui')(v); }, 'set-ui'),
     accentPicker({ onChange: (patch) => { Object.assign(s, patch); } }),
     segmented('Online lineup reveal', LINEUP_STYLES, s.lineupCards, upd('lineupCards'), 'set-lineup'),
+    segmented('Starting XI at the end', LINEUP_XI, s.lineupXI, upd('lineupXI'), 'set-lineup-xi'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
     h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
     adminCodesField());
