@@ -9,7 +9,7 @@ const ATT = ['ST', 'CF', 'LW', 'RW', 'CAM'];
 export const EVOLUTIONS = [
   { id: 'pace-merchant', name: 'Pace Merchant', desc: 'Turn a steady wide man into a sprinter.',
     req: { maxOvr: 82, max: { pac: 85 }, notPos: ['GK', 'CB'], noLotg: true },
-    objectives: [{ t: 'matches', v: 3, label: 'Play 3 matches in the XI' }, { t: 'wins', v: 2, label: 'Win 2 matches' }],
+    objectives: [], instant: true, // no matches needed (owner, Sep 29: matches don't run on Chromebooks yet)
     upgrade: { stats: { pac: 6, dri: 2 }, styles: ['rapid', 'quickstep'], label: '+6 PAC, +2 DRI, Rapid / Quick Step' } },
   { id: 'clinical', name: 'Clinical Finisher', desc: 'Sharpen an attacker in front of goal.',
     req: { maxOvr: 81, max: { sho: 82 }, pos: ATT, noLotg: true },
@@ -21,7 +21,7 @@ export const EVOLUTIONS = [
     upgrade: { stats: { pas: 5, dri: 3 }, styles: ['tikitaka', 'incisive'], addPos: true, label: '+5 PAS, +3 DRI, Tiki Taka, new position' } },
   { id: 'the-wall', name: 'The Wall', desc: 'Build an unbeatable defender.',
     req: { maxOvr: 80, max: { def: 82 }, pos: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM'], noLotg: true },
-    objectives: [{ t: 'matches', v: 3, label: 'Play 3 matches in the XI' }, { t: 'cleanSheets', v: 1, label: 'Keep a clean sheet' }],
+    objectives: [], instant: true, // no matches needed (owner, Sep 29: matches don't run on Chromebooks yet)
     upgrade: { stats: { def: 5, phy: 3, pac: 1 }, styles: ['anticipate', 'bruiser', 'aerial'], label: '+5 DEF, +3 PHY, Anticipate / Bruiser' } },
   { id: 'safe-hands', name: 'Safe Hands', desc: 'A keeper the fans can trust.',
     req: { maxOvr: 80, pos: ['GK'] },
@@ -29,7 +29,7 @@ export const EVOLUTIONS = [
     upgrade: { gk: 4, styles: ['quickreflexes', 'farreach'], label: '+4 all GK stats, Quick Reflexes' } },
   { id: 'rising', name: 'Rising Star', desc: 'Bronze and silver cards step up to gold.',
     req: { maxOvr: 74, noSpecial: true },
-    objectives: [{ t: 'matches', v: 2, label: 'Play 2 matches in the XI' }, { t: 'wins', v: 1, label: 'Win a match' }],
+    objectives: [], instant: true, // no matches needed (owner, Sep 29: matches don't run on Chromebooks yet)
     upgrade: { all: 5, styles: [], addPos: true, label: '+5 to key stats, new position' } },
   // Elite evolutions (owner request, Sep 29): 15 more that take any card rated up to 98, promos included.
   { id: 'elite-pace', name: 'Lightning Legs', desc: 'Even the quickest can find another gear.',
@@ -50,11 +50,11 @@ export const EVOLUTIONS = [
     upgrade: { stats: { def: 3, phy: 2 }, styles: ['intercept', 'block'], label: '+3 DEF, +2 PHY, Intercept' } },
   { id: 'elite-keeper', name: 'Last Line', desc: 'A keeper who wins you points on his own.',
     req: { maxOvr: 98, pos: ['GK'] },
-    objectives: [{ t: 'matches', v: 4, label: 'Play 4 matches in goal' }, { t: 'cleanSheets', v: 2, label: 'Keep 2 clean sheets' }],
+    objectives: [], instant: true, // no matches needed (owner, Sep 29: matches don't run on Chromebooks yet)
     upgrade: { gk: 3, styles: ['farreach', 'quickreflexes'], label: '+3 all GK stats, Far Reach' } },
   { id: 'elite-dribbler', name: 'Street Magic', desc: 'Close control that leaves defenders on the floor.',
     req: { maxOvr: 98, max: { dri: 97 }, notPos: ['GK', 'CB'] },
-    objectives: [{ t: 'matches', v: 4, label: 'Play 4 matches in the XI' }, { t: 'goals', v: 2, label: 'Score 2 goals with him' }],
+    objectives: [], instant: true, // no matches needed (owner, Sep 29: matches don't run on Chromebooks yet)
     upgrade: { stats: { dri: 3, pac: 1 }, styles: ['technical', 'trickster'], label: '+3 DRI, +1 PAC, Technical' } },
   { id: 'elite-engine', name: 'Box to Box', desc: 'Up and down the pitch for ninety minutes.',
     req: { maxOvr: 98, pos: ['CM', 'CDM', 'CAM'] },
@@ -78,7 +78,7 @@ export const EVOLUTIONS = [
     upgrade: { stats: { sho: 2, pas: 2 }, styles: ['deadball'], wf: 1, label: '+2 SHO, +2 PAS, Dead Ball, +1★ weak foot' } },
   { id: 'elite-captain', name: 'Captain\'s Armband', desc: 'The leader your club builds around.',
     req: { maxOvr: 98 },
-    objectives: [{ t: 'matches', v: 5, label: 'Play 5 matches in the XI' }, { t: 'wins', v: 4, label: 'Win 4 matches' }],
+    objectives: [], instant: true, // no matches needed (owner, Sep 29: matches don't run on Chromebooks yet)
     upgrade: { all: 2, styles: ['pressproven'], label: '+2 to key stats, Press Proven' } },
   { id: 'elite-sweeper', name: 'Sweeper Keeper', desc: 'A keeper who plays like an extra defender.',
     req: { maxOvr: 98, pos: ['GK'] },

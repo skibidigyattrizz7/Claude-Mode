@@ -619,6 +619,20 @@ test('elite evolutions: 15 more, each takes a 98 card and no 99, and their PlayS
   assert.ok(card && card.ovr >= 98 && card.ovr <= 99 && card.evo === 1);
 });
 
+test('instant evolutions: no matches needed, claimable right after starting', () => {
+  const inst = EVO.EVOLUTIONS.filter((e) => e.instant);
+  assert.ok(inst.length >= 5, `${inst.length} instant evolutions`);
+  assert.ok(inst.some((e) => e.req.pos && e.req.pos.includes('GK')), 'one for keepers');
+  const s = UT.createUTState({ clubName: 'Instant FC' }, new Rng(21));
+  const evo = EVO.EVO_BY_ID['elite-captain'];
+  const p = UT.clubPlayers(s).find((x) => EVO.eligibility(x, evo)[0]);
+  assert.ok(EVO.startEvolution(s, evo.id, p.id).ok);
+  const idx = s.evo.active.findIndex((a) => a.evoId === evo.id);
+  assert.ok(EVO.evoComplete(s.evo.active[idx]));
+  const card = EVO.claimEvolution(s, idx);
+  assert.ok(card && card.evo === 1 && card.ovr >= p.ovr);
+});
+
 test('draft: formation, captain, 1-of-5 picks, valid team, knockout rewards', () => {
   const d = DR.newDraft('t1');
   DR.chooseFormation(d, '4-2-3-1');

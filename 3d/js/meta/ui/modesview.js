@@ -228,7 +228,7 @@ export function evolutionsView() {
           const used = !!ev.used[evo.id];
           const elig = UT.clubPlayers(s).filter((p) => EVO.eligibility(p, evo)[0] && !ev.active.some((a) => a.pid === p.id));
           return h('div', { class: `pm-sbc ${used ? 'is-done' : ''}` },
-            h('div', { class: 'pm-sbc-top' }, h('h4', null, evo.name), h('span', { class: 'pm-chip on' }, 'Free')),
+            h('div', { class: 'pm-sbc-top' }, h('h4', null, evo.name), h('span', { class: 'pm-chip on' }, evo.instant ? 'No matches' : 'Free')),
             h('p', null, evo.desc),
             h('ul', { class: 'pm-reqmini' }, reqLines(evo).map((l) => h('li', null, l))),
             h('div', { class: 'pm-sbc-reward' }, h('span', { class: 'pm-dim' }, 'Upgrade'), h('b', null, evo.upgrade.label)),
@@ -254,6 +254,7 @@ function reqLines(evo) {
   if (r.noLotg) out.push('No Legends of the Game');
   if (r.noSpecial) out.push('No special cards');
   out.push(...evo.objectives.map((o) => o.label));
+  if (evo.instant) out.push('No matches needed: claim straight away');
   return out;
 }
 function chooseEvoPlayer(app, evo, elig) {
@@ -264,7 +265,7 @@ function chooseEvoPlayer(app, evo, elig) {
       close();
       if (!r.ok) { app.toast(r.error, 'bad'); return; }
       OBJ.setFlag(app.ut, 'evoStarted');
-      persist(app); app.toast(`${p.name} started ${evo.name}. Play matches with him in your XI!`, 'good'); app.refresh();
+      persist(app); app.toast(evo.instant ? `${p.name} started ${evo.name}. Claim the upgrade now!` : `${p.name} started ${evo.name}. Play matches with him in your XI!`, 'good'); app.refresh();
     },
   })));
   close = modal(app.root, { title: `${evo.name}: choose a player`, wide: true, body: grid, actions: [{ label: 'Cancel' }] });

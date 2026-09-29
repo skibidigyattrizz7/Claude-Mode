@@ -161,5 +161,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): owner can delete any account or guest (Delete on each Players row) and bulk "Delete old guests" (N days idle, 0 = all). Migration 010 applied as 20260929133106. Never the owner account itself.
 - DONE (Sep 29): Klose (late Icon, realplayers.js LATE_ICON_ROWS, kept out of ICON_ROWS so seeded promos do not move) and Muller have 5 cards each, two at 99. Verified no existing card id changed.
 - DONE (Sep 29): Manage (Admin > Players) crashed with "DURATIONS is not defined" (restriction rows); now uses the number+unit picker, and the screen shows an error instead of going blank.
-- TODO (Sep 29): some evolutions should not need matches (matches do not work on Chromebooks yet).
+- DONE (Sep 29): 6 evolutions are 'instant' (no matches, claim right away): Rising Star, Pace Merchant, The Wall, Street Magic, Captain's Armband, Last Line (GK).
 - TODO (Sep 29): Store: animated pack showcase that cycles through packs / zooms in (like the squad view), since there are many packs now.
