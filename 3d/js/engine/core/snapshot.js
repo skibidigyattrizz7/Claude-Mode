@@ -22,6 +22,9 @@
 //            KICK: 0.4 pass / 0.7 lofted / 1 shot   WINDUP: power 0..1   HEAD/WALL: jump height (m)
 //            DIVE: sign = world-z side of the dive (+1 => toward +z), |animP|-1 = hand height (m)
 //                  (flight ~0.28-0.5 s, then lying on the ground until the action ends ~1.3 s)
+//                  the value is side * (1 + h + 4 * rest); rest 17..32 (= 16 + the usual code) marks a forward lunge at the
+//                  dribbler's feet (keeper smother): reach ahead along the facing direction, belly down (render/player.js decodeDive)
+//            GKJUMP: 0 jump-catch / 1 punch (a keeper claiming a cross)
 //            CELEB: variant 0 arms up / 1 airplane / 2 knee slide
 //            SKILL: kind%10 (0 step-over, 1 roulette, 2 ball roll, 3 heel-to-heel), +10 => to the left
 //            SLIDE: animT continues past 0.72 s while getting up (to ~1.22 s)

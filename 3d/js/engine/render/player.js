@@ -52,11 +52,14 @@ export function selectAnimationState(anim, speed, acceleration = 0, turn = 0, po
 export function decodeDive(pp) {
   const side = Math.sign(pp) || 1;
   const v = Math.max(0, Math.abs(pp) - 1);
-  const rest = Math.floor(v / 4 + 1e-6);
+  let rest = Math.floor(v / 4 + 1e-6);
   const h = v - rest * 4;
-  if (!rest) return { side, h, travel: 2, flight: 0.4, legacy: true };
+  if (!rest) return { side, h, travel: 2, flight: 0.4, legacy: true, fwd: false };
+  // rest 17..32 = a forward lunge at the feet (16 + the ordinary code)
+  const fwd = rest > 16;
+  if (fwd) rest -= 16;
   const r = rest - 1;
-  return { side, h, travel: r % 4, flight: 0.24 + 0.09 * Math.floor(r / 4), legacy: false };
+  return { side, h, travel: r % 4, flight: 0.24 + 0.09 * Math.floor(r / 4), legacy: false, fwd };
 }
 
 // ---------------------------------------------------------------- shared geometry
@@ -567,6 +570,13 @@ export class PlayerRig {
     const elb = -(0.18 + run * (0.55 + 0.85 * sprint));
     T[P.leX] = elb - 0.15 * run * Math.max(0, -Math.sin(ph));
     T[P.reX] = elb - 0.15 * run * Math.max(0, Math.sin(ph));
+    if (this.isGK && sprint > 0.02) {
+      // a keeper sprinting out to a through ball / a one-on-one runs with his hands up and a little out, ready to gather or smother
+      const up = sprint * 0.85;
+      T[P.lsX] = lerp(T[P.lsX], -1.05, up); T[P.rsX] = lerp(T[P.rsX], -1.05, up);
+      T[P.lsZ] = lerp(T[P.lsZ], 0.5, up); T[P.rsZ] = lerp(T[P.rsZ], -0.5, up);
+      T[P.leX] = lerp(T[P.leX], -0.9, up); T[P.reX] = lerp(T[P.reX], -0.9, up);
+    }
     const breath = Math.sin(t * 1.9 + (this.seed % 100)) * 0.012 * (1 - run);
     T[P.spX] = 0.03 + 0.025 * s * (back ? -0.6 : 1) + breath;
     T[P.pitch] = (back ? -0.04 : 0.12) * sprint;
@@ -803,6 +813,30 @@ export class PlayerRig {
         T[P.spX] = 0.25 * load * (1 - fl) + 0.1 * fl + 0.3 * kneel * (1 - stand); T[P.spZ] = -dr * 0.15 * fl * (1 - kneel); T[P.spY] = 0;
         T[P.nkY] = 0; T[P.nkX] = -0.15 * fl * (1 - land);
         T[P.lift] = 0;
+        if (D.fwd) {
+          // Forward lunge at the dribbler's feet (core/sim.js `_gkLunge`): launch off the plant foot low over the grass, both
+          // hands reaching ahead along the line to the ball, chest down. After the touch the arms fold in around the ball,
+          // he slides on his belly, lies a moment, then pushes up to a kneel and stands (same rise as the side dives).
+          const fly = easeOut(fl), sl = easeIn(land), fold = seg(u, F + 0.05, F + 0.3), sm = 1 - stand;
+          let yy = STAND_Y - 0.3 * load * (1 - fl);
+          if (fl > 0) yy = lerp(STAND_Y - 0.3, 0.72, fly);
+          yy = lerp(yy, 0.27, sl); yy = lerp(yy, 0.46, kneel); yy = lerp(yy, STAND_Y, stand);
+          T[P.bodyY] = yy;
+          T[P.pitch] = lerp(lerp(0.2 * load, 1.05, fly), 1.3, sl) * (1 - kneel * 0.75) * sm;
+          T[P.roll] = dr * (0.2 * fly + 0.12 * sl) * (1 - kneel);
+          T[P.yaw] = 0;
+          const aim = lerp(lerp(-0.4, -2.85, fly), -1.45, fold * (1 - kneel));
+          T[P.lsX] = aim; T[P.rsX] = aim;
+          T[P.lsZ] = lerp(0.3, 0.14, fly) + 0.2 * fold; T[P.rsZ] = -(lerp(0.3, 0.14, fly) + 0.2 * fold);
+          T[P.leX] = lerp(-0.6, -0.08, fly) - 1.5 * fold * (1 - kneel); T[P.reX] = T[P.leX];
+          T[P.lhX] = lerp(lerp(-0.55 * load, 0.32, fl), 0.15, sl); T[P.rhX] = lerp(lerp(-0.55 * load, 0.05, fl), 0.1, sl);
+          T[P.lkX] = lerp(lerp(0.9 * load, 0.55, fl), 0.25, sl); T[P.rkX] = lerp(lerp(0.9 * load, 0.85, fl), 0.3, sl);
+          T[P.lhZ] = 0.08 * fl; T[P.rhZ] = -0.08 * fl;
+          T[P.lkX] = lerp(T[P.lkX], 1.5, kneel * sm); T[P.rkX] = lerp(T[P.rkX], 1.1, kneel * sm);
+          T[P.lhX] = lerp(T[P.lhX], -0.7, kneel * sm); T[P.rhX] = lerp(T[P.rhX], -0.35, kneel * sm);
+          T[P.spX] = (0.12 * fl + 0.3 * kneel) * sm; T[P.spZ] = 0; T[P.spY] = 0;
+          T[P.nkX] = -0.55 * fly * (1 - kneel); T[P.nkY] = 0;
+        }
         break;
       }
       case ANIM.CELEB: {
