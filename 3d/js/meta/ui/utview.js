@@ -20,8 +20,9 @@ import * as SS from '../core/seasons.js';
 import { ensureEvo } from '../core/evolutions.js';
 import { playstyleList } from './card.js';
 import { adminCodesPanel, adminBadge } from './adminview.js';
-import { tileIcon } from './icons.js';
+import { tileIcon, icon } from './icons.js';
 import { giftsButton } from './giftsview.js';
+import { accentPicker, uiStylePicker } from '../../uiprefs.js';
 import { friendsButton } from './friendsview.js';
 import { swapsView } from './swapsview.js';
 import { getConfig, effPrice } from './config.js';
@@ -121,6 +122,14 @@ export function cardMeta(p, extra = null) {
   return h('div', { class: 'pm-cardmeta' },
     h('span', { class: 'pm-cardmeta-pos', title: 'Positions' }, h('b', null, p.pos), (p.alt || []).length ? ` ${p.alt.join(' ')}` : ''),
     extra);
+}
+
+/** Display settings without leaving Ultimate Team (owner, Sep 29): interface style + UI colour (js/uiprefs.js). */
+function displayButton(app) {
+  return h('button', { class: 'pm-giftsbtn', 'aria-label': 'Display settings', title: 'Display settings: interface style and colour',
+    onclick: () => modal(app.root, { title: 'Display', className: 'pm-displaymodal',
+      body: h('div', { class: 'pm-display' }, uiStylePicker(), accentPicker(), h('p', { class: 'pm-dim' }, 'Saved on this device. Match settings are in the main menu Settings.')),
+      actions: [{ label: 'Done', primary: true }] }) }, icon('gear'));
 }
 
 // ---------- home ----------
@@ -224,7 +233,7 @@ export function utHomeView() {
             h('div', { class: 'pm-chiprow' },
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`)),
               h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
-          h('div', { class: 'pm-clubhead-btns' }, friendsButton(app), giftsButton(app), adminBadge(app))),
+          h('div', { class: 'pm-clubhead-btns' }, displayButton(app), friendsButton(app), giftsButton(app), adminBadge(app))),
         h('div', { class: 'pm-uthub' },
           squadTile, storeTile, sbcTile, battlesTile, objTile, rivals, marketTile, promoTile,
           h('div', { class: 'pm-hxminis' }, mini('Club', `${s.club.length} players`, () => app.push(clubView()), 'club'),

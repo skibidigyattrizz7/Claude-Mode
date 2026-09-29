@@ -1,6 +1,7 @@
 // Pitchside 3D — app shell: main menu, team select, settings, controls rebinding, result screen,
 // and the startMatch() wrapper around the engine's createMatch(). Engine + meta are loaded with
 // dynamic import() so a broken module shows a friendly error instead of a blank page.
+import { UI_ACCENTS, accentPicker, applyUiPrefs } from './uiprefs.js';
 import { DEFAULT_KEYBINDS, loadKeybinds, saveKeybinds, resetKeybinds } from './shared/keybinds.js';
 import { GAMEPLAY_DEFAULTS, loadGameplay, saveGameplay } from './shared/gameplay.js';
 import { dedupeTeams } from './net/protocol.js';
@@ -64,11 +65,6 @@ const WEATHERS = [['clear', 'Clear'], ['rain', 'Rain'], ['snow', 'Snow'], ['rand
 const UI_STYLES = [['classic', 'Classic'], ['stadium', 'Stadium']];
 // Online lineup reveal: full player cards per line (default) or the simple shirt tiles.
 const LINEUP_STYLES = [['cards', 'Full cards'], ['simple', 'Simple']];
-// UI colour (owner request, Sep 29): the accent used across menus, Ultimate Team and Career (css/accent.css).
-// [id, label, swatch colour, ink]; 'default' keeps each interface style's own accent.
-const UI_ACCENTS = [['default', 'Theme default', '', ''], ['lime', 'Lime', '#cdfb3c', '#0b0d10'], ['orange', 'Orange', '#ff6a1f', '#0a0f14'], ['red', 'Red', '#ff4757', '#0a0f14'],
-  ['gold', 'Gold', '#f5c542', '#0a0f14'], ['green', 'Green', '#34d987', '#06140d'], ['cyan', 'Cyan', '#22d3ee', '#04141a'], ['blue', 'Blue', '#4c8dff', '#050b16'],
-  ['pink', 'Pink', '#ff4fa3', '#14050c'], ['white', 'White', '#eef2f6', '#0b0d10']];
 
 export function loadSettings() {
   const s = { ...DEFAULT_SETTINGS, ...lsGet(SETTINGS_KEY, {}) };
@@ -82,7 +78,7 @@ export function loadSettings() {
   if (!WEATHERS.some(([k]) => k === s.weather)) s.weather = DEFAULT_SETTINGS.weather;
   if (!UI_STYLES.some(([k]) => k === s.ui)) s.ui = DEFAULT_SETTINGS.ui;
   if (!LINEUP_STYLES.some(([k]) => k === s.lineupCards)) s.lineupCards = DEFAULT_SETTINGS.lineupCards;
-  if (!UI_ACCENTS.some(([k]) => k === s.accent)) s.accent = DEFAULT_SETTINGS.accent;
+  if (s.accent !== 'custom' && !UI_ACCENTS.some(([k]) => k === s.accent)) s.accent = DEFAULT_SETTINGS.accent;
   return s;
 }
 function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
@@ -90,28 +86,6 @@ function saveSettings(s) { lsSet(SETTINGS_KEY, s); }
 function applyUiStyle(v) {
   const root = document.documentElement;
   if (v === 'stadium') root.dataset.ui = 'stadium'; else delete root.dataset.ui;
-}
-function applyAccent(v) {
-  const root = document.documentElement;
-  if (v && v !== 'default') root.dataset.accent = v; else delete root.dataset.accent;
-}
-/** Round colour swatches (radio group) for Settings > UI colour. */
-function accentPicker(value, onChange) {
-  const wrap = h('div', { class: 'field' }, h('div', { class: 'field-label', id: 'lbl-set-accent' }, 'UI colour'));
-  const row = h('div', { class: 'accent-row', role: 'radiogroup', 'aria-labelledby': 'lbl-set-accent' });
-  const btns = UI_ACCENTS.map(([id, label, sw, ink]) => {
-    const b = h('button', { type: 'button', role: 'radio', class: `accent-sw${id === 'default' ? ' accent-sw--default' : ''}`, title: label, 'aria-label': label,
-      'aria-checked': String(id === value), 'data-value': id }, id === value ? '✓' : '');
-    if (sw) { b.style.setProperty('--sw', sw); b.style.setProperty('--sw-ink', ink); }
-    b.addEventListener('click', () => {
-      for (const o of btns) { const on = o === b; o.setAttribute('aria-checked', String(on)); o.textContent = on ? '✓' : ''; }
-      onChange(id);
-    });
-    return b;
-  });
-  row.append(...btns);
-  wrap.append(row);
-  return wrap;
 }
 
 // Gameplay assists: P1 uses shared/gameplay.js storage; P2 (local 2-player) has its own profile.
@@ -906,7 +880,7 @@ function settingsScreen(tab = 'general') {
     segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
     segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
     segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); upd('ui')(v); }, 'set-ui'),
-    accentPicker(s.accent, (v) => { applyAccent(v); upd('accent')(v); }),
+    accentPicker({ onChange: (patch) => { Object.assign(s, patch); } }),
     segmented('Online lineup reveal', LINEUP_STYLES, s.lineupCards, upd('lineupCards'), 'set-lineup'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
     h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
@@ -1343,7 +1317,7 @@ function startOnlineServices() {
 
 // ------------------------------------------------------------------ boot
 applyUiStyle(loadSettings().ui);
-applyAccent(loadSettings().accent);
+applyUiPrefs();
 mountStadium(document.querySelector('.bg'));
 mainMenu();
 document.documentElement.classList.add('ready');

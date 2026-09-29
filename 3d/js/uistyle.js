@@ -8,6 +8,14 @@
     if (s && s.ui === 'stadium') root.setAttribute('data-ui', 'stadium');
     // UI colour (Settings > UI colour): applied here too so there's no flash of the default accent
     if (s && typeof s.accent === 'string' && /^[a-z]{2,12}$/.test(s.accent) && s.accent !== 'default') root.setAttribute('data-accent', s.accent);
+    // a custom colour (uiprefs.js applyUiPrefs does the same after load, with a nicer highlight)
+    if (s && s.accent === 'custom' && /^#[0-9a-f]{6}$/i.test(s.accentCustom || '')) {
+      var hx = s.accentCustom, c = [1, 3, 5].map(function (i) { var v = parseInt(hx.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+      var L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      root.style.setProperty('--user-acc', hx); root.style.setProperty('--user-acc-hi', hx);
+      root.style.setProperty('--user-acc-ink', (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#0b0d10' : '#ffffff');
+      root.style.setProperty('--user-acc-soft', 'rgba(' + [1, 3, 5].map(function (i) { return parseInt(hx.slice(i, i + 2), 16); }).join(',') + ',.16)');
+    }
   } catch (e) { /* storage blocked: stay on Classic */ }
 
   var on = function () { return root.getAttribute('data-ui') === 'stadium'; };

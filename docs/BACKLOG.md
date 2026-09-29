@@ -171,3 +171,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): owner badge (Stadium) now a chamfered dark button like its neighbours, accent only on the crown + left edge.
 - DONE (Sep 29): Settings > UI colour: 10 swatches (theme default + 9), css/accent.css, applied before first paint by uistyle.js.
 - DONE (Sep 29): Club and Swaps lag fixed: cards build 48 at a time as you scroll (dom.js lazyFill), Set lookups, debounced search. 1150-card club: 3.7 s -> 0.35 s.
+- DONE (Sep 29): custom colour picker (last swatch opens the browser colour picker; js/uiprefs.js, --user-acc vars).
+- DONE (Sep 29): gear button in the UT header opens Display (interface style + UI colour).
