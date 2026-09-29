@@ -4,28 +4,29 @@ import { ADMIN_EFFECTS, ADMIN_BY_CODE } from '../core/admin.js';
 
 const CSS = `
 .ps3d-adm-chips{position:absolute;left:18px;top:58px;display:flex;flex-wrap:wrap;gap:5px;max-width:46vw;pointer-events:none;z-index:3}
-.ps3d-adm-chips span{background:rgba(120,40,160,.82);border:1px solid rgba(255,215,0,.7);color:#fff;font-size:11px;font-weight:800;letter-spacing:.5px;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.ps3d-adm-chips span{background:rgba(16,19,26,.9);border:1px solid rgba(255,212,0,.75);color:#fff;font-size:11px;font-weight:800;letter-spacing:.5px;padding:2px 7px;border-radius:10px;white-space:nowrap}
 .ps3d-adm-chips span b{color:#ffe14d;font-weight:800;margin-left:4px}
 .ps3d-hud.compact~.ps3d-adm-chips{top:48px}
-.ps3d-adm-crown{position:absolute;right:68px;top:14px;width:44px;height:40px;border-radius:6px;border:0;background:rgba(120,40,160,.75);color:#ffe14d;font-size:20px;pointer-events:auto;z-index:4}
-.ps3d-adm{position:absolute;inset:0;background:rgba(10,4,24,.62);display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:6}
-.ps3d-adm .box{background:linear-gradient(#2a1840,#140c26);border:1px solid rgba(255,215,0,.45);border-radius:10px;padding:16px 18px;width:min(760px,94vw);max-height:90vh;overflow:auto;color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.6);font-size:13px}
-.ps3d-adm h2{margin:0 0 4px;font-style:italic;letter-spacing:3px;color:#ffe14d;font-size:20px}
-.ps3d-adm .sub{color:#c9b6e6;margin-bottom:10px}
-.ps3d-adm .opts{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:rgba(255,255,255,.06);padding:8px 10px;border-radius:8px;margin-bottom:10px}
-.ps3d-adm label{display:flex;gap:6px;align-items:center;color:#d8c9f0;font-weight:600}
-.ps3d-adm select,.ps3d-adm input{background:#1d1233;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:4px 6px;font:inherit}
+.ps3d-adm-crown{position:absolute;right:68px;top:14px;width:44px;height:40px;border-radius:6px;border:1px solid rgba(255,212,0,.6);background:rgba(16,19,26,.8);color:#ffe14d;font-size:20px;pointer-events:auto;z-index:4}
+.ps3d-adm{position:absolute;inset:0;background:rgba(6,8,12,.66);display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:6}
+.ps3d-adm .box{background:#12161d;border:1px solid rgba(255,212,0,.45);border-radius:10px;padding:16px 18px;width:min(760px,94vw);max-height:90vh;overflow:auto;color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.6);font-size:13px}
+.ps3d-adm h2{margin:0 0 4px;letter-spacing:3px;color:#ffe14d;font-size:20px}
+.ps3d-adm .sub{color:#aab3c2;margin-bottom:10px}
+.ps3d-adm .opts{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:#1a1f28;padding:8px 10px;border-radius:8px;margin-bottom:10px}
+.ps3d-adm label{display:flex;gap:6px;align-items:center;color:#cfd6e2;font-weight:600}
+.ps3d-adm select,.ps3d-adm input{background:#0d1016;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:4px 6px;font:inherit}
 .ps3d-adm input[type=number]{width:56px}.ps3d-adm input[type=text]{width:130px}
 .ps3d-adm .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:7px}
-.ps3d-adm .grid button{text-align:left;border:0;border-radius:7px;padding:8px 10px;background:#3a2358;color:#fff;cursor:pointer;font:inherit;font-weight:800;line-height:1.2}
-.ps3d-adm .grid button small{display:block;font-weight:500;color:#cdbbe8;font-size:11px;margin-top:2px}
-.ps3d-adm .grid button:hover,.ps3d-adm .grid button:focus{background:#ffd400;color:#1a0f2e;outline:none}
-.ps3d-adm .grid button:hover small,.ps3d-adm .grid button:focus small{color:#3a2358}
-.ps3d-adm .grid button.owner{background:#6a1a2a}
+.ps3d-adm .grid button{text-align:left;border:0;border-radius:7px;padding:8px 10px;background:#232a36;color:#fff;cursor:pointer;font:inherit;font-weight:800;line-height:1.2;transition:transform 120ms,background 120ms}
+.ps3d-adm .grid button small{display:block;font-weight:500;color:#9aa4b4;font-size:11px;margin-top:2px}
+.ps3d-adm .grid button:hover,.ps3d-adm .grid button:focus{background:#ffd400;color:#14161b;outline:none;transform:translateY(-1px)}
+.ps3d-adm .grid button:active{transform:translateY(1px)}
+.ps3d-adm .grid button:hover small,.ps3d-adm .grid button:focus small{color:#3a3f4a}
+.ps3d-adm .grid button.owner{background:#4a1c24}
 .ps3d-adm .grid button:disabled{opacity:.4;cursor:not-allowed}
 .ps3d-adm .status{min-height:18px;margin:8px 0 0;color:#ffe14d;font-weight:700}
 .ps3d-adm .warn{background:#6a1a2a;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-weight:700}
-.ps3d-adm .close{float:right;border:0;background:#3a2358;color:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:800}
+.ps3d-adm .close{float:right;border:0;background:#232a36;color:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:800}
 `;
 let styleRefs = 0, styleEl = null;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

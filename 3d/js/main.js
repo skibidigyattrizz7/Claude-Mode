@@ -6,7 +6,7 @@ import { GAMEPLAY_DEFAULTS, loadGameplay, saveGameplay } from './shared/gameplay
 import { dedupeTeams } from './net/protocol.js';
 import { gameplayGroups, sanitizeGameplay } from './net/gameplaymeta.js';
 import { online } from './net/services.js';
-import { bindOnline } from './shared/adminauth.js';
+import { bindOnline, getAdminLevel } from './shared/adminauth.js';
 import { maybeShowAccountGate, accountSettingsPane, mountBroadcastBanner, onlineCountBadge, openAccountGate } from './net/accountui.js';
 import { createCloudSync } from './net/cloudsave.js';
 import { setConfigProvider } from './meta/core/config.js';
@@ -388,6 +388,13 @@ export async function openMatch(opts) {
     onEnd: (r) => { if (userOnEnd) try { userOnEnd(r); } catch (err) { console.error(err); } resolve(r); },
   };
   delete full.userSide;
+  // Admin fun-effects menu in every match type for owners / mods (key ` or \, crown on touch). Ultimate Team
+  // already passes its own level; Kick-Off, online and the rest get it here.
+  if (full.adminLevel === undefined) {
+    let lvl = null;
+    try { lvl = getAdminLevel(); } catch { /* ignore */ }
+    full.adminLevel = lvl === 'super' || lvl === 'full' ? 'owner' : lvl === 'mod' ? 'mod' : null;
+  }
   if (Q.get('timeScale')) full.timeScale = Number(Q.get('timeScale')); // dev/testing: fast-forward the sim
   let handle = null;
   let closed = false;

@@ -7,6 +7,8 @@ import { DT, PHASE, SP, PITCH, halfBase, GOAL } from './core/constants.js';
 import { predictBall } from './core/physics.js';
 import { InputManager, emptyInput, EXTRA_BINDS } from './ui/input.js';
 import { Hud } from './ui/hud.js';
+import { AdminUi } from './ui/admin.js';
+import { ADMIN_EFFECTS } from './core/admin.js';
 import { GoalCard, goalCardInfo } from './ui/goalcard.js';
 import { MatchAudio } from './ui/audio.js';
 import { Commentary } from './ui/commentary.js';
@@ -146,6 +148,25 @@ export function createMatch(container, opts = {}) {
   });
   hud.camMode = camMode;
   const goalCard = new GoalCard(hud.el || root, { home: rHome, away: rAway, touch });
+  // Admin fun effects (core/admin.js): active-effect chips on every client; the hidden Admin menu (key ` or \,
+  // crown on touch) only when opts.adminLevel is 'owner' | 'mod'. Effects run on the authoritative sim (offline or
+  // online host); a guest admin forwards commands through opts.onAdminCommand when the host side supports it.
+  const adminLevel = opts.adminLevel === 'owner' || opts.adminLevel === 'mod' ? opts.adminLevel : null;
+  const adminBy = local[0] ? 0 : local[1] ? 1 : 0;
+  function applyAdmin(id, params = {}) {
+    const p = { ...params, by: params.by || SIDES[adminBy], level: params.level || adminLevel || 'mod' };
+    if (sim) return sim.admin.apply(id, p);
+    if (typeof opts.onAdminCommand === 'function') { try { opts.onAdminCommand(id, p); return { ok: true, sent: true }; } catch { return { ok: false, error: 'failed' }; } }
+    return { ok: false, error: 'only the host can use admin effects' };
+  }
+  const adminUi = new AdminUi(root, {
+    hud, home: rHome, away: rAway, level: adminLevel, touch, bySide: adminBy,
+    mode: sim ? 'local' : typeof opts.onAdminCommand === 'function' ? 'relay' : 'blocked',
+    apply: (id, params) => applyAdmin(id, params),
+    playerName: (idx) => { try { return playerData(idx).name; } catch { return ''; } },
+    // offline, the match pauses while the menu is open; online it keeps running
+    onOpen: (open) => { if (netRole === 'local' && !menuOpen) { paused = open; if (!open) last = performance.now(); } },
+  });
   const input = new InputManager(root, binds, {
     touch,
     onCommand: (cmd, arg, slot) => {
@@ -591,6 +612,7 @@ export function createMatch(container, opts = {}) {
       view = guestView(nowMs);
     }
     if (!view) { hud.update(null, { dt }); return; }
+    try { adminUi.update(view); } catch (e) { console.error(e); }
     lastView = view;
     recAcc += dt;
     if (recAcc >= 1 / 30 && !replay) {
@@ -736,6 +758,9 @@ export function createMatch(container, opts = {}) {
     _debug: { get renderer() { return R; }, get sim() { return sim; }, get view() { return lastView; }, get hud() { return hud; } },
     pause() { paused = true; },
     resume() { resume(); },
+    /** Admin fun effects (see core/admin.js): list + apply (authoritative side only; a guest forwards). */
+    listAdminEffects() { return ADMIN_EFFECTS.map((e) => ({ id: e.id, label: e.label, desc: e.desc, params: e.params, ownerOnly: !!e.ownerOnly, scope: e.scope })); },
+    applyAdminEffect(id, params) { return applyAdmin(id, params); },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -744,6 +769,7 @@ export function createMatch(container, opts = {}) {
       if (ro) ro.disconnect();
       input.dispose();
       hud.dispose();
+      try { adminUi.dispose(); } catch { /* ignore */ }
       goalCard.dispose();
       audio.dispose();
       commentary.stop();
