@@ -1385,7 +1385,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
     if (v.cursed) {
-      assert.ok(c && c.cursed && !c.glitch && c.ovr === 1 && c.stats.pac === 1 && c.cardTag === 'THE NII' && c.special === 'secret', v.id);
+      assert.ok(c && c.cursed && !c.glitch && c.ovr === 1 && c.stats.pac === 1 && c.cardTag === v.tag && c.special === 'secret', v.id);
       assert.equal(toMatchPlayer(c, 'ST', 9).cursed, true);
       assert.ok(UT.itemScore(c) > UT.itemScore(getPlayer(SC.SECRET_CARD_ID)), 'THE NII leads the pack reveal');
     } else assert.ok(c && c.glitch && c.ovr === SC.INFINITE_OVR && c.nat === v.nat && c.name === v.name, v.id);

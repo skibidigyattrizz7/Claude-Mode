@@ -44,10 +44,10 @@ export const SECRET_VERSIONS = [
   // "THE NII" (owner request, Sep 29): the anti-secret card. Same vault odds, but `cursed` instead of `glitch`:
   // every stat shows "-∞" and in matches he barely moves, gives the ball away, passes to the opponent and every
   // shot flies into his own goal for 10 own goals (engine/core/sim.js `p.cursed`). Owner's photo, faded edges.
-  // owner request (Sep 29): Perlita + an "evil" twin. `evil`: same ∞ powers, red design with "EVIL" across the top
+  // owner request (Sep 29): Perlita + an "evil" twin. `evil`: red design with "EVIL" across the top, and (owner) -∞ stats: cursed like THE NII
   // (card.js `is-evil`, meta.css). Nation is a guess (MEX); owner can change it.
   { id: 'secret_perlita', last: 'Perlita', name: 'Perlita', nat: 'MEX', skin: 2, photo: 'assets/cards/perlita.webp' },
-  { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'MEX', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, tag: 'EVIL' },
+  { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'MEX', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
