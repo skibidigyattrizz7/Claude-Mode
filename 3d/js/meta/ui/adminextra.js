@@ -290,7 +290,16 @@ export async function sendGift(app, { to, kind, coins, packId, card, count = 1, 
     let target = to, shown = to;
     if (to !== 'all') {
       const players = app.online.players;
-      const r0 = players && typeof players.resolve === 'function' ? await safeCall(() => players.resolve(to), { ok: false, error: 'offline' }) : { ok: true, id: to };
+      let r0 = players && typeof players.resolve === 'function' ? await safeCall(() => players.resolve(to), { ok: false, error: 'offline' }) : { ok: true, id: to };
+      // the public lookup only knows usernames: fall back to the staff search, which also matches club/display
+      // names in any capitals (guests like "Oelke FC" have no username)
+      if ((!r0 || r0.ok === false) && app.online.moderation && typeof app.online.moderation.search === 'function') {
+        const key = (x) => String(x || '').toLowerCase().replace(/[\s_-]/g, '');
+        const sr = await safeCall(() => app.online.moderation.search(to), { ok: false });
+        const items = sr && sr.ok !== false && Array.isArray(sr.items) ? sr.items : [];
+        const hit = items.find((x) => key(x.username) === key(to)) || items.find((x) => key(x.name) === key(to)) || (items.length === 1 ? items[0] : null);
+        if (hit) r0 = { ok: true, id: hit.id, username: hit.username || hit.name };
+      }
       if (!r0 || r0.ok === false) { const e = (r0 && r0.error) || 'player_not_found'; app.toast(`${label} failed: ${e === 'player_not_found' ? `no player "${to}"` : e}.`, 'bad'); return { ok: false, error: e }; }
       target = r0.id; shown = r0.username || to;
     }
@@ -394,8 +403,10 @@ export function giveawayPanel(app) {
  * Prominent "Send card" modal: username/friend code + a searchable card picker (DB players + Admin Cards).
  * Exported so the Admin panel's top-level button and Moderation's per-row "Send card" both reuse it.
  */
-export function openSendCardModal(app, { toUsername = '', card = null } = {}) {
+export function openSendCardModal(app, { toUsername = '', toId = null, card = null } = {}) {
+  // toId (owner panel Players row): shows the name, sends to the exact player id unless the box is edited
   const st = { target: toUsername, q: card ? card.name : '', tradable: true };
+  const dest = () => (toId && st.target === toUsername ? toId : st.target.trim());
   const target = h('input', { class: 'pm-input', value: st.target, placeholder: 'Username or friend code', 'aria-label': 'Recipient' });
   target.addEventListener('input', () => { st.target = target.value; });
   const q = h('input', { class: 'pm-input', type: 'search', value: st.q, placeholder: 'Search any player or Admin Card…', 'aria-label': 'Card search' });
@@ -416,7 +427,7 @@ export function openSendCardModal(app, { toUsername = '', card = null } = {}) {
           class: 'pm-btn pm-btn--primary pm-btn--sm',
           onclick: async () => {
             if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
-            const r = await sendGift(app, { to: st.target.trim(), kind: 'card', card: c }, 'Card');
+            const r = await sendGift(app, { to: dest(), kind: 'card', card: c }, 'Card');
             if (r && r.ok !== false) close();
           },
         }, 'Send')));

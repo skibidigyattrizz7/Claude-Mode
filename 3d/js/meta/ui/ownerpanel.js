@@ -11,6 +11,7 @@ import { PROMOS } from '../core/promos.js';
 import { giftPayloadCard } from '../core/customreg.js';
 import { listCustomCards } from './customcards.js';
 import { save as saveLocal } from '../core/storage.js';
+import { openSendCardModal } from './adminextra.js';
 
 const RESTRICTIONS = [['market', 'Transfer market'], ['packs', 'Packs'], ['messages', 'Messages'], ['codes', 'Using admin codes'], ['admin', 'Activating admin (all staff powers)']];
 const DURATION_UNITS = [['s', 'sec'], ['m', 'min'], ['h', 'hr'], ['d', 'day']];
@@ -116,6 +117,7 @@ export function playersPanel(app) {
             h('small', null, `${u.friendCode ? `Code ${u.friendCode} · ` : ''}Joined ${day(u.createdAt)} · Last seen ${u.online ? 'now' : u.lastSeenAt ? when(u.lastSeenAt) : '-'}`))),
         h('div', { class: 'pm-prow-acts' },
           btn('Message', 'bell', async () => { const t = (prompt(`Message to ${name}:`, '') || '').trim(); if (t) quick('Message', () => svc.message(u.id, t)); }),
+          btn('Card', 'grant', () => openSendCardModal(app, { toUsername: name, toId: u.id })),
           btn('Coins', 'coins', async () => { const n = parseCoins(prompt(`Coins for ${name} (e.g. 5000 or -5000):`, '')); if (n) quick(n > 0 ? 'Add coins' : 'Remove coins', () => svc.giveCoins(u.id, n, { reason: 'owner panel' })); }),
           u.banned
             ? btn('Unban', null, () => quick('Unban', () => mod.unban(u.id)))

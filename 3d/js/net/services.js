@@ -1221,7 +1221,9 @@ export function createOnline(deps) {
     const q = cleanStr(raw, 40, '').replace(/^@/, '');
     if (q.length < 2) return fail('player_not_found');
     const k = usernameKey(q), fc = q.toUpperCase().replace(/-/g, '');
-    const pick = (items) => items.find((p) => p.username && usernameKey(p.username) === k) || items.find((p) => p.friendCode === fc) || (items.length === 1 ? items[0] : null);
+    // also a club/display name in any capitals (guests like "Oelke FC" have no username), owner request Sep 29
+    const pick = (items) => items.find((p) => p.username && usernameKey(p.username) === k) || items.find((p) => p.friendCode === fc)
+      || items.find((p) => p.name && usernameKey(p.name) === k) || (items.length === 1 ? items[0] : null);
     if (adminSecret() || staffRole() || code) {
       const r = await online.moderation.search(q, code);
       const hit = r.ok ? pick(r.items) : null;
