@@ -1618,3 +1618,4 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
   transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .45s ease; }
 .pm-packfan-item .pm-pack { font-size: clamp(9px, .95vw, 13px); box-shadow: 0 1em 1.8em -0.8em #000; }
 @media (prefers-reduced-motion: reduce) { .pm-packfan-item { transition: none; } }
+.pm-lazymore { grid-column: 1 / -1; justify-self: center; margin: 8px 0 16px; }

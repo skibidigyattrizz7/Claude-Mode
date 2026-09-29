@@ -1,7 +1,7 @@
 // Swaps screen: exchange spare cards for coins or tokens, complete swap sets, spend tokens in the Token
 // Store. Pure UI glue over core/swaps.js — reuses the existing card renderer (card.js) and modal/button
 // classes, same as every other UT screen.
-import { h, clear, add, fmtNum, confirmBox, select } from './dom.js';
+import { h, clear, add, fmtNum, confirmBox, select, lazyFill, debounce } from './dom.js';
 import { playerCard } from './card.js';
 import { icon } from './icons.js';
 import * as UT from '../core/ut.js';
@@ -59,14 +59,14 @@ function renderSwapCards(body, app) {
     const sorters = { ovr: (a, b) => b.ovr - a.ovr, coins: (a, b) => SW.swapCoinValue(b) - SW.swapCoinValue(a), tokens: (a, b) => SW.swapTokenValue(b) - SW.swapTokenValue(a) };
     list.sort(sorters[f.sort]);
     count.textContent = `${list.length} eligible (starting XI and admin cards hidden)`;
-    for (const p of list) {
-      const tag = bench.has(p.id) ? h('div', { class: 'pm-cardtag' }, 'SUB') : null;
-      grid.appendChild(playerCard(p, { size: 'sm', extra: tag, onClick: () => swapCardModal(app, p, draw) }));
-    }
+    // built a chunk at a time as you scroll (big clubs lagged when every card was built up front)
+    lazyFill(grid, list, (p) => playerCard(p, { size: 'sm', extra: bench.has(p.id) ? h('div', { class: 'pm-cardtag' }, 'SUB') : null, onClick: () => swapCardModal(app, p, draw) }));
     if (!list.length) grid.appendChild(h('p', { class: 'pm-empty' }, 'No eligible cards (only your starting XI is off-limits).'));
   };
   const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search name…', 'aria-label': 'Search club' });
-  search.addEventListener('input', () => { f.q = search.value; draw(); });
+  const redrawSoon = debounce(draw, 150);
+  search.addEventListener('input', () => { f.q = search.value; redrawSoon(); });
+  app.onCleanup(() => { if (grid._lazyStop) grid._lazyStop(); });
   add(body,
     h('div', { class: 'pm-filterbar' }, search,
       select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),

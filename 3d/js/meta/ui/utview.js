@@ -1,5 +1,5 @@
 // Pitchside Ultimate Team screens.
-import { h, clear, frag, modal, confirmBox, fmtNum, select, add } from './dom.js';
+import { h, clear, frag, modal, confirmBox, fmtNum, select, add, lazyFill, debounce } from './dom.js';
 import { playerCard, attributeBlock } from './card.js';
 import { leagueBadgeSVG } from './leaguebadge.js';
 import { profileFacts } from '../core/bios.js';
@@ -391,13 +391,15 @@ function clubView() {
         list.sort(sorters[f.sort]);
         count.textContent = `${list.length} of ${s.club.length} players`;
         const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
-        for (const p of list) {
-          const tag = inSquad.has(p.id) ? h('div', { class: 'pm-cardtag' }, s.squad.slots.includes(p.id) ? 'XI' : 'SUB') : (s.untradeable || []).includes(p.id) ? h('div', { class: 'pm-cardtag pm-cardtag--ut', title: 'Untradeable' }, 'UT') : null;
+        const xi = new Set(s.squad.slots.filter(Boolean)), untr = new Set(s.untradeable || []);
+        // built a chunk at a time as you scroll (big clubs lagged when every card was built up front)
+        lazyFill(grid, list, (p) => {
+          const tag = inSquad.has(p.id) ? h('div', { class: 'pm-cardtag' }, xi.has(p.id) ? 'XI' : 'SUB') : untr.has(p.id) ? h('div', { class: 'pm-cardtag pm-cardtag--ut', title: 'Untradeable' }, 'UT') : null;
           const onTl = PM.onTransferList(s, p.id);
-          grid.appendChild(h('div', { class: 'pm-cardcell' },
+          return h('div', { class: 'pm-cardcell' },
             playerCard(p, { size: 'sm', extra: tag, onClick: () => clubPlayerModal(app, p, draw) }),
-            cardMeta(p, onTl ? h('span', { class: 'pm-cardmeta-tl', title: 'On your transfer list' }, 'TL') : null)));
-        }
+            cardMeta(p, onTl ? h('span', { class: 'pm-cardmeta-tl', title: 'On your transfer list' }, 'TL') : null));
+        });
         if (!list.length) grid.appendChild(h('p', { class: 'pm-empty' }, 'No players match these filters.'));
         drawBulk(list, inSquad);
       };
@@ -406,8 +408,9 @@ function clubView() {
       const drawBulk = (list, inSquad) => {
         clear(bulk);
         const spare = list.filter((p) => !inSquad.has(p.id));
-        const untr = spare.filter((p) => (s.untradeable || []).includes(p.id));
-        const trade = spare.filter((p) => !(s.untradeable || []).includes(p.id) && !PM.onTransferList(s, p.id));
+        const utSet = new Set(s.untradeable || []);
+        const untr = spare.filter((p) => utSet.has(p.id));
+        const trade = spare.filter((p) => !utSet.has(p.id) && !PM.onTransferList(s, p.id));
         if (!untr.length && !trade.length) return;
         add(bulk, h('span', { class: 'pm-dim' }, `${spare.length} shown not in your squad`),
           untr.length ? h('button', { class: 'pm-btn pm-btn--sm', onclick: async () => {
@@ -423,7 +426,9 @@ function clubView() {
           } }, `Send all to transfer list (${trade.length})`) : null);
       };
       const search = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search name…', value: f.q, 'aria-label': 'Search club' });
-      search.addEventListener('input', () => { f.q = search.value; draw(); });
+      const redrawSoon = debounce(draw, 150);
+      search.addEventListener('input', () => { f.q = search.value; redrawSoon(); });
+      app.onCleanup(() => { if (grid._lazyStop) grid._lazyStop(); });
       add(main, utTabs(app, 'club'),
         h('div', { class: 'pm-filterbar' },
           search,

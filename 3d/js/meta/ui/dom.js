@@ -47,6 +47,33 @@ export function frag(html) {
 
 export function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
 
+/**
+ * Fill `grid` with `list` a chunk at a time (owner, Sep 29: Club / Swaps lagged with ~1,100 cards built at once).
+ * The first chunk renders now; the rest follows as a sentinel after the grid scrolls into view (plus a "Show more"
+ * button as a fallback). Call again to redraw: it clears the grid and cancels the previous observer.
+ */
+export function lazyFill(grid, list, make, chunk = 48) {
+  if (grid._lazyStop) grid._lazyStop();
+  clear(grid);
+  let i = 0, io = null;
+  const more = h('button', { class: 'pm-btn pm-btn--ghost pm-lazymore', type: 'button' });
+  const step = () => {
+    const end = Math.min(list.length, i + chunk);
+    const f = document.createDocumentFragment();
+    for (; i < end; i++) { const n = make(list[i], i); if (n) f.appendChild(n); }
+    if (more.parentNode) more.remove();
+    grid.appendChild(f);
+    if (i < list.length) { more.textContent = `Show more (${list.length - i} left)`; grid.appendChild(more); if (io) { io.disconnect(); io.observe(more); } }
+    else if (io) { io.disconnect(); io = null; }
+  };
+  more.addEventListener('click', step);
+  if (typeof IntersectionObserver === 'function') io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) step(); }, { rootMargin: '600px 0px' });
+  grid._lazyStop = () => { if (io) io.disconnect(); io = null; };
+  step();
+}
+/** Run `fn` after `ms` of quiet (search boxes that redraw big grids). */
+export function debounce(fn, ms = 150) { let t = 0; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
 let toastTimer = null;
 export function toast(root, msg, kind = 'info') {
   let box = root.querySelector('.pm-toasts');
