@@ -41,8 +41,11 @@ function star(cx, cy, r, fill) {
   return `<polygon points="${pts.join(' ')}" fill="${fill}"/>`;
 }
 
+// Flags for card nations that are not full national teams (adding one to data.js would re-seed generated
+// players). Owner request Sep 29: Israel for the knight secret card.
+const FLAG_ONLY = { ISR: { flag: { t: 'israel', c: ['#FFFFFF', '#0038B8'] } } };
 export function flagSVG(code, cls = 'pm-flag') {
-  const n = NATION_BY_CODE[code];
+  const n = NATION_BY_CODE[code] || FLAG_ONLY[code];
   if (!n) return `<svg class="${cls}" viewBox="0 0 30 20"><rect width="30" height="20" fill="#555"/></svg>`;
   const f = n.flag, c = f.c;
   let body = '';
@@ -53,6 +56,7 @@ export function flagSVG(code, cls = 'pm-flag') {
     case 'cross': body = `<rect width="30" height="20" fill="${c[0]}"/><rect x="12.5" width="5" height="20" fill="${c[1]}"/><rect y="7.5" width="30" height="5" fill="${c[1]}"/>`; break;
     case 'nordic': body = `<rect width="30" height="20" fill="${c[0]}"/><rect x="8" width="4" height="20" fill="${c[1]}"/><rect y="8" width="30" height="4" fill="${c[1]}"/>`; break;
     case 'nordic2': body = `<rect width="30" height="20" fill="${c[0]}"/><rect x="7.5" width="5" height="20" fill="${c[1]}"/><rect y="7.5" width="30" height="5" fill="${c[1]}"/><rect x="8.75" width="2.5" height="20" fill="${c[2]}"/><rect y="8.75" width="30" height="2.5" fill="${c[2]}"/>`; break;
+    case 'israel': body = `<rect width="30" height="20" fill="${c[0]}"/><rect y="2" width="30" height="2.6" fill="${c[1]}"/><rect y="15.4" width="30" height="2.6" fill="${c[1]}"/><path d="M15 6.2 18.3 11.9H11.7Z M15 13.8 11.7 8.1H18.3Z" fill="none" stroke="${c[1]}" stroke-width=".8"/>`; break;
     case 'swiss': body = `<rect width="30" height="20" fill="${c[0]}"/><rect x="13" y="4" width="4" height="12" fill="${c[1]}"/><rect x="9" y="8" width="12" height="4" fill="${c[1]}"/>`; break;
     case 'saltire': body = `<rect width="30" height="20" fill="${c[0]}"/><path d="M0 0L30 20M30 0L0 20" stroke="${c[1]}" stroke-width="3.4"/>`; break;
     case 'circle': body = `<rect width="30" height="20" fill="${c[0]}"/><circle cx="15" cy="10" r="6" fill="${c[1]}"/>`; break;

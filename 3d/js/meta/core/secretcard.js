@@ -49,6 +49,9 @@ export const SECRET_VERSIONS = [
   { id: 'secret_perlita', last: 'Perlita', name: 'Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/perlita.webp' },
   { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp', evil: true, cursed: true, tag: 'EVIL' },
+  // owner request (Sep 29): knight card, the owner's whole picture (title + background) is the card art and every
+  // stat shows a Star of David. Name is a placeholder until the owner gives one.
+  { id: 'secret_knight', last: 'Knight', name: 'Knight', nat: 'ISR', skin: 1, fullArt: 'assets/cards/knight-full.webp', statGlyph: '✡' },
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
@@ -85,6 +88,7 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   p.skin = ver.skin;
   if (ver.photo) { p.photo = ver.photo; p.photoCut = true; }
   if (ver.evil) { p.evil = true; p.cardTag = ver.tag || 'EVIL'; }
+  if (ver.fullArt) { p.fullArt = ver.fullArt; p.statGlyph = ver.statGlyph || null; }
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   if (ver.cursed) {
     // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and

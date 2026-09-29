@@ -1381,7 +1381,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
   // Every version (owner's list) is a full ∞ glitch card with its own name + nation, and none can be granted.
   // THE NII (`cursed`) is the one anti-version: OVR 1, floor stats, no glitch, carried into matches as `cursed`.
-  assert.equal(SC.SECRET_VERSIONS.length, 13);
+  assert.equal(SC.SECRET_VERSIONS.length, 14);
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
     if (v.cursed) {
@@ -1389,7 +1389,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
       assert.equal(toMatchPlayer(c, 'ST', 9).cursed, true);
       assert.ok(UT.itemScore(c) > UT.itemScore(getPlayer(SC.SECRET_CARD_ID)), 'THE NII leads the pack reveal');
     } else assert.ok(c && c.glitch && c.ovr === SC.INFINITE_OVR && c.nat === v.nat && c.name === v.name, v.id);
-    assert.ok(NATION_BY_CODE_T[c.nat], `nation ${c.nat} exists`);
+    assert.ok(NATION_BY_CODE_T[c.nat] || v.fullArt, `nation ${c.nat} exists`); // the full-art knight uses a flag-only nation (art.js FLAG_ONLY)
     assert.equal(A.grantPlayer(s, v.id).ok, false);
   }
 });

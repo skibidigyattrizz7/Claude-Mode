@@ -1619,3 +1619,16 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-packfan-item .pm-pack { font-size: clamp(9px, .95vw, 13px); box-shadow: 0 1em 1.8em -0.8em #000; }
 @media (prefers-reduced-motion: reduce) { .pm-packfan-item { transition: none; } }
 .pm-lazymore { grid-column: 1 / -1; justify-self: center; margin: 8px 0 16px; }
+
+/* ---- Full-art secret card (owner, Sep 29: the knight card). The owner's whole picture, title and background
+   included, fills the card face (shield-masked); a navy fade under the nameplate keeps the stats readable;
+   silver + Israeli-blue frame to match the picture. Stats show the card's glyph (✡) via card.js statGlyph. ---- */
+.pm-card.pm-card.sp-secret.is-fullart { --bord: linear-gradient(135deg, #f4f7ff 0%, #9fb4e8 22%, #0038b8 45%, #e9eef8 62%, #0038b8 80%, #f4f7ff 100%);
+  --face: #07142e; --ink: #ffffff; --num: #ffffff; --ovr: #ffffff; --pat: none;
+  filter: drop-shadow(0 0 .45em rgba(90,140,255,.55)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); }
+.pm-card.is-fullart .pc-fullart { position: absolute; inset: .2em; width: calc(100% - .4em); height: calc(100% - .4em); object-fit: cover; object-position: 50% 0;
+  -webkit-mask: var(--shield) 0 0/100% 100% no-repeat; mask: var(--shield) 0 0/100% 100% no-repeat; z-index: 0; pointer-events: none; }
+.pm-card.is-fullart .pc-in { z-index: 0; }
+.pm-card.is-fullart .pc-fullart + * , .pm-card.is-fullart .pc-side, .pm-card.is-fullart .pc-name, .pm-card.is-fullart .pc-stats, .pm-card.is-fullart .pc-tag, .pm-card.is-fullart .pc-ps { z-index: 2; }
+.pm-card.is-fullart .pc-ovr, .pm-card.is-fullart .pc-pos, .pm-card.is-fullart .pc-name, .pm-card.is-fullart .pc-stat b { text-shadow: 0 0 .25em #0038b8, 0 .06em .12em #000; }
+.pm-card.sp-secret.is-fullart .pc-tag { display: none; } /* the picture carries its own title */
