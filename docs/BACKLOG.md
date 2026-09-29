@@ -156,7 +156,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): secret card "AryeetyMensah" (owner's photo, top label "THE NII"): anti-admin card, all stats shown as -inf; in matches he barely moves, his passes go to the opponent, he loses the ball instantly, and any shot he takes goes in his own goal and counts as 10 own goals. (secretcard.js `cursed`, sim.js `_cursePlan`/`_curseFumble`, tests in engine/tests/cursed.test.mjs; nation set to Ghana, owner can change.)
 - DONE (Sep 29): gifts find players by club/display name in any capitals (e.g. "oelke fc"), not just exact usernames.
 - DONE (Sep 29): owner panel Players rows have a Card button (send any card, like Coins).
-- WAITING (Sep 29): Oelke secret card photo. Cut-out ready (recovered from the session log) but the photo has DO NOT COPY / (c) 2024 watermarks (school proof); asked the owner before publishing.
+- DONE (Sep 29): Oelke secret card uses the owner's photo, cut out (3d/assets/cards/oelke.webp).
 - DONE (Sep 29): 15 more "elite-" Evolutions (evolutions.js) that accept cards rated up to 98, promos included.
 - DONE (Sep 29): owner can delete any account or guest (Delete on each Players row) and bulk "Delete old guests" (N days idle, 0 = all). Migration 010 applied as 20260929133106. Never the owner account itself.
 - DONE (Sep 29): Klose (late Icon, realplayers.js LATE_ICON_ROWS, kept out of ICON_ROWS so seeded promos do not move) and Muller have 5 cards each, two at 99. Verified no existing card id changed.

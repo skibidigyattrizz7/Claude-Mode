@@ -35,7 +35,7 @@ export const SECRET_VERSIONS = [
   { id: 'secret_kilner', last: 'Kilner', name: 'Kilner', nat: 'SCO', skin: 0 },
   { id: 'secret_collins', last: 'Collins', name: 'Collins', nat: 'KOR', skin: 1 },
   { id: 'secret_patel', last: 'Patel', name: 'Patel', nat: 'IND', skin: 3 },
-  { id: 'secret_oelke', last: 'Oelke', name: 'Oelke', nat: 'GER', skin: 0 },
+  { id: 'secret_oelke', last: 'Oelke', name: 'Oelke', nat: 'GER', skin: 0, photo: 'assets/cards/oelke.webp' }, // owner's photo, cut out (Sep 29)
   { id: 'secret_masilang', last: 'Masilang', name: 'BraydenMasilang', nat: 'PHI', skin: 2 },
   { id: 'secret_nickerson', last: 'Nickerson', name: 'Nickerson', nat: 'KEN', skin: 5 },
   { id: 'secret_dammad', last: 'Dammad', name: 'Dammad', nat: 'PLE', skin: 3 },
