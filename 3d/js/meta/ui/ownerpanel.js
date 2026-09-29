@@ -7,6 +7,7 @@ import { icon } from './icons.js';
 import { playerCard } from './card.js';
 import { safeCall } from './app.js';
 import { getDB, getPlayer } from '../core/players.js';
+import { secretCards } from '../core/secretcard.js';
 import { PROMOS } from '../core/promos.js';
 import { giftPayloadCard } from '../core/customreg.js';
 import { listCustomCards } from './customcards.js';
@@ -225,6 +226,30 @@ function addCardModal(app, onAdd) {
   modal(app.root, { title: 'Add a card to their club', wide: true, body: h('div', null, q, h('label', { class: 'pm-toggle' }, untrad, h('span', null, 'Untradeable')), res), actions: [{ label: 'Close' }] });
 }
 
+/** Pick a card to force out of a pack (database + secret cards; owner, Sep 29). onPick(card) -> keep open unless it returns true. */
+export function forcePullPicker(app, onPick, title = 'Force a pack pull') {
+  const q = h('input', { class: 'pm-input', type: 'search', placeholder: 'Search any card, e.g. Rabbi Patel…', 'aria-label': 'Card search' });
+  const res = h('div', { class: 'pm-admin-results' });
+  let close = null;
+  const draw = () => {
+    clear(res);
+    const s = q.value.trim().toLowerCase();
+    if (s.length < 2) { res.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 letters. Secret cards are included.')); return; }
+    const pool = [...secretCards(), ...getDB().all];
+    const hits = pool.filter((p) => p.name.toLowerCase().includes(s)).sort((a, b) => (b.secret ? 1 : 0) - (a.secret ? 1 : 0) || b.ovr - a.ovr).slice(0, 24);
+    if (!hits.length) res.appendChild(h('p', { class: 'pm-dim' }, 'No matches.'));
+    for (const c of hits) {
+      res.appendChild(h('div', { class: 'pm-mktrow' }, playerCard(c, { size: 'xs' }),
+        h('div', { class: 'pm-mkt-info' }, h('b', null, c.name), h('span', { class: 'pm-dim' }, c.secret ? 'Secret card' : `${c.ovr} ${c.pos}`)),
+        h('button', { class: 'pm-btn pm-btn--primary pm-btn--sm', onclick: async () => { if ((await onPick(c)) === true && close) close(); } }, 'Force')));
+    }
+  };
+  q.addEventListener('input', draw);
+  draw();
+  close = modal(app.root, { title, wide: true, body: h('div', null, h('p', { class: 'pm-dim' }, 'The next pack leads with this card (it walks out).'), q, res), actions: [{ label: 'Close' }] });
+  return close;
+}
+
 export function playerDetailView(id, summary = null) {
   return {
     title: summary ? (summary.username || summary.name || 'Player') : 'Player', kicker: 'Owner · player', cls: 'pm-main--wide',
@@ -340,6 +365,7 @@ export function playerDetailView(id, summary = null) {
         }
         club.appendChild(h('div', { class: 'pm-btnrow pm-wrap' },
           h('button', { class: 'pm-btn pm-btn--primary', onclick: () => addCardModal(app, (c, untradeable) => patch(`Add ${c.name}`, [{ op: 'addCard', card: giftPayloadCard(c), untradeable }])) }, icon('grant'), ' Add a card'),
+          h('button', { class: 'pm-btn', onclick: () => forcePullPicker(app, async (c) => { const r = await patch(`Force ${c.name} from their next pack`, [{ op: 'forcePull', id: c.id }]); return !!(r && r.ok); }, 'Force a pull for this player') }, icon('chest'), ' Force a pack pull'),
           h('button', { class: 'pm-btn pm-btn--danger', onclick: async () => { if (await confirmBox(app.root, 'Reset club', 'Replace their club with a fresh starter club?', 'Reset club', true)) patch('Reset club', [{ op: 'resetClub' }]); } }, 'Fresh starter club')));
         if (d.patches.length) {
           club.appendChild(h('p', { class: 'pm-warnline' }, `${d.patches.length} change${d.patches.length > 1 ? 's' : ''} waiting, applied when the player next opens Ultimate Team:`));

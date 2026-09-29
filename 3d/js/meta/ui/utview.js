@@ -517,7 +517,14 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   const n = Math.max(1, Math.min(10, Math.floor(count) || 1));
   const owned = UT.ownedSet(s), rng = new Rng();
   let items = [];
-  for (let k = 0; k < n; k++) { const got = UT.openPack(packType, owned, rng); for (const it of got) owned.add(it.pid); items = items.concat(got); }
+  for (let k = 0; k < n; k++) {
+    const got = UT.openPack(packType, owned, rng);
+    // admin forced pull: this pack leads with the queued card (walkout) in place of its lead card
+    const forced = UT.takeForcedPull(s);
+    if (forced) got[0] = { pid: forced, cat: 'forced', dup: owned.has(forced) };
+    for (const it of got) owned.add(it.pid);
+    items = items.concat(got);
+  }
   if (n > 1) items.sort((a, b) => UT.itemScore(getPlayer(b.pid)) - UT.itemScore(getPlayer(a.pid)));
   s.stats.packsOpened += n;
   persist(app);

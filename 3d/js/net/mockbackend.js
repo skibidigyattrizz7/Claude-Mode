@@ -1395,7 +1395,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const v = db.profiles[p_player];
       if (!v) return err('not_found');
       if (!mayActOn(a, p_id, v)) return err('not_allowed');
-      const OPS = ['addCard', 'removeCard', 'editCard', 'setTradable', 'resetClub', 'resetObjectives', 'resetSbcs', 'setClubName'];
+      const OPS = ['addCard', 'removeCard', 'editCard', 'setTradable', 'resetClub', 'resetObjectives', 'resetSbcs', 'setClubName', 'forcePull'];
       if (!Array.isArray(p_ops) || p_ops.length < 1 || p_ops.length > 100 || JSON.stringify(p_ops).length > 262144 || !p_ops.every((o) => isObj(o) && OPS.includes(o.op))) return err('bad_value');
       const x = { id: ++db.patchSeq, profileId: v.id, ops: JSON.parse(JSON.stringify(p_ops)), by: a, at: now(), appliedAt: null };
       db.patches.push(x);

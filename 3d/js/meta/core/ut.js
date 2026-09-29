@@ -167,6 +167,24 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   items.sort((a, b) => itemScore(getPlayer(b.pid)) - itemScore(getPlayer(a.pid)));
   return items;
 }
+// ---------- forced pulls (owner, Sep 29) ----------
+// Admin "force what comes out of packs": a queue of card ids on the UT save. Each pack opened takes the next one and
+// it leads that pack (walkout). Filled by the admin tab for yourself, or by an owner patch ({op:'forcePull'}) for
+// another player. Owner decision: secret cards are allowed here (the one deliberate way to hand one out).
+export const FORCED_PULL_MAX = 10;
+export function queueForcedPull(state, pid) {
+  if (!state || typeof pid !== 'string' || !getPlayer(pid)) return false;
+  state.forcedPulls = Array.isArray(state.forcedPulls) ? state.forcedPulls.filter((x) => typeof x === 'string') : [];
+  if (state.forcedPulls.length >= FORCED_PULL_MAX) return false;
+  state.forcedPulls.push(pid);
+  return true;
+}
+/** Next forced card id (removed from the queue) or null. */
+export function takeForcedPull(state) {
+  if (!state || !Array.isArray(state.forcedPulls)) return null;
+  while (state.forcedPulls.length) { const id = state.forcedPulls.shift(); if (getPlayer(id)) return id; }
+  return null;
+}
 export function itemScore(p) {
   if (p.cursed) return 5000; // THE NII (secretcard.js): always leads the pack reveal, like the other secret cards
   return p.ovr + ({ secret: 50, lotg: 45, legend: 30, hero: 20, objective: 15, inform: 10 }[p.special] || (PROMO_BY_ID[p.special] ? 35 : 0)) + (p.rare ? 0.5 : 0) + (p.evo ? 1 : 0);

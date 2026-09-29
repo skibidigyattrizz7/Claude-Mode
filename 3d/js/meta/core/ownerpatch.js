@@ -8,10 +8,11 @@
 //   { op:'resetClub' }                        fresh starter club (club name, kit and coins kept)
 //   { op:'resetObjectives' } / { op:'resetSbcs' }
 //   { op:'setClubName', name }
+//   { op:'forcePull', id }                    their next pack leads with this card (ut.js queueForcedPull)
 import { receiveCard, applyCardEdit } from './customreg.js';
-import { removeFromClub, createUTState } from './ut.js';
+import { removeFromClub, createUTState, queueForcedPull } from './ut.js';
 
-export const OWNER_OPS = ['addCard', 'removeCard', 'editCard', 'setTradable', 'resetClub', 'resetObjectives', 'resetSbcs', 'setClubName'];
+export const OWNER_OPS = ['addCard', 'removeCard', 'editCard', 'setTradable', 'resetClub', 'resetObjectives', 'resetSbcs', 'setClubName', 'forcePull'];
 const ID_RE = /^[A-Za-z0-9_.:-]{1,40}$/;
 
 function setTradable(state, id, tradable) {
@@ -58,6 +59,7 @@ export function applyOwnerOp(state, op) {
     }
     case 'resetObjectives': state.obj = {}; return true;
     case 'resetSbcs': state.sbc = {}; return true;
+    case 'forcePull': return id ? queueForcedPull(state, id) : false;
     case 'setClubName': {
       const n = typeof op.name === 'string' ? op.name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24) : '';
       if (!n) return false;

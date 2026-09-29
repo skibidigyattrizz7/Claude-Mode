@@ -7,7 +7,7 @@ import * as UT from '../core/ut.js';
 import * as C from '../core/career.js';
 import * as A from '../core/admin.js';
 import * as AA from '../../shared/adminauth.js';
-import { getDB } from '../core/players.js';
+import { getDB, getPlayer } from '../core/players.js';
 import { remove as removeKey } from '../core/storage.js';
 import { safeCall } from './app.js';
 import { openPackFlow } from './utview.js';
@@ -197,6 +197,18 @@ export function adminView() {
           class: 'pm-adminpack', disabled: !s, title: pk.name, onclick: () => openPackFlow(app, pk.id, null, st.packCount),
         }, packArt(pk, 'sm'), h('span', null, pk.name), pk.adminOnly ? h('small', { class: 'pm-adminpack-badge' }, 'Admin only') : null))));
 
+      // ---- forced pulls for your own packs (owner, Sep 29) ----
+      const queued = s && Array.isArray(s.forcedPulls) ? s.forcedPulls : [];
+      const forced = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('chest'), ' Force pack pulls'),
+        h('p', { class: 'pm-dim' }, 'Pick what your next packs lead with (up to 10, in order). To force a pull for another player, use Players, then Manage.'),
+        queued.length ? h('div', { class: 'pm-admin-results' }, queued.map((pid, i) => { const p = getPlayer(pid); return p ? h('div', { class: 'pm-mktrow' }, playerCard(p, { size: 'xs' }), h('div', { class: 'pm-mkt-info' }, h('b', null, `${i + 1}. ${p.name}`), h('span', { class: 'pm-dim' }, i ? 'After that' : 'Next pack'))) : null; })) : h('p', { class: 'pm-dim' }, 'Nothing queued.'),
+        h('div', { class: 'pm-btnrow' },
+          h('button', { class: 'pm-btn pm-btn--primary', disabled: !s, onclick: () => OP.forcePullPicker(app, (c) => {
+            if (!UT.queueForcedPull(s, c.id)) { app.toast(`Queue is full (max ${UT.FORCED_PULL_MAX}).`, 'warn'); return false; }
+            app.saveUT(); app.toast(`${c.name} will lead your next pack.`, 'good'); app.refresh(); return true;
+          }) }, 'Choose a card'),
+          queued.length ? h('button', { class: 'pm-btn', onclick: () => { s.forcedPulls = []; app.saveUT(); app.refresh(); } }, 'Clear queue') : null));
+
       // ---- grant player ----
       const results = h('div', { class: 'pm-admin-results' });
       const drawResults = () => {
@@ -281,7 +293,7 @@ export function adminView() {
         h('p', { class: 'pm-dim' }, `${LEVEL_NAME[level]}${(RANK[AA.adminSessionLevel()] || 0) < (RANK[level] || 0) ? ' (from your account role)' : ''}.`),
         h('button', { class: 'pm-btn', onclick: () => { AA.clearAdminSession(); app.toast('Admin locked.'); app.pop(); } }, 'Lock admin'));
       const tools = h('div', { class: 'pm-admin-grid', 'data-admin-tab': 'tools' },
-        can('coins', level) ? coins : null, can('packs', level) ? packs : null,
+        can('coins', level) ? coins : null, can('packs', level) ? packs : null, can('packs', level) ? forced : null,
         can('owner', level) ? progress : null, can('owner', level) ? career : null, can('grant', level) ? grant : null, can('grant', level) ? tradable : null, can('owner', level) ? reset : lock);
 
       // ---- extra tabs: moderation (mod/full), and owner-only Cards / Broadcast / Config ----
