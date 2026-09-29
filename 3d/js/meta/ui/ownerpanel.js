@@ -300,14 +300,16 @@ export function playerDetailView(id, summary = null) {
             }, 'Ban / timeout'),
             p.banned ? h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Unban', () => mod.unban(id)); if (r && r.ok) reload(); } }, 'Unban') : null),
           h('div', { class: 'pm-admin-results' }, RESTRICTIONS.map(([k, label]) => {
-            let mins = '';
+            // length: number + unit like the ban above (blank = permanent); DURATIONS was removed in a refactor
+            // but this row still used it, which crashed the whole Manage screen
+            const dur = durationInput(label, 'd');
             const on = p.restrictions && p.restrictions[k];
             return h('div', { class: 'pm-mktrow' },
               h('div', { class: 'pm-mkt-info' }, h('b', null, `Ban from: ${label}`), h('span', { class: 'pm-dim' }, on ? (on === true ? 'Restricted (permanent)' : `Restricted until ${when(on)}`) : 'Allowed')),
-              on ? null : select(DURATIONS, '', (v) => { mins = v; }, { 'aria-label': `${label} duration` }),
+              on ? null : dur.el,
               h('button', {
                 class: `pm-btn pm-btn--sm ${on ? '' : 'pm-btn--danger'}`,
-                onclick: async () => { const r = await run(app, on ? `Allow ${label}` : `Restrict ${label}`, () => svc.restrict(id, k, { on: !on, minutes: mins ? Number(mins) : null })); if (r && r.ok) reload(); },
+                onclick: async () => { const ms = on ? null : dur.ms(); const r = await run(app, on ? `Allow ${label}` : `Restrict ${label}`, () => svc.restrict(id, k, { on: !on, minutes: ms ? Math.max(1, Math.ceil(ms / 60000)) : null })); if (r && r.ok) reload(); },
               }, on ? 'Lift' : 'Restrict'));
           })));
 
@@ -353,7 +355,7 @@ export function playerDetailView(id, summary = null) {
           d.listings.length ? h('p', { class: 'pm-dim' }, `Listings: ${d.listings.slice(0, 10).map((l) => `${l.name} ${fmtNum(l.price)} (${l.status})`).join(' · ')}`) : null);
 
         add(box, h('div', { class: 'pm-admin-grid' }, info, coins, account, bans, message, club, hist));
-      });
+      }).catch((e) => { clear(box); box.appendChild(h('p', { class: 'pm-warnline' }, `This player screen failed to load: ${(e && e.message) || e}.`)); });
     },
   };
 }
