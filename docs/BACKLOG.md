@@ -180,3 +180,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): EVIL VINSON HELL card + timed curse, spinning planet, account ban/owner release, squad/pack/match consequences in `chatgpt/hell-card`. Migration 011 is applied; details: `docs/VINSON_HANDOFF.md`.
 - DONE (Sep 29): Rabbi Patel goal celebration (engine/ui/goalcard.js FLAG_GOAL_IDS): Israeli flag, spinning Star of David, star zooms through its hexagon as the exit (~4.5 s).
 - DONE (Sep 29): Pain Man angelic secret card: halo baked into the cut-out photo, white-and-gold design (is-angel), ANGELIC on top, |∞| stats. Nation guessed EGY.
+- DONE (Sep 29): Saved cards (Club tab): duplicates left on a pack's Done go there instead of being quick-sold; a pack left mid-opening (tab closed / reload) is rescued there on next load (ut.js pendingPack / rescuePendingPack).

@@ -167,6 +167,37 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   items.sort((a, b) => itemScore(getPlayer(b.pid)) - itemScore(getPlayer(a.pid)));
   return items;
 }
+// ---------- saved cards (owner, Sep 29: "I just lost a Rabbi Patel") ----------
+// A pack card that is not sent anywhere is never quick-sold automatically any more: duplicates left on Done go to
+// `state.saved`, and a pack left mid-opening (tab closed, reload) is rescued there on the next load via
+// `state.pendingPack` (ids still unassigned while the opening screen is up). Saved cards can hold duplicates.
+export const SAVED_MAX = 500;
+export function saveCard(state, pid) {
+  if (!state || typeof pid !== 'string' || !getPlayer(pid)) return false;
+  state.saved = Array.isArray(state.saved) ? state.saved.filter((x) => typeof x === 'string') : [];
+  if (state.saved.length >= SAVED_MAX) return false;
+  state.saved.push(pid);
+  return true;
+}
+/** Remove one saved copy (index i). -> pid | null */
+export function takeSaved(state, i) {
+  if (!state || !Array.isArray(state.saved) || !Number.isInteger(i) || i < 0 || i >= state.saved.length) return null;
+  return state.saved.splice(i, 1)[0];
+}
+/** Pack cards the opening screen never resolved (page closed mid-opening) -> Saved cards. -> how many */
+export function rescuePendingPack(state) {
+  if (!state || !Array.isArray(state.pendingPack) || !state.pendingPack.length) return 0;
+  let n = 0;
+  for (const pid of state.pendingPack) if (saveCard(state, pid)) n++;
+  state.pendingPack = [];
+  return n;
+}
+export function resolvePending(state, pid) {
+  if (!state || !Array.isArray(state.pendingPack)) return;
+  const i = state.pendingPack.indexOf(pid);
+  if (i >= 0) state.pendingPack.splice(i, 1);
+}
+
 // ---------- forced pulls (owner, Sep 29) ----------
 // Admin "force what comes out of packs": a queue of card ids on the UT save. Each pack opened takes the next one and
 // it leads that pack (walkout). Filled by the admin tab for yourself, or by an owner patch ({op:'forcePull'}) for

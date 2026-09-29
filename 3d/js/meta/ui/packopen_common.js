@@ -239,7 +239,7 @@ export function makeGrid(stage, pack, players, opts, destroy) {
           dupValue ? h('button', { class: 'pm-btn', onclick: () => { bulkTargets(players, 'sellDups').forEach((x) => sell(x, true)); renderGrid(); } }, `Quick sell duplicates +${fmtNum(dupValue)}`) : null,
           pending ? h('button', { class: 'pm-btn', onclick: () => { bulkTargets(players, 'sellAll').forEach((x) => sell(x, true)); renderGrid(); } }, `Quick sell all +${fmtNum(allValue)}`) : null,
           h('button', { class: 'pm-btn pm-btn--accent pm-po-finish', onclick: finish }, pending ? 'Done' : 'Close'))),
-      pending ? h('p', { class: 'pm-hint pm-po-hint' }, 'On Done, unassigned players go to your club and duplicates are quick sold.') : null,
+      pending ? h('p', { class: 'pm-hint pm-po-hint' }, opts.onSave ? 'On Done, new players go to your club and duplicates go to Saved cards (Club tab). Nothing is sold unless you choose to.' : 'On Done, unassigned players go to your club and duplicates are quick sold.') : null,
       grid));
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }
@@ -253,7 +253,8 @@ export function makeGrid(stage, pack, players, opts, destroy) {
   }
   function sell(x, silent) { if (x.state !== 'new') return; const v = opts.onSell(x.pid, x.dup); x.sold = v; coinsGained += v; x.state = 'sold'; if (!silent) renderGrid(); }
   function finish() {
-    for (const x of players) { if (x.state === 'new') { if (x.dup) sell(x, true); else send(x, true); } }
+    // never auto quick-sell (owner lost a Rabbi Patel): new cards join the club, anything else goes to Saved cards
+    for (const x of players) { if (x.state === 'new') { if (!x.dup) send(x, true); else if (opts.onSave) { opts.onSave(x.pid); x.state = 'saved'; } else sell(x, true); } }
     destroy();
     opts.onDone && opts.onDone({ coins: coinsGained, sent: players.filter((x) => x.state === 'sent').length, listed: players.filter((x) => x.state === 'listed').length, vault: players.filter((x) => x.state === 'vault').length });
   }

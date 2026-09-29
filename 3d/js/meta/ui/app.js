@@ -4,7 +4,7 @@ import { load, save } from '../core/storage.js';
 import { validateTeam } from '../core/teams.js';
 import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
-import { loadUT, saveUT } from '../core/ut.js';
+import { loadUT, saveUT, rescuePendingPack } from '../core/ut.js';
 import { normalizeWallet, settleInfinite, setInfinite as walletSetInfinite, realCoins, isInfinite, cleanCoins } from '../core/wallet.js';
 import { getAdminLevel, bindOnline as bindAdminOnline, clearAdminSession } from '../../shared/adminauth.js';
 import { adminButton, adminView } from './adminview.js';
@@ -62,6 +62,8 @@ export class MetaApp {
     container.appendChild(this.root);
     this.stack = [];
     this.ut = loadUT();
+    // a pack left mid-opening last time (tab closed / reload): its unresolved cards go to Saved cards
+    try { if (this.ut && rescuePendingPack(this.ut)) { saveUT(this.ut); this._rescued = true; } } catch { /* never block loading */ }
     if (this.ut) normalizeWallet(this.ut);
     this.vinson = this.online ? startVinsonExperience(this.online) : null;
     this.career = null;

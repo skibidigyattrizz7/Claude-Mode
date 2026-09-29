@@ -1179,7 +1179,7 @@ test('pack summary bulk actions: send all to club / SBC storage / transfer list,
   const common = (await import('node:fs')).readFileSync(new URL('../ui/packopen_common.js', import.meta.url), 'utf8');
   assert.ok(common.includes("'Send all to SBC storage'") && common.includes("'Send all to transfer list'"));
   const utv = (await import('node:fs')).readFileSync(new URL('../ui/utview.js', import.meta.url), 'utf8');
-  assert.match(utv, /onTransfer: \(pid\) => \{ UT\.addToClub\(s, pid\); const r = PM\.sendToTransferList\(s, pid\)/);
+  assert.match(utv, /onTransfer: \(pid\) => \{ (?:done\(pid\); )?UT\.addToClub\(s, pid\); const r = PM\.sendToTransferList\(s, pid\)/);
 });
 
 test('transfer list (pmarket): flag a club card for sale without listing it yet, then list or return it', async () => {

@@ -446,7 +446,28 @@ function clubView() {
       const redrawSoon = debounce(draw, 150);
       search.addEventListener('input', () => { f.q = search.value; redrawSoon(); });
       app.onCleanup(() => { if (grid._lazyStop) grid._lazyStop(); });
-      add(main, utTabs(app, 'club'),
+      // Saved cards: duplicates left on a pack's Done and cards rescued from a pack left mid-opening (owner, Sep 29)
+      const saved = Array.isArray(s.saved) ? s.saved : [];
+      const savedSec = saved.length ? h('section', { class: 'pm-panel pm-saved' },
+        h('h3', { class: 'pm-h' }, `Saved cards (${saved.length})`),
+        h('p', { class: 'pm-dim' }, 'Cards from packs you did not send anywhere. Nothing here is ever sold unless you choose to.'),
+        h('div', { class: 'pm-admin-results' }, saved.map((pid, i) => {
+          const p = getPlayer(pid); if (!p) return null;
+          const inClub = s.club.includes(pid);
+          const act = (fn, msg) => { if (UT.takeSaved(s, i) == null) return; fn(); persist(app); if (msg) app.toast(msg, 'good'); app.refresh(); };
+          return h('div', { class: 'pm-mktrow' }, playerCard(p, { size: 'xs' }),
+            h('div', { class: 'pm-mkt-info' }, h('b', null, p.name), h('span', { class: 'pm-dim' }, inClub ? 'Duplicate (already in your club)' : 'Not in your club')),
+            h('div', { class: 'pm-btnrow' },
+              inClub ? null : h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => act(() => UT.addToClub(s, pid), `${p.name} added to your club`) }, 'To club'),
+              h('button', { class: 'pm-btn pm-btn--sm', onclick: () => act(() => UT.sendToVault(s, pid), `${p.name} moved to SBC storage`) }, 'To SBC storage'),
+              h('button', { class: 'pm-btn pm-btn--sm pm-btn--ghost', onclick: async () => {
+                const v = quickSellValue(p);
+                if (!(await confirmBox(app.root, 'Quick sell', `Quick sell ${p.name} for ${fmtNum(v)} coins?`, 'Quick sell', true))) return;
+                act(() => { s.coins += v; }, `+${fmtNum(v)} coins`);
+              } }, 'Quick sell')));
+        }))) : null;
+      if (app._rescued) { app._rescued = false; setTimeout(() => app.toast('Cards from a pack you left mid-opening were saved to Saved cards.', 'good'), 0); }
+      add(main, utTabs(app, 'club'), savedSec,
         h('div', { class: 'pm-filterbar' },
           search,
           select([['ALL', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['ATT', 'Attackers']], f.group, (v) => { f.group = v; draw(); }, { 'aria-label': 'Position' }),
@@ -540,17 +561,21 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   } else if (items.some((it) => it.pid === HELL_CARD_ID)) void app.vinson?.onPull();
   if (n > 1) items.sort((a, b) => UT.itemScore(getPlayer(b.pid)) - UT.itemScore(getPlayer(a.pid)));
   s.stats.packsOpened += n;
+  // until each card is resolved it sits in pendingPack, so closing the page mid-opening can't lose it
+  s.pendingPack = (Array.isArray(s.pendingPack) ? s.pendingPack : []).concat(items.map((it) => it.pid));
   persist(app);
+  const done = (pid) => UT.resolvePending(s, pid);
   runPackOpening(app.root, {
     pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
     sellValue: (p) => quickSellValue(p),
-    onSend: (pid) => { UT.addToClub(s, pid); persist(app); },
-    onVault: (pid) => { UT.sendToVault(s, pid); persist(app); },
+    onSend: (pid) => { done(pid); UT.addToClub(s, pid); persist(app); },
+    onVault: (pid) => { done(pid); UT.sendToVault(s, pid); persist(app); },
+    onSave: (pid) => { done(pid); UT.saveCard(s, pid); persist(app); },
     // FC-style "Send all to transfer list": the card joins the club, then is flagged for sale (pmarket.js).
     canTransfer: (pid) => !(s.untradeable || []).includes(pid),
-    onTransfer: (pid) => { UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); return r; },
-    onSell: (pid) => { const v = quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
-    onDone: (sum) => { persist(app); app.refresh(); if (onDone) onDone(sum); },
+    onTransfer: (pid) => { done(pid); UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); return r; },
+    onSell: (pid) => { done(pid); const v = quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
+    onDone: (sum) => { UT.rescuePendingPack(s); persist(app); app.refresh(); if (onDone) onDone(sum); },
   });
 }
 

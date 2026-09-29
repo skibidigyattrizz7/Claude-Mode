@@ -1696,3 +1696,4 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-card.sp-secret.is-angel .pc-name { border-bottom-color: rgba(154,114,16,.45); }
 .pm-card.sp-secret.is-angel .pc-stats::before { background: #9a7210; }
 .pm-card.sp-secret.is-angel .pc-in::after { animation: none; }
+.pm-saved { margin-bottom: 16px; } .pm-saved .pm-admin-results { max-height: 360px; overflow-y: auto; }
