@@ -3,7 +3,7 @@
 // accounts; this saved state also gives offline guests the same presentation and squad rules.
 import { HELL_CARD_ID } from './secretcard.js';
 
-export const DOOM_MS = 3 * 60 * 1000;
+export const DOOM_MS = 60 * 1000;
 export const FIRST_WARNING_MS = 5 * 1000;
 export const FINAL_WARNING_MS = 10 * 1000;
 export const BAN_MESSAGE = "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON";
@@ -34,6 +34,11 @@ export function advance(state, now = Date.now()) {
 
 export function release(state) {
   state.vinson = { phase: 'freed', doomUntil: 0, phaseUntil: 0, pin: null };
+  return state.vinson;
+}
+
+export function lift(state) {
+  state.vinson = { phase: 'lifted', doomUntil: 0, phaseUntil: 0, pin: null };
   return state.vinson;
 }
 
@@ -89,7 +94,8 @@ export function reconcileServer(state, remote, now = Date.now()) {
     if (Number.isFinite(deadline) && (!v || v.phase === 'doom' || v.phase === 'banned')) beginDoom(state, now, deadline);
   } else if (remote.phase === 'banned' && (!v || v.phase !== 'banned')) {
     state.vinson = { phase: 'banned', doomUntil: v?.doomUntil || now, phaseUntil: 0, pin: null };
-  } else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned')) release(state);
+  } else if (remote.phase === 'lifted') lift(state);
+  else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned')) release(state);
   else if (remote.phase === 'locked' && (!v || v.phase !== 'locked')) {
     state.vinson = { phase: 'locked', doomUntil: 0, phaseUntil: 0, pin: v?.pin || { area: 'slot', idx: 9 } };
     enforceLock(state);

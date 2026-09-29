@@ -13,14 +13,26 @@
 .vinson-locked { top: auto; bottom: max(24px, env(safe-area-inset-bottom)); }
 .vinson-screen { position: absolute; inset: 0; overflow: hidden; pointer-events: auto; background: #000; color: #fff0dd;
   display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-.vinson-tiles { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); gap: 2px; }
-.vinson-tile { position: relative; min-width: 0; min-height: 0; overflow: hidden; animation: vinson-appear .3s ease-out both; }
+.vinson-tiles { position: absolute; inset: 0; overflow: hidden; }
+.vinson-tile { position: absolute; width: 22%; height: 22%; overflow: hidden; animation: vinson-appear .65s ease-out both; box-shadow: 0 0 35px #150000; }
 .vinson-tile img { width: 100%; height: 100%; object-fit: cover; object-position: top center; filter: saturate(.52); }
 .vinson-tile span { position: absolute; bottom: 2%; left: 0; width: 100%; padding: 2px 0; background: #130100de;
   color: #fff1dd; font-size: clamp(6px, 1vw, 16px); font-weight: 900; letter-spacing: .03em; }
-.vinson-tile.corner-0 { grid-area: 1 / 1; }.vinson-tile.corner-1 { grid-area: 1 / 8; }
-.vinson-tile.corner-2 { grid-area: 8 / 1; }.vinson-tile.corner-3 { grid-area: 8 / 8; }
-.vinson-blackout { background: #000; }.vinson-blackout .vinson-tiles { opacity: 0; transition: opacity .45s; }
+.vinson-tile.corner-0 { left: 0; top: 0; }.vinson-tile.corner-1 { right: 0; top: 0; }
+.vinson-tile.corner-2 { left: 0; bottom: 0; }.vinson-tile.corner-3 { right: 0; bottom: 0; }
+.vinson-blackout { background: #000; }.vinson-blackout .vinson-tiles { opacity: 0; transition: opacity 1s; }
+.vinson-whisper { position: absolute; left: 7%; top: 38%; color: #d32317; font-size: clamp(28px, 7vw, 96px); font-weight: 900; letter-spacing: .08em; transform: rotate(-5deg); text-shadow: 2px 6px 3px #250000; animation: vinson-flicker 2.3s steps(2) infinite; }
+body.vinson-infected .pm-root .pm-btn:hover, body.vinson-infected .pm-root .pm-uttab:hover { color: #ffb3a5; background: #7d100b; box-shadow: 0 6px 0 #4b0705, inset 0 -6px 12px #ce271b; }
+body.vinson-infected .pm-root .pm-uttab:nth-child(3n) { animation: vinson-flicker 3.7s steps(2) infinite; }
+.vinson-chain { position: absolute; z-index: 5; inset: 0; pointer-events: none; display: grid; place-items: center; font: 900 clamp(28px, 5vw, 64px) Impact, sans-serif; color: #c2ac95; text-shadow: 3px 3px #1c1512, -3px -3px #1c1512; background: linear-gradient(35deg, transparent 45%, #2a2524 47%, #9e8c77 49%, #2a2524 51%, transparent 53%), linear-gradient(-35deg, transparent 45%, #2a2524 47%, #9e8c77 49%, #2a2524 51%, transparent 53%); }
+.vinson-match-screen { position: absolute; z-index: 10000; inset: 0; display: grid; place-items: center; padding: 8vw; text-align: center; background: linear-gradient(180deg, #090000 0%, #7a0909 34%, #2d0000 100%); color: #fff0e0; font: 900 clamp(28px, 5vw, 75px) Impact, sans-serif; letter-spacing: .05em; animation: vinson-drip .9s ease-out both; }
+.vinson-match-screen::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 30px, #a50e0d 31px 40px, transparent 41px 74px); opacity: .35; transform-origin: top; animation: vinson-drip 1.5s ease-in both; }
+.vinson-match-screen strong { position: relative; text-shadow: 3px 6px #330000; }
+.vinson-po-corrupt { position: relative; pointer-events: none; animation: vinson-break .8s cubic-bezier(.5,0,1,1) forwards; color: #fff !important; background: #9a0a08 !important; }
+.vinson-po-corrupt::after { content: '666 001010 666'; position: absolute; left: 0; right: 0; top: 80%; color: #cf2117; font: 900 12px monospace; }
+@keyframes vinson-flicker { 50% { opacity: 0; filter: blur(2px); } 54% { opacity: 1; filter: none; } }
+@keyframes vinson-drip { from { opacity: 0; clip-path: inset(0 0 100%); } to { opacity: 1; clip-path: inset(0); } }
+@keyframes vinson-break { 35% { transform: skew(15deg) scale(1.05); } 100% { opacity: 0; transform: translateY(130vh) rotate(29deg); } }
 .vinson-planet-art { position: relative; width: min(96vw, 1000px); aspect-ratio: 16 / 9; }
 .vinson-planet-art > img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .vinson-spinning-earth { position: absolute; left: 35.5%; top: 41.6%; width: 22.4%; aspect-ratio: 1;
@@ -33,5 +45,5 @@
 .vinson-check:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 @keyframes vinson-appear { from { opacity: 0; transform: scale(.84); } to { opacity: 1; transform: scale(1); } }
 @keyframes vinson-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .vinson-tile, .vinson-spinning-earth { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .vinson-tile, .vinson-spinning-earth, .vinson-whisper, .vinson-match-screen, .vinson-match-screen::before, .vinson-po-corrupt, body.vinson-infected .pm-root .pm-uttab:nth-child(3n) { animation: none; } }
 @media (max-width: 560px) { .vinson-notice { padding: 11px 15px 15px; }.vinson-final-title { margin-top: 6px; } }

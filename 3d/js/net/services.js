@@ -809,11 +809,12 @@ export function createOnline(deps) {
         const r = dataOr(await rpc('vinson_status', { p_id: ident.id, p_secret: ident.secret }));
         if (!r.ok) return fail(r.error || 'server_error');
         if (r.phase === 'banned') setBan({ reason: "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON", until: null });
-        else if (r.phase === 'released' || r.phase === 'locked' || r.exempt) {
+        else if (r.phase === 'released' || r.phase === 'locked' || r.phase === 'lifted' || r.exempt) {
           const a = readAcc();
           if (a?.ban?.reason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") setBan(null);
         }
-        return { ok: true, exempt: r.exempt === true, phase: ['doom', 'banned', 'released', 'locked'].includes(r.phase) ? r.phase : null,
+        if (r.restrictions) { pres.last = { ...(pres.last || {}), restrictions: r.restrictions }; emitPresence(); }
+        return { ok: true, exempt: r.exempt === true, phase: ['doom', 'banned', 'released', 'locked', 'lifted'].includes(r.phase) ? r.phase : null,
           deadline: isoOr(r.deadline), serverNow: isoOr(r.serverNow) };
       },
       async pull() {
@@ -828,6 +829,12 @@ export function createOnline(deps) {
         const a = readAcc();
         if (!a || a.role !== 'owner') return fail('not_allowed');
         const r = dataOr(await rpc('vinson_unban', { p_id: a.id, p_secret: a.token, p_player: playerId }));
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
+      },
+      async lift(playerId) {
+        const a = readAcc();
+        if (!a || a.role !== 'owner') return fail('not_allowed');
+        const r = dataOr(await rpc('vinson_lift', { p_id: a.id, p_secret: a.token, p_player: playerId }));
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
       },
     },
@@ -1464,7 +1471,7 @@ const unavailable = () => {
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
     owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, deletePlayer: f, deleteGuests: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f },
-    vinson: { status: f, pull: f, lock: f, unban: f },
+    vinson: { status: f, pull: f, lock: f, unban: f, lift: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },

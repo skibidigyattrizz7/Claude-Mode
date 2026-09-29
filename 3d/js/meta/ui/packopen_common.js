@@ -196,6 +196,7 @@ export function positionName(pos) {
  */
 export function makeGrid(stage, pack, players, opts, destroy) {
   let coinsGained = 0;
+  let corrupting = false;
   const canTransfer = (pid) => (typeof opts.canTransfer === 'function' ? opts.canTransfer(pid) : true);
   function renderGrid() {
     clear(stage);
@@ -241,6 +242,16 @@ export function makeGrid(stage, pack, players, opts, destroy) {
           h('button', { class: 'pm-btn pm-btn--accent pm-po-finish', onclick: finish }, pending ? 'Done' : 'Close'))),
       pending ? h('p', { class: 'pm-hint pm-po-hint' }, opts.onSave ? 'On Done, new players go to your club and duplicates go to Saved cards (Club tab). Nothing is sold unless you choose to.' : 'On Done, unassigned players go to your club and duplicates are quick sold.') : null,
       grid));
+    if (opts.curse) stage.querySelector('.pm-po-gridwrap')?.addEventListener('click', (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
+      if (corrupting) return;
+      corrupting = true;
+      button.classList.add('vinson-po-corrupt');
+      button.textContent = '666 0101 666';
+      setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 900);
+    }, true);
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }
   // Single-item SBC storage stays duplicates-only (tile button); the bulk action stores every pending item.

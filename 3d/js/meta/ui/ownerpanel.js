@@ -124,6 +124,7 @@ export function playersPanel(app) {
             ? btn('Unban', null, () => quick('Unban', () => mod.unban(u.id)))
             : [btn('Timeout', null, () => quick('Timeout (1 day)', () => mod.ban(u.id, 'Timeout', new Date(Date.now() + 1440 * 60000)), `Time out ${name} for 1 day?`, true)),
               btn('Ban', 'ban', () => { const reason = (prompt(`Ban ${name}. Reason (shown to the player):`, 'Owner decision') || '').trim(); if (reason) quick('Ban', () => mod.ban(u.id, reason, null)); }, 'pm-btn--danger')],
+          u.role === 'owner' ? null : btn('Lift Vinson curse', null, () => quick('Lift Vinson curse', () => app.online.vinson.lift(u.id))),
           btn('Manage', null, open, 'pm-btn--accent'),
           u.role === 'owner' ? null : btn('Delete', null, () => quick('Delete player', () => svc.deletePlayer(u.id), `Delete ${name} completely? Their club, coins, saves and messages are gone for good.`, true), 'pm-btn--danger')));
     }));
@@ -323,7 +324,8 @@ export function playerDetailView(id, summary = null) {
                 if (r && r.ok) reload();
               },
             }, 'Ban / timeout'),
-            p.banned ? h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Unban', () => mod.unban(id)); if (r && r.ok) reload(); } }, 'Unban') : null),
+            p.banned ? h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Unban', () => mod.unban(id)); if (r && r.ok) reload(); } }, 'Unban') : null,
+            h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Lift Vinson curse', () => app.online.vinson.lift(id)); if (r && r.ok) reload(); } }, 'Lift Vinson curse')),
           h('div', { class: 'pm-admin-results' }, RESTRICTIONS.map(([k, label]) => {
             // length: number + unit like the ban above (blank = permanent); DURATIONS was removed in a refactor
             // but this row still used it, which crashed the whole Manage screen
