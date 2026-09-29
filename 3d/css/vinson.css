@@ -30,7 +30,7 @@ body.vinson-infected .pm-root .pm-uttab:nth-child(3n) { animation: vinson-flicke
 .vinson-match-screen strong { position: relative; text-shadow: 3px 6px #330000; }
 .vinson-po-corrupt { position: relative; pointer-events: none; animation: vinson-break .8s cubic-bezier(.5,0,1,1) forwards; color: #fff !important; background: #9a0a08 !important; }
 .vinson-po-corrupt::after { content: '666 001010 666'; position: absolute; left: 0; right: 0; top: 80%; color: #cf2117; font: 900 12px monospace; }
-@keyframes vinson-flicker { 50% { opacity: .22; filter: blur(2px); } 54% { opacity: 1; filter: none; } }
+@keyframes vinson-flicker { 50% { opacity: 0; filter: blur(2px); } 54% { opacity: 1; filter: none; } }
 @keyframes vinson-drip { from { opacity: 0; clip-path: inset(0 0 100%); } to { opacity: 1; clip-path: inset(0); } }
 @keyframes vinson-break { 35% { transform: skew(15deg) scale(1.05); } 100% { opacity: 0; transform: translateY(130vh) rotate(29deg); } }
 .vinson-planet-art { position: relative; width: min(96vw, 1000px); aspect-ratio: 16 / 9; }
