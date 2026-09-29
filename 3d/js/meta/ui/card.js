@@ -115,6 +115,7 @@ export function cardClasses(p) {
   if (p.cursed === true) c.push('is-cursed');
   if (p.evil === true) c.push('is-evil');
   if (p.fullArt) c.push('is-fullart');
+  if (p.angel === true) c.push('is-angel');
   if (p.artTheme) c.push(`art-${tok(p.artTheme)}`);
   if (p.statText) c.push('has-stattext');
   if (p.rare) c.push('rare');
@@ -162,7 +163,7 @@ export function playerCard(p, opts = {}) {
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(othersAll.join(', '))}">${othersAll.length >= 10 ? 'ANY POSITION' : `+${esc(others.join(' '))}${othersAll.length > 3 ? '…' : ''}`}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
   // above it unclipped, so special cards can let the player break out of the top edge of the frame.
-  const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
+  const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true || p.angel === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}

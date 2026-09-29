@@ -56,6 +56,9 @@ export const SECRET_VERSIONS = [
   { id: 'secret_eman', last: 'E-Man', name: 'E-Man', nat: 'ISR', skin: 5, fullArt: 'assets/cards/eman-full.webp', artTheme: 'fire', adminOnly: true },
   { id: 'secret_elijah', last: 'E.L.I.J.A.H.', name: 'E.L.I.J.A.H.', nat: 'ISR', skin: 5, fullArt: 'assets/cards/elijah-full.webp', artTheme: 'fire', adminOnly: true,
     statText: '???', statSup: '∞', tag: 'FINAL FORM' }, // every stat reads ???^∞
+  // owner request (Sep 29): Pain Man, the angelic card: halo (baked into the photo), white-and-gold heavenly design,
+  // every stat |∞| (absolute infinity). Nation is a guess (EGY); owner can change it.
+  { id: 'secret_painman', last: 'Pain Man', name: 'Pain Man', nat: 'EGY', skin: 1, photo: 'assets/cards/pain-man.webp', angel: true, statText: '|∞|', tag: 'ANGELIC' },
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
@@ -98,6 +101,7 @@ function buildSecretCard(id = SECRET_CARD_ID) {
     if (ver.tag) p.cardTag = ver.tag;
   }
   if (ver.adminOnly) p.adminOnly = true;
+  if (ver.angel) { p.angel = true; p.statText = ver.statText; p.statSup = ''; p.cardTag = ver.tag; }
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   if (ver.cursed) {
     // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and

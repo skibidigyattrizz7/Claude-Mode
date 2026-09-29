@@ -1647,3 +1647,16 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-card .pc-ovr--text { font-size: 1.2em; white-space: nowrap; }
 .pm-card.has-stattext .pc-stat b { font-size: .8em; white-space: nowrap; }
 .pm-card.has-stattext .pc-stat span { font-size: .85em; }
+
+/* ---- Pain Man (secretcard.js `angel`, owner Sep 29): heavenly white-and-gold card, soft light rays, gold ink,
+   "ANGELIC" across the top; the halo is part of the photo. Stats read |∞| (card.js statText). ---- */
+.pm-card.pm-card.sp-secret.is-angel { --bord: linear-gradient(135deg, #fffdf2 0%, #f7d774 22%, #fff7d6 45%, #d9a92b 62%, #fffbe8 80%, #f2c94c 100%);
+  --face: radial-gradient(70% 45% at 55% 22%, rgba(255,246,200,.95), transparent 70%), linear-gradient(178deg, #fefcf4 0%, #eef4ff 55%, #d8e6fb 100%);
+  --ink: #3a2c06; --num: #7a5a08; --ovr: #9a7210;
+  --pat: repeating-conic-gradient(from 0deg at 55% 22%, rgba(255,224,130,.22) 0 6deg, transparent 6deg 18deg) 0 0/100% 100%, var(--art-common) 0 0/100% 100%;
+  filter: drop-shadow(0 0 .55em rgba(255,215,110,.75)) drop-shadow(0 .32em .5em rgba(0,0,0,.35)); }
+.pm-card.sp-secret.is-angel .pc-tag { top: .62em; font-size: .56em; font-weight: 900; letter-spacing: .18em; z-index: 4; color: #8a6408; text-shadow: 0 0 .4em rgba(255,236,160,.95); }
+.pm-card.sp-secret.is-angel .pc-ovr, .pm-card.sp-secret.is-angel .pc-name { text-shadow: 0 0 .35em rgba(255,236,160,.9); }
+.pm-card.sp-secret.is-angel .pc-name { border-bottom-color: rgba(154,114,16,.45); }
+.pm-card.sp-secret.is-angel .pc-stats::before { background: #9a7210; }
+.pm-card.sp-secret.is-angel .pc-in::after { animation: none; }
