@@ -149,7 +149,7 @@ export function playerCard(p, opts = {}) {
   const tag = p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
-    ${p.photo ? `<img class="pc-avatar pc-photo" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
+    ${p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
       <div class="pc-ovr">${inf ? '∞' : num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>

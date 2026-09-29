@@ -140,40 +140,7 @@ export function crestSVG(club, cls = 'pm-crest') {
 const HAIR_COLS = { no: ['#e8d18a', '#c9a15b', '#8a6a3b'], de: ['#3b2a1e', '#8a6a3b', '#c9a15b'], nl: ['#c9a15b', '#3b2a1e', '#8a6a3b'], en: ['#2a1d15', '#6b4a2b', '#c9a15b', '#9b4a24'] };
 
 /** Player avatar (stylised bust). */
-/** Hand-drawn faces for special cards (same 60x60 box and style as the generated ones). */
-const CUSTOM_AVATARS = {
-  // "Grumpy Patel" (secret card, owner request Sep 29): curly dark mop, big ears, huge pink bulb nose, deep
-  // cheek folds, a proper frown and a blue-grey hoodie.
-  grumpy: () => {
-    const skin = '#e6ad8f', shade = '#c98f73', hood = '#4d6f8a', hoodDk = '#3c586e';
-    return `<path d="M3 60c1-11 9-16 18-18l9 4 9-4c9 2 17 7 18 18z" fill="${hood}"/>`
-      + `<path d="M18 44c3 5 7 7 12 7s9-2 12-7l-3-2c-2 3-5 5-9 5s-7-2-9-5z" fill="${hoodDk}"/>`
-      + `<path d="M28 46h4v4h-4z" fill="#6fc2b8"/>`
-      + `<rect x="24.5" y="35" width="11" height="9" rx="3" fill="${skin}"/>`
-      + `<ellipse cx="15.6" cy="27" rx="3.4" ry="5.2" fill="${skin}"/><ellipse cx="44.4" cy="27" rx="3.4" ry="5.2" fill="${skin}"/>`
-      + `<ellipse cx="15.9" cy="27.2" rx="1.6" ry="3" fill="${shade}"/><ellipse cx="44.1" cy="27.2" rx="1.6" ry="3" fill="${shade}"/>`
-      + `<path d="M17.5 24c0-9 5.5-13.5 12.5-13.5S42.5 15 42.5 24v6c0 8-5.5 12.5-12.5 12.5S17.5 38 17.5 30z" fill="${skin}"/>`
-      + `<g fill="#1c1512">`
-      + `<circle cx="20.5" cy="16" r="3.6"/><circle cx="24.5" cy="12.2" r="3.9"/><circle cx="29.5" cy="10.6" r="4.1"/>`
-      + `<circle cx="34.6" cy="11.6" r="3.9"/><circle cx="38.8" cy="14.8" r="3.6"/><circle cx="41" cy="19" r="2.6"/>`
-      + `<circle cx="19" cy="19.8" r="2.4"/><path d="M19 18c3 1 7 0 9-2 2 2 6 3 11 2l1-5H19z"/>`
-      + `</g>`
-      + `<path d="M23 22.4q2.6-1.3 5 .3M32 22.7q2.4-1.6 5-.3" stroke="#2a1d18" stroke-width="1" fill="none" stroke-linecap="round"/>`
-      + `<ellipse cx="25.6" cy="24.8" rx="1.3" ry=".9" fill="#2a1d18"/><ellipse cx="34.4" cy="24.8" rx="1.3" ry=".9" fill="#2a1d18"/>`
-      + `<path d="M23.8 24.1q1.8-.8 3.6 0M32.6 24.1q1.8-.8 3.6 0" stroke="${shade}" stroke-width=".9" fill="none"/>`
-      + `<path d="M21.5 29q1.5 5 4.5 7.5M38.5 29q-1.5 5-4.5 7.5" stroke="${shade}" stroke-width="1.1" fill="none" stroke-linecap="round"/>`
-      + `<circle cx="30" cy="29.3" r="4.6" fill="#d9837c"/><circle cx="30" cy="29.3" r="4.6" fill="none" stroke="#b9635d" stroke-width=".5"/>`
-      + `<circle cx="28.6" cy="27.9" r="1.2" fill="#f0aaa3" opacity=".9"/>`
-      + `<g fill="#b9635d" opacity=".55"><circle cx="31.6" cy="28.3" r=".35"/><circle cx="29.4" cy="30.8" r=".35"/><circle cx="32.2" cy="30.6" r=".35"/><circle cx="27.6" cy="29.9" r=".35"/></g>`
-      + `<path d="M25.6 36.4q4.4-2.4 8.8 0" stroke="#7a4636" stroke-width="1.3" fill="none" stroke-linecap="round"/>`
-      + `<path d="M27.5 39.6q2.5 1 5 0" stroke="${shade}" stroke-width=".8" fill="none" stroke-linecap="round"/>`;
-  },
-};
-
 export function avatarSVG(p, cls = 'pm-avatar') {
-  if (p && typeof p.avatar === 'string' && Object.hasOwn(CUSTOM_AVATARS, p.avatar)) {
-    return `<svg class="${cls}" viewBox="0 0 60 60" aria-hidden="true">${CUSTOM_AVATARS[p.avatar]()}</svg>`;
-  }
   const nat = NATION_BY_CODE[p.nat];
   const region = nat ? nat.region : 'en';
   const skins = SKIN[region] || SKIN.en;

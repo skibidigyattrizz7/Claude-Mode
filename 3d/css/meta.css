@@ -312,6 +312,8 @@
 .pm-card.is-promo .pc-avatar, .pm-card.sp-lotg .pc-avatar, .pm-card.sp-hero .pc-avatar { right: -.15em; top: -1.25em; width: 9em; height: 9em; }
 .pc-photo { object-fit: cover; border-radius: .6em; }
 .pm-card .pc-photo.pc-avatar { right: .7em; top: 1.3em; width: 6.2em; height: 6.2em; }
+/* cut-out photo (transparent background, e.g. secret cards): sits like a drawn face, bottom-aligned on the nameplate */
+.pm-card .pc-photo.pc-photo--cut { right: .1em; top: .75em; width: 7.3em; height: 7.3em; border-radius: 0; object-fit: contain; object-position: 50% 100%; }
 /* name bar + 6 stats in two columns (PAC SHO PAS | DRI DEF PHY) */
 .pc-name { position: absolute; left: .9em; right: .9em; top: 6.95em; z-index: 3; text-align: center; font-size: 1.12em; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: .06em 0 .1em; border-bottom: 1px solid color-mix(in srgb, currentColor 38%, transparent); }
 .pc-stats { position: absolute; left: 1.45em; right: 1.3em; top: 9.2em; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto); grid-auto-flow: column; column-gap: 1.2em; z-index: 3; }
