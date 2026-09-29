@@ -101,11 +101,30 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.ps3d-gc,.ps3d-gc.show{transition:none}}
 `;
 
+// Signature goal celebrations for specific cards (owner request, Sep 29). Rabbi Patel (secretcard.js
+// 'secret_knight'): the Israeli flag fills the screen, its Star of David spins, then the star expands until the
+// empty hexagon in its middle swallows the screen, as the exit before the replay / celebration ends.
+const FLAG_GOAL_IDS = new Set(['secret_knight']);
+const FLAG_T = { in: 0.25, spinEnd: 3.1, out: 4.2 }; // s after the goal
+const STAR = '<svg class="gcf-star" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="none" stroke="#0038b8" stroke-width="6" stroke-linejoin="miter">'
+  + '<path d="M0 -40 34.64 20 -34.64 20Z"/><path d="M0 40 -34.64 -20 34.64 -20Z"/></g></svg>';
+const FLAG_CSS = `
+.gcf{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden;background:#fff;opacity:0;transition:opacity .35s ease}
+.gcf.on{opacity:1}.gcf.gone{opacity:0;transition:opacity .3s ease}
+.gcf::before,.gcf::after{content:"";position:absolute;left:0;right:0;height:11%;background:#0038b8;transition:transform .7s cubic-bezier(.6,0,.9,.4)}
+.gcf::before{top:9%}.gcf::after{bottom:9%}
+.gcf.exit::before{transform:translateY(-240%)}.gcf.exit::after{transform:translateY(240%)}
+.gcf-star{position:absolute;left:50%;top:50%;width:min(40vh,40vw);height:min(40vh,40vw);transform:translate(-50%,-50%) rotate(0) scale(1)}
+.gcf.on .gcf-star{animation:gcf-spin 1.1s linear infinite}
+@keyframes gcf-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.gcf.on .gcf-star{animation:none}}
+`;
+
 function addStyle() {
   if (typeof document === 'undefined' || document.getElementById('ps3d-gc-css')) return;
   const s = document.createElement('style');
   s.id = 'ps3d-gc-css';
-  s.textContent = CSS;
+  s.textContent = CSS + FLAG_CSS;
   document.head.appendChild(s);
 }
 
@@ -180,13 +199,42 @@ export class GoalCard {
     el.setAttribute('aria-label', `${info.label}: ${info.name}${info.minute ? `, ${info.minute} minutes` : ''}`);
     this.timers.push(setTimeout(() => el.classList.add('show'), SHOW_DELAY * 1000));
     this.timers.push(setTimeout(() => el.classList.remove('show'), (SHOW_DELAY + SHOW_FOR) * 1000));
+    if (!info.og && info.id && FLAG_GOAL_IDS.has(info.id)) this._flagGoal();
   }
 
-  hide() { this._clear(); this.el.classList.remove('show'); }
+  /** Rabbi Patel's goal: flag in, spinning Star of David, then the star expands out through its hexagon. */
+  _flagGoal() {
+    if (this.fx) this.fx.remove();
+    const fx = document.createElement('div');
+    fx.className = 'gcf';
+    fx.innerHTML = STAR;
+    this.parent.appendChild(fx);
+    this.fx = fx;
+    const star = fx.firstChild;
+    this.timers.push(setTimeout(() => fx.classList.add('on'), FLAG_T.in * 1000));
+    this.timers.push(setTimeout(() => {
+      // freeze the spin where it is, then zoom from that angle (inline styles, so the zoom always animates)
+      const m = getComputedStyle(star).transform;
+      let deg = 0;
+      const mm = /matrix\(([^,]+),\s*([^,]+)/.exec(m || '');
+      if (mm) deg = Math.round(Math.atan2(+mm[2], +mm[1]) * 180 / Math.PI);
+      star.style.animation = 'none';
+      star.style.transform = `translate(-50%,-50%) rotate(${deg}deg) scale(1)`;
+      void star.getBoundingClientRect();
+      star.style.transition = 'transform 1s cubic-bezier(.55,0,.8,.2)';
+      star.style.transform = `translate(-50%,-50%) rotate(${deg + 30}deg) scale(30)`;
+      fx.classList.add('exit');
+    }, FLAG_T.spinEnd * 1000));
+    this.timers.push(setTimeout(() => fx.classList.add('gone'), FLAG_T.out * 1000));
+    this.timers.push(setTimeout(() => { fx.remove(); if (this.fx === fx) this.fx = null; }, (FLAG_T.out + 0.4) * 1000));
+  }
+
+  hide() { this._clear(); this.el.classList.remove('show'); if (this.fx) { this.fx.remove(); this.fx = null; } }
 
   dispose() {
     this.disposed = true;
     this._clear();
+    if (this.fx) { this.fx.remove(); this.fx = null; }
     this.el.remove();
   }
 }
