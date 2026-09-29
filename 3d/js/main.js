@@ -444,8 +444,15 @@ async function revealCardRenderer() {
 async function openMatchWithReveal(opts) {
   const m = await openMatch(opts);
   const role = opts && opts.netRole;
-  if ((role !== 'host' && role !== 'guest') || Q.get('noReveal') === '1') return m;
-  const opp = role === 'host' ? opts.away : opts.home;
+  if (Q.get('noReveal') === '1' || (opts && opts.noReveal)) return m;
+  // online: the other player's team; against the AI (owner, Sep 29): the AI side when exactly one side is the AI
+  let opp = null;
+  if (role === 'host' || role === 'guest') opp = role === 'host' ? opts.away : opts.home;
+  else {
+    const c = m.controllers || opts.controllers || (opts.userSide === 'away' ? { home: 'ai', away: 'p1' } : { home: 'p1', away: 'ai' });
+    if (c.home === 'ai' && c.away !== 'ai') opp = opts.home;
+    else if (c.away === 'ai' && c.home !== 'ai') opp = opts.away;
+  }
   if (!opp || !Array.isArray(opp.players)) return m;
   try { m.handle.pause(); } catch { return m; }
   const renderCard = loadSettings().lineupCards === 'simple' ? null : await revealCardRenderer();
@@ -458,7 +465,7 @@ async function openMatchWithReveal(opts) {
 
 /** startMatch(home, away, opts) -> Promise<result>. Handed to mountMeta and used by Kick-Off. */
 export async function startMatch(home, away, opts = {}) {
-  const m = await openMatch({ ...opts, home, away });
+  const m = await openMatchWithReveal({ ...opts, home, away });
   try { return await m.done; } finally { m.close(); }
 }
 
@@ -681,7 +688,7 @@ async function practice() {
     kit: { primary: '#ff7a1a', secondary: '#1b1b1b', number: '#1b1b1b', shorts: '#1b1b1b', socks: '#ff7a1a' },
     players: base.players.map(weak), bench: [], chemistry: 0,
   };
-  playFromMenu({ home, away, kicker: 'Practice', opts: { controllers: { home: 'p1', away: 'ai' }, difficulty: 'amateur', halfMinutes: 2, weather: loadSettings().weather, netRole: 'local' } });
+  playFromMenu({ home, away, kicker: 'Practice', opts: { controllers: { home: 'p1', away: 'ai' }, difficulty: 'amateur', halfMinutes: 2, weather: loadSettings().weather, netRole: 'local', noReveal: true } });
 }
 
 // ------------------------------------------------------------------ Career / Ultimate Team (meta)
