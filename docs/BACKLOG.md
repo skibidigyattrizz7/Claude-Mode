@@ -145,3 +145,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE 2026-09-29: lineup reveal also before matches vs the AI (Kick-Off, UT modes); not in Practice or local 2-player.
 - Owner (2026-09-29): GK AI: keepers don't come off their line to claim balls (sweeper keeper / crosses / through balls), and in 1v1s they just watch: should rush out, narrow the angle, spread, dive at feet / smother and win the ball.
 - DONE 2026-09-29: in-match admin menu was never wired into the engine; now opens in every match for owner/mod (key ` or \, crown on touch), 29 effects, pauses offline, restyled (no purple gradient). Online: works when you HOST; a guest admin sees 'only works when you host' (guest relay needs a net/ change).
+- DONE 2026-09-29: keeper AI (sweeper claims, cross catch/punch by handling, real 1v1s: narrow angle, set, smother lunge; win ~40% / rounded ~30% / touch ~20% / pen ~8% vs avg keeper). Goals per match about the same.
