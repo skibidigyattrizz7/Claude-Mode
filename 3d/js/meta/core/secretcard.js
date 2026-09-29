@@ -50,11 +50,11 @@ export const SECRET_VERSIONS = [
   { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp', evil: true, cursed: true, tag: 'EVIL' },
   // owner request (Sep 29): knight card, the owner's whole picture (title + background) is the card art and every
-  // stat shows a Star of David. Name is a placeholder until the owner gives one.
-  { id: 'secret_knight', last: 'Knight', name: 'Knight', nat: 'ISR', skin: 1, fullArt: 'assets/cards/knight-full.webp', statGlyph: '✡' },
+  // stat shows a Star of David. Named Rabbi Patel (owner).
+  { id: 'secret_knight', last: 'Rabbi Patel', name: 'Rabbi Patel', nat: 'ISR', skin: 1, fullArt: 'assets/cards/knight-full.webp', statGlyph: '✡' },
   // owner request (Sep 29): E-Man and his final form. Admin Vault only (`adminOnly`), full fire picture as card art.
-  { id: 'secret_eman', last: 'E-Man', name: 'E-Man', nat: 'GHA', skin: 5, fullArt: 'assets/cards/eman-full.webp', artTheme: 'fire', adminOnly: true },
-  { id: 'secret_elijah', last: 'E.L.I.J.A.H.', name: 'E.L.I.J.A.H.', nat: 'GHA', skin: 5, fullArt: 'assets/cards/elijah-full.webp', artTheme: 'fire', adminOnly: true,
+  { id: 'secret_eman', last: 'E-Man', name: 'E-Man', nat: 'ISR', skin: 5, fullArt: 'assets/cards/eman-full.webp', artTheme: 'fire', adminOnly: true },
+  { id: 'secret_elijah', last: 'E.L.I.J.A.H.', name: 'E.L.I.J.A.H.', nat: 'ISR', skin: 5, fullArt: 'assets/cards/elijah-full.webp', artTheme: 'fire', adminOnly: true,
     statText: '???', statSup: '∞', tag: 'FINAL FORM' }, // every stat reads ???^∞
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
