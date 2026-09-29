@@ -9,6 +9,7 @@ import { leadPass, rollSpeedFor, rollTimeTo } from './passing.js';
 import { passArrive, throughLead } from './assist.js';
 import { ps, bst } from './playstyles.js';
 import { instr } from './tactics.js';
+import { gkThink } from './keeper.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
 const tacOf = (sim, team) => (sim.tac && sim.tac[team]) || { defensiveStyle: 'balanced', buildUp: 'balanced', chanceCreation: 'balanced', width: 5, depth: 5, playersInBox: 5, corners: 3, freeKicks: 3, mentality: 0, instructions: {} };
@@ -54,12 +55,15 @@ export function teamThink(sim, team) {
     let best = Infinity, second = Infinity, ctrlT = Infinity;
     for (const m of mates) {
       m.ic = sim.intercept(m);
-      if (m.isGK && !sim.gkMayChase(m)) continue;
+      if (m.isGK && !sim.gkMayChase(m) && !(m.sweepUntil > sim.t)) continue;
       if (oppPass && !m.isGK && sim.t < (m.readAt || 0)) continue;
       if (skipCtrl && m.idx === ctrlIdx) { ctrlT = m.ic.t; continue; }
       if (m.ic.t < best) { second = best; info.chaser2 = info.chaser; best = m.ic.t; info.chaser = m.idx; }
       else if (m.ic.t < second) { second = m.ic.t; info.chaser2 = m.idx; }
     }
+    // a sweeping keeper has committed to this ball (see keeper.js): he is the chaser, the defenders let him have it
+    const gkS = sim.gk(team);
+    if (gkS.sweepUntil > sim.t && info.chaser !== gkS.idx && !(skipCtrl && ctrlIdx === gkS.idx)) { info.chaser2 = info.chaser; info.chaser = gkS.idx; best = Math.min(best, gkS.ic.t); }
     // the user is clearly first to it: one AI teammate only follows up if he is close behind
     if (skipCtrl && ctrlT + 0.7 < best && !oppPass) { info.chaser2 = -1; if (ctrlT + 1.4 < best) info.chaser = -1; }
     info.chaseT = Math.min(best, ctrlT);
@@ -459,7 +463,7 @@ function carrier(sim, p, dt) {
   const b = sim.ball;
   if (b.inHands) return;
   const pressure = sim.pressureOn(p);
-  if (!p.drib || t >= p.nextThink || (pressure < 1.4 && t > p.drib.t0 + 0.25)) {
+  if (!p.drib || t >= p.nextThink || (pressure < 1.4 && t > p.drib.t0 + 0.25 && !(p.roundUntil > t))) {
     p.nextThink = t + diff.think * (1.1 + rng() * 0.9) * (pressure < 2.5 ? 0.6 : 1);
     decideCarrier(sim, p, pressure);
     if (sim.ball.owner !== p.idx) return;
@@ -537,6 +541,22 @@ function decideCarrier(sim, p, pressure) {
   const held = t - (p.gainT || t);
   const riskW = 0.35 + diff.level * 0.1;
   const ment = tac.mentality || 0;
+  // one-on-one with a keeper who has come off his line: sometimes take him on (dribble round him) instead of shooting
+  if (X > 78 && D < 24 && D > 5.5 && !b.inHands) {
+    const gkO = sim.gk(1 - team);
+    if (gkO && !gkO.act && !gkO.sentOff) {
+      const off = Math.abs(gkO.x - gx), dG = Math.hypot(gkO.x - p.x, gkO.z - p.z);
+      if (off > 3.2 && dG < 11 && dG > 2.8 && t > (p.roundT || 0) + 1.5
+        && rng() < clamp(0.3 + (a.dri - 70) * 0.006 + ps(p, 'trickster') * 0.12 + ps(p, 'technical') * 0.05, 0.05, 0.5)) {
+        const zoff = p.z - gkO.z, side = Math.abs(zoff) > 0.5 ? Math.sign(zoff) : rng() < 0.5 ? 1 : -1;
+        const tx = gkO.x + d * 1.4 - p.x, tz = gkO.z + side * 2.7 - p.z, tl = Math.hypot(tx, tz) || 1;
+        p.roundT = t; p.roundUntil = t + 0.85;
+        p.drib = { x: tx / tl, z: tz / tl, sprint: true, t0: t };
+        p.nextThink = t + 0.85;
+        return;
+      }
+    }
+  }
   const counter = tac.buildUp === 'counter' && t - (sim.info[team].wonT || -9) < 6;
   // --- shoot
   if (D < 30 && X > 70) {
@@ -675,110 +695,6 @@ function aiShoot(sim, p, D) {
 }
 
 // ------------------------------------------------------------------ goalkeeper
-function gkThink(sim, p, dt) {
-  const t = sim.t, team = p.team, d = sim.dir[team], b = sim.ball, info = sim.info[team];
-  const gl = sim.ownGoalX(team);
-  if (b.owner === p.idx) return gkDistribute(sim, p);
-  const owner = sim.owner();
-  if (b.owner < 0) {
-    const vTo = -d * b.v.x;
-    // a new kick replaces any stale plan (rebounds, deflections, second shots)
-    if (vTo > 4 && (!p.gkPlan || p.gkPlan.kickT !== b.kickT) && sim.X(team, b.p.x) < 45 && b.lastTeam !== team && sim.path && !(p.act && p.act.type === 'dive')) {
-      const plan = sim.planSave(p);
-      if (plan) { plan.kickT = b.kickT; p.gkPlan = plan; }
-    }
-  }
-  if (p.gkPlan) {
-    const pl = p.gkPlan;
-    if (t > pl.tc + 0.6 || b.owner >= 0) p.gkPlan = null;
-    else if (t >= pl.tReact) {
-      if (!pl.acted && sim.path && t - (pl.refT || 0) > 0.09) {
-        const np = sim.planSave(p);
-        if (np) Object.assign(pl, { tc: np.tc, x: np.x, y: np.y, z: np.z, gz: np.gz, gy: np.gy, refT: t });
-      }
-      const dz = pl.z - p.z, timeLeft = pl.tc - t;
-      const wide = Math.abs(pl.gz) > GOAL.HW + 0.5 || pl.gy > GOAL.H + 0.6;
-      if (!pl.acted) {
-        if (wide && Math.abs(dz) > 1.6) pl.acted = true;
-        else if (Math.abs(dz) > 0.75 || pl.y > p.h + 0.3) {
-          if (timeLeft < 0.45) { pl.acted = true; sim.startDive(p, pl); }
-        }
-      }
-      if (!pl.acted && timeLeft < 0.6 && Math.abs(dz) > 0.5) { p.des.x *= 0.5; p.des.z *= 0.5; p.ready = true; return; }
-      if (!pl.acted || pl.step) {
-        goTo(sim, p, { x: pl.x, z: pl.z }, 'run', 0.05);
-        const sh = Math.hypot(p.des.x, p.des.z), cap = 2.8 + p.a.spd * 0.012;
-        if (sh > cap) { p.des.x *= cap / sh; p.des.z *= cap / sh; }
-        p.ready = true;
-        return;
-      }
-      if (p.act) return;
-    }
-  }
-  if (p.act) return;
-  // loose ball in or near the box: attack it — dive on it when an attacker is closing in
-  if (!owner) {
-    const ic = p.ic || sim.intercept(p);
-    const icX = sim.X(team, ic.x);
-    const claim = info.chaser === p.idx || (icX < 18 && Math.abs(ic.z) < 21 && ic.t < oppBestT(sim, team) + 0.15);
-    if (claim && icX < 20 && Math.abs(ic.z) < 23) {
-      const bd = Math.hypot(b.p.x - p.x, b.p.z - p.z);
-      const bs = Math.hypot(b.v.x, b.v.z);
-      let near = 99;
-      for (const o of sim.teamList[1 - team]) near = Math.min(near, Math.hypot(o.x - b.p.x, o.z - b.p.z));
-      if (bd < 3.2 && bd > 0.7 && b.p.y < 0.7 && bs < 9 && near < 3 && t > p.cool.tackle) { sim.gkDiveAtBall(p); return; }
-      goTo(sim, p, ic, 'sprint', 0);
-      p.ready = false;
-      return;
-    }
-  }
-  // one-on-one: narrow the angle, smother at the attacker's feet, pounce on a heavy touch
-  if (owner && owner.team !== team) {
-    const oX = sim.X(team, owner.x);
-    if (oX < 17 && Math.abs(owner.z) < 18) {
-      const dd = Math.hypot(owner.x - p.x, owner.z - p.z);
-      const ballAhead = Math.hypot(b.p.x - owner.x, b.p.z - owner.z);
-      let covered = false;
-      for (const m of sim.teamList[team]) {
-        if (m.isGK) continue;
-        const sd = segDist(m.x, m.z, owner.x, owner.z, gl, 0);
-        if (sd.t > 0.05 && sd.d < 1.6) { covered = true; break; }
-      }
-      if (!covered || oX < 12) {
-        const rush = ps(p, 'rushout');
-        if (dd < 2.1 + rush * 0.3 + ballAhead * 0.3 && t > p.cool.tackle) { sim.gkSmother(p, owner); return; }
-        const gd = Math.hypot(owner.x - gl, owner.z);
-        const out = clamp(gd * (0.3 + rush * 0.08), 1.2, 7);
-        const ux = (owner.x - gl) / (gd || 1), uz = owner.z / (gd || 1);
-        goTo(sim, p, { x: gl + ux * out, z: uz * out }, 'sprint', 0.1);
-        p.ready = dd < 8;
-        return;
-      }
-    }
-  }
-  // positioning on the angle bisector between the posts (near-post coverage)
-  const bx = b.p.x, bz = b.p.z;
-  const dA = Math.hypot(bx - gl, bz + GOAL.HW), dB = Math.hypot(bx - gl, bz - GOAL.HW);
-  const zP = -GOAL.HW + (2 * GOAL.HW * dA) / (dA + dB);
-  const tx = bx - gl, tz = bz - zP;
-  const dist = Math.hypot(tx, tz) || 1;
-  const far = sim.X(team, bx) > 52;
-  const depth = clamp(0.8 + (dist - 5) * 0.085, 0.7, far ? 13 : 5.2);
-  const posErr = (100 - p.a.pos) * 0.004;
-  let x = gl + (tx / dist) * depth;
-  let z = zP + (tz / dist) * depth * (1 + posErr);
-  z = clamp(z, -(GOAL.HW - 0.3) - (depth > 3 ? 4 : 0), GOAL.HW - 0.3 + (depth > 3 ? 4 : 0));
-  if (d * (x - gl) < 0.3) x = gl + d * 0.3;
-  goTo(sim, p, { x, z }, dist < 30 ? 'run' : 'jog', 0.15);
-  p.ready = dist < 30;
-}
-
-function oppBestT(sim, team) {
-  let best = 99;
-  for (const o of sim.teamList[1 - team]) { const ic = o.ic || sim.intercept(o); if (ic.t < best) best = ic.t; }
-  return best;
-}
-
 export function gkDistribute(sim, p) {
   const t = sim.t, team = p.team, rng = sim.rng;
   if (p.holdStart == null) p.holdStart = t;

@@ -14,6 +14,7 @@ import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } f
 import { leadPass, rollSpeedFor, rollTimeTo, solveLob, solveShot, solveShotCurl, groundVel } from './passing.js';
 import { FORMATIONS, assignSlots, roleGroup } from './formations.js';
 import * as AI from './ai.js';
+import { gkFeetPlay } from './keeper.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
 const HUMAN_AI = { ...DIFFICULTY.world, err: 1 };
@@ -175,6 +176,7 @@ export class MatchSim {
       stam: 1, stamMax: 1, act: null, anim: ANIM.RUN, animT: 0, animP: 0,
       cool: { touch: 0, tackle: 0, steal: 0 }, sentOff: false, pendingOff: false, yellow: 0, fooledUntil: 0, burst: 0,
       nextThink: 0, home: { x: 0, z: 0 }, run: null, drib: null, space: null, ic: null, gkPlan: null, holdStart: null, gainT: 0,
+      claim: null, sweep: null, lunge: null, oo: null, gkSetT: -9,
       faceBall: null, ready: false,
     };
     this._applyData(p, pd, chem);
@@ -367,6 +369,7 @@ export class MatchSim {
     if (this.shootout) { KO.stepPlay(this, dt); return; }
     if (b.owner < 0 && (!this.path || t >= this.nextPredict)) {
       this.path = predictBall(b, 3, 0.05);
+      this.pathT = t;
       this.nextPredict = t + 0.1;
     }
     if (t >= this.nextTeamThink) {
@@ -394,6 +397,11 @@ export class MatchSim {
     this._movePlayers(dt);
     this._collide();
     this._updateBall(dt);
+    if (this.phase !== PHASE.PLAY) return;
+    for (let team = 0; team < 2; team++) {
+      const g = this.gk(team);
+      if (g.lunge) { if (!g.act || g.act.type !== 'dive') g.lunge = null; else if (t >= g.lunge.tC) this._gkLungeResolve(g); }
+    }
     if (this.phase !== PHASE.PLAY) return;
     this._tackles();
     if (this.phase !== PHASE.PLAY) return;
@@ -1657,6 +1665,8 @@ export class MatchSim {
     if (b.inHands) {
       const low = p.act && (p.act.type === 'dive' || p.act.type === 'down' || p.act.type === 'getup');
       b.p.x = p.x + Math.cos(p.face) * 0.3; b.p.z = p.z + Math.sin(p.face) * 0.3; b.p.y = low ? 0.35 : 1.05;
+      // a jump-catch: the ball stays up in his hands at the top of the leap, then comes down to the chest as he lands
+      if (p.act && p.act.type === 'gkjump') b.p.y = lerp(p.h + 0.2 + this._jumpH(p), 1.05, clamp((this.t - p.act.t0 - 0.34) / 0.26, 0, 1));
       b.v.x = p.vx; b.v.z = p.vz; b.v.y = 0;
       return;
     }
@@ -1903,6 +1913,7 @@ export class MatchSim {
       }
     } else {
       // clearances: defenders not under the user's control hack danger away first time
+      if (p.isGK && this._gkFeetClear(p)) return;
       if ((!this.human[team] || gp.autoClearances) && this._autoClear(p)) return;
       if (this._aiFirstTime(p, zone, rel)) return;
     }
@@ -1965,6 +1976,17 @@ export class MatchSim {
     const z = wide ? Math.sign(p.z) * (HW + 4) : clamp(p.z * 1.3 + (this.rng() - 0.5) * 36, -38, 38);
     const tx = this.wx(team, clamp(X + (wide ? 18 + this.rng() * 14 : 35 + this.rng() * 15), 20, 80));
     this.aiKick(p, 'lob', { point: { x: tx, z }, power: 0.9, elev: 0.55, noClamp: true, clear: true });
+    return true;
+  }
+
+  // a keeper meeting the ball with his feet (a sweep outside his box, a back-pass, a scramble): he does not dribble, he
+  // plays it short when it is safe or clears it first time. Calm inside the box: he controls it and plays out (keeper.js).
+  _gkFeetClear(p) {
+    const team = p.team;
+    if (inOwnPenaltyArea(p.x, p.z, this.dir[team]) && this.pressureOn(p) >= 3.5) return false;
+    this._creditPass(p);
+    this._gain(p, 'feet', true);
+    gkFeetPlay(this, p);
     return true;
   }
 
@@ -2091,6 +2113,12 @@ export class MatchSim {
     this._execute(p, { vel, spin: { x: 0, y: 0, z: 0 }, info: { kind: 'header', pass: true, shot: false, target, power: 0.5, noOffside: false } });
   }
 
+  // chance a keeper punches (rather than catches) a cross: more with a crowd around the ball and a high ball, less with
+  // good handling / the Cross Claimer PlayStyle
+  gkPunchP(g, crowd, y) {
+    return clamp(0.1 + crowd * 0.26 + (72 - g.a.han) * 0.012 + (y > 2.4 ? 0.12 : 0) - ps(g, 'crossclaimer') * 0.25 - (g.a.han > 82 ? 0.06 : 0), 0.02, 0.88);
+  }
+
   _gkTouch(g) {
     const b = this.ball, t = this.t;
     if (g.cool.touch > t) return false;
@@ -2114,7 +2142,8 @@ export class MatchSim {
       stretched = e > 0.6;
     } else if (!g.act || ['head', 'kick', 'chest', 'gkjump'].includes(g.act.type)) {
       const hd = Math.hypot(b.p.x - g.x, b.p.z - g.z);
-      const reach = 0.62 + (g.h - 1.85) * 0.3 + ps(g, 'footwork') * 0.08 + (b.p.y < 0.5 ? 0.1 : 0);
+      const claiming = !!(g.act && g.act.type === 'gkjump' && g.act.claim);
+      const reach = 0.62 + (g.h - 1.85) * 0.3 + ps(g, 'footwork') * 0.08 + (b.p.y < 0.5 ? 0.1 : 0) + (claiming ? 0.35 : 0);
       hit = hd < reach && b.p.y < g.h + 0.55 + this._jumpH(g) + ps(g, 'crossclaimer') * 0.1;
     } else return false;
     if (!hit) return false;
@@ -2133,25 +2162,43 @@ export class MatchSim {
     const catchV = (13 + g.a.han * 0.13) * (stretched ? 0.7 : 1) * this.diffFor(g.team).gk * (1 + bst(g, 'gk') * 2);
     const shot = this.shotTracker.shot;
     const valid = shot && shot.team !== g.team ? this.shotTracker.onKeeperTouch(t, false) : false;
-    // high ball into a crowded box: punch it clear (cross-claimers catch far more often)
-    if (b.p.y > 1.7 && b.lastTeam !== g.team && !(g.act && g.act.type === 'dive') && speed > 6) {
+    // a cross / lofted ball (not a driven shot): catch it, or punch it clear (weaker handlers punch more, and can fumble it)
+    const sh0 = this.shotTracker.shot;
+    const drive = !!(sh0 && sh0.team !== g.team && Math.abs(sh0.t - b.kickT) < 0.3);
+    if (b.p.y > 1.2 && b.lastTeam !== g.team && !drive && !(g.act && g.act.type === 'dive') && speed > 4) {
       let crowd = 0;
-      for (const o of this.teamList[1 - g.team]) if (Math.hypot(o.x - b.p.x, o.z - b.p.z) < 1.8) crowd++;
-      if (crowd && this.rng() < 0.62 - ps(g, 'crossclaimer') * 0.3 - (g.a.han - 70) * 0.006) {
+      for (const o of this.teamList[1 - g.team]) if (Math.hypot(o.x - b.p.x, o.z - b.p.z) < 2) crowd++;
+      const cc = ps(g, 'crossclaimer');
+      const cl = g.act && g.act.type === 'gkjump' && g.act.claim ? g.act : null;
+      const punch = cl && cl.punchNow != null ? cl.punchNow : this.rng() < this.gkPunchP(g, crowd, b.p.y);
+      if (punch) {
         const side = Math.sign(b.p.z - g.z) || (this.rng() < 0.5 ? -1 : 1);
         b.v.x = d * (8 + this.rng() * 5); b.v.z = side * (3 + this.rng() * 6); b.v.y = 4.5 + this.rng() * 2.5;
         b.w.x = b.w.y = b.w.z = 0;
         b.lastTouch = g.idx; b.lastTeam = g.team; b.intended = -1;
         g.cool.touch = t + 0.5;
-        g.act = { type: 'gkjump', t0: t - 0.2, dur: 0.75, punch: 1, jh: 0.35 };
+        if (!cl) g.act = { type: 'gkjump', t0: t - 0.2, dur: 0.75, punch: 1, jh: 0.35 };
         this.pendingPass = null; this.path = null;
         this.fxPush('punch', { pi: g.idx });
         if (valid) this._shotResolved(this.shotTracker.update(t, true));
         return true;
       }
+      const pFumble = clamp((70 - g.a.han) * 0.006 + crowd * 0.03 + (b.p.y > 2.3 ? 0.04 : 0) - cc * 0.05, 0, 0.3);
+      if (this.rng() < pFumble) {
+        // spills it: drops in front of him, a scramble
+        const side = Math.sign(b.p.z - g.z) || (this.rng() < 0.5 ? -1 : 1);
+        b.v.x = d * (0.8 + this.rng() * 2.2); b.v.z = side * (0.5 + this.rng() * 2.5); b.v.y = 0.8;
+        b.w.x = b.w.y = b.w.z = 0;
+        b.lastTouch = g.idx; b.lastTeam = g.team; b.intended = -1;
+        g.cool.touch = t + 0.45;
+        if (!cl) g.act = { type: 'gkjump', t0: t - 0.25, dur: 0.6, punch: 0, jh: 0.3 };
+        this.pendingPass = null; this.path = null; this.nextPredict = 0;
+        this.fxPush('parry', { pi: g.idx });
+        return true;
+      }
     }
-    if (speed < catchV || speed < 7) {
-      if (b.p.y > 1.9 && !(g.act && g.act.type === 'dive')) g.act = { type: 'gkjump', t0: t - 0.25, dur: 0.6, punch: 0, jh: 0.3 };
+    if (speed < catchV || speed < 7 || (!drive && b.p.y > 1.2)) {
+      if (b.p.y > 1.9 && !(g.act && g.act.type === 'dive') && !(g.act && g.act.type === 'gkjump')) g.act = { type: 'gkjump', t0: t - 0.25, dur: 0.6, punch: 0, jh: 0.3 };
       this._gain(g, 'hands');
       if (valid) this._shotResolved(this.shotTracker.update(t, true));
     } else {
@@ -2214,8 +2261,9 @@ export class MatchSim {
     const travel = Math.abs(o.vz * o.flight);
     const tb = travel < 0.9 ? 0 : travel < 1.7 ? 1 : travel < 2.5 ? 2 : 3;
     const fb = clamp(Math.round((o.flight - 0.24) / 0.09), 0, 3);
-    g.act = { type: 'dive', t0: t, dur: o.flight + lie, flight: o.flight, side: o.side, h: o.h, vx: o.vx, vz: o.vz, hx: 0, dx: o.dx, dz: o.dz, fromLoose: o.fromLoose, next: { type: 'getup', dur: 0.5, at0: o.flight + lie } };
-    g.animP = o.side * (1 + o.h + 4 * (1 + tb + 4 * fb));
+    g.act = { type: 'dive', t0: t, dur: o.flight + lie, flight: o.flight, side: o.side, h: o.h, vx: o.vx, vz: o.vz, hx: 0, dx: o.dx, dz: o.dz, fromLoose: o.fromLoose, fwd: !!o.fwd, next: { type: 'getup', dur: 0.5, at0: o.flight + lie } };
+    // `rest` 17..32 (16 + the usual bucket code) = a forward lunge at the feet: reach along the facing direction, belly down
+    g.animP = o.side * (1 + o.h + 4 * (1 + tb + 4 * fb + (o.fwd ? 16 : 0)));
     g.setStance = 0;
   }
 
@@ -2237,28 +2285,77 @@ export class MatchSim {
     this._diveAct(g, { flight, side, h, vz: (side * travel) / flight, vx: ((plan.x - g.x) / flight) * 0.4 });
   }
 
-  // keeper dives onto a loose ball (low, toward the ball) — smothers it if he gets there
-  gkDiveAtBall(g) {
+  // Keeper lunges at the ball / the dribbler's feet (also a human keeper's tackle key). The contest is not decided up
+  // front: he flies toward the ball (a low, forward reaching dive, see the DIVE anim `fwd` flag) and `_gkLungeResolve`
+  // settles it when his hands get there, from his attributes against the dribbler's and how well the dive was timed.
+  // Outcomes: he wins it (hands), only gets a touch (the ball spills loose), or he is rounded (the attacker keeps it).
+  _gkLunge(g, owner) {
     const b = this.ball, t = this.t;
-    const dx = b.p.x + b.v.x * 0.25 - g.x, dz = b.p.z + b.v.z * 0.25 - g.z, dl = Math.hypot(dx, dz) || 1;
+    const tx = b.p.x + (owner ? owner.vx * 0.08 : b.v.x * 0.14), tz = b.p.z + (owner ? owner.vz * 0.08 : b.v.z * 0.14);
+    const dx = tx - g.x, dz = tz - g.z, dl = Math.hypot(dx, dz) || 1;
     const flight = 0.3;
-    const reach = Math.min(dl, 1.2 + g.a.div * 0.012 + (g.h - 1.85) * 1.2 + ps(g, 'rushout') * 0.2);
-    const side = Math.sign(dz) || 1;
-    g.cool.tackle = t + 1.3;
-    this._diveAct(g, { flight, side, h: 0.3, vx: ((dx / dl) * reach * 0.7) / flight, vz: ((dz / dl) * reach * 0.7) / flight, dx: dx / dl, dz: dz / dl, fromLoose: true });
-    g.gkPlan = null;
+    const reach = 1.5 + g.a.div * 0.012 + (g.h - 1.85) * 1.2 + ps(g, 'rushout') * 0.25 + g.speed * 0.06;
+    const travel = clamp(dl - 0.25, 0.8, reach);
+    g.cool.tackle = t + 1.6;
+    g.gkPlan = null; g.claim = null; g.sweep = null;
+    this._diveAct(g, { flight, side: Math.sign(dz) || 1, h: 0.3, vx: (dx / dl) * travel / flight, vz: (dz / dl) * travel / flight, dx: dx / dl, dz: dz / dl, fromLoose: !owner, fwd: true });
+    g.lunge = { tC: t + 0.17 };
   }
 
-  gkSmother(g, owner) {
-    const t = this.t;
-    g.cool.tackle = t + 1.5;
-    const side = Math.sign(owner.z - g.z) || 1;
-    this._diveAct(g, { flight: 0.3, side, h: 0.3, vz: (owner.z - g.z) / 0.3 * 0.6, vx: (owner.x - g.x) / 0.3 * 0.6 });
-    const pr = clamp(0.3 + (g.a.div + g.a.pos) / 400 - owner.a.dri / 300 + ps(g, 'rushout') * 0.1, 0.12, 0.75);
-    if (this.rng() < pr) {
-      // he smothers it: the ball goes into his hands mid-dive and he stays down with it (the dive act carries on)
-      this.ball.owner = -1;
+  gkDiveAtBall(g) { this._gkLunge(g, null); }
+  gkSmother(g, owner) { this._gkLunge(g, owner); }
+
+  _gkLungeResolve(g) {
+    g.lunge = null;
+    const b = this.ball, t = this.t, a = g.act;
+    if (!a || a.type !== 'dive' || b.inHands || b.owner === g.idx) return;
+    const o = b.owner >= 0 ? this.players[b.owner] : null;
+    if (o && o.team === g.team) return;
+    // the ball has already gone (a shot, a pass): the dive itself still gets the normal hand-contact check in _gkTouch
+    if (!o && Math.hypot(b.v.x, b.v.z) > 9) return;
+    const ext = 0.35 + 0.65 * 0.55;
+    const hx = g.x + (a.dx || 0) * ext, hz = g.z + (a.dz || 0) * ext;
+    const dist = Math.hypot(b.p.x - hx, b.p.z - hz);
+    const d = this.dir[g.team];
+    const ga = g.a;
+    const kS = (ga.div * 0.3 + ga.ref * 0.25 + ga.pos * 0.2 + ga.han * 0.15 + ga.spd * 0.1) / 100;
+    const aS = o ? (o.a.dri * 0.6 + o.a.pac * 0.25 + o.a.phy * 0.15) / 100 : 0.6;
+    const ahead = o ? Math.hypot(b.p.x - o.x, b.p.z - o.z) : 1.5;
+    let pWin = (0.46 + (kS - aS) * 0.95 + ps(g, 'rushout') * 0.06 + clamp(ahead - 0.7, 0, 1.2) * 0.22 - Math.max(0, dist - 0.7) * 0.32) * this.diffFor(g.team).gk;
+    pWin = clamp(pWin, 0.04, 0.82);
+    if (o) pWin *= 1 - 0.9 * bst(o, 'dri');
+    pWin += (1 - pWin) * bst(g, 'gk');
+    const r = this.rng();
+    if (dist < 1.5 && r < pWin) {
+      // smothered: the ball goes into his hands and he stays down with it (the dive act carries on)
+      b.owner = -1;
       this._gain(g, 'hands');
+      this.fxPush('save', { pi: g.idx });
+      g.st.saves++;
+      return;
+    }
+    if (dist < 1.5 && r < pWin + (1 - pWin) * 0.3) {
+      // a touch only: the ball squirts loose toward the flank / out of the danger area
+      const side = Math.sign(b.p.z - g.z) || (this.rng() < 0.5 ? -1 : 1);
+      if (o) { o.cool.touch = t + 0.35; this.lastLoss[o.team] = { idx: o.idx, t }; }
+      b.owner = -1; b.inHands = false;
+      b.v.x = d * (1.5 + this.rng() * 3); b.v.z = side * (2 + this.rng() * 4); b.v.y = 0.4;
+      b.lastTouch = g.idx; b.lastTeam = g.team; b.intended = -1;
+      this.pendingPass = null; this.path = null; this.nextPredict = 0;
+      this.fxPush('parry', { pi: g.idx });
+      return;
+    }
+    if (!o) return;
+    // rounded: he dives and the attacker goes past with the goal open. A late / wild lunge can take the man (a penalty).
+    if (dist < 1.3 && inOwnPenaltyArea(g.x, g.z, d) && this.rng() < 0.08) {
+      this._foul(g, o, judgeTackle({ contactFirst: true, bodyContact: true, lastMan: true }).card);
+      return;
+    }
+    o.nextThink = t + 0.4; o.drib = null;
+    if (!this.isHumanCtrl(o) && !o.act && o.speed > 1.5) {
+      const f = faceVec(o), rr = { x: -f.z, z: f.x };
+      const away = ((o.z - g.z) * rr.z + (o.x - g.x) * rr.x) >= 0 ? 1 : -1;
+      this.doSkill(o, { x: rr.x * away, z: rr.z * away }, false);
     }
   }
 
@@ -3068,7 +3165,7 @@ export class MatchSim {
       } else if (this.ball.owner === p.idx && this.ball.inHands) code = ANIM.HOLD;
       else if (this.ball.owner === p.idx && (this.phase === PHASE.SETPIECE) && this.sp && this.sp.type === SP.THROW) code = ANIM.THROW, at = 0;
       else if (p.windup > 0) { code = ANIM.WINDUP; pp = p.windup; }
-      else if (p.isGK && p.ready && p.speed < 2) { code = ANIM.GKREADY; pp = p.gkPlan && !p.gkPlan.acted ? 1 : 0; } // 1 = set for the shot (split step)
+      else if (p.isGK && p.ready && p.speed < 2) { code = ANIM.GKREADY; pp = (p.gkPlan && !p.gkPlan.acted) || p.gkSetT > t - 0.2 ? 1 : 0; } // 1 = set for the shot (split step)
       p.anim = code; p.animT = at; p.animP = code === ANIM.DIVE ? p.animP : pp;
     }
   }
