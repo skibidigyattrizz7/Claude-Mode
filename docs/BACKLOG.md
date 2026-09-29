@@ -143,3 +143,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - Owner (2026-09-29): lineup reveal should show the real cards (design, attributes, rating) per line first, then the names+ratings pitch view. Auto-build filters: promo/card type, rarity, OVR min/max, build by league / club / country.
 - DONE 2026-09-29: lineup reveal shows full UT cards (design, rating, attributes) per line, then the names+ratings pitch; auto-build filters (card type/promo, tier, rarity, min/max OVR, league, club, country; gaps filled from the club with a warning).
 - DONE 2026-09-29: lineup reveal also before matches vs the AI (Kick-Off, UT modes); not in Practice or local 2-player.
+- Owner (2026-09-29): GK AI: keepers don't come off their line to claim balls (sweeper keeper / crosses / through balls), and in 1v1s they just watch: should rush out, narrow the angle, spread, dive at feet / smother and win the ball.
