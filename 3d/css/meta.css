@@ -1582,3 +1582,31 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-filterfield { display: grid; gap: 4px; min-width: 0; }
 .pm-filterfield .pm-select, .pm-filterfield .pm-input { width: 100%; min-width: 0; }
 .pm-modal:has(.pm-autobuild) .pm-modal-body { max-height: min(70vh, 640px); overflow-y: auto; }
+
+/* ---- Store showcase (utview.js packShowcase): carousel of every pack on sale; hold the front pack to zoom.
+   Only transform / opacity animate. ---- */
+.pm-show { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: center; margin: 4px 0 22px;
+  padding: 16px; border-radius: 16px; background: radial-gradient(60% 80% at 35% 50%, color-mix(in srgb, var(--glow, var(--acc)) 16%, transparent), transparent 70%), var(--panel, #12151a);
+  border: 1px solid rgba(255,255,255,.06); }
+.pm-show-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pm-show-stage { position: relative; flex: 1; min-width: 0; height: clamp(230px, 56vw, 330px); perspective: 900px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.pm-show-stage .pm-pack { font-size: clamp(13px, 3.1vw, 19px); }
+.pm-show-pack { position: absolute; left: 50%; top: 50%; padding: 0; border: 0; background: none; cursor: pointer; border-radius: .7em;
+  transform: translate(-50%, -50%) translateX(var(--x, 0)) rotateY(var(--r, 0)) scale(var(--s, 1)); opacity: var(--o, 1);
+  transition: transform .55s cubic-bezier(.2,.8,.2,1), opacity .45s ease; -webkit-tap-highlight-color: transparent; }
+.pm-show-pack.is-on { cursor: zoom-in; }
+.pm-show-pack.is-on .pm-pack { box-shadow: 0 0 0 2px color-mix(in srgb, var(--glow) 70%, transparent), 0 1.2em 2.4em -1em #000, 0 0 2.2em -0.4em var(--glow); }
+.pm-show-pack:focus-visible { outline: 3px solid var(--acc); outline-offset: 4px; }
+.pm-show-stage.is-zoom .pm-show-pack.is-on { transform: translate(-50%, -50%) scale(1.32) rotate(-2deg); transition-duration: .35s; }
+.pm-show-stage.is-zoom .pm-show-pack:not(.is-on) { opacity: 0; }
+.pm-show-nav { flex: none; width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.35); color: var(--txt); font-size: 24px; line-height: 1; cursor: pointer; }
+.pm-show-nav:hover { border-color: var(--acc); color: var(--acc); }
+.pm-show-side { display: grid; gap: 12px; min-width: 0; }
+.pm-show-info h3 { font-family: var(--font-display); font-size: 26px; text-transform: uppercase; margin: 2px 0 4px; }
+.pm-show-info p { margin: 0 0 8px; }
+.pm-show-foot { display: flex; align-items: center; gap: 10px; }
+.pm-show-count { font-variant-numeric: tabular-nums; color: var(--mut); font-size: 13px; }
+.pm-show-track { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; }
+.pm-show-bar { display: block; height: 100%; background: var(--glow, var(--acc)); transform-origin: 0 50%; transform: scaleX(0); transition: transform .1s linear; }
+@media (max-width: 720px) { .pm-show { grid-template-columns: 1fr; padding: 12px; } .pm-show-info h3 { font-size: 22px; } }
+@media (prefers-reduced-motion: reduce) { .pm-show-pack { transition: none; } }

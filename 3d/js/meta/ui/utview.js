@@ -531,6 +531,13 @@ function storeView() {
         promoPacks.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, promoPacks.map((pack) => storeItem(pack))) : null,
         h('h3', { class: 'pm-h' }, 'Buy packs'),
         h('div', { class: 'pm-storegrid' }, onSale.filter((p) => !p.promo).map((pack) => storeItem(pack))));
+      async function buyPack(pack) {
+        const price = effPrice(pack.price);
+        if (!(await confirmBox(app.root, 'Buy pack', `Buy ${pack.name} for ${fmtNum(price)} coins?`, 'Buy & open'))) return;
+        if (s.coins < price) return;
+        s.coins -= price; persist(app); app.renderTop(app.stack[app.stack.length - 1]);
+        openPackFlow(app, pack.id);
+      }
       function storeItem(pack) {
         const price = effPrice(pack.price);
         return h('div', { class: `pm-storeitem ${pack.promo ? `is-promo pm-promo--${pack.promo}` : ''}`, style: pack.promo ? { '--pa': PROMO_BY_ID[pack.promo].colors[0], '--pb': PROMO_BY_ID[pack.promo].colors[1], '--pc': PROMO_BY_ID[pack.promo].colors[2] } : null },
@@ -541,17 +548,104 @@ function storeView() {
               h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => oddsModal(app, pack) }, 'View odds'),
               h('button', {
                 class: 'pm-btn pm-btn--primary pm-btn--sm', disabled: s.coins < price,
-                onclick: async () => {
-                  if (!(await confirmBox(app.root, 'Buy pack', `Buy ${pack.name} for ${fmtNum(price)} coins?`, 'Buy & open'))) return;
-                  if (s.coins < price) return;
-                  s.coins -= price; persist(app); app.renderTop(app.stack[app.stack.length - 1]);
-                  openPackFlow(app, pack.id);
-                },
+                onclick: () => buyPack(pack),
               }, 'Buy & open'))));
       }
-      add(main, utTabs(app, 'store'), M.picksRow(app), mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
+      const show = cfg.packsInShop && onSale.length > 1 ? packShowcase(app, [...promoPacks, ...onSale.filter((p) => !p.promo)], buyPack) : null;
+      add(main, utTabs(app, 'store'), M.picksRow(app), show, mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
+}
+
+// ---------- Store showcase ----------
+// Owner request (Sep 29): with every pack on sale, a big stage at the top of the Store cycles through them
+// carousel-style (neighbours peek in at the sides). Press and hold the front pack to zoom in on it; swipe, the
+// arrows or the arrow keys switch. Auto-advances every 3.5 s, paused while hovered or held, off under
+// prefers-reduced-motion. Only transform/opacity animate (Chromebook-cheap); the timer is cleared on leave.
+function packShowcase(app, packs, buy) {
+  const st = { i: 0, held: false, hover: false };
+  const reduced = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })();
+  const stage = h('div', { class: 'pm-show-stage' });
+  const info = h('div', { class: 'pm-show-info', 'aria-live': 'polite' });
+  const count = h('span', { class: 'pm-show-count' });
+  const bar = h('i', { class: 'pm-show-bar' });
+  let zoomT = 0;
+  const unzoom = () => { clearTimeout(zoomT); st.held = false; stage.classList.remove('is-zoom'); };
+  const slots = packs.map((pack, k) => {
+    const el = h('button', { class: 'pm-show-pack', type: 'button', 'aria-label': `${pack.name}${k === st.i ? '' : ': show'}` }, packArt(pack, 'lg'));
+    el.addEventListener('click', () => { if (k !== st.i) go(k); });
+    el.addEventListener('pointerdown', (e) => {
+      if (k !== st.i) return;
+      st.held = true;
+      zoomT = setTimeout(() => stage.classList.add('is-zoom'), 160);
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, unzoom);
+    stage.appendChild(el);
+    return el;
+  });
+  // swipe anywhere on the stage (ignored while zoomed in)
+  let sx = null;
+  stage.addEventListener('pointerdown', (e) => { sx = e.clientX; });
+  stage.addEventListener('pointerup', (e) => {
+    if (sx == null) return;
+    const dx = e.clientX - sx; sx = null;
+    if (Math.abs(dx) > 40 && !stage.classList.contains('is-zoom')) go(st.i + (dx < 0 ? 1 : -1));
+  });
+  function layout() {
+    const n = packs.length;
+    slots.forEach((el, k) => {
+      let d = k - st.i;
+      if (d > n / 2) d -= n;
+      if (d < -n / 2) d += n;
+      const a = Math.abs(d);
+      el.hidden = a > 2;
+      el.classList.toggle('is-on', d === 0);
+      el.tabIndex = d === 0 ? 0 : -1;
+      el.style.setProperty('--x', `${d * 58}%`);
+      el.style.setProperty('--s', String(d === 0 ? 1 : a === 1 ? 0.74 : 0.56));
+      el.style.setProperty('--r', `${d * -14}deg`);
+      el.style.setProperty('--o', String(d === 0 ? 1 : a === 1 ? 0.62 : 0.28));
+      el.style.zIndex = String(10 - a);
+    });
+    const pack = packs[st.i];
+    const price = effPrice(pack.price);
+    const pr = pack.promo ? PROMO_BY_ID[pack.promo] : null;
+    wrap.style.setProperty('--glow', pr ? pr.colors[1] : 'var(--acc)'); // set on the section so the backdrop, pack ring and bar share it
+    clear(info);
+    add(info,
+      h('small', { class: 'pm-kicker' }, pr ? `${pr.name} · promo pack` : 'Featured pack'),
+      h('h3', null, pack.name),
+      h('p', { class: 'pm-dim' }, pack.desc),
+      h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(price)),
+      h('div', { class: 'pm-btnrow' },
+        h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => oddsModal(app, pack) }, 'View odds'),
+        h('button', { class: 'pm-btn pm-btn--primary', disabled: app.ut.coins < price, onclick: () => buy(pack) }, 'Buy & open')));
+    count.textContent = `${st.i + 1} / ${n}`;
+    st.t = 0; bar.style.transform = 'scaleX(0)';
+  }
+  function go(k) { unzoom(); st.i = (k + packs.length) % packs.length; layout(); }
+  const paused = () => st.held || st.hover || document.hidden;
+  const wrap = h('section', { class: 'pm-show', 'aria-label': 'Featured packs', 'aria-roledescription': 'carousel',
+    onmouseenter: () => { st.hover = true; wrap.classList.add('is-paused'); }, onmouseleave: () => { st.hover = false; wrap.classList.remove('is-paused'); unzoom(); },
+    onkeydown: (e) => { if (e.key === 'ArrowRight') { e.preventDefault(); go(st.i + 1); } else if (e.key === 'ArrowLeft') { e.preventDefault(); go(st.i - 1); } },
+  },
+  h('div', { class: 'pm-show-main' },
+    h('button', { class: 'pm-show-nav', type: 'button', 'aria-label': 'Previous pack', onclick: () => go(st.i - 1) }, '‹'),
+    stage,
+    h('button', { class: 'pm-show-nav', type: 'button', 'aria-label': 'Next pack', onclick: () => go(st.i + 1) }, '›')),
+  h('div', { class: 'pm-show-side' }, info, h('div', { class: 'pm-show-foot' }, count, h('span', { class: 'pm-show-track' }, bar), h('small', { class: 'pm-dim' }, 'Hold a pack to zoom in'))));
+  // countdown only runs while not paused, so a hover never cuts the next pack's time short
+  const STEP = 100, HOLD = 3500;
+  const timer = reduced ? 0 : setInterval(() => {
+    if (paused()) return;
+    st.t = (st.t || 0) + STEP;
+    bar.style.transform = `scaleX(${Math.min(1, st.t / HOLD)})`;
+    if (st.t >= HOLD) go(st.i + 1);
+  }, STEP);
+  app.onCleanup(() => { clearInterval(timer); clearTimeout(zoomT); });
+  layout();
+  return wrap;
 }
 
 // ---------- SBC ----------
