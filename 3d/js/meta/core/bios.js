@@ -170,7 +170,7 @@ export const BIOS = {
   robinho: '1984-01-25|173|R', willianbra: '1988-08-09|175|R', coutinho: '1992-06-12|172|R', douglascosta: '1990-09-14|172|L',
   hulk: '1986-07-25|180|L', oscarbra: '1991-09-09|179|R', pabloaimar: '1979-11-03', arielortega: '1974-03-04', dimaria: '1988-02-14|180|L',
   overmars: '1973-03-29|173', memphisdepay: '1994-02-13|176|R', arshavin: '1981-05-29|172|R', tomasrosicky: '1980-10-04|178|R',
-  mutuadrian: '1979-01-08', muller: '1989-09-13|186|R', gotze: '1992-06-03|176|R', draxler: '1993-09-20|187|R', reusmarco: '1989-05-31|180|R',
+  mutuadrian: '1979-01-08', muller: '1989-09-13|186|R', klose: '1978-06-09|182|R', gotze: '1992-06-03|176|R', draxler: '1993-09-20|187|R', reusmarco: '1989-05-31|180|R',
   zolagf: '1966-07-05|168|R', cassano: '1982-07-12|175|R', elshaarawy: '1992-10-27|178|R', insigne: '1991-06-04|163|R',
   fedechiesa: '1997-10-25|175|R', cazorla: '1984-12-13|168|R', isco: '1992-04-21|176|R', ansufati: '2002-10-31|178|R',
   oyarzabal: '1997-04-21|181|L', joaquin: '1981-07-21|181|R', ribery: '1983-04-07|170|R', fekir: '1993-07-18|173|L',

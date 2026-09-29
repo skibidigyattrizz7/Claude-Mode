@@ -371,6 +371,24 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
     }
   }
 
+  // Owner request (Sep 29): Klose (late Icon, realplayers.js LATE_ICON_ROWS) and Müller get 5 cards each, two of
+  // them 99. Appended after every seeded campaign, so no other promo card changes.
+  const owned = (b, id) => out.some((p) => p.special === id && p.baseId === b.id);
+  const ownerPick = (b, id, target, extra = {}) => { if (b && PROMO_BY_ID[id] && !owned(b, id)) make(b, id, Math.min(99, Math.max(target, b.ovr + 1)), extra); };
+  const klose = (src.lateIcons || []).find((p) => p.person === 'klose');
+  if (klose) { // base Icon + 4 promos
+    ownerPick(klose, 'flashback', 99, { moment: '16 World Cup goals, the all-time record' });
+    ownerPick(klose, 'moments', 99, { moment: '2014 World Cup record-breaker' });
+    ownerPick(klose, 'halo', 94);
+    ownerPick(klose, 'cupicon', 93);
+  }
+  const muller = actives.find((p) => p.person === 'muller') || src.regulars.find((p) => p.person === 'muller');
+  if (muller) { // base + the seeded Role Swap card + 3 here
+    ownerPick(muller, 'moments', 99, { moment: '2014 World Cup Golden Boot run' });
+    ownerPick(muller, 'fiesta', 99);
+    ownerPick(muller, 'tots', 95);
+  }
+
   for (const p of out) p.tier = 'gold';
   return out;
 }

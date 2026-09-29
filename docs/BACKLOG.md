@@ -159,7 +159,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - WAITING (Sep 29): Oelke secret card photo. Cut-out ready (recovered from the session log) but the photo has DO NOT COPY / (c) 2024 watermarks (school proof); asked the owner before publishing.
 - DONE (Sep 29): 15 more "elite-" Evolutions (evolutions.js) that accept cards rated up to 98, promos included.
 - DONE (Sep 29): owner can delete any account or guest (Delete on each Players row) and bulk "Delete old guests" (N days idle, 0 = all). Migration 010 applied as 20260929133106. Never the owner account itself.
-- TODO (Sep 29): add Miroslav Klose and Thomas Muller, 5 cards each (base + promos), 2 of each at 99.
+- DONE (Sep 29): Klose (late Icon, realplayers.js LATE_ICON_ROWS, kept out of ICON_ROWS so seeded promos do not move) and Muller have 5 cards each, two at 99. Verified no existing card id changed.
 - DONE (Sep 29): Manage (Admin > Players) crashed with "DURATIONS is not defined" (restriction rows); now uses the number+unit picker, and the screen shows an error instead of going blank.
 - TODO (Sep 29): some evolutions should not need matches (matches do not work on Chromebooks yet).
 - TODO (Sep 29): Store: animated pack showcase that cycles through packs / zooms in (like the squad view), since there are many packs now.

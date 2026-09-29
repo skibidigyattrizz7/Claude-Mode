@@ -12,6 +12,12 @@ import { bioFor } from './bios.js';
 //       face stats (outfield: pac sho pas dri def phy | GK: div han kic ref spd pos), age, height, skin tone 0..5, extra]
 // extra: { hs: hair style override, lg: league for Star club placement }
 // ---------- Icons (retired; prime versions) ----------
+// Icons added after launch (owner request, Sep 29: Klose). Kept OUT of ICON_ROWS on purpose: the seeded promo
+// campaigns shuffle the icon list, so appending to it would change which players every existing promo card is
+// built from (and break saved clubs). These join the database at the very end instead (see players.js).
+const LATE_ICON_ROWS = [
+  ['klose', 'Miroslav Klose', 'Klose', 'GER', 'ST', ['CF'], 'R', 4, 3, 91, [80, 93, 74, 80, 42, 84], 28, 182, 0],
+];
 const ICON_ROWS = [
   ['pele', 'Pelé', 'Pelé', 'BRA', 'CF', ['ST', 'CAM'], 'R', 4, 5, 98, [95, 96, 93, 96, 60, 78], 29, 173, 5],
   ['maradona', 'Diego Maradona', 'Maradona', 'ARG', 'CAM', ['CF', 'ST'], 'L', 3, 5, 98, [91, 93, 94, 97, 40, 76], 26, 165, 2],
@@ -133,6 +139,7 @@ const STAR_ROWS = [
 
 // slug -> [weight kg, PlayStyles ('+' suffix = PlayStyle+)]
 const PHYS = {
+  klose: [84, ['powerheader+', 'aerial', 'firsttouch', 'lowdriven']], // late Icon (Sep 29)
   pele: [73, ['finesse+', 'acrobatic+', 'technical', 'powerheader']],
   maradona: [70, ['technical+', 'trickster+', 'finesse', 'firsttouch']],
   messi_icon: [72, ['finesse+', 'tikitaka+', 'technical', 'firsttouch']],
@@ -372,6 +379,7 @@ export function buildRealPlayers(helpers) {
     return p;
   };
   const icons = ICON_ROWS.map((r) => make(r, 'icon'));
+  const lateIcons = LATE_ICON_ROWS.map((r) => make(r, 'icon'));
   const stars = STAR_ROWS.map((r) => make(r, 'star'));
   // V3 regulars: ordinary gold / rare gold cards of real active players (no special version).
   // Balanced placement: best players go to the most famous clubs of their league, but no club grows past
@@ -434,5 +442,5 @@ export function buildRealPlayers(helpers) {
     p.look = hashStr(p.id) % 997;
     return p;
   });
-  return { icons, stars, regulars };
+  return { icons, stars, regulars, lateIcons };
 }
