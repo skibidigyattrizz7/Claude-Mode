@@ -174,3 +174,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): custom colour picker (last swatch opens the browser colour picker; js/uiprefs.js, --user-acc vars).
 - DONE (Sep 29): gear button in the UT header opens Display (interface style + UI colour).
 - DONE (Sep 29): admin tab "Open N at once" (1-10): all packs roll together into one reveal, best card first (openPackFlow count).
+- NOTE (Sep 29): Vinson "hell card" request not built. Evil Vinson (like Evil Perlita) still available if the owner wants it.
