@@ -319,8 +319,8 @@
 .pc-stats { position: absolute; left: 1.3em; right: 1.3em; top: 9.2em; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto); grid-auto-flow: column; column-gap: 1.2em; z-index: 3; }
 .pc-stats::before { content: ""; position: absolute; left: 50%; top: .15em; bottom: .15em; width: 1px; background: currentColor; opacity: .3; }
 .pc-stat { display: flex; align-items: baseline; justify-content: center; gap: .3em; font-size: .92em; line-height: 1.06; white-space: nowrap; } /* centred in each half (owner, Sep 29) */
-.pc-stat b { font-weight: 700; min-width: 1.3em; text-align: right; color: var(--num, inherit); }
-.pc-stat span { font-weight: 400; opacity: .82; letter-spacing: .02em; }
+.pc-stat b { font-weight: 700; min-width: 1.45em; text-align: right; font-variant-numeric: tabular-nums; color: var(--num, inherit); }
+.pc-stat span { font-weight: 400; opacity: .82; letter-spacing: .02em; display: inline-block; min-width: 2.3em; text-align: left; } /* equal label width keeps the 3 centred rows in one column */
 .pc-tag { position: absolute; left: 50%; top: 27.7em; transform: translateX(-50%); z-index: 3; font-size: .46em; font-weight: 700; letter-spacing: .1em; white-space: nowrap; opacity: .92; }
 .pc-ps { position: absolute; right: .55em; top: 1.7em; z-index: 3; display: flex; flex-direction: column; gap: .22em; }
 .pc-ps .ps { font-size: .52em; width: 2.1em; height: 2.1em; }

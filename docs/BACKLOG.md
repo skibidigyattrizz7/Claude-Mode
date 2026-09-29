@@ -177,3 +177,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - NOTE (Sep 29): Vinson "hell card" request not built. Evil Vinson (like Evil Perlita) still available if the owner wants it.
 - DONE (Sep 29): E-Man (∞) and E.L.I.J.A.H. FINAL FORM (???^∞) secret cards: Admin Vault only (adminOnly), full fire art (art-fire). Nation guessed GHA.
 - DONE (Sep 29): card stats centred; names size by letter width (4 steps, xs-aware) so none of the 4,016 cards clip at sm or xs; secret cards say ANY POSITION instead of a clipped list; UT screens toured in both styles on desktop + phone. Knight card renamed Rabbi Patel; E-Man / E.L.I.J.A.H. from Israel.
+- TODO (Sep 29): admin command to force what comes out of packs, for yourself or another player (e.g. make a player pack Rabbi Patel).
