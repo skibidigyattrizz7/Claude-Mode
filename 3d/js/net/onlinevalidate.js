@@ -13,6 +13,7 @@ export const JPEG_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 export const MAX_IMAGE_CHARS = 204860; // 150 KB of JPEG as base64 + prefix
 export const CONFIG_KEYS = ['promos', 'packs', 'rewards', 'market', 'features'];
 export const CONFIG_TTL_MS = 60 * 1000;
+export const PRESENCE_MS = 3000; // presence heartbeat (server throttle: 3600 an hour, migration 016)
 
 /** One config value (same rules as pitchside__config_error). -> clean object | null */
 export function sanitizeConfigValue(key, v) {

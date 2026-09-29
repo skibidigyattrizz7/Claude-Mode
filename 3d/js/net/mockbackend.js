@@ -1096,7 +1096,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const db = load();
       const p = auth(db, p_id, p_secret);
       if (!p) return err('auth');
-      if (!hit(db, `pres:${p.id}`, 3600000, 600)) { store.save(db); return err('rate_limited'); }
+      if (!hit(db, `pres:${p.id}`, 3600000, 3600)) { store.save(db); return err('rate_limited'); }
       seen(p);
       store.save(db);
       return {

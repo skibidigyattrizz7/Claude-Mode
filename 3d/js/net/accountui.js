@@ -11,7 +11,7 @@ export function ensureAccountCss() {
   if (document.querySelector('link[data-account-css]')) return;
   const l = document.createElement('link');
   l.rel = 'stylesheet';
-  l.href = new URL('../../css/account.css?v=20260927m', import.meta.url).href;
+  l.href = new URL('../../css/account.css?v=20260929m', import.meta.url).href;
   l.dataset.accountCss = '1';
   document.head.appendChild(l);
 }
@@ -277,20 +277,45 @@ export function accountSettingsPane(online, { toast = null } = {}) {
 }
 
 // ------------------------------------------------------------------ broadcast banner + online counter
+// Owner announcements (everyone) and direct messages to this player pop up at the top of the screen as soon as
+// presence reports them (every few seconds). A direct message shows who sent it; both can be dismissed.
 export function mountBroadcastBanner(online) {
   ensureAccountCss();
   const wrap = el('div', { class: 'acc-bcast-wrap', 'aria-live': 'polite' });
   document.body.append(wrap);
   const dismissed = new Set();
-  return online.presence.onBroadcast((b) => {
-    if (dismissed.has(b.id)) return;
-    const ttl = b.until ? Math.max(4000, Math.min(Date.parse(b.until) - Date.now(), 10 * 60 * 1000)) : 60000;
-    const item = el('div', { class: 'acc-bcast', role: 'status', 'data-bid': String(b.id) },
-      el('span', { class: 'acc-bcast-tag' }, 'Announcement'), el('span', { class: 'acc-bcast-text' }, b.text),
-      el('button', { class: 'acc-bcast-x', type: 'button', 'aria-label': 'Dismiss', onclick: () => { dismissed.add(b.id); item.remove(); } }, '×'));
-    wrap.append(item);
+  const show = (key, kind, from, text, ttl) => {
+    if (dismissed.has(key) || wrap.querySelector(`[data-key="${CSS.escape(key)}"]`)) return;
+    const item = el('div', { class: `acc-bcast acc-bcast--${kind}`, role: 'status', 'data-key': key },
+      el('div', { class: 'acc-bcast-body' },
+        el('span', { class: 'acc-bcast-tag' }, kind === 'dm' ? `Message from ${from}` : 'Announcement'),
+        el('span', { class: 'acc-bcast-text' }, text)),
+      el('button', { class: 'acc-bcast-x', type: 'button', 'aria-label': 'Dismiss', onclick: () => { dismissed.add(key); item.remove(); } }, '×'));
+    wrap.prepend(item);
+    while (wrap.children.length > 3) wrap.lastElementChild.remove();
     setTimeout(() => item.remove(), ttl);
+  };
+  const offB = online.presence.onBroadcast((b) => {
+    const ttl = b.until ? Math.max(4000, Math.min(Date.parse(b.until) - Date.now(), 10 * 60 * 1000)) : 60000;
+    show(`b${b.id}`, 'all', '', b.text, ttl);
   });
+  // direct messages: when the unread count goes up, show the newest unread message of each conversation
+  let lastUnread = 0, busy = false;
+  const offU = typeof online.presence.onUpdate === 'function' ? online.presence.onUpdate(async (u) => {
+    const n = u && Number.isInteger(u.unread) ? u.unread : 0;
+    const grew = n > lastUnread; lastUnread = n;
+    if (!grew || busy || !online.messages || typeof online.messages.conversations !== 'function') return;
+    busy = true;
+    try {
+      const r = await online.messages.conversations();
+      for (const c of (r && r.ok && r.items) || []) {
+        if (!c.unread || c.lastMine) continue;
+        const who = c.with.name || c.with.username || 'a player';
+        show(`m${c.with.id}|${c.at}`, 'dm', who, c.lastText || (c.lastImage ? 'Sent a photo' : ''), 30000);
+      }
+    } catch { /* never throws */ } finally { busy = false; }
+  }) : null;
+  return () => { offB && offB(); offU && offU(); wrap.remove(); };
 }
 
 /** "● 12 online" pill that follows presence updates. */

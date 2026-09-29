@@ -23,7 +23,7 @@ import {
 } from './validate.js';
 import { usernameError, passwordError, parseBan, banActive, banText, isReservedName, trimUsername, usernameKey } from './accountcore.js';
 import {
-  nonNeg, PACK_RE, JPEG_RE, MAX_IMAGE_CHARS, CONFIG_KEYS, CONFIG_TTL_MS, sanitizeConfigValue, sanitizeConfig, sanitizeEpochs, sanitizeBroadcast,
+  nonNeg, PACK_RE, JPEG_RE, MAX_IMAGE_CHARS, CONFIG_KEYS, CONFIG_TTL_MS, PRESENCE_MS, sanitizeConfigValue, sanitizeConfig, sanitizeEpochs, sanitizeBroadcast,
   sanitizePresence, sanitizeGift, sanitizePublicPlayer, sanitizeConversation, sanitizeMessage, cleanSquad, compressImage, cleanGiftCardOut,
 } from './onlinevalidate.js';
 
@@ -1109,12 +1109,13 @@ export function createOnline(deps) {
 
     // ---------------------------------------------------------------- presence, counter, broadcasts
     presence: {
-      /** Heartbeat every 25 s while the tab is visible (+ config refresh every 3 min). Idempotent. */
+      /** Heartbeat every 3 s while the tab is visible (owner, Sep 29: admin commands, messages and Store changes reach
+       *  players near-instantly; the server allows 3600 an hour) + config refresh every minute. Idempotent. */
       start() {
         if (pres.running) return;
         pres.running = true;
         presenceTick(true);
-        pres.timer = setInterval(() => presenceTick(false), deps.presenceMs || 25000);
+        pres.timer = setInterval(() => presenceTick(false), deps.presenceMs || PRESENCE_MS);
         pres.cfgTimer = setInterval(() => { online.config.get(true); }, CONFIG_TTL_MS);
         online.config.get();
         if (typeof document !== 'undefined' && document.addEventListener) {

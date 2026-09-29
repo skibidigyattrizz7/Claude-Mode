@@ -140,7 +140,7 @@ function displayButton(app) {
 // ---------- home ----------
 export function utHomeView() {
   return {
-    title: 'Ultimate Team', kicker: 'Pitchside', coins: true, utHome: true, topRight: tokenChip, cls: 'pm-main--wide',
+    title: 'Ultimate Team', kicker: 'Pitchside', coins: true, utHome: true, topRight: tokenChip, cls: 'pm-main--wide', liveConfig: true,
     render(main, app) {
       const s = app.ut;
       if (!s) { app.replace(onboardView()); return; }
@@ -589,7 +589,7 @@ export function openPackFlow(app, packType, onDone, count = 1) {
 
 function storeView() {
   return {
-    title: 'Store', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide',
+    title: 'Store', kicker: 'Ultimate Team', coins: true, topRight: tokenChip, cls: 'pm-main--wide', liveConfig: true,
     render(main, app) {
       const s = app.ut;
       const mine = h('section', { class: 'pm-section' });

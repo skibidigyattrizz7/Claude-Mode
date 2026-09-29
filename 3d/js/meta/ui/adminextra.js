@@ -406,6 +406,10 @@ export function giveawayPanel(app) {
 export function openSendCardModal(app, { toUsername = '', toId = null, card = null } = {}) {
   // toId (owner panel Players row): shows the name, sends to the exact player id unless the box is edited
   const st = { target: toUsername, q: card ? card.name : '', tradable: true };
+  // Owner accounts can drop the card straight into the player's club (owner patch, applied on their next
+  // check-in, a few seconds); everyone else sends a gift the player claims from their inbox.
+  const owner = app.online && app.online.owner;
+  const direct = !!(owner && typeof owner.patchPlayer === 'function');
   const dest = () => (toId && st.target === toUsername ? toId : st.target.trim());
   const target = h('input', { class: 'pm-input', value: st.target, placeholder: 'Username or friend code', 'aria-label': 'Recipient' });
   target.addEventListener('input', () => { st.target = target.value; });
@@ -423,14 +427,24 @@ export function openSendCardModal(app, { toUsername = '', toId = null, card = nu
     for (const c of all) {
       results.appendChild(h('div', { class: 'pm-mktrow' }, playerCard(c, { size: 'xs' }),
         h('div', { class: 'pm-mkt-info' }, h('b', null, c.name), h('span', { class: 'pm-dim' }, `${c.ovr} ${c.pos}${c.customAdmin ? ' · Admin Card' : ''}`)),
-        h('button', {
-          class: 'pm-btn pm-btn--primary pm-btn--sm',
-          onclick: async () => {
-            if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
-            const r = await sendGift(app, { to: dest(), kind: 'card', card: c }, 'Card');
-            if (r && r.ok !== false) close();
-          },
-        }, 'Send')));
+        h('div', { class: 'pm-btnrow' },
+          direct ? h('button', {
+            class: 'pm-btn pm-btn--primary pm-btn--sm', title: 'Goes straight into their club within a few seconds',
+            onclick: async () => {
+              if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
+              const r = await safeCall(() => owner.patchPlayer(dest(), [{ op: 'addCard', card: giftPayloadCard(c) }]), { ok: false });
+              if (r && r.ok !== false) { app.toast(`${c.name} added to their club.`, 'good'); close(); }
+              else app.toast(`Could not add the card${r && r.error ? `: ${r.error}` : ''}.`, 'bad');
+            },
+          }, 'Add to club') : null,
+          h('button', {
+            class: `pm-btn pm-btn--sm ${direct ? '' : 'pm-btn--primary'}`,
+            onclick: async () => {
+              if (!st.target.trim()) { app.toast('Enter a username or friend code first.', 'warn'); return; }
+              const r = await sendGift(app, { to: dest(), kind: 'card', card: c }, 'Card');
+              if (r && r.ok !== false) close();
+            },
+          }, 'Gift'))));
     }
   }
   q.addEventListener('input', () => { st.q = q.value; draw(); });
@@ -439,7 +453,7 @@ export function openSendCardModal(app, { toUsername = '', toId = null, card = nu
     title: 'Send / Gift a card', wide: true,
     body: h('div', { class: 'pm-cc-send' },
       h('label', { class: 'pm-inline' }, h('span', { class: 'pm-dim' }, 'To'), target),
-      h('p', { class: 'pm-dim' }, 'The card arrives in their Gifts inbox and lands in their club, tradable.'),
+      h('p', { class: 'pm-dim' }, direct ? 'Add to club: it lands in their club within a few seconds. Gift: it waits in their Gifts inbox until they claim it.' : 'The card arrives in their Gifts inbox and lands in their club, tradable.'),
       q, results),
     actions: [{ label: 'Close' }],
   });
@@ -471,6 +485,18 @@ function storePacksPanel(app) {
   const online = !!(owner && typeof owner.setConfig === 'function');
   const status = h('small', { class: 'pm-dim' });
   const list = h('div', { class: 'pm-admin-packs' });
+  // Add all / Remove all: one config write for every pack (Admin Vault stays admin-only either way)
+  const setAll = async (on) => {
+    const cur = (app.online.config && app.online.config.current && app.online.config.current.packs) || {};
+    const packs = {};
+    for (const [k, v] of Object.entries(cur)) if (v && typeof v === 'object') packs[k] = { ...v };
+    for (const p of PACKS.filter((x) => !x.adminOnly)) packs[p.id] = { ...(packs[p.id] || {}), enabled: on };
+    status.textContent = 'Saving…';
+    const r = await safeCall(() => owner.setConfig('packs', packs), { ok: false });
+    if (r && r.ok !== false) { status.textContent = ''; app.toast(on ? 'Every pack is on sale.' : 'Every pack was removed from the Store.', 'good'); }
+    else status.textContent = `Failed${r && r.error ? `: ${r.error}` : ''}.`;
+    draw(); app.refresh();
+  };
   const draw = () => {
     const onSale = new Set(storePacks().map((p) => p.id));
     clear(list);
@@ -494,7 +520,10 @@ function storePacksPanel(app) {
   draw();
   return h('section', { class: 'pm-panel pm-admin-sec' },
     h('h3', null, icon('gear'), ' Store packs'),
-    h('p', { class: 'pm-dim' }, online ? 'Tick a pack to sell it in the Store, untick to remove it. Applies to every player.' : 'Needs the online service: sign in to change the Store for everyone.'),
+    h('p', { class: 'pm-dim' }, online ? 'Tick a pack to sell it in the Store, untick to remove it. Applies to every player within a few seconds.' : 'Needs the online service: sign in to change the Store for everyone.'),
+    online ? h('div', { class: 'pm-btnrow' },
+      h('button', { class: 'pm-btn pm-btn--sm', onclick: () => setAll(true) }, 'Add all'),
+      h('button', { class: 'pm-btn pm-btn--sm pm-btn--danger', onclick: async () => { if (await confirmBox(app.root, 'Remove all packs', 'Take every pack out of the Store for everyone?', 'Remove all', true)) setAll(false); } }, 'Remove all')) : null,
     list, status);
 }
 

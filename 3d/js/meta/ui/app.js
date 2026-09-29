@@ -87,7 +87,7 @@ export class MetaApp {
     }
     this.configUnsub = null;
     if (this.online && this.online.config && typeof this.online.config.onChange === 'function') {
-      try { const un = this.online.config.onChange(() => { this.checkResetEpoch(); this.checkAdminRevoke(); }); if (typeof un === 'function') this.configUnsub = un; } catch { /* ignore */ }
+      try { const un = this.online.config.onChange(() => { this.checkResetEpoch(); this.checkAdminRevoke(); this.refreshLiveConfig(); }); if (typeof un === 'function') this.configUnsub = un; } catch { /* ignore */ }
     }
     if (this.online && this.online.presence && typeof this.online.presence.onUpdate === 'function') {
       try {
@@ -168,6 +168,18 @@ export class MetaApp {
       try { const c = globalThis.__pitchsideCloud; if (c && typeof c.syncNow === 'function') c.syncNow(); } catch { /* ignore */ }
       if (changed && !this.destroyed) { this.toast('The owner updated your club.', 'warn'); this.refresh(); }
     } finally { this.patching = false; }
+  }
+  /** Owner changed the server config (Store packs on/off, prices...): redraw the Store / UT home right away when
+   * one is on screen, so players see it without reloading. Skipped while the player is typing or a dialog is open. */
+  refreshLiveConfig() {
+    try {
+      const v = this.stack[this.stack.length - 1];
+      if (this.destroyed || !v || !v.liveConfig) return;
+      const a = document.activeElement;
+      if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      if (document.querySelector('.pm-modal, .pm-po, [role="dialog"][aria-modal="true"]')) return;
+      this.refresh();
+    } catch { /* never throws */ }
   }
   /** Owner "Revoke ALL admin" (config features.adminRevokeAt, unix s): drop this device's admin session once. */
   checkAdminRevoke() {

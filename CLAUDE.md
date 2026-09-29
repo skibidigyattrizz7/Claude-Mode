@@ -33,6 +33,9 @@ If existing UI already uses one of these, flag it to the owner (with a screensho
 rather than silently keeping or adding more of it. See also `docs/UI_DIRECTION.md`.
 
 ## Other standing rules
+- Work style (owner, Sep 29): use the engineering design process on everything (define → research → ideas → build →
+  test → improve), for UI, design and animations too. Aim for the best result at the lowest token cost. Small
+  decisions: just do them and tell the owner; bigger ones: do the sensible thing and ask/show them alongside.
 - Hosting: GitHub Pages is the live game. Ignore Render and Vercel completely (owner, Sep 29).
 - Don't change the online / multiplayer system unless it's really needed — it works.
 - Admin codes are owner-only secrets: never write them into repo files; store hashes only.
