@@ -346,7 +346,7 @@ export function runFut(root, opts) {
         say(nation ? nation.name : best.nat);
         break;
       }
-      case 'rating': setState('s-rating'); sfx.hit(); shake(true); punch(bannerL); punch(bannerR); punch(back); sideBursts(40); say(`${best.glitch === true || best.cursed === true ? infLabel(best) : best.ovr} ${best.pos}`, positionName(best.pos)); break;
+      case 'rating': setState('s-rating'); sfx.hit(); shake(true); punch(bannerL); punch(bannerR); punch(back); sideBursts(40); say(`${best.glitch === true || best.cursed === true || best.hell === true ? infLabel(best) : best.ovr} ${best.pos}`, positionName(best.pos)); break;
       case 'club': {
         setState('s-coin'); sfx.riser(); say(club ? club.name : String(best.club));
         at(dur * 0.66, () => { if (phase !== 'playing') return; setState('s-club'); sfx.hit(); shake(true); punch(bannerL); punch(bannerR); punch(back); sideBursts(50); });

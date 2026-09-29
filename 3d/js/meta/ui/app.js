@@ -13,6 +13,9 @@ import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { applyOwnerPatches } from '../core/ownerpatch.js';
+import { startVinsonExperience } from './vinson.js';
+import { inSquad, enforceLock, MATCH_MESSAGE } from '../core/vinson.js';
+import { HELL_CARD_ID } from '../core/secretcard.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
 export function coinNum(r) {
@@ -40,7 +43,13 @@ export class MetaApp {
   constructor(container, { startMatch, startOnlineMatch = null, online = null, onExit = null } = {}) {
     this.container = container;
     this.startMatchFn = startMatch;
-    this.startOnlineMatchFn = typeof startOnlineMatch === 'function' ? startOnlineMatch : null;
+    this.startOnlineMatchFn = typeof startOnlineMatch === 'function' ? (args) => {
+      if (this.ut?.vinson?.phase === 'locked' && inSquad(this.ut.squad)) {
+        this.toast(MATCH_MESSAGE, 'bad');
+        return Promise.resolve({ ok: false, abandoned: true, reason: 'vinson_curse', message: MATCH_MESSAGE });
+      }
+      return startOnlineMatch(args);
+    } : null;
     this.online = online && typeof online === 'object' ? online : null;
     this.onExit = onExit;
     /** UT coin wallet: 'local' (saved with the club) or 'online' (server balance via online.coins). */
@@ -54,6 +63,7 @@ export class MetaApp {
     this.stack = [];
     this.ut = loadUT();
     if (this.ut) normalizeWallet(this.ut);
+    this.vinson = this.online ? startVinsonExperience(this.online) : null;
     this.career = null;
     this.settings = { halfMinutes: 3, difficulty: 'pro', ...load(SETTINGS_KEY, {}) };
     this.destroyed = false;
@@ -89,6 +99,7 @@ export class MetaApp {
     }
     this.checkResetEpoch();
     this.applyOwnerPatches();
+    this.vinson?.attach(this);
   }
 
   /**
@@ -348,6 +359,7 @@ export class MetaApp {
   saveUT() {
     const s = this.ut;
     if (!s) return false;
+    if (s.vinson?.phase === 'locked') enforceLock(s);
     const w = this.wallet;
     if (isInfinite(s)) {
       // spends are free; earnings are kept (local: in the stash; online: sent to the server wallet)
@@ -391,6 +403,10 @@ export class MetaApp {
   // ---- matches ----
   /** Calls the host startMatch. Returns result, or null when abandoned/failed. */
   async playMatch(home, away, opts) {
+    if (this.ut?.vinson?.phase === 'locked' && [...(home?.players || []), ...(home?.bench || [])].some((p) => p.id === HELL_CARD_ID)) {
+      this.toast(MATCH_MESSAGE, 'bad');
+      return null;
+    }
     for (const [side, t] of [['home', home], ['away', away]]) {
       const errs = validateTeam(t);
       if (errs.length) { this.toast(`Invalid ${side} team: ${errs[0]}`, 'bad'); console.warn('[meta] invalid team', side, errs); return null; }
@@ -413,6 +429,7 @@ export class MetaApp {
 
   destroy() {
     this.destroyed = true;
+    this.vinson?.detach(this);
     this.runCleanup();
     if (this.accountUnsub) { try { this.accountUnsub(); } catch { /* ignore */ } }
     if (this.configUnsub) { try { this.configUnsub(); } catch { /* ignore */ } }

@@ -24,6 +24,7 @@ import { genPhysique, PLAYSTYLE_IDS } from './physique.js';
 import { POSITIONS } from './data.js';
 
 export const SECRET_CARD_ID = 'secret_ghost';
+export const HELL_CARD_ID = 'secret_vinson';
 export const SECRET_PACK_ID = 'secret';
 export const SECRET_ODDS = 0.001;
 
@@ -57,6 +58,10 @@ export const SECRET_VERSIONS = [
   { id: 'secret_elijah', last: 'E.L.I.J.A.H.', name: 'E.L.I.J.A.H.', nat: 'ISR', skin: 5, fullArt: 'assets/cards/elijah-full.webp', artTheme: 'fire', adminOnly: true,
     statText: '???', statSup: '∞', tag: 'FINAL FORM' }, // every stat reads ???^∞
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
+  // Vinson uses the same ultra-rare vault slot but has her own HELL presentation and event hook.
+  // The timed event consumes `hell` + HELL_CARD_ID; it does not reuse the existing evil/cursed gameplay.
+  { id: HELL_CARD_ID, last: 'Evil Vinson', name: 'Evil Vinson', nat: 'USA', skin: 5,
+    photo: 'assets/cards/evil-vinson.png', hell: true, tag: 'WORSE THAN THOMAS' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
 export const SECRET_CARD_IDS = SECRET_VERSIONS.map((v) => v.id);
@@ -92,6 +97,11 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   p.skin = ver.skin;
   if (ver.photo) { p.photo = ver.photo; p.photoCut = true; }
   if (ver.evil) { p.evil = true; p.cardTag = ver.tag || 'EVIL'; }
+  if (ver.hell) {
+    p.hell = true;
+    p.photoCut = false; // the supplied portrait has an opaque background; CSS blends it into the HELL face
+    p.cardTag = ver.tag;
+  }
   if (ver.fullArt) {
     p.fullArt = ver.fullArt; p.statGlyph = ver.statGlyph || null; p.artTheme = ver.artTheme || null;
     if (ver.statText) { p.statText = ver.statText; p.statSup = ver.statSup || ''; }
