@@ -31,6 +31,8 @@ import { PROMO_BY_ID } from '../core/promos.js';
 import * as PM from '../core/pmarket.js';
 import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
+import { cursedPack, isOwner, enforceLock } from '../core/vinson.js';
+import { HELL_CARD_ID } from '../core/secretcard.js';
 
 const persist = (app) => app.saveUT();
 const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary }, badge: s.badge || null });
@@ -261,7 +263,8 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
     ['Nation', h('span', { class: 'pm-factrow' }, frag(flagSVG(p.nat, 'pm-flag pm-flag--xs')), n ? n.name : p.nat)],
     ['Club', h('span', { class: 'pm-factrow' }, frag(crestSVG(c || p.club, 'pm-crest pm-crest--xs')), c ? c.name : p.club)],
     ['League', h('span', { class: 'pm-factrow' }, frag(leagueBadgeSVG(p.league)), leagueName(p.league))],
-    ['Weak foot', stars(p.wf)], ['Skill moves', stars(p.sm)], ['Work rates', `${p.wr[0]} / ${p.wr[1]}`],
+    ['Weak foot', p.hell === true ? '???' : stars(p.wf)], ['Skill moves', p.hell === true ? '???' : stars(p.sm)],
+    ['Work rates', p.hell === true ? '???' : `${p.wr[0]} / ${p.wr[1]}`],
     ['Card', p.hell === true ? 'HELL' : p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
     ['Potential', p.hell === true ? '???' : p.glitch === true ? '∞' : p.cursed === true ? '-∞' : p.pot],
   ];
@@ -296,12 +299,12 @@ function squadView() {
       const squadBar = h('div', { class: 'pm-squadbar' },
         h('label', { class: 'pm-squadbar-pick' }, h('span', { class: 'pm-dim' }, 'Squad'),
           select(squads.map((q, i) => [i, `${q.name} · ${q.formation} · ${q.rating || '-'}`]), s.activeSquad, (v) => {
-            if (SQ.switchSquad(s, Number(v))) { persist(app); app.toast(`${s.squads[s.activeSquad].name} loaded.`, 'good'); app.refresh(); }
+            if (SQ.switchSquad(s, Number(v))) { enforceLock(s); persist(app); app.toast(`${s.squads[s.activeSquad].name} loaded.`, 'good'); app.refresh(); }
           }, { 'aria-label': 'Active squad' })),
         h('button', { class: 'pm-btn pm-btn--sm', disabled: squads.length >= SQ.MAX_SQUADS, title: squads.length >= SQ.MAX_SQUADS ? `Up to ${SQ.MAX_SQUADS} squads` : 'New squad (starts as a copy of this one)', onclick: () => {
           const inp = nameInput(`Squad ${squads.length + 1}`);
           modal(app.root, { title: 'New squad', body: h('div', null, h('p', { class: 'pm-dim' }, 'Starts as a copy of your current squad. Change it, then switch between squads any time.'), inp),
-            actions: [{ label: 'Cancel' }, { label: 'Create', primary: true, onClick: () => { if (SQ.addSquad(s, inp.value) >= 0) { persist(app); app.refresh(); } } }] });
+            actions: [{ label: 'Cancel' }, { label: 'Create', primary: true, onClick: () => { if (SQ.addSquad(s, inp.value) >= 0) { enforceLock(s); persist(app); app.refresh(); } } }] });
         } }, '+ New'),
         h('button', { class: 'pm-btn pm-btn--sm', onclick: () => {
           const inp = nameInput(s.squads[s.activeSquad].name);
@@ -314,7 +317,7 @@ function squadView() {
       main.appendChild(squadBar);
       const autoBtn = h('button', { class: 'pm-btn pm-btn--accent', onclick: () => {
         const before = s.squad.formation;
-        UT.autoSquad(s, ed.get().formation); persist(app);
+        UT.autoSquad(s, ed.get().formation); enforceLock(s); persist(app);
         const o = UT.autoBuildSettings(s);
         if (s.squad.formation !== before) app.refresh(); else ed.set(s.squad);
         const short = s.autoBuildShort || 0;
@@ -324,7 +327,12 @@ function squadView() {
       const ed = squadEditor({
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
         getPlayer, pool: () => UT.clubPlayers(s),
-        onChange: (v) => { s.squad = v; OBJ.setFlag(s, 'squadEdited'); persist(app); },
+        onChange: (v) => {
+          s.squad = v;
+          app.vinson?.onSquadChange();
+          if (enforceLock(s)) { ed.set(s.squad); app.toast('EVIL VINSON cannot be removed from this squad.', 'warn'); }
+          OBJ.setFlag(s, 'squadEdited'); persist(app);
+        },
         toolbar: [autoBtn, autoSettingsBtn], chemToggle: true,
         manager: { value: s.squad.manager || null, onChange: (m) => { s.squad.manager = m; persist(app); } },
         chemStyle: { value: s.squad.chemStyle || 'classic', onChange: (v) => { s.squad.chemStyle = v; persist(app); } },
@@ -518,6 +526,10 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   const owned = UT.ownedSet(s), rng = new Rng();
   let items = [];
   for (let k = 0; k < n; k++) { const got = UT.openPack(packType, owned, rng); for (const it of got) owned.add(it.pid); items = items.concat(got); }
+  if (cursedPack(s) && !isOwner(app.online)) {
+    items = items.map((_, i) => ({ pid: HELL_CARD_ID, cat: `secret_${HELL_CARD_ID}`, dup: i > 0 || (s.club || []).includes(HELL_CARD_ID) }));
+    app.toast("YOU'VE BEEN CURSED BY VINSON", 'bad');
+  } else if (items.some((it) => it.pid === HELL_CARD_ID)) void app.vinson?.onPull();
   if (n > 1) items.sort((a, b) => UT.itemScore(getPlayer(b.pid)) - UT.itemScore(getPlayer(a.pid)));
   s.stats.packsOpened += n;
   persist(app);

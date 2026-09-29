@@ -1,0 +1,37 @@
+/* Isolated HELL event UI. Paint/opacity/transform only; all movement is disabled for reduced motion. */
+#vinson-experience { position: fixed; z-index: 20000; inset: 0; pointer-events: none; font-family: 'Barlow Condensed', Impact, sans-serif; }
+.vinson-notice { position: absolute; top: max(18px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  width: min(92vw, 680px); box-sizing: border-box; padding: 14px 24px 16px; text-align: center;
+  background: #240907; color: #ffdbbb; border: 2px solid #a73320; box-shadow: 0 9px 24px rgba(0,0,0,.7), inset 0 -10px 0 rgba(92,10,9,.55);
+  clip-path: polygon(0 0, 100% 0, 100% 87%, 96% 100%, 4% 100%, 0 87%); }
+.vinson-notice::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(105deg, transparent 0 17px, rgba(188,32,18,.19) 17px 21px, transparent 21px 40px); }
+.vinson-notice-title { position: relative; display: block; font-size: clamp(18px, 3vw, 31px); font-weight: 900; letter-spacing: .075em; line-height: 1.1; text-shadow: 0 3px #430908; }
+.vinson-timer { position: relative; display: block; margin-top: 4px; font: 700 clamp(19px, 3.5vw, 34px) ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #fff2de; }
+.vinson-warn, .vinson-consequence { top: auto; bottom: max(24px, env(safe-area-inset-bottom)); }
+.vinson-consequence { background: #330c08; border-color: #e65a36; }
+.vinson-locked { top: auto; bottom: max(24px, env(safe-area-inset-bottom)); }
+.vinson-screen { position: absolute; inset: 0; overflow: hidden; pointer-events: auto; background: #000; color: #fff0dd;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.vinson-tiles { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); gap: 2px; }
+.vinson-tile { position: relative; min-width: 0; min-height: 0; overflow: hidden; animation: vinson-appear .3s ease-out both; }
+.vinson-tile img { width: 100%; height: 100%; object-fit: cover; object-position: top center; filter: saturate(.52); }
+.vinson-tile span { position: absolute; bottom: 2%; left: 0; width: 100%; padding: 2px 0; background: #130100de;
+  color: #fff1dd; font-size: clamp(6px, 1vw, 16px); font-weight: 900; letter-spacing: .03em; }
+.vinson-tile.corner-0 { grid-area: 1 / 1; }.vinson-tile.corner-1 { grid-area: 1 / 8; }
+.vinson-tile.corner-2 { grid-area: 8 / 1; }.vinson-tile.corner-3 { grid-area: 8 / 8; }
+.vinson-blackout { background: #000; }.vinson-blackout .vinson-tiles { opacity: 0; transition: opacity .45s; }
+.vinson-planet-art { position: relative; width: min(96vw, 1000px); aspect-ratio: 16 / 9; }
+.vinson-planet-art > img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.vinson-spinning-earth { position: absolute; left: 35.5%; top: 41.6%; width: 22.4%; aspect-ratio: 1;
+  overflow: hidden; border-radius: 50%; animation: vinson-spin 11s linear infinite; }
+.vinson-spinning-earth img { position: absolute; width: 446%; max-width: none; height: auto; left: -159%; top: -104.7%; }
+.vinson-final-title { display: block; max-width: 90vw; margin: -1rem 0 0; font-size: clamp(22px, 4vw, 50px);
+  line-height: 1; letter-spacing: .08em; color: #b82a1c; text-shadow: 0 2px #320605; }
+.vinson-check { margin: 20px; pointer-events: auto; cursor: pointer; color: #ffe4bd; background: #2d0d0a;
+  border: 1px solid #ae4f32; padding: 10px 16px; font: 700 15px system-ui, sans-serif; }
+.vinson-check:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+@keyframes vinson-appear { from { opacity: 0; transform: scale(.84); } to { opacity: 1; transform: scale(1); } }
+@keyframes vinson-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .vinson-tile, .vinson-spinning-earth { animation: none; } }
+@media (max-width: 560px) { .vinson-notice { padding: 11px 15px 15px; }.vinson-final-title { margin-top: 6px; } }
