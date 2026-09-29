@@ -163,3 +163,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): Manage (Admin > Players) crashed with "DURATIONS is not defined" (restriction rows); now uses the number+unit picker, and the screen shows an error instead of going blank.
 - DONE (Sep 29): 6 evolutions are 'instant' (no matches, claim right away): Rising Star, Pace Merchant, The Wall, Street Magic, Captain's Armband, Last Line (GK).
 - DONE (Sep 29): Store showcase carousel (utview.js packShowcase): cycles every pack every 3.5 s, swipe / arrows / arrow keys, hold to zoom, pauses on hover or hold, off under reduced motion.
+- DONE (Sep 29): UT home Store tile shows a fan of packs (like the Squad tile) that turns every 3 s; subtitle follows the front pack.

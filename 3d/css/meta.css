@@ -1610,3 +1610,11 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-show-bar { display: block; height: 100%; background: var(--glow, var(--acc)); transform-origin: 0 50%; transform: scaleX(0); transition: transform .1s linear; }
 @media (max-width: 720px) { .pm-show { grid-template-columns: 1fr; padding: 12px; } .pm-show-info h3 { font-size: 22px; } }
 @media (prefers-reduced-motion: reduce) { .pm-show-pack { transition: none; } }
+
+/* ---- UT home Store tile: fanned packs that turn every 3 s (utview.js packFan) ---- */
+.pm-packfan { position: absolute; left: 0; right: 0; top: 11%; height: 70%; }
+.pm-packfan-item { position: absolute; left: 50%; top: 0; transform-origin: 50% 90%;
+  transform: translateX(-50%) translateX(var(--x, 0)) translateY(var(--y, 0)) rotate(var(--r, 0)) scale(var(--s, 1)); opacity: var(--o, 1);
+  transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .45s ease; }
+.pm-packfan-item .pm-pack { font-size: clamp(9px, .95vw, 13px); box-shadow: 0 1em 1.8em -0.8em #000; }
+@media (prefers-reduced-motion: reduce) { .pm-packfan-item { transition: none; } }

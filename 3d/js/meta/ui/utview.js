@@ -158,9 +158,15 @@ export function utHomeView() {
       const waiting = s.packs.slice(0, 2).map((pk) => UT.PACK_BY_ID[pk.type]).filter(Boolean);
       const onSale = UT.storePacks();
       const featured = onSale.find((p) => p.promo) || onSale[onSale.length - 1];
-      const storeArt = h('div', { class: 'pm-art-store', style: { position: 'absolute', inset: '0' } }, (waiting.length ? waiting : [featured]).filter(Boolean).map((p) => packArt(p, 'md')));
+      // owner request (Sep 29): a fan of packs like the Squad tile's cards, cycling through everything on sale
+      // (your unopened packs when you have some)
       const nPacks = s.packs.length + (s.picks || []).length;
-      const storeTile = hx('pm-hx--store', 'Store', nPacks ? `${nPacks} pack${nPacks > 1 ? 's' : ''} to open` : featured ? `${featured.name} · ${fmtNum(effPrice(featured.price))} coins` : 'Packs & Player Picks', () => app.push(storeView()), storeArt, nPacks ? String(nPacks) : null);
+      const fanPacks = waiting.length ? s.packs.map((pk) => UT.PACK_BY_ID[pk.type]).filter(Boolean) : [...onSale.filter((p) => p.promo), ...onSale.filter((p) => !p.promo)];
+      let storeTile = null; // assigned below; the fan's first callback runs before the tile exists
+      const storeArt = h('div', { class: 'pm-art-store', style: { position: 'absolute', inset: '0' } }, fanPacks.length ? packFan(app, fanPacks, (p) => {
+        if (!nPacks && storeTile) { const sub = storeTile.querySelector('.pm-tile-body p'); if (sub) sub.textContent = `${p.name} · ${fmtNum(effPrice(p.price))} coins`; }
+      }) : null);
+      storeTile = hx('pm-hx--store', 'Store', nPacks ? `${nPacks} pack${nPacks > 1 ? 's' : ''} to open` : featured ? `${featured.name} · ${fmtNum(effPrice(featured.price))} coins` : 'Packs & Player Picks', () => app.push(storeView()), storeArt, nPacks ? String(nPacks) : null);
 
       // sbc: the next challenge you haven't done, with its reward
       const sbcs = UT.SBCS.filter((x) => UT.sbcAvailable(s, x));
@@ -555,6 +561,38 @@ function storeView() {
       add(main, utTabs(app, 'store'), M.picksRow(app), show, mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
+}
+
+/** Home Store tile: three packs fanned like the Squad tile's cards; every 3 s the fan turns to the next pack
+ * (the others slide round behind). Transform/opacity only; off under prefers-reduced-motion; timer cleaned up. */
+function packFan(app, packs, onChange) {
+  const reduced = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })();
+  const fan = h('div', { class: 'pm-packfan' });
+  const els = packs.map((p) => { const el = h('div', { class: 'pm-packfan-item' }, packArt(p, 'md')); fan.appendChild(el); return el; });
+  let i = 0;
+  const layout = () => {
+    const n = packs.length;
+    els.forEach((el, k) => {
+      let d = k - i;
+      if (d > n / 2) d -= n;
+      if (d < -n / 2) d += n;
+      const a = Math.abs(d);
+      el.hidden = a > 2;
+      el.style.setProperty('--x', `${d * 52}%`);
+      el.style.setProperty('--r', `${d * 9}deg`);
+      el.style.setProperty('--y', `${a * 0.9}em`);
+      el.style.setProperty('--s', String(d === 0 ? 1.12 : a === 1 ? 0.9 : 0.7));
+      el.style.setProperty('--o', String(a > 1 ? 0 : 1));
+      el.style.zIndex = String(10 - a);
+    });
+    onChange(packs[i]);
+  };
+  layout();
+  if (!reduced && packs.length > 1) {
+    const t = setInterval(() => { if (!document.hidden) { i = (i + 1) % packs.length; layout(); } }, 3000);
+    app.onCleanup(() => clearInterval(t));
+  }
+  return fan;
 }
 
 // ---------- Store showcase ----------
