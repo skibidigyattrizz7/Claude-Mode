@@ -174,3 +174,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): custom colour picker (last swatch opens the browser colour picker; js/uiprefs.js, --user-acc vars).
 - DONE (Sep 29): gear button in the UT header opens Display (interface style + UI colour).
 - DONE (Sep 29): admin tab "Open N at once" (1-10): all packs roll together into one reveal, best card first (openPackFlow count).
+
+- IN REVIEW (Sep 29): EVIL VINSON HELL card identity/art/`???` display in `chatgpt/hell-card`; effects, timers, ban/unban and spinning planet belong to Claude's separate work. Integration contract: `docs/VINSON_HANDOFF.md`.

@@ -425,6 +425,42 @@
   97.6% { filter: drop-shadow(0 0 .2em rgba(255,20,20,.3)) brightness(.8); }
 }
 
+/* EVIL VINSON: HELL is its own card family, not the red EVIL/cursed recolour.
+   Still frame, scorched copper border, ash and ember bands; no flashing or scripted motion. */
+.pm-card.pm-card.sp-secret.is-hell {
+  --bord: linear-gradient(145deg, #ffdfaa 0%, #a73b17 15%, #310d0b 38%, #e56a2c 57%, #43100d 76%, #f0a65a 100%);
+  --face: radial-gradient(75% 54% at 72% 27%, #984428 0%, #451710 52%, transparent 85%), linear-gradient(170deg, #27130f 0%, #160b0a 55%, #070707 100%);
+  --ink: #ffead0; --num: #ffe2b3; --ovr: #ffbd79;
+  --pat: repeating-linear-gradient(117deg, transparent 0 13px, rgba(255,153,86,.08) 13px 14px, transparent 14px 31px),
+    linear-gradient(180deg, transparent 45%, rgba(159,42,21,.24) 66%, transparent 100%);
+  filter: drop-shadow(0 .2em .4em rgba(105,28,14,.55)) drop-shadow(0 .35em .5em rgba(0,0,0,.7));
+}
+.pm-card.sp-secret.is-hell .pc-in::after,
+.pm-card--md.sp-secret.is-hell, .pm-card--lg.sp-secret.is-hell { animation: none; }
+.pm-card.sp-secret.is-hell .pc-in::before { background: linear-gradient(180deg, transparent 56%, rgba(8,3,3,.88) 80%, #080504 100%); }
+.pm-card.sp-secret.is-hell .pc-photo.pc-avatar {
+  top: 1.15em; right: .45em; width: 6.7em; height: 6.85em; object-position: 50% 13%; border-radius: 0;
+  mix-blend-mode: darken; -webkit-mask: linear-gradient(#000 68%, transparent 99%); mask: linear-gradient(#000 68%, transparent 99%);
+}
+.pm-card.sp-secret.is-hell .pc-side { top: 1.7em; }
+.pm-card.sp-secret.is-hell .pc-ovr { font-size: 1.9em; letter-spacing: -.08em; }
+.pm-card.sp-secret.is-hell .pc-tag {
+  top: .75em; font-size: .56em; font-weight: 900; letter-spacing: .13em; color: #ffe4bc;
+  text-shadow: 0 .1em .25em #180402; opacity: 1;
+}
+.pm-card.sp-secret.is-hell .pc-name { top: 7.2em; font-size: 1.05em; font-weight: 900; letter-spacing: .035em; border-color: #bd7047; text-shadow: 0 .12em .2em #150604; }
+.pm-card.sp-secret.is-hell .pc-stats { top: 9.35em; }
+.pm-card.sp-secret.is-hell .pc-stat b { letter-spacing: -.04em; }
+.pm-card.sp-secret.is-hell .pc-flag { box-shadow: 0 0 0 .07em #7b3524; }
+.pm-card.sp-secret.is-hell .pc-hell-seal {
+  position: absolute; left: 50%; bottom: .55em; transform: translateX(-50%); z-index: 4;
+  font-size: .72em; font-weight: 900; letter-spacing: .38em; padding-left: .38em; color: #ffc688;
+  text-shadow: 0 .1em .15em #150604;
+}
+.pm-card--xs.sp-secret.is-hell .pc-tag { display: block; font-size: .43em; top: .65em; }
+.pm-card--xs.sp-secret.is-hell .pc-name { font-size: 1.16em; top: 6.88em; }
+.pm-card--xs.sp-secret.is-hell .pc-hell-seal { font-size: .55em; bottom: .3em; }
+
 /* ---- promos: full-art cards. Colours come from core/promos.js (--pa dark / --pb main / --pc light, injected
    by card.js); each campaign supplies its own art via --pfx and may override --face/--bord/--num/--band.
    The lower band is the darker stats panel. ---- */

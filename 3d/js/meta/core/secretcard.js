@@ -24,6 +24,7 @@ import { genPhysique, PLAYSTYLE_IDS } from './physique.js';
 import { POSITIONS } from './data.js';
 
 export const SECRET_CARD_ID = 'secret_ghost';
+export const HELL_CARD_ID = 'secret_vinson';
 export const SECRET_PACK_ID = 'secret';
 export const SECRET_ODDS = 0.001;
 
@@ -50,6 +51,10 @@ export const SECRET_VERSIONS = [
   { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
+  // Vinson uses the same ultra-rare vault slot but has her own HELL presentation and event hook.
+  // The timed event consumes `hell` + HELL_CARD_ID; it does not reuse the existing evil/cursed gameplay.
+  { id: HELL_CARD_ID, last: 'Evil Vinson', name: 'Evil Vinson', nat: 'USA', skin: 5,
+    photo: 'assets/cards/evil-vinson.png', hell: true, tag: 'WORSE THAN THOMAS' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
 export const SECRET_CARD_IDS = SECRET_VERSIONS.map((v) => v.id);
@@ -85,6 +90,11 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   p.skin = ver.skin;
   if (ver.photo) { p.photo = ver.photo; p.photoCut = true; }
   if (ver.evil) { p.evil = true; p.cardTag = ver.tag || 'EVIL'; }
+  if (ver.hell) {
+    p.hell = true;
+    p.photoCut = false; // the supplied portrait has an opaque background; CSS blends it into the HELL face
+    p.cardTag = ver.tag;
+  }
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   if (ver.cursed) {
     // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and

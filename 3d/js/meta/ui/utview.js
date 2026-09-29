@@ -262,8 +262,8 @@ export function playerModal(app, p, { actions = [], extra = null } = {}) {
     ['Club', h('span', { class: 'pm-factrow' }, frag(crestSVG(c || p.club, 'pm-crest pm-crest--xs')), c ? c.name : p.club)],
     ['League', h('span', { class: 'pm-factrow' }, frag(leagueBadgeSVG(p.league)), leagueName(p.league))],
     ['Weak foot', stars(p.wf)], ['Skill moves', stars(p.sm)], ['Work rates', `${p.wr[0]} / ${p.wr[1]}`],
-    ['Card', p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
-    ['Potential', p.glitch === true ? '∞' : p.cursed === true ? '-∞' : p.pot],
+    ['Card', p.hell === true ? 'HELL' : p.special ? `${UT.SPECIAL_NAME[p.special] || p.special}${p.real ? ' · real player' : ''}` : `${p.tier[0].toUpperCase() + p.tier.slice(1)}${p.rare ? ' rare' : ''}`],
+    ['Potential', p.hell === true ? '???' : p.glitch === true ? '∞' : p.cursed === true ? '-∞' : p.pot],
   ];
   if (p.moment) bio.push(['Moment', p.moment]);
   if (p.upg) bio.push(['Upgrades', `${p.upg.level}/${p.upg.max} knockout rounds reached`]);
