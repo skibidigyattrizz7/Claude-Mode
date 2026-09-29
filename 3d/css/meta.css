@@ -1632,3 +1632,13 @@ b.ovr.bronze { background: linear-gradient(160deg, #e3a878, #955a33); color: #2a
 .pm-card.is-fullart .pc-fullart + * , .pm-card.is-fullart .pc-side, .pm-card.is-fullart .pc-name, .pm-card.is-fullart .pc-stats, .pm-card.is-fullart .pc-tag, .pm-card.is-fullart .pc-ps { z-index: 2; }
 .pm-card.is-fullart .pc-ovr, .pm-card.is-fullart .pc-pos, .pm-card.is-fullart .pc-name, .pm-card.is-fullart .pc-stat b { text-shadow: 0 0 .25em #0038b8, 0 .06em .12em #000; }
 .pm-card.sp-secret.is-fullart .pc-tag { display: none; } /* the picture carries its own title */
+/* full-art fire theme (E-Man / E.L.I.J.A.H.): ember frame, dark face, "FINAL FORM" across the top */
+.pm-card.pm-card.sp-secret.is-fullart.art-fire { --bord: linear-gradient(135deg, #ffe0a8 0%, #ff7a18 22%, #7a0d00 45%, #ffb347 62%, #b31200 80%, #ffe0a8 100%); --face: #140402;
+  filter: drop-shadow(0 0 .5em rgba(255,90,20,.6)) drop-shadow(0 .32em .5em rgba(0,0,0,.6)); }
+.pm-card.art-fire .pc-ovr, .pm-card.art-fire .pc-pos, .pm-card.art-fire .pc-name, .pm-card.art-fire .pc-stat b { text-shadow: 0 0 .3em #ff3d00, 0 .06em .12em #000; }
+.pm-card.sp-secret.is-fullart.art-fire .pc-tag { display: block; top: .62em; font-size: .56em; font-weight: 900; letter-spacing: .16em; z-index: 4; color: #fff; text-shadow: 0 0 .3em #ff3d00, 0 0 .7em rgba(255,60,0,.9), 0 .08em .1em #000; }
+.pm-card .pc-ovr--text { font-size: 1.45em; letter-spacing: 0; }
+.pm-card .pc-stat b sup, .pm-card .pc-ovr sup { font-size: .6em; vertical-align: .55em; margin-left: .05em; }
+.pm-card .pc-ovr--text { font-size: 1.2em; white-space: nowrap; }
+.pm-card.has-stattext .pc-stat b { font-size: .8em; white-space: nowrap; }
+.pm-card.has-stattext .pc-stat span { font-size: .85em; }

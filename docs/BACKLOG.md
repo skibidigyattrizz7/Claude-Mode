@@ -175,3 +175,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): gear button in the UT header opens Display (interface style + UI colour).
 - DONE (Sep 29): admin tab "Open N at once" (1-10): all packs roll together into one reveal, best card first (openPackFlow count).
 - NOTE (Sep 29): Vinson "hell card" request not built. Evil Vinson (like Evil Perlita) still available if the owner wants it.
+- DONE (Sep 29): E-Man (∞) and E.L.I.J.A.H. FINAL FORM (???^∞) secret cards: Admin Vault only (adminOnly), full fire art (art-fire). Nation guessed GHA.

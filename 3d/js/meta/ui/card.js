@@ -111,6 +111,8 @@ export function cardClasses(p) {
   if (p.cursed === true) c.push('is-cursed');
   if (p.evil === true) c.push('is-evil');
   if (p.fullArt) c.push('is-fullart');
+  if (p.artTheme) c.push(`art-${tok(p.artTheme)}`);
+  if (p.statText) c.push('has-stattext');
   if (p.rare) c.push('rare');
   if (p.special) c.push(`sp-${tok(p.special)}`);
   if (p.era === 'prime') c.push('era-prime');
@@ -142,7 +144,9 @@ export function playerCard(p, opts = {}) {
   // finite/1-99 (market value, SBC rating math, sorting all use the real number, never this display string).
   const inf = p.glitch === true || p.cursed === true;
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
-  const glyph = typeof p.statGlyph === 'string' && p.statGlyph.length <= 2 ? esc(p.statGlyph) : null; // e.g. the knight card's ✡
+  // custom stat display for full-art secret cards: a glyph (the knight's ✡) or text with a superscript (E.L.I.J.A.H.'s ???^∞)
+  const glyph = typeof p.statText === 'string' && p.statText.length <= 4 ? `${esc(p.statText)}${p.statSup ? `<sup>${esc(String(p.statSup).slice(0, 2))}</sup>` : ''}`
+    : typeof p.statGlyph === 'string' && p.statGlyph.length <= 2 ? esc(p.statGlyph) : null;
   const statsHtml = size === 'xs' ? '' : `<div class="pc-stats">${vals.map((v, i) => `<div class="pc-stat"><b>${glyph || (inf ? infLabel(p) : num(v, 0, 999))}</b><span>${labels[i]}</span></div>`).join('')}</div>`;
   const posLabel = opts.pos || p.pos;
   const ps = size === 'xs' ? '' : sortedStyles(p).slice(0, 3).map((x) => psBadge(x)).join('');
@@ -153,12 +157,12 @@ export function playerCard(p, opts = {}) {
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(othersAll.join(', '))}">+${esc(others.join(' '))}${othersAll.length > 3 ? '…' : ''}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
   // above it unclipped, so special cards can let the player break out of the top edge of the frame.
-  const tag = (p.cursed === true || p.evil === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
+  const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
-      <div class="pc-ovr">${inf ? infLabel(p) : num(p.ovr, 0, 999)}</div>
+      <div class="pc-ovr${p.statText ? ' pc-ovr--text' : ''}">${p.statText ? glyph : inf ? infLabel(p) : num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>
       ${altHtml}
       <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>

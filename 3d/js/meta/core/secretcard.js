@@ -52,6 +52,10 @@ export const SECRET_VERSIONS = [
   // owner request (Sep 29): knight card, the owner's whole picture (title + background) is the card art and every
   // stat shows a Star of David. Name is a placeholder until the owner gives one.
   { id: 'secret_knight', last: 'Knight', name: 'Knight', nat: 'ISR', skin: 1, fullArt: 'assets/cards/knight-full.webp', statGlyph: '✡' },
+  // owner request (Sep 29): E-Man and his final form. Admin Vault only (`adminOnly`), full fire picture as card art.
+  { id: 'secret_eman', last: 'E-Man', name: 'E-Man', nat: 'GHA', skin: 5, fullArt: 'assets/cards/eman-full.webp', artTheme: 'fire', adminOnly: true },
+  { id: 'secret_elijah', last: 'E.L.I.J.A.H.', name: 'E.L.I.J.A.H.', nat: 'GHA', skin: 5, fullArt: 'assets/cards/elijah-full.webp', artTheme: 'fire', adminOnly: true,
+    statText: '???', statSup: '∞', tag: 'FINAL FORM' }, // every stat reads ???^∞
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
@@ -88,7 +92,12 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   p.skin = ver.skin;
   if (ver.photo) { p.photo = ver.photo; p.photoCut = true; }
   if (ver.evil) { p.evil = true; p.cardTag = ver.tag || 'EVIL'; }
-  if (ver.fullArt) { p.fullArt = ver.fullArt; p.statGlyph = ver.statGlyph || null; }
+  if (ver.fullArt) {
+    p.fullArt = ver.fullArt; p.statGlyph = ver.statGlyph || null; p.artTheme = ver.artTheme || null;
+    if (ver.statText) { p.statText = ver.statText; p.statSup = ver.statSup || ''; }
+    if (ver.tag) p.cardTag = ver.tag;
+  }
+  if (ver.adminOnly) p.adminOnly = true;
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   if (ver.cursed) {
     // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and
