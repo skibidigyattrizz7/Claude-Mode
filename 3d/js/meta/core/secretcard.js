@@ -44,6 +44,10 @@ export const SECRET_VERSIONS = [
   // "THE NII" (owner request, Sep 29): the anti-secret card. Same vault odds, but `cursed` instead of `glitch`:
   // every stat shows "-∞" and in matches he barely moves, gives the ball away, passes to the opponent and every
   // shot flies into his own goal for 10 own goals (engine/core/sim.js `p.cursed`). Owner's photo, faded edges.
+  // owner request (Sep 29): Perlita + an "evil" twin. `evil`: same ∞ powers, red design with "EVIL" across the top
+  // (card.js `is-evil`, meta.css). Nation is a guess (MEX); owner can change it.
+  { id: 'secret_perlita', last: 'Perlita', name: 'Perlita', nat: 'MEX', skin: 2, photo: 'assets/cards/perlita.webp' },
+  { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'MEX', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, tag: 'EVIL' },
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
@@ -79,6 +83,7 @@ function buildSecretCard(id = SECRET_CARD_ID) {
   p.glitch = true;
   p.skin = ver.skin;
   if (ver.photo) { p.photo = ver.photo; p.photoCut = true; }
+  if (ver.evil) { p.evil = true; p.cardTag = ver.tag || 'EVIL'; }
   Object.assign(p, genPhysique(p)); // deterministic height/weight, same rules as every other card
   if (ver.cursed) {
     // the exact opposite of the glitch tier: floor stats (shown as "-∞"), OVR 1, no PlayStyles, weak foot and

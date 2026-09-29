@@ -166,3 +166,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): UT home Store tile shows a fan of packs (like the Squad tile) that turns every 3 s; subtitle follows the front pack.
 - DONE (Sep 29): Nickerson secret card uses the owner's photo, cut out (3d/assets/cards/nickerson.webp).
 - TODO (Sep 29): Evil Nickerson secret card (owner image, red glowing eyes).
+- DONE (Sep 29): Perlita + Evil Perlita secret cards (∞ powers; evil = red design, EVIL on top; nation guessed MEX).

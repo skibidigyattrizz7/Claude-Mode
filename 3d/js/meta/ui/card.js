@@ -109,6 +109,7 @@ const num = (v, lo = 0, hi = 999) => { const n = Math.round(Number(v)); return N
 export function cardClasses(p) {
   const c = ['pm-card', `t-${tok(p.tier)}`];
   if (p.cursed === true) c.push('is-cursed');
+  if (p.evil === true) c.push('is-evil');
   if (p.rare) c.push('rare');
   if (p.special) c.push(`sp-${tok(p.special)}`);
   if (p.era === 'prime') c.push('era-prime');
@@ -150,7 +151,7 @@ export function playerCard(p, opts = {}) {
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(othersAll.join(', '))}">+${esc(others.join(' '))}${othersAll.length > 3 ? '…' : ''}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
   // above it unclipped, so special cards can let the player break out of the top edge of the frame.
-  const tag = p.cursed === true && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
+  const tag = (p.cursed === true || p.evil === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
