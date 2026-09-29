@@ -87,7 +87,7 @@ export function attributeBlock(p) {
   // "The Shawky" (secretcard.js `glitch`): every number here is still a real, 1-99-safe value underneath
   // (see substats.js) — only the display reads "∞", same as the card face and rating.
   // THE NII (secretcard.js `cursed`) is the opposite: every number reads "-∞".
-  const inf = p.glitch === true || p.cursed === true;
+  const inf = p.glitch === true || p.cursed === true || p.hell === true;
   const disp = (v) => (inf ? infLabel(p) : v);
   return h('div', { class: 'pm-attrs pm-attrs--full' }, subStats(p).map((g) => h('div', { class: 'pm-attrgroup', 'data-attr': g.key },
     h('div', { class: 'pm-attr' }, h('span', null, g.label), h('b', { class: cls(g.value) }, disp(g.value)), h('i', { style: { '--v': `${Math.min(99, g.value)}%` } })),
@@ -98,7 +98,7 @@ export function attributeBlock(p) {
 // cards have no separate first/last name — the owner types one name for the card, so it must show in full
 // ("pain man", not "man") rather than through cardName()'s last-word-only rule.
 /** What an "infinite" number reads as: "∞" for the glitch secret cards, "-∞" for THE NII (cursed). */
-export const infLabel = (p) => (p && p.cursed === true ? '-∞' : '∞');
+export const infLabel = (p) => (p && p.hell === true ? '???' : p && p.cursed === true ? '-∞' : '∞');
 /** Rough rendered width of an uppercase nameplate (wide M/W, narrow I/./-/space) so long names shrink instead of "…". */
 /** Nameplate size class; the xs card's plate is relatively narrower, so it steps down sooner. */
 function nameFit(n, size) { const w = nameWidth(n) / (size === 'xs' ? 0.8 : 1); return w > 12.8 ? ' pc-name--xxl' : w > 10.6 ? ' pc-name--xl' : w > 8.6 ? ' pc-name--long' : ''; }
@@ -114,6 +114,7 @@ export function cardClasses(p) {
   const c = ['pm-card', `t-${tok(p.tier)}`];
   if (p.cursed === true) c.push('is-cursed');
   if (p.evil === true) c.push('is-evil');
+  if (p.hell === true) c.push('is-hell');
   if (p.fullArt) c.push('is-fullart');
   if (p.angel === true) c.push('is-angel');
   if (p.artTheme) c.push(`art-${tok(p.artTheme)}`);
@@ -147,7 +148,7 @@ export function playerCard(p, opts = {}) {
   const labels = p.pos === 'GK' ? GK_LABELS : STAT_LABELS;
   // "The Shawky" (secretcard.js `glitch`): shown as "∞" everywhere on the face — the underlying numbers stay
   // finite/1-99 (market value, SBC rating math, sorting all use the real number, never this display string).
-  const inf = p.glitch === true || p.cursed === true;
+  const inf = p.glitch === true || p.cursed === true || p.hell === true;
   // FUT order: left column PAC SHO PAS, right column DRI DEF PHY (the grid flows by column).
   // custom stat display for full-art secret cards: a glyph (the knight's ✡) or text with a superscript (E.L.I.J.A.H.'s ???^∞)
   const glyph = typeof p.statText === 'string' && p.statText.length <= 4 ? `${esc(p.statText)}${p.statSup ? `<sup>${esc(String(p.statSup).slice(0, 2))}</sup>` : ''}`
@@ -163,7 +164,7 @@ export function playerCard(p, opts = {}) {
   const altHtml = size === 'xs' || !others.length ? '' : `<div class="pc-alt" title="Also plays ${esc(othersAll.join(', '))}">${othersAll.length >= 10 ? 'ANY POSITION' : `+${esc(others.join(' '))}${othersAll.length > 3 ? '…' : ''}`}</div>`;
   // Layers: .pc-in is the masked shield face (pattern + foil + shine stay clipped inside it); art and text sit
   // above it unclipped, so special cards can let the player break out of the top edge of the frame.
-  const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true || p.angel === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
+  const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true || p.angel === true || p.hell === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
     ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
@@ -178,12 +179,13 @@ export function playerCard(p, opts = {}) {
     <div class="pc-name${nameFit(nameOnCard(p), size)}">${esc(nameOnCard(p))}</div>
     ${statsHtml}
     ${tag ? `<div class="pc-tag">${esc(tag)}</div>` : ''}
+    ${p.hell === true ? '<div class="pc-hell-seal" aria-hidden="true">HELL</div>' : ''}
     ${upg && size !== 'xs' ? `<div class="pc-upg" title="Upgrades ${upg.level}/${upg.max}">${Array.from({ length: upg.max }, (_, i) => `<i class="${i < upg.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}
     ${p.era === 'prime' ? '<div class="pc-era">PRIME</div>' : ''}
     ${p.evo ? `<div class="pc-evo" title="Evolved ×${evo}">EVO${evo > 1 ? ` ${evo}` : ''}</div>` : ''}
   </div>`;
   const el = frag(html);
-  el.setAttribute('aria-label', `${p.name}, ${inf ? 'infinity' : p.ovr} ${posLabel}`);
+  el.setAttribute('aria-label', `${p.name}, ${p.hell === true ? 'unknown rating' : inf ? 'infinity' : p.ovr} ${posLabel}`);
   if (opts.extra) el.appendChild(opts.extra);
   if (opts.onClick) {
     el.tabIndex = 0;

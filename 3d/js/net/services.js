@@ -777,6 +777,12 @@ export function createOnline(deps) {
       },
       async unban(id, code) {
         { const t = await resolveId(id, code); if (!t.ok) return t; id = t.id; }
+        // Vinson bans are releasable by the owner account only. A generic moderator unban cannot silently
+        // clear the server-owned curse; ordinary moderation bans still use the original RPC below.
+        if (readAcc()?.role === 'owner') {
+          const v = await online.vinson.unban(id);
+          if (v.ok || v.error !== 'not_vinson') return v;
+        }
         const r = await modCall('mod_unban', { p_player: id }, code);
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : r;
       },
@@ -794,6 +800,37 @@ export function createOnline(deps) {
       },
     },
 
+
+    // ---------------------------------------------------------------- EVIL VINSON (migration 011)
+    vinson: {
+      async status() {
+        const ident = await identity();
+        if (!ident) return fail('auth');
+        const r = dataOr(await rpc('vinson_status', { p_id: ident.id, p_secret: ident.secret }));
+        if (!r.ok) return fail(r.error || 'server_error');
+        if (r.phase === 'banned') setBan({ reason: "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON", until: null });
+        else if (r.phase === 'released' || r.phase === 'locked' || r.exempt) {
+          const a = readAcc();
+          if (a?.ban?.reason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") setBan(null);
+        }
+        return { ok: true, exempt: r.exempt === true, phase: ['doom', 'banned', 'released', 'locked'].includes(r.phase) ? r.phase : null,
+          deadline: isoOr(r.deadline), serverNow: isoOr(r.serverNow) };
+      },
+      async pull() {
+        const r = dataOr(await authed('vinson_pull'));
+        return r.ok ? { ok: true, exempt: r.exempt === true, phase: r.phase || null, deadline: isoOr(r.deadline) } : fail(r.error || 'server_error');
+      },
+      async lock() {
+        const r = dataOr(await authed('vinson_lock'));
+        return r.ok ? { ok: true, phase: r.phase } : fail(r.error || 'server_error');
+      },
+      async unban(playerId) {
+        const a = readAcc();
+        if (!a || a.role !== 'owner') return fail('not_allowed');
+        const r = dataOr(await rpc('vinson_unban', { p_id: a.id, p_secret: a.token, p_player: playerId }));
+        return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
+      },
+    },
 
     // ---------------------------------------------------------------- owner powers (migration 003)
     owner: {
@@ -1427,6 +1464,7 @@ const unavailable = () => {
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
     owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, deletePlayer: f, deleteGuests: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f },
+    vinson: { status: f, pull: f, lock: f, unban: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },

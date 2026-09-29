@@ -1384,7 +1384,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
   // Every version (owner's list) is a full ∞ glitch card with its own name + nation, and none can be granted.
   // THE NII (`cursed`) is the one anti-version: OVR 1, floor stats, no glitch, carried into matches as `cursed`.
-  assert.equal(SC.SECRET_VERSIONS.length, 17);
+  assert.equal(SC.SECRET_VERSIONS.length, 18);
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
     if (v.cursed) {
@@ -1395,6 +1395,21 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
     assert.ok(NATION_BY_CODE_T[c.nat] || v.fullArt, `nation ${c.nat} exists`); // the full-art knight uses a flag-only nation (art.js FLAG_ONLY)
     assert.equal(A.grantPlayer(s, v.id).ok, false);
   }
+});
+
+test('EVIL VINSON has an independent HELL card identity and stable display hook', () => {
+  const c = SC.secretCard(SC.HELL_CARD_ID);
+  assert.equal(c.id, 'secret_vinson');
+  assert.equal(c.name, 'Evil Vinson');
+  assert.equal(c.cardTag, 'WORSE THAN THOMAS');
+  assert.equal(c.hell, true);
+  assert.equal(c.evil, undefined);
+  assert.equal(c.cursed, undefined);
+  assert.equal(c.photo, 'assets/cards/evil-vinson.png');
+  assert.equal(c.photoCut, false);
+  assert.equal(c.ovr, SC.INFINITE_OVR);
+  assert.ok(Object.values(c.stats).every((v) => v === 99));
+  assert.equal(getPlayer(SC.HELL_CARD_ID), c);
 });
 
 test('B2: Admin Vault pack — admin-only (never in the public store), 10 varied random players per opening', () => {
