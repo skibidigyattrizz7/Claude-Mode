@@ -181,3 +181,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): Rabbi Patel goal celebration (engine/ui/goalcard.js FLAG_GOAL_IDS): Israeli flag, spinning Star of David, star zooms through its hexagon as the exit (~4.5 s).
 - DONE (Sep 29): Pain Man angelic secret card: halo baked into the cut-out photo, white-and-gold design (is-angel), ANGELIC on top, |∞| stats. Nation guessed EGY.
 - DONE (Sep 29): Saved cards (Club tab): duplicates left on a pack's Done go there instead of being quick-sold; a pack left mid-opening (tab closed / reload) is rescued there on next load (ut.js pendingPack / rescuePendingPack).
+- DONE (Sep 29): test link ?test=1 (3d/js/testmode.js): in-memory storage, fake online server, Owner Access, banner; reload = clean slate. See HANDOFF section 7.

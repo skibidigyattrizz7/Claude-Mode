@@ -63,6 +63,7 @@ Owner videos/screens: extract frames with
 ## 7. Hosting
 - **GitHub Pages** (live, auto): https://skibidigyattrizz7.github.io/Claude-Mode/
 - **Render** static site (auto-deploys this branch): https://pitchside-xl8m.onrender.com
+- **Test link** (owner, Sep 29): add `?test=1` to any of these, e.g. https://skibidigyattrizz7.github.io/Claude-Mode/3d/?test=1 . js/testmode.js swaps all storage for memory (nothing saved, reload = clean slate), forces the fake online server (?mockOnline=1, never the real DB) and turns on Owner Access.
 - **Replit** (manual copy, does NOT auto-update): https://vital-flustered-codegeneration--ziadaymanshawky.replit.app. Updating it costs the owner's Replit credits.
 - **Vercel**: production serves old `main`; only branch previews are current. Owner must set Vercel's Production Branch or approve merging to main.
 - All are blocked on the owner's school Chromebook (filter category "domain sharing"). Don't try to bypass it (see section 1).
