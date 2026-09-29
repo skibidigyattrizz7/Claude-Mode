@@ -146,7 +146,7 @@
 .pm-dotbadge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font: 700 12px/1 var(--font-display); }
 
 /* ---------- UT home hub: big image tiles with the player's own content ---------- */
-.pm-uthub { display: grid; gap: 12px; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: minmax(0, auto); }
+.pm-uthub { display: grid; gap: 12px; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: minmax(0, auto); grid-auto-flow: row dense; }
 .pm-uthub .pm-tile { min-height: 0; padding: 0; justify-content: flex-end; }
 .pm-uthub .pm-hx { grid-column: span 4; min-height: 250px; }
 .pm-uthub .pm-hx--squad { grid-column: 1 / 6; grid-row: span 2; min-height: 512px; }
@@ -229,7 +229,9 @@
 
 @media (max-width: 1100px) {
   .pm-uthub .pm-hx--squad { grid-column: 1 / 7; }
-  .pm-uthub .pm-hx--store, .pm-uthub .pm-hx--battles { grid-column: 7 / 13; }
+  .pm-uthub .pm-hx--squad { grid-row: 1 / span 2; }
+  .pm-uthub .pm-hx--store { grid-column: 7 / 13; grid-row: 1; }
+  .pm-uthub .pm-hx--battles { grid-column: 7 / 13; grid-row: 2; }
   .pm-uthub .pm-hx--sbc, .pm-uthub .pm-hx--obj, .pm-uthub .pm-hx--rivals, .pm-uthub .pm-hx--market { grid-column: span 6; }
   .pm-uthub .pm-hx--promo { grid-column: 1 / -1; }
 }
