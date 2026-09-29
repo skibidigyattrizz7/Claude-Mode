@@ -8,14 +8,14 @@
 // underneath). Under prefers-reduced-motion it shows only the final XI, for a short beat.
 
 const LINES = [
-  { key: 'gk', label: 'Goalkeeper', pos: ['GK'], hold: 1300 },
-  { key: 'def', label: 'Defence', pos: ['CB', 'LB', 'RB', 'LWB', 'RWB'], hold: 1800 },
-  { key: 'mid', label: 'Midfield', pos: ['CM', 'CDM', 'CAM', 'LM', 'RM'], hold: 1800 },
-  { key: 'att', label: 'Attack', pos: ['ST', 'CF', 'LW', 'RW'], hold: 1600 },
+  { key: 'gk', label: 'Goalkeeper', pos: ['GK'], hold: 1700 },
+  { key: 'def', label: 'Defence', pos: ['CB', 'LB', 'RB', 'LWB', 'RWB'], hold: 2300 },
+  { key: 'mid', label: 'Midfield', pos: ['CM', 'CDM', 'CAM', 'LM', 'RM'], hold: 2300 },
+  { key: 'att', label: 'Attack', pos: ['ST', 'CF', 'LW', 'RW'], hold: 2100 },
 ];
 const FINAL_HOLD = 2000; // includes the 500 ms the pitch takes to fill
 const REDUCED_HOLD = 2600;
-const EXIT_MS = 160;
+const EXIT_MS = 280; // the row pans away (lineup.css lr-pan)
 const SKIP_GUARD_MS = 350; // ignore input right after opening so the tap that started the match cannot skip it
 
 const LEFT = new Set(['LB', 'LWB', 'LM', 'LW']);
@@ -81,9 +81,17 @@ function card(p, shirtSVG, kit, i, renderCard) {
     let node = null;
     try { node = renderCard(p); } catch (e) { console.warn('[lineup] card render failed', e); }
     if (node) {
+      // dealt face-down, then flipped over (see lineup.css lr-deal); the back is a plain branded card back
       const c = el('div', 'lr-card lr-card--full');
       c.style.setProperty('--i', String(i));
-      c.append(node);
+      if (Number(p.ovr) >= ELITE) c.classList.add('is-elite');
+      const flip = el('div', 'lr-flip');
+      const front = el('div', 'lr-face lr-front');
+      front.append(node);
+      const back = el('div', 'lr-face lr-back');
+      back.append(el('span', 'lr-back-mark'));
+      flip.append(front, back);
+      c.append(flip);
       return c;
     }
   }
@@ -171,7 +179,9 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
     const live = el('div', 'lr-live');
     live.setAttribute('aria-live', 'polite');
     live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);';
-    root.append(head, stage, pips, live);
+    const spot = el('div', 'lr-spot');
+    spot.setAttribute('aria-hidden', 'true');
+    root.append(spot, head, stage, pips, live);
     container.append(root);
 
     let timer = 0;
@@ -215,7 +225,18 @@ export function showLineupReveal({ team, container, shirtSVG, teamOvr, label = '
       wrap.dataset.line = line.key;
       wrap.style.setProperty('--n', String(line.players.length));
       const title = el('div', 'lr-line-title');
-      title.append(el('span', 'lr-line-name', line.label), el('span', 'lr-line-avg', line.avg), el('small', 'lr-line-lbl', 'Line rating'));
+      const avgEl = el('span', 'lr-line-avg', calm ? line.avg : 0);
+      title.append(el('span', 'lr-line-name', line.label), avgEl, el('small', 'lr-line-lbl', 'Line rating'));
+      if (!calm) {
+        const t0 = performance.now() + 150, dur = 650;
+        const tick = (now) => {
+          if (!alive() || !avgEl.isConnected) return;
+          const k = Math.max(0, Math.min(1, (now - t0) / dur));
+          avgEl.textContent = String(Math.round(line.avg * (1 - Math.pow(1 - k, 3))));
+          if (k < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
       const row = el('div', 'lr-cards');
       line.players.forEach((p, i) => row.append(card(p, shirtSVG, line.key === 'gk' ? (team.gkKit || kit) : kit, i, renderCard)));
       wrap.append(title, row);
