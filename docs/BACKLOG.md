@@ -183,3 +183,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): Saved cards (Club tab): duplicates left on a pack's Done go there instead of being quick-sold; a pack left mid-opening (tab closed / reload) is rescued there on next load (ut.js pendingPack / rescuePendingPack).
 - DONE (Sep 29): test link ?test=1 (3d/js/testmode.js): in-memory storage, fake online server, Owner Access, banner; reload = clean slate. See HANDOFF section 7.
 - DONE (Sep 29): owner rule: ignore Render and Vercel (CLAUDE.md + HANDOFF updated).
+- DONE (Sep 29): Codex pack-opening visuals (codex/pack-opening-visuals) were already merged as the "Classic" pack animation; the test link now starts on Classic (toggle on the pack screen switches to New).

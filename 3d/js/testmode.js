@@ -33,6 +33,9 @@
   if (q.get('mockOnline') !== '1') { q.set('mockOnline', '1'); history.replaceState(null, '', location.pathname + '?' + q.toString() + location.hash); }
   // Owner Access for testing (only ever inside this in-memory session)
   session.setItem('pitchside.admin.session', JSON.stringify({ level: 'super' }));
+  // Pack opening starts on the Classic cinematic (Codex's 3D tunnel/walkout visuals) so the owner can compare it;
+  // the toggle on the pack screen still switches to the New one. The live game keeps its own default.
+  local.setItem('pitchside.meta.packAnim', JSON.stringify('classic'));
 
   function banner() {
     var b = document.createElement('div');
