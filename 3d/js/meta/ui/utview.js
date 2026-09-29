@@ -508,15 +508,21 @@ export function oddsModal(app, pack) {
   });
 }
 
-export function openPackFlow(app, packType, onDone) {
+export function openPackFlow(app, packType, onDone, count = 1) {
   if (typeof app.restricted === 'function' && app.restricted('packs')) { app.toast('The owner has restricted packs on your account.', 'warn'); return; }
   const s = app.ut;
   const pack = UT.PACK_BY_ID[packType];
-  const items = UT.openPack(packType, UT.ownedSet(s), new Rng());
-  s.stats.packsOpened++;
+  // count > 1 (admin "open up to 10 at once", owner Sep 29): every pack is rolled, then shown as one opening with
+  // the best card leading; later packs see earlier pulls as owned so duplicates are flagged correctly.
+  const n = Math.max(1, Math.min(10, Math.floor(count) || 1));
+  const owned = UT.ownedSet(s), rng = new Rng();
+  let items = [];
+  for (let k = 0; k < n; k++) { const got = UT.openPack(packType, owned, rng); for (const it of got) owned.add(it.pid); items = items.concat(got); }
+  if (n > 1) items.sort((a, b) => UT.itemScore(getPlayer(b.pid)) - UT.itemScore(getPlayer(a.pid)));
+  s.stats.packsOpened += n;
   persist(app);
   runPackOpening(app.root, {
-    pack, items, getPlayer,
+    pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
     sellValue: (p) => quickSellValue(p),
     onSend: (pid) => { UT.addToClub(s, pid); persist(app); },
     onVault: (pid) => { UT.sendToVault(s, pid); persist(app); },

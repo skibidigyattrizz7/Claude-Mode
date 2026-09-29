@@ -188,9 +188,13 @@ export function adminView() {
       // ---- packs ---- (owner request Sep 28: each button uses that pack's own look — same small packArt
       // tiles the Store and My Packs already use — and the admin-only Admin Vault pack is labelled as such;
       // it never appears in UT.storePacks(), only here and in "My Packs" is where a normal pack ends up.)
+      // how many of the clicked pack to open in one go (owner, Sep 29: up to 10 at once)
+      st.packCount = st.packCount || 1;
+      const countSel = select(Array.from({ length: 10 }, (_, i) => [String(i + 1), i ? `Open ${i + 1} at once` : 'Open 1']), String(st.packCount), (v) => { st.packCount = Number(v); }, { 'aria-label': 'Packs to open at once' });
       const packs = h('section', { class: 'pm-panel pm-admin-sec' }, h('h3', null, icon('chest'), ' Open any pack for free'),
+        h('div', { class: 'pm-btnrow' }, countSel, h('small', { class: 'pm-dim' }, 'Then click a pack. All of them open together, best card first.')),
         h('div', { class: 'pm-adminpacks' }, UT.PACKS.map((pk) => h('button', {
-          class: 'pm-adminpack', disabled: !s, title: pk.name, onclick: () => openPackFlow(app, pk.id),
+          class: 'pm-adminpack', disabled: !s, title: pk.name, onclick: () => openPackFlow(app, pk.id, null, st.packCount),
         }, packArt(pk, 'sm'), h('span', null, pk.name), pk.adminOnly ? h('small', { class: 'pm-adminpack-badge' }, 'Admin only') : null))));
 
       // ---- grant player ----
