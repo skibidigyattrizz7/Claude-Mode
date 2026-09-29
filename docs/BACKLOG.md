@@ -174,7 +174,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): custom colour picker (last swatch opens the browser colour picker; js/uiprefs.js, --user-acc vars).
 - DONE (Sep 29): gear button in the UT header opens Display (interface style + UI colour).
 - DONE (Sep 29): admin tab "Open N at once" (1-10): all packs roll together into one reveal, best card first (openPackFlow count).
-- NOTE (Sep 29): Vinson "hell card" request not built. Evil Vinson (like Evil Perlita) still available if the owner wants it.
 - DONE (Sep 29): E-Man (∞) and E.L.I.J.A.H. FINAL FORM (???^∞) secret cards: Admin Vault only (adminOnly), full fire art (art-fire). Nation guessed GHA.
 - DONE (Sep 29): card stats centred; names size by letter width (4 steps, xs-aware) so none of the 4,016 cards clip at sm or xs; secret cards say ANY POSITION instead of a clipped list; UT screens toured in both styles on desktop + phone. Knight card renamed Rabbi Patel; E-Man / E.L.I.J.A.H. from Israel.
-- DONE (Sep 29): forced pack pulls: admin tab 'Force pack pulls' (your queue, up to 10) and Players > Manage 'Force a pack pull' (owner patch op forcePull, migration recorded as 20260929200215 pitchside_011_force_pull). NOTE: another branch (chatgpt/hell-card) applied pitchside_011_vinson to the live DB at 19:36 (changes __is_banned + save_put); not merged here.
+- DONE (Sep 29): forced pack pulls: admin tab 'Force pack pulls' (your queue, up to 10) and Players > Manage 'Force a pack pull' (owner patch op forcePull, migration recorded as 20260929200215 pitchside_011_force_pull).
+- DONE (Sep 29): EVIL VINSON HELL card + timed curse, spinning planet, account ban/owner release, squad/pack/match consequences in `chatgpt/hell-card`. Migration 011 is applied; details: `docs/VINSON_HANDOFF.md`.

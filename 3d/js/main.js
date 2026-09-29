@@ -1304,11 +1304,15 @@ function startOnlineServices() {
     const cloud = createCloudSync(online, {
       onReplaced: () => {
         toast('Your Ultimate Team club was loaded from your account.', 'good');
+        window.__pitchsideVinson?.reload?.();
         if (metaMount && nav.top && nav.top.name === 'meta') { nav.back(); metaScreen('ut'); }
       },
     });
     cloud.start();
     window.__pitchsideCloud = cloud;
+    // The VINSON deadline and ban screen continue across menus and page reloads.
+    import('./meta/ui/vinson.js').then(({ startVinsonExperience }) => startVinsonExperience(online))
+      .catch((e) => console.warn('[vinson] event UI unavailable', e));
     // Accounts are optional but prominent: first visit shows Create account / Log in / Continue as guest.
     const webdriver = typeof navigator !== 'undefined' && navigator.webdriver;
     if (!Q.get('screen') && Q.get('gate') !== '0' && (!webdriver || Q.get('gate') === '1')) maybeShowAccountGate(online, { toast });

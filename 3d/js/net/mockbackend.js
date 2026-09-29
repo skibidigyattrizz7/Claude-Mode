@@ -70,8 +70,10 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     return d;
   };
   const SESSION_TTL = 60 * DAY;
-  const isBanned = (p) => !!p.banned && (!p.bannedUntil || p.bannedUntil > now());
-  const banJson = (p) => ({ reason: p.banReason || '', until: p.bannedUntil ? new Date(p.bannedUntil).toISOString() : null });
+  const vinsonBanned = (p) => p.vinson && (p.vinson.phase === 'banned' || (p.vinson.phase === 'doom' && p.vinson.deadline <= now()));
+  const isBanned = (p) => (!!p.banned && (!p.bannedUntil || p.bannedUntil > now())) || !!vinsonBanned(p);
+  const banJson = (p) => vinsonBanned(p) ? { reason: "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON", until: null }
+    : { reason: p.banReason || '', until: p.bannedUntil ? new Date(p.bannedUntil).toISOString() : null };
   const bannedError = (p) => Object.assign(new Error('banned'), { ban: banJson(p) });
   const audit = (db, id, action, detail = {}) => { db.audit.push({ profileId: id, action, detail, at: now() }); if (db.audit.length > 2000) db.audit.splice(0, db.audit.length - 2000); };
   const newSession = (db, id) => {
@@ -744,6 +746,45 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       store.save(db);
       const b = isBanned(p);
       return { ok: true, id: p.id, username: p.username || null, name: p.name, role: p.role || 'player', claimed: !!p.username, banned: b, ban: b ? banJson(p) : null, friendCode: p.friendCode };
+    },
+    vinson_status({ p_id, p_secret }) {
+      const db = load(), p = authRaw(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (p.role === 'owner') return { ok: true, exempt: true, phase: null, serverNow: new Date(now()).toISOString() };
+      if (!p.vinson) return { ok: true, phase: null, serverNow: new Date(now()).toISOString() };
+      if (p.vinson.phase === 'doom' && p.vinson.deadline <= now()) {
+        p.vinson.phase = 'banned';
+        Object.assign(p, { banned: true, banReason: "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON", bannedUntil: null, bannedAt: now(), bannedBy: 'vinson' });
+        audit(db, p.id, 'vinson_ban'); store.save(db);
+      }
+      return { ok: true, phase: p.vinson.phase, deadline: p.vinson.deadline ? new Date(p.vinson.deadline).toISOString() : null, serverNow: new Date(now()).toISOString() };
+    },
+    vinson_pull({ p_id, p_secret }) {
+      const db = load(), p = authRaw(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (p.role === 'owner') return { ok: true, exempt: true };
+      if (isBanned(p)) return err('banned');
+      if (!p.vinson || !['doom', 'locked'].includes(p.vinson.phase)) {
+        p.vinson = { phase: 'doom', deadline: now() + 180000 }; audit(db, p.id, 'vinson_pull'); store.save(db);
+      }
+      return { ok: true, phase: p.vinson.phase, deadline: p.vinson.deadline ? new Date(p.vinson.deadline).toISOString() : null };
+    },
+    vinson_lock({ p_id, p_secret }) {
+      const db = load(), p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      if (!p.vinson || !['released', 'locked'].includes(p.vinson.phase)) return err('not_released');
+      p.vinson = { phase: 'locked', deadline: null }; store.save(db);
+      return { ok: true, phase: 'locked' };
+    },
+    vinson_unban({ p_id, p_secret, p_player }) {
+      const db = load(), actor = auth(db, p_id, p_secret), p = db.profiles[p_player];
+      if (!actor || actor.role !== 'owner') return err('not_allowed');
+      if (!p || p.id === actor.id) return err('not_found');
+      if (!p.vinson || !['doom', 'banned'].includes(p.vinson.phase)) return err('not_vinson');
+      p.vinson = { phase: 'released', deadline: null };
+      if (p.banReason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") Object.assign(p, { banned: false, banReason: null, bannedUntil: null, bannedAt: null, bannedBy: null });
+      audit(db, p.id, 'vinson_unban', { byId: actor.id }); store.save(db);
+      return { ok: true, player: modRow(p) };
     },
     // ---------------------------------------------------------------- moderation (002)
     // p_query='' -> "all players" (paginated, newest first). A real pitchside_mod_list RPC should replace this
@@ -1432,6 +1473,8 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (!p) return err('auth');
       if (!isObj(p_data)) return err('bad_value');
       if (JSON.stringify(p_data).length > 1572864) return err('too_large');
+      if (p.vinson?.phase === 'locked' && (!Array.isArray(p_data.club) || !p_data.club.includes('secret_vinson')
+        || ![...(p_data.squad?.slots || []), ...(p_data.squad?.bench || [])].includes('secret_vinson'))) return err('vinson_locked');
       if (!hit(db, `save:${p.id}`, 3600000, 240)) { store.save(db); return err('rate_limited'); }
       const cur = db.saves[p.id];
       if ((cur ? cur.rev : 0) !== p_rev) return { ok: false, error: 'conflict', rev: cur ? cur.rev : 0 };
