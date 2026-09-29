@@ -123,7 +123,8 @@ export function playersPanel(app) {
             ? btn('Unban', null, () => quick('Unban', () => mod.unban(u.id)))
             : [btn('Timeout', null, () => quick('Timeout (1 day)', () => mod.ban(u.id, 'Timeout', new Date(Date.now() + 1440 * 60000)), `Time out ${name} for 1 day?`, true)),
               btn('Ban', 'ban', () => { const reason = (prompt(`Ban ${name}. Reason (shown to the player):`, 'Owner decision') || '').trim(); if (reason) quick('Ban', () => mod.ban(u.id, reason, null)); }, 'pm-btn--danger')],
-          btn('Manage', null, open, 'pm-btn--accent')));
+          btn('Manage', null, open, 'pm-btn--accent'),
+          u.role === 'owner' ? null : btn('Delete', null, () => quick('Delete player', () => svc.deletePlayer(u.id), `Delete ${name} completely? Their club, coins, saves and messages are gone for good.`, true), 'pm-btn--danger')));
     }));
     body.appendChild(list);
   }
@@ -133,6 +134,18 @@ export function playersPanel(app) {
     h('p', { class: 'pm-dim' }, 'Everyone who ever signed in, played or made a team. Message, coins, timeout and ban right here; Manage opens their club, account, access and history.'),
     h('div', { class: 'pm-btnrow pm-wrap' }, filterInp,
       h('button', { class: 'pm-btn', onclick: load }, 'Refresh'),
+      // Bulk clean-up of device guests (no username): pick how many days idle; 0 = every guest.
+      h('button', {
+        class: 'pm-btn pm-btn--danger',
+        onclick: async () => {
+          const raw = prompt('Delete every guest (no username) not seen for how many days? 0 = all guests.', '7');
+          if (raw == null) return;
+          const days = Number(String(raw).trim());
+          if (!Number.isInteger(days) || days < 0) { app.toast('Enter a whole number of days (0 or more).', 'warn'); return; }
+          const r = await run(app, 'Delete guests', () => svc.deleteGuests(days), { confirm: `Delete every guest not seen for ${days} day${days === 1 ? '' : 's'}? This cannot be undone.`, danger: true });
+          if (r && r.ok) { app.toast(`${r.deleted} guest${r.deleted === 1 ? '' : 's'} deleted.`, 'good'); load(); }
+        },
+      }, 'Delete old guests'),
       h('button', {
         class: 'pm-btn pm-btn--danger',
         onclick: async () => {

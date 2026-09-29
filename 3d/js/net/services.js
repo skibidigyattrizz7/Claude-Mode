@@ -852,6 +852,18 @@ export function createOnline(deps) {
         const r = await ownerCall('admin_reset', { p_player: playerId, p_what: what });
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player), resets: sanitizeEpochs(r.resets) } : r;
       },
+      /** Delete a player completely (account or guest; never the owner or yourself). Owner Access only (010). */
+      async deletePlayer(playerId) {
+        { const t = await resolveId(playerId); if (!t.ok) return t; playerId = t.id; }
+        const r = await ownerCall('admin_delete_player', { p_player: playerId });
+        return r.ok ? { ok: true, deleted: 1 } : r;
+      },
+      /** Delete every device guest (no username) not seen for `days` days (0 = all guests). -> { ok, deleted } */
+      async deleteGuests(days = 0) {
+        if (!Number.isInteger(days) || days < 0 || days > 3650) return fail('bad_value');
+        const r = await ownerCall('admin_delete_guests', { p_days: days });
+        return r.ok ? { ok: true, deleted: Number.isInteger(r.deleted) ? r.deleted : 0 } : r;
+      },
       async broadcast(text, minutes = 30) {
         const t = cleanStr(text, 200, '');
         if (!t) return fail('bad_text');
@@ -1413,7 +1425,7 @@ const unavailable = () => {
       onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
-    owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
+    owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, deletePlayer: f, deleteGuests: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },

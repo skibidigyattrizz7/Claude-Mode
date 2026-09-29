@@ -978,6 +978,34 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       store.save(db);
       return { ok: true, player: modRow(v), resets: epochs(v) };
     },
+    // ---------------------------------------------------------------- 010: delete players
+    admin_delete_player({ p_code, p_player, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (a !== 'super') { store.save(db); return err(a ? 'needs_super' : 'not_admin'); }
+      const v = db.profiles[p_player];
+      if (!v) return err('not_found');
+      if (v.role === 'owner' || v.id === p_id) return err('not_allowed');
+      audit(db, null, 'admin_delete_player', { player: v.id, by: a });
+      delete db.profiles[v.id]; delete db.squads[v.id];
+      store.save(db);
+      return { ok: true, deleted: 1 };
+    },
+    admin_delete_guests({ p_code, p_days = 0, p_id = null, p_secret = null }) {
+      const db = load();
+      const a = actor(db, p_code, p_id, p_secret);
+      if (a !== 'super') { store.save(db); return err(a ? 'needs_super' : 'not_admin'); }
+      const cut = Date.now() - p_days * 86400000;
+      let n = 0;
+      for (const v of Object.values(db.profiles)) {
+        if (v.username || (v.role && v.role !== 'player') || v.id === p_id) continue;
+        if (Date.parse(v.lastSeenAt || v.createdAt || 0) >= cut) continue;
+        delete db.profiles[v.id]; delete db.squads[v.id]; n++;
+      }
+      audit(db, null, 'admin_delete_guests', { days: p_days, deleted: n, by: a });
+      store.save(db);
+      return { ok: true, deleted: n };
+    },
     // ---------------------------------------------------------------- 003: broadcasts + presence
     get_broadcasts() { return { ok: true, items: activeBroadcasts(load()) }; },
     admin_broadcast({ p_code, p_text, p_minutes = 30, p_id = null, p_secret = null }) {

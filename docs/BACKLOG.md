@@ -158,3 +158,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Sep 29): owner panel Players rows have a Card button (send any card, like Coins).
 - WAITING (Sep 29): Oelke secret card photo. Cut-out ready (recovered from the session log) but the photo has DO NOT COPY / (c) 2024 watermarks (school proof); asked the owner before publishing.
 - DONE (Sep 29): 15 more "elite-" Evolutions (evolutions.js) that accept cards rated up to 98, promos included.
+- DONE (Sep 29): owner can delete any account or guest (Delete on each Players row) and bulk "Delete old guests" (N days idle, 0 = all). Migration 010 applied as 20260929133106. Never the owner account itself.
+- TODO (Sep 29): add Miroslav Klose and Thomas Muller, 5 cards each (base + promos), 2 of each at 99.
+- TODO (Sep 29): fix the Manage button in the player moderation section (Commands).
+- TODO (Sep 29): some evolutions should not need matches (matches do not work on Chromebooks yet).
