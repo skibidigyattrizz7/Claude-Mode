@@ -48,6 +48,7 @@ export const SECRET_VERSIONS = [
   // (card.js `is-evil`, meta.css). Nation: Kenya (owner).
   { id: 'secret_perlita', last: 'Perlita', name: 'Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/perlita.webp' },
   { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
+  { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp', evil: true, cursed: true, tag: 'EVIL' },
   { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));

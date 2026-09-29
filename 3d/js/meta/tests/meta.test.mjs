@@ -1381,7 +1381,7 @@ test('B2: Secret card ("The Shawky") — EGY, every position, every PlayStyle, "
   assert.ok(!s.club.includes(SC.SECRET_CARD_ID));
   // Every version (owner's list) is a full ∞ glitch card with its own name + nation, and none can be granted.
   // THE NII (`cursed`) is the one anti-version: OVR 1, floor stats, no glitch, carried into matches as `cursed`.
-  assert.equal(SC.SECRET_VERSIONS.length, 12);
+  assert.equal(SC.SECRET_VERSIONS.length, 13);
   for (const v of SC.SECRET_VERSIONS) {
     const c = getPlayer(v.id);
     if (v.cursed) {
