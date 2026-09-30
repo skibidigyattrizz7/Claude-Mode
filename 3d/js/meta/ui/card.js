@@ -8,6 +8,9 @@ import { psBadge, psIconSvg, ensurePsiStyles } from './playstyleicons.js';
 import { leagueBadgeSVG } from './leaguebadge.js';
 import { PROMOS, PROMO_BY_ID } from '../core/promos.js';
 import { subStats } from '../core/substats.js';
+import { CARD_DESIGNS } from '../core/carddesigns.js';
+import { CARD_INK } from '../core/cardink.js';
+import { designFor } from './carddesign.js';
 
 const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
 const GK_LABELS = ['DIV', 'HAN', 'KIC', 'REF', 'SPD', 'POS'];
@@ -113,6 +116,9 @@ const num = (v, lo = 0, hi = 999) => { const n = Math.round(Number(v)); return N
 /** Real-person portrait from Wikimedia Commons (assets/players/<person>.webp): a plain rectangle that is faded into the card. */
 const isRealPhoto = (p) => typeof p.photo === 'string' && p.photo.startsWith('assets/players/') && !p.photoCut && !p.fullArt;
 
+/** true for a light text colour like #f7f3e8 (so a dark halo is needed behind it) */
+const isLightInk = (hex) => { const n = parseInt(String(hex).slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) >= 135; };
+
 export function cardClasses(p) {
   const c = ['pm-card', `t-${tok(p.tier)}`];
   if (p.cursed === true) c.push('is-cursed');
@@ -175,7 +181,7 @@ export function playerCard(p, opts = {}) {
     ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : isRealPhoto(p) ? ` pc-photo--real${p.photoDyn ? ' pc-photo--dyn' : ''}` : ''}" src="${esc(p.photo)}" alt=""${isRealPhoto(p) ? ' loading="lazy" decoding="async"' : ''} />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
       <div class="pc-ovr${p.statText ? ' pc-ovr--text' : ''}">${p.statText ? glyph : inf ? infHtml(infLabel(p)) : num(p.ovr, 0, 999)}</div>
-      <div class="pc-pos">${esc(posLabel)}</div>
+      <div class="pc-pos"${othersAll.length ? ` title="Also plays ${esc(othersAll.join(', '))}"` : ''}>${esc(posLabel)}</div>
       ${altHtml}
       <div class="pc-badges">${flagSVG(p.nat, 'pc-flag')}${p.league ? leagueBadgeSVG(p.league, 'pc-league') : ''}${crestSVG(club, 'pc-crest')}</div>
     </div>
@@ -190,6 +196,21 @@ export function playerCard(p, opts = {}) {
     ${p.evo ? `<div class="pc-evo" title="Evolved ×${evo}">EVO${evo > 1 ? ` ${evo}` : ''}</div>` : ''}
   </div>`;
   const el = frag(html);
+  // Real EA card art: the image is the whole card (frame included); CSS (.has-fut) hides the drawn shield
+  const key = designFor(p);
+  const design = key && CARD_DESIGNS[key];
+  if (design) {
+    el.classList.add('has-fut', design.dark ? 'fut-dark' : 'fut-light');
+    el.dataset.design = key;
+    // absolute: a url() inside a custom property would otherwise resolve against css/meta.css, not the page
+    el.style.setProperty('--fut', `url("${new URL(design.file, document.baseURI).href}")`);
+    // ink per place: [rating column, name + stats band] (tools/card_ink.py); the design's own ink if unlisted
+    const [inkTop, inkBand] = CARD_INK[key] || [design.ink, design.ink];
+    el.style.setProperty('--fut-ink', inkBand);
+    el.style.setProperty('--fut-ink-top', inkTop);
+    el.style.setProperty('--fut-halo', isLightInk(inkBand) ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.45)');
+    el.style.setProperty('--fut-halo-top', isLightInk(inkTop) ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.45)');
+  }
   el.setAttribute('aria-label', `${p.name}, ${p.hell === true ? 'unknown rating' : inf ? 'infinity' : p.ovr} ${posLabel}`);
   if (opts.extra) el.appendChild(opts.extra);
   if (opts.onClick) {
