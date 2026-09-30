@@ -1,0 +1,23 @@
+/* Six impacts tear through the actual cursed-pack backdrop. */
+.vinson-pack-collapse {position:fixed;inset:0;z-index:29000;overflow:hidden;pointer-events:none;isolation:isolate;}
+.vinson-pack-collapse.is-punching {background:#020001;z-index:31000;}
+.vinson-punch-pane {position:absolute;inset:0;overflow:hidden;opacity:0;z-index:2;}
+.is-punching .vinson-punch-pane {opacity:1;}
+.vinson-punch-cracks {position:absolute;inset:0;width:100%;height:100%;z-index:4;opacity:0;overflow:hidden;}
+.is-punching .vinson-punch-cracks {opacity:1;}
+.vinson-punch-cracks path {filter:drop-shadow(0 1px 1px #000);}
+.vinson-crack-leak,.vinson-hole-leak {opacity:.9;animation:vinson-leak-in 1800ms ease-out both;}
+.vinson-punch-dust,.vinson-punch-chip {position:absolute;z-index:5;width:3px;height:3px;background:#cac0b4;box-shadow:0 0 3px #d8bcb6;}
+.vinson-punch-chip {width:11px;height:18px;background:#a5a0a799;clip-path:polygon(0 10%,80% 0,100% 60%,10% 100%);border:1px solid #eee6d3;}
+.vinson-punch-actor {position:absolute;z-index:1;inset:0;display:grid;place-items:center;opacity:0;overflow:hidden;}
+.vinson-punch-actor img {height:100%;width:100%;object-fit:contain;filter:contrast(1.15);transform-origin:50% 35%;}
+.vinson-screen-hand {position:absolute;z-index:6;left:50%;bottom:-12%;width:min(64vw,700px);height:110%;
+  opacity:0;transform:translate(-50%,50%) scale(.3);transform-origin:50% 100%;overflow:visible;}
+.vinson-screen-hand path {fill:#29130e;stroke:#926757;stroke-width:3;filter:drop-shadow(0 0 18px #c3291a66);}
+.vinson-punch-black {position:absolute;inset:0;z-index:10;background:#000;opacity:0;transition:opacity 350ms ease-out;}
+.is-black .vinson-punch-black {opacity:1;}
+@keyframes vinson-leak-in {from {opacity:0;} to {opacity:.9;} }
+@media (prefers-reduced-motion:reduce) {
+  .vinson-crack-leak,.vinson-hole-leak {animation:none;}
+  .vinson-punch-black {transition:none;}
+}

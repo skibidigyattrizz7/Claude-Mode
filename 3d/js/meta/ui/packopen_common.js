@@ -8,6 +8,7 @@ import { PROMOS } from '../core/promos.js';
 import { load, save } from '../core/storage.js';
 import { normalizePackAnim, bulkTargets } from './packopen_seq.js';
 import { fractureElement } from './vinsonfracture.js';
+import { playVinsonPackCollapse } from './vinsonpackcollapse.js';
 
 export const FLARE = { bronze: '#a9b1bf', silver: '#e4ecf6', gold: '#ffc933', walkout: '#b44dff' };
 export const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', lotg: '#ffd35a', objective: '#6ee7ff' };
@@ -261,9 +262,9 @@ export function makeGrid(stage, pack, players, opts, destroy) {
           h('span', { class: 'vinson-po-aftermath-kicker' }, 'CURSED PACK'),
           h('strong', null, 'VINSON CLAIMS THE PULL'),
           h('span', null, 'Your cards are lost to the curse.'),
-          h('small', null, 'EJECTING IN 10 SECONDS')));
+          h('small', null, 'THE SCREEN WILL NOT HOLD')));
       stage.appendChild(aftermath);
-      setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 10000);
+      playVinsonPackCollapse(stage, { onExit: () => { destroy(); opts.onCurseExit?.(); } });
     }, true);
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }
