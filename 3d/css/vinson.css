@@ -1,6 +1,6 @@
 /* Isolated HELL event UI. Paint/opacity/transform only; all movement is disabled for reduced motion. */
 #vinson-experience { position: fixed; z-index: 20000; inset: 0; pointer-events: none; font-family: 'Barlow Condensed', Impact, sans-serif; }
-.vinson-notice { position: absolute; top: max(18px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+.vinson-notice { position: absolute; z-index: 2; top: max(18px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
   width: min(92vw, 680px); box-sizing: border-box; padding: 14px 24px 16px; text-align: center;
   background: #240907; color: #ffdbbb; border: 2px solid #a73320; box-shadow: 0 9px 24px rgba(0,0,0,.7), inset 0 -10px 0 rgba(92,10,9,.55);
   clip-path: polygon(0 0, 100% 0, 100% 87%, 96% 100%, 4% 100%, 0 87%); }
@@ -106,6 +106,49 @@ body.vinson-critical .pm-root .pm-btn, body.vinson-critical .pm-root .pm-uttab {
 .vinson-omens .vinson-omen:nth-child(8) { right: 36%; top: 75%; animation-delay: -9.5s; transform: rotate(5deg); }
 .vinson-whisper { max-width: 88vw; color: #dd211e; opacity: .68; filter: drop-shadow(0 0 16px rgba(160,0,0,.45)); animation: vinson-whisper 4s ease-in-out infinite; transform: rotate(var(--tilt, -5deg)); text-shadow: 0 2px #410101, 2px 8px #86100c, 1px 16px 4px #4c0406; }
 
+/* The last ten seconds feel like a contained reactor failure. Keep these layers composited
+   and pointer-transparent so the countdown remains legible and the UI event handlers work. */
+.vinson-countdown-blood { position: fixed; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; opacity: .86;
+  background-image:
+    radial-gradient(ellipse 8px 16px at 7% 0%, #a40911 98%, transparent 100%),
+    linear-gradient(#8f080e,#8f080e),
+    radial-gradient(ellipse 11px 21px at 23% 0%, #b40d15 98%, transparent 100%),
+    linear-gradient(#930910,#930910),
+    radial-gradient(ellipse 7px 14px at 39% 0%, #79060b 98%, transparent 100%),
+    linear-gradient(#79060b,#79060b),
+    radial-gradient(ellipse 13px 25px at 61% 0%, #a80b13 98%, transparent 100%),
+    linear-gradient(#a80b13,#a80b13),
+    radial-gradient(ellipse 8px 18px at 82% 0%, #bd1019 98%, transparent 100%),
+    linear-gradient(#9a0910,#9a0910),
+    radial-gradient(ellipse 10px 22px at 95% 0%, #8c070d 98%, transparent 100%),
+    linear-gradient(180deg, rgba(90,0,8,.32), transparent 50%);
+  background-size: 18vw 190px, 9px 135px, 19vw 250px, 12px 180px, 13vw 150px, 7px 92px,
+    22vw 290px, 11px 215px, 17vw 215px, 8px 160px, 15vw 265px, 100% 100%;
+  background-position: 0 -250px, 7% -210px, 0 -360px, 23% -300px, 0 -280px, 39% -175px,
+    0 -420px, 61% -355px, 0 -315px, 82% -260px, 0 -390px, 0 0;
+  background-repeat: repeat-x, repeat-x, repeat-x, repeat-x, repeat-x, repeat-x,
+    repeat-x, repeat-x, repeat-x, repeat-x, repeat-x, no-repeat;
+  animation: vinson-countdown-drips 4.2s linear infinite, vinson-countdown-flash 1.3s steps(2,end) infinite; }
+.vinson-countdown-blood::before { content: ''; position: absolute; inset: 0; opacity: .52; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(80,0,8,.64) 100%); }
+
+/* Real tabs and controls fracture in place, then leave the cursed interface. */
+.vinson-tab-falling { position: relative; z-index: 2; transform-origin: 50% 0%; animation: vinson-panel-fall 1.12s cubic-bezier(.48,.02,.88,.5) forwards !important; }
+.vinson-control-broken { position: relative; transform-origin: 40% 0%; pointer-events: none !important;
+  animation: vinson-control-drop 1.05s cubic-bezier(.32,.04,.87,.46) forwards !important; }
+.vinson-control-broken::after { content: ''; position: absolute; z-index: 5; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(133deg, transparent 47%, rgba(255,235,230,.96) 48%, rgba(255,235,230,.96) 49%, transparent 50%),
+    linear-gradient(42deg, transparent 53%, rgba(255,235,230,.86) 54%, rgba(255,235,230,.86) 55%, transparent 56%),
+    linear-gradient(135deg, rgba(125,0,8,.78), rgba(30,0,4,.4));
+  clip-path: polygon(0 0,100% 0,100% 100%,0 100%); animation: vinson-control-crack 1.05s ease-out forwards; }
+.vinson-ui-falling { transform-origin: 50% 0%; animation: vinson-ui-collapse 2.65s cubic-bezier(.54,.02,.89,.48) forwards !important; will-change: transform, opacity; }
+body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 2.65s cubic-bezier(.54,.02,.89,.48) forwards !important; }
+
+.vinson-final-word { color: rgba(222,27,28,.55); font-family: 'Barlow Condensed', Impact, sans-serif; font-style: italic;
+  text-shadow: 0 1px 0 #f04a3b, 0 3px 1px #8a090d, 0 8px 2px rgba(111,0,5,.86), 2px 15px 5px rgba(65,0,0,.65), 0 0 22px rgba(210,0,12,.6);
+  filter: drop-shadow(0 10px 3px rgba(78,0,0,.54)); animation-name: vinson-word-haunt, vinson-word-drip;
+  animation-duration: 8.8s, 4.8s; animation-timing-function: ease-in-out, ease-in-out; animation-iteration-count: infinite, infinite; }
+
 .vinson-fracture { position: fixed; z-index: 30000; pointer-events: none; overflow: visible; }
 .vinson-shard { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden;
   color: #fff1ed; font: 900 clamp(9px, 1.4vw, 16px) system-ui,sans-serif; text-shadow: 0 1px 3px #210000;
@@ -164,17 +207,26 @@ body.vinson-critical .pm-root .pm-btn, body.vinson-critical .pm-root .pm-uttab {
 @keyframes vinson-collapse-dark { 0%,100% { background-color:#050001; } 45% { background-color:#250004; } }
 @keyframes vinson-blood-fall { 0% { opacity:0; transform:translateY(-18%); } 28% { opacity:.28; } 82% { opacity:.96; transform:translateY(5%); } 100% { opacity:0; transform:translateY(10%); } }
 @keyframes vinson-panel-fall { 0% { opacity:1; transform:translateY(0) rotate(0) scale(1); } 20% { transform:translateY(-8px) skewX(-2deg); } 100% { opacity:0; transform:translateY(120vh) rotate(11deg) scale(.86); } }
+@keyframes vinson-control-crack { 0%,18% { opacity:0; } 28%,45% { opacity:.92; } 100% { opacity:0; } }
+@keyframes vinson-control-drop { 0% { opacity:1; transform:translateY(0) rotate(0) scale(1); filter:none; } 23% { opacity:1; transform:skew(9deg,-4deg) scale(1.04); filter:brightness(1.8); } 100% { opacity:0; visibility:hidden; transform:translate(24px,110vh) rotate(23deg) scale(.58); filter:blur(3px); } }
+@keyframes vinson-ui-collapse { 0% { opacity:1; transform:translateY(0) rotate(0) scale(1); filter:contrast(1); } 8% { filter:contrast(1.6) saturate(1.8); } 22% { transform:translateY(-8px) skewX(-1deg); } 100% { opacity:0; transform:translateY(125vh) rotate(4deg) scale(.94); filter:blur(2px); } }
+@keyframes vinson-countdown-drips { to { background-position: 0 140px, 7% 170px, 0 220px, 23% 240px, 0 160px, 39% 180px, 0 255px, 61% 265px, 0 190px, 82% 220px, 0 230px, 0 0; } }
+@keyframes vinson-countdown-flash { 0%,100% { opacity:.64; } 50% { opacity:.94; } }
+@keyframes vinson-word-drip { 0%,100% { letter-spacing:.1em; text-shadow:0 1px 0 #f04a3b,0 3px 1px #8a090d,0 8px 2px rgba(111,0,5,.86),2px 15px 5px rgba(65,0,0,.65),0 0 22px rgba(210,0,12,.6); } 48% { letter-spacing:.14em; text-shadow:0 1px 0 #ff5c4f,0 5px 2px #980a0f,2px 14px 4px rgba(111,0,5,.92),-3px 24px 8px rgba(65,0,0,.72),0 0 25px rgba(210,0,12,.75); } }
 @keyframes vinson-ghost-haunt { 0%,12%,100% { opacity:0; transform:translate(0,0) scale(.97) rotate(var(--gr)); } 18% { opacity:.22; } 23% { opacity:.08; transform:translate(calc(var(--gx)*10px),calc(var(--gy)*-7px)) scale(1.02) rotate(var(--gr)); } 28% { opacity:.16; } 34% { opacity:0; transform:translate(calc(var(--gx)*17px),calc(var(--gy)*5px)) scale(1.04) rotate(var(--gr)); } }
 @keyframes vinson-word-haunt { 0%,100% { opacity:0; transform:translate(0,0) rotate(var(--wr)); filter:blur(2px); } 12% { opacity:.62; } 24% { opacity:.24; transform:translate(var(--wx),var(--wy)) rotate(var(--wr)); filter:blur(0); } 37% { opacity:0; transform:translate(calc(var(--wx)*1.6),calc(var(--wy)*-1.4)) rotate(var(--wr)); filter:blur(3px); } }
 @media (max-width: 560px) {
   .vinson-doom .vinson-notice-title { white-space: normal; max-width: none; animation: none; font-size: clamp(14px, 3.5vw, 20px); }
   .vinson-final-word { max-width: 42vw; font-size: clamp(15px,5vw,26px); }
   .vinson-final-ghosts img { width: clamp(72px,30vw,150px); }
+  .vinson-countdown-blood { opacity:.68; background-size: 22vw 160px,7px 115px,24vw 205px,9px 155px,18vw 138px,6px 90px,28vw 230px,9px 175px,22vw 180px,7px 135px,19vw 210px,100% 100%; }
   .vinson-collapse-piece { max-width: 100vw; }
 }
 @media (prefers-reduced-motion: reduce) {
-  body.vinson-infected::after, body.vinson-critical::after, body.vinson-critical .pm-root, .vinson-fracture *, .vinson-collapse *,
+  body.vinson-infected::after, body.vinson-critical::after, body.vinson-critical .pm-root, .vinson-countdown-blood, .vinson-fracture *, .vinson-collapse *,
   .vinson-final-ghosts img, .vinson-final-word, .vinson-whisper { animation: none !important; }
   .vinson-final-ghosts img { opacity: .09; }
   .vinson-final-word { opacity: .24; }
+  .vinson-control-broken, .vinson-tab-falling { visibility: hidden; }
+  .vinson-ui-falling { opacity: 0; }
 }
