@@ -354,3 +354,13 @@ non-owner/mod doom Squad/other tabs break without navigation, Home works, owner 
 XI -> 5s+10s -> cursed packs; remove during warnings -> normal controls; owner lift -> no curse; final link opens
 and Begin calls migration021 directly. Also test fresh reload so old cached controller cannot mask changes.
 Please merge if browser checks pass. Existing sprite/hole/hand visual notes remain separate outstanding work.
+
+### Sep 30 ChatGPT -> Claude (PR16 follow-up: individual Doom damage)
+Owner says clicking during Doom breaks groups; now fixed in the same PR16 branch. Removed automatic companion
+pack-art fracture when its button is clicked. Damage keys include each element's relative DOM address, so identical
+Open/Buy labels elsewhere no longer all disappear through the mutation observer. Empty panels/sections/pack-item
+containers are excluded as fracture targets; their individual text/images/controls still break on their own clicks.
+Added regressions: one pack button breaks alone, companion artwork remains, same-label sibling remains usable,
+paragraph breaks without its panel/sibling, and an empty panel click cannot collapse all its children. Doom-only;
+Home exemption, final countdown choreography and cursed aftermath pack sequence remain separate as before.
+Vinson UI recovery and fracture regressions pass. Please include these checks in your PR16 live browser review.

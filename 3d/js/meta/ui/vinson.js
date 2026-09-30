@@ -26,8 +26,16 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   let soundContext = null, battleExperience = null, battleOpening = false, experienceClosed = false;
   const damagedKeys = new Set();
   const controlSelector = 'button, [role="tab"], a, input, select, textarea, .pc-card, .pm-slot';
-  const surfaceSelector = '.pm-tile, .pm-panel, .pm-section, .pm-storeitem, .pm-packitem, .pm-coins, .pm-crest, img, svg, h1, h2, h3, h4, p, label, span';
-  const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.closest('.pm-modal')?.getAttribute('aria-label') || 'screen'}:${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
+  const surfaceSelector = 'img, svg, h1, h2, h3, h4, p, label, span';
+  const controlKey = (el) => {
+    if (el.dataset.uttab) return `tab:${el.dataset.uttab}`;
+    const address = [];
+    for (let node = el; node && node !== root(); node = node.parentNode) {
+      const parent = node.parentNode;
+      address.unshift(`${node.tagName}:${parent ? [...parent.children].indexOf(node) : 0}`);
+    }
+    return `${address.join('/')}:${el.getAttribute('aria-label') || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.id}`;
+  };
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
   const remember = (key) => { if (ephemeral) return null; try { return sessionStorage.getItem(key); } catch { return null; } };
@@ -101,11 +109,6 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       const packScene = lockedPack && !!target.closest('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback');
       const matchScene = lockedPack && /^(play|start match|play rivals|play squad battles|kick off)$/i.test(label);
       const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
-      const pack = target.closest('.pm-storeitem, .pm-packitem')?.querySelector('.pm-pack');
-      if (pack && pack !== target && !broken.has(pack)) {
-        fractureElement(pack, { x: event.clientX, y: event.clientY });
-        breakControl(pack);
-      }
       fractureElement(target, { x: event.clientX, y: event.clientY });
       // Result screens own their coordinated button collapse and exit timer.
       if (!packScene) breakControl(target);
