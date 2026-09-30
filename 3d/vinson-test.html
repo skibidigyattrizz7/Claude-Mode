@@ -96,7 +96,19 @@
   });
   const originalUI = app.root.innerHTML;
   const controller = startVinsonExperience(online, { initialState: fixture, ephemeral: true });
-  controller.attach(app); // fixture replaces any disk state immediately
+  controller.attach(app);
+  // Hold the actual production title for visual inspection without changing a real game or its timer.
+  if (new URLSearchParams(location.search).has('titleproof')) {
+    const titleObserver = new MutationObserver(() => {
+      const title = document.querySelector('.vinson-blood-heading');
+      if (!title) return;
+      const proof = title.parentElement.cloneNode(true);
+      proof.style.cssText = 'position:fixed;inset:0;z-index:40001;opacity:1;animation:none;pointer-events:none';
+      proof.classList.remove('vinson-prologue-out');
+      document.body.append(proof); titleObserver.disconnect();
+    });
+    titleObserver.observe(document.body, { childList:true, subtree:true });
+  } // fixture replaces any disk state immediately
 
   const status = document.querySelector('.qa-status');
   const show = (label) => { status.innerHTML = `Scene · <b>${label}</b> · in-memory fixture`; };
