@@ -139,18 +139,22 @@ Do NOT edit card.js / meta.css / 3d/js/net/** (Claude is changing those). Promo 
 (buildPromoCards usage map). Run node 3d/js/meta/tests/meta.test.mjs and add tests for the new promos.
 ```
 
-### Grok (Expert mode; Heavy only with SuperGrok): secret and admin card art
+### Grok (Fast mode is fine; it only makes pictures, no code)
 ```
-Make card background art for a football card game in the exact style of EA SPORTS FC 26 Ultimate Team special cards
-(shield-shaped card with the notched top corners, ornate thin metallic frame, dramatic artwork in the top 60%, a calm
-darker band in the lower 40% where name and stats go, NO text, NO player, NO numbers). Portrait 840x1200, card shape on a
-transparent or pure black background. If you can, work on several at once (subagents / parallel generations).
-1. "The Shawky" - glitch / infinity god card: black and electric cyan, digital glitch shards, an infinity sign.
-2. "Cursed -infinity" - blood red and black, cracked obsidian, dripping red, evil glow.
-3. "Hell" - fire and molten lava, charred frame.
-4. "Angel" - white marble and gold, soft light rays, feathers.
-5. "E.L.I.J.A.H." - deep purple cosmic nebula with gold runes.
-6. "Admin Card" - black and gold circuit board with a crown.
-7. "Rabbi Patel" - royal blue and white with gold, a Star of David in the art.
-Give each as a separate PNG named like shawky.png, cursed.png, hell.png, angel.png, elijah.png, admin.png, rabbi.png.
+Context: I'm building a free, non-commercial browser football game for my school friends called Pitchside, like
+EA SPORTS FC Ultimate Team. Code is on GitHub (github.com/skibidigyattrizz7/Claude-Mode), live at
+skibidigyattrizz7.github.io/Claude-Mode/3d/. Another AI (Claude) writes the code; I just need PICTURES from you, which
+I will download and give to Claude. You don't need to touch GitHub.
+
+Make card BACKGROUND art in the exact style of EA SPORTS FC 26 Ultimate Team special cards: tall shield-shaped card
+with notched top corners, thin ornate metallic frame, dramatic artwork in the top 60%, a calmer darker band in the
+bottom 40% (the game draws the player photo, name and stats on top later). NO text, NO player, NO numbers, NO logos.
+Portrait (about 840x1200), card on a plain black background. Make one image per card, one at a time:
+1. "The Shawky" (glitch infinity god card): black and electric cyan, digital glitch shards, an infinity sign.
+2. "Cursed" (minus infinity): blood red and black, cracked obsidian, dripping red, evil glow.
+3. "Hell": fire and molten lava, charred frame.
+4. "Angel": white marble and gold, soft light rays, feathers.
+5. "E.L.I.J.A.H.": deep purple cosmic nebula with gold runes.
+6. "Admin Card": black and gold circuit board with a crown.
+7. "Rabbi Patel": royal blue and white with gold, a Star of David in the art.
 ```
