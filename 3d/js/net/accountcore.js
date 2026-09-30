@@ -3,11 +3,14 @@
 // (pitchside__username_error, pitchside__name_norm, pitchside__name_reserved) and the password rules mirror
 // pitchside__password_error (migration 008) — keep them in sync.
 
-export const USERNAME_MIN = 3;
+export const USERNAME_MIN = 1;
 export const USERNAME_MAX = 16;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 72; // bcrypt limit
-const USERNAME_RE = /^[A-Za-z0-9_]+( [A-Za-z0-9_]+)*$/;
+// Owner, Sep 30: no username restrictions. Any characters, 1-16 long; only control / invisible characters are refused
+// (they break how names render). No word filter. Uniqueness and the reserved owner name still apply.
+// eslint-disable-next-line no-control-regex
+const USERNAME_BAD_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/;
 
 // BLOCKLIST (same words, same order as the SQL regex between BLOCKLIST-BEGIN / BLOCKLIST-END)
 export const BLOCKED_WORDS = ['fuck', 'shit', 'cunt', 'bitch', 'nigg', 'fagg', 'whore', 'slut', 'pussy', 'wank', 'twat', 'retard',
@@ -28,8 +31,8 @@ export const trimUsername = (s) => String(s == null ? '' : s).trim();
 /** -> null when OK, else an error code (same codes as the server). Reserved names are OK here. */
 export function usernameError(raw) {
   const u = trimUsername(raw);
-  if (u.length < USERNAME_MIN || u.length > USERNAME_MAX || !USERNAME_RE.test(u)) return 'bad_username';
-  if (isBlockedName(u)) return 'username_not_allowed';
+  const n = [...u].length;
+  if (n < USERNAME_MIN || n > USERNAME_MAX || USERNAME_BAD_RE.test(u)) return 'bad_username';
   return null;
 }
 // COMMON-PASSWORDS (same list, same order as pitchside__password_error in migration 008). Only entries of 8+

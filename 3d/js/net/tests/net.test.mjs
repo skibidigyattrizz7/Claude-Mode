@@ -440,14 +440,16 @@ test('startOnlineMatch-style rivals timeout reports reason no_opponent', async (
 const mkAcc = (be, o = {}) => createOnline({ rpc: (f, a) => be.call(f, a), storage: o.storage || memStorage(), volatileStorage: o.volatile || memStorage(), transportKind: 'loopback', requireAccount: true, matchmakerConfig: { pollMs: 5, timeoutMs: 80 }, ...o.extra });
 
 test('account rules: usernames, passwords, name filter, SQL parity', () => {
-  assert.equal(usernameError('ab'), 'bad_username');
+  // owner, Sep 30: no username restrictions beyond 1-16 characters and no invisible characters
+  assert.equal(usernameError(''), 'bad_username');
   assert.equal(usernameError('a'.repeat(17)), 'bad_username');
-  assert.equal(usernameError('bad-name'), 'bad_username');
-  assert.equal(usernameError('two  spaces'), 'bad_username');
+  assert.equal(usernameError('a\u200bb'), 'bad_username');
+  assert.equal(usernameError('x'), null);
+  assert.equal(usernameError('bad-name!'), null);
+  assert.equal(usernameError('two  spaces'), null);
   assert.equal(usernameError('  Alice Smith  '), null); // trimmed
   assert.equal(usernameError('Cool_Kid 9'), null);
-  assert.equal(usernameError('sh1t_lord'), 'username_not_allowed');
-  assert.equal(usernameError('The Admin'), 'username_not_allowed');
+  assert.equal(usernameError('The Admin'), null);
   assert.equal(nameNorm('5hawky_F C'), 'shawkyfc');
   assert.ok(isReservedName('Shawky Fc') && isReservedName('ShawkyFc') && isReservedName('shawky_fc') && isReservedName('5HAWKY FC'));
   assert.ok(!isReservedName('Shawky'));
@@ -536,7 +538,7 @@ test('accounts: signup, duplicate names, remember-me storage, login elsewhere, l
   const A = mkAcc(be, { storage: disk, volatile: tab });
   assert.equal(A.account.current().state, 'none');
   assert.equal((await A.profile()).error, 'no_account'); // online features need an account
-  assert.equal((await A.account.signup({ username: 'Al', password: 'Pitch-pass1', confirm: 'Pitch-pass1' })).error, 'bad_username');
+  assert.equal((await A.account.signup({ username: 'A'.repeat(17), password: 'Pitch-pass1', confirm: 'Pitch-pass1' })).error, 'bad_username');
   assert.equal((await A.account.signup({ username: 'Alice Smith', password: 'Pitch-pass1', confirm: 'nope' })).error, 'password_mismatch');
   const r = await A.account.signup({ username: ' Alice Smith ', password: 'Pitch-pass1', confirm: 'Pitch-pass1', remember: true });
   assert.equal(r.ok, true);

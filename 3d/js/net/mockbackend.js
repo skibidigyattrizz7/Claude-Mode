@@ -35,7 +35,7 @@ function rivalsReward(peak, wins) {
   if (wins >= 20) packs.push('stars');
   return { coins: base + 300 * Math.min(Math.max(wins || 0, 0), 20), packs };
 }
-import { usernameError, passwordError, isReservedName, usernameKey, isBlockedName } from './accountcore.js';
+import { usernameError, passwordError, isReservedName, usernameKey } from './accountcore.js';
 
 const POS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
 
@@ -131,7 +131,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     return db.profiles[id];
   };
   const keyTaken = (db, u) => Object.values(db.profiles).some((p) => p.username && usernameKey(p.username) === usernameKey(u));
-  const safeName = (n, role) => { const v = cleanName(n); return (role !== 'owner' && isReservedName(v)) || isBlockedName(v) ? null : v; };
+  const safeName = (n, role) => { const v = cleanName(n); return role !== 'owner' && isReservedName(v) ? null : v; };
   const CODE_A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const newCode = (db) => {
     for (;;) {

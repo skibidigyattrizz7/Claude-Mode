@@ -208,3 +208,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
     "dyn" cutout; monochrome only for retired Icons; reject photos where the player is under 17 / past their playing years or the crop is bad.
     Full download pass (no --no-download) is slow: Wikimedia rate limits.
 - Sep 30: Saved cards "Claim all" (non-duplicates to club) and "Sell all" (quick sell, Secret cards kept). DONE.
+- Sep 30: Remove all username restrictions (any characters, 1-16, no word filter; uniqueness + reserved owner name kept). Migration 018.
+- LATER (owner, Sep 30): accounts/progress: signing out in one tab still showed the Shawky FC cards (save is per browser/device, not per
+  account), and the game treats "Shawky FC" and "Phonk Mode FC" as different clubs. Merge those two into one (Shawky FC = the name after login),
+  and make sign-out / a second account in another tab not share the same local club.

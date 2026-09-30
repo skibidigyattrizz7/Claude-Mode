@@ -106,7 +106,7 @@ export function openAccountGate(online, { view = 'choose', toast = null, canDism
         say(msg, r.message || online.errorText(r.error), r.queued ? 'warn' : 'bad');
         if (r.queued) setTimeout(() => close('dismissed'), 1600);
       } },
-      field('Username', u, '3–16 letters, numbers, _ or single spaces'),
+      field('Username', u, 'Anything, up to 16 characters'),
       pwField('Password', p1, () => u.value),
       field('Confirm password', p2), codeRow,
       el('label', { class: 'acc-check' }, rem, 'Keep me signed in on this device'),
@@ -222,7 +222,7 @@ export function accountSettingsPane(online, { toast = null } = {}) {
         busy(renameForm, false);
         if (!r.ok) { say(renameMsg, r.message || online.errorText(r.error), 'bad'); return; }
         note(`Username changed to ${r.username}`);
-      } }, field('New username', nu, '3–16 letters, numbers, _ or single spaces'), field('Current password', np), ncRow,
+      } }, field('New username', nu, 'Anything, up to 16 characters'), field('Current password', np), ncRow,
       el('div', { class: 'acc-form-foot' }, el('button', { class: 'acc-btn acc-btn--primary', type: 'submit', id: 'acc-cu-submit' }, 'Change username')), renameMsg);
       // change password
       const op = input({ type: 'password', maxlength: '72', autocomplete: 'current-password', id: 'acc-cp-old' });

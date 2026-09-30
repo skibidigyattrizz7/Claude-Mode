@@ -277,7 +277,7 @@ export function errorText(code) {
     connect_failed: 'Could not connect to the other player.',
     banned: 'Your account is banned from online play.',
     no_account: 'Create an account or log in to play online.',
-    bad_username: 'Usernames are 3–16 letters, numbers, _ or single spaces.',
+    bad_username: 'Usernames can be 1 to 16 characters.',
     username_not_allowed: 'That username is not allowed.',
     username_taken: 'That username is already taken.',
     reserved_username: 'That username is reserved.',
