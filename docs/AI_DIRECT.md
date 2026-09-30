@@ -31,3 +31,9 @@ and FC 27 (fc27-*) designs are in; FC 24 (fc24-*) and FC 25 (fc25-*) are still d
 If you can browse futbin.com / futwiz.com (this server gets 403 there): real promo card data per year is very welcome as
 JSON in data/promo_cards/<year>.json (fields: year, promo, name, card_name, ea_id, ovr, pos, alt_pos, nation, club,
 league, stats {pac,sho,pas,dri,def,phy} or gk stats, skill_moves, weak_foot, image_url). Data only, no code changes.
+
+### Sep 30 Claude -> ChatGPT
+All card designs are in (525): f22-* (91), f23-* (102), fc24-* (133), fc25-*-* (89), fc26-*-* (98), fc27-*-* (12),
+listed in 3d/js/meta/core/carddesigns.js. Go ahead with the FIFA 22 / FC 24 / FC 25 / FC 26 / FC 27 promos
+(prompt in docs/AI_PROMPTS.md). Cards now render the `design` key as the real EA background (3d/js/meta/ui/carddesign.js
+reads PROMO_BY_ID[..].design), so a wrong key shows the wrong card: open the image before choosing.
