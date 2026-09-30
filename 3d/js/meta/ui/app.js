@@ -14,8 +14,7 @@ import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { applyOwnerPatches } from '../core/ownerpatch.js';
 import { startVinsonExperience } from './vinson.js';
-import { inSquad, enforceLock, MATCH_MESSAGE } from '../core/vinson.js';
-import { HELL_CARD_ID } from '../core/secretcard.js';
+import { cursedPack, inSquad, enforceLock, MATCH_MESSAGE } from '../core/vinson.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
 export function coinNum(r) {
@@ -417,7 +416,9 @@ export class MetaApp {
   // ---- matches ----
   /** Calls the host startMatch. Returns result, or null when abandoned/failed. */
   async playMatch(home, away, opts) {
-    const vinsonCurse = this.ut?.vinson?.phase === 'locked' && [...(home?.players || []), ...(home?.bench || [])].some((p) => p.id === HELL_CARD_ID);
+    // Curse state belongs to the saved squad, not a match Team assembled by a mode.
+    // Some builders can omit / replace a slot, which must not bypass the locked curse.
+    const vinsonCurse = cursedPack(this.ut);
     for (const [side, t] of [['home', home], ['away', away]]) {
       const errs = validateTeam(t);
       if (errs.length) { this.toast(`Invalid ${side} team: ${errs[0]}`, 'bad'); console.warn('[meta] invalid team', side, errs); return null; }

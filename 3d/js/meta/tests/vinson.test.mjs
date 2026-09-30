@@ -42,6 +42,17 @@ test('locked card is restored after attempted removal, squad switch or club edit
   state.squad = defaultSquad(); enforceLock(state); assert.equal(inSquad(state.squad), true);
 });
 
+test('match curse follows the locked saved squad even if a mode-built team omits Vinson', () => {
+  const state = s();
+  state.vinson = { phase: 'locked', pin: { area: 'slot', idx: 9 } };
+  state.squad.slots[9] = HELL_CARD_ID;
+  const modeBuiltHome = { players: [], bench: [] };
+  assert.equal(modeBuiltHome.players.some((p) => p.id === HELL_CARD_ID), false);
+  assert.equal(cursedPack(state), true);
+  lift(state);
+  assert.equal(cursedPack(state), false);
+});
+
 test('server release changes ban to freed, lock persists across devices', () => {
   const state = s(); beginDoom(state, 0); advance(state, DOOM_MS);
   reconcileServer(state, { ok: true, phase: 'released' }); assert.equal(state.vinson.phase, 'freed');
@@ -52,6 +63,21 @@ test('server release changes ban to freed, lock persists across devices', () => 
   assert.equal(cursedPack(state), false);
   state.squad.slots[9] = null; assert.equal(enforceLock(state), false);
   lift(state); assert.equal(squadChanged(state)?.phase, 'lifted');
+});
+
+test('server release starts the warning immediately when Vinson is already in the squad', () => {
+  const state = s();
+  state.squad.slots[9] = HELL_CARD_ID;
+  beginDoom(state, 0);
+  advance(state, DOOM_MS);
+  const now = 50_000;
+  reconcileServer(state, { ok: true, phase: 'released' }, now);
+  assert.equal(state.vinson.phase, 'warn');
+  assert.equal(state.vinson.phaseUntil, now + FIRST_WARNING_MS);
+  assert.deepEqual(state.vinson.pin, { area: 'slot', idx: 9 });
+  assert.equal(advance(state, now + FIRST_WARNING_MS).phase, 'consequence');
+  assert.equal(advance(state, now + FIRST_WARNING_MS + FINAL_WARNING_MS).phase, 'locked');
+  assert.equal(cursedPack(state), true);
 });
 
 test('server time keeps the countdown accurate when the device clock differs', () => {
