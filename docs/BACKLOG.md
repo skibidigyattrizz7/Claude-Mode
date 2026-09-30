@@ -265,3 +265,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   retries replace nonce, too-soon confirmation is recoverable, and interrupted local reward saves reconcile without
   duplicates. Claude owns the final curse/unban/lock/fight/win/claim/reload browser review before merging.
 - DONE (Oct 1): Vinson-banned players can fight from the ban screen (migration 021; moderation bans still blocked).
+- DONE (Oct 1): Kilner, Masilang and The Shawky secret cards use the owner's photos (cut out, sharpened); originals in tools/photo_sources/.
