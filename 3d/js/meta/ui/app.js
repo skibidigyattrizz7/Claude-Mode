@@ -14,7 +14,7 @@ import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { applyOwnerPatches } from '../core/ownerpatch.js';
-import { startVinsonExperience } from './vinson.js?v=vinson7';
+import { startVinsonExperience } from './vinson.js?v=vinson8';
 import { cursedPack, enforceLock, isOwner } from '../core/vinson.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */

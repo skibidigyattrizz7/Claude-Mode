@@ -262,3 +262,29 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
   .vinson-control-broken, .vinson-tab-falling { visibility: hidden; }
   .vinson-ui-falling { opacity: 0; }
 }
+
+/* Blood lettering for the warnings between the portrait waves. */
+.vinson-blood-heading, .vinson-intertitle {
+  color: #e72a32; text-align: center; line-height: 1.45;
+  text-shadow: 0 -1px 0 #ff7773, 0 2px 0 #690408, 0 5px 3px #340002, 0 0 24px #640005;
+  -webkit-text-stroke: .6px #72050b;
+}
+.vinson-blood-heading { display: block; max-width: 90vw; font: inherit; }
+.vinson-intertitle { left: 5%; right: 5%; }
+.vinson-blood-word { display: inline-block; white-space: nowrap; margin-right: .18em; }
+.vinson-blood-letter { position: relative; display: inline-block; isolation: isolate; }
+.vinson-blood-letter::after {
+  content: ''; position: absolute; z-index: -1; left: 43%; top: 72%;
+  width: .045em; min-width: 2px; height: var(--blood-length, .3em);
+  border-radius: 0 0 55% 55%; background: linear-gradient(90deg, #61000b, #d51923 42%, #8c0613);
+  box-shadow: 1px 0 0 #530008, 0 2px 2px #270003;
+  transform-origin: top; animation: vinson-title-bleed 1.6s ease-in-out var(--blood-delay, 0s) infinite alternate;
+}
+.vinson-blood-letter:nth-child(3n)::after { left: 65%; width: .065em; }
+.vinson-blood-letter:nth-child(5n)::after { display: none; }
+@keyframes vinson-title-bleed { from { transform: scaleY(.65); } to { transform: scaleY(1.4); } }
+@media (max-width: 600px) {
+  .vinson-blood-heading { font-size: clamp(30px, 7vw, 44px); letter-spacing: .07em; }
+  .vinson-intertitle { font-size: clamp(28px, 6vw, 40px); }
+}
+@media (prefers-reduced-motion: reduce) { .vinson-blood-letter::after { animation: none; } }

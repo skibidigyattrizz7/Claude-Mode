@@ -13,7 +13,7 @@ const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK 
 
 export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson7', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson8', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
@@ -29,6 +29,21 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   const remember = (key) => { if (ephemeral) return null; try { return sessionStorage.getItem(key); } catch { return null; } };
   const mark = (key) => { if (ephemeral) return; try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
   const make = (tag, cls, txt) => { const el = document.createElement(tag); el.className = cls; if (txt) el.textContent = txt; return el; };
+  const bloodTitle = (target, text) => {
+    target.replaceChildren();
+    target.setAttribute('aria-label', text);
+    target.setAttribute('role', 'heading'); target.setAttribute('aria-level', '2');
+    text.split(' ').forEach((word, wordIndex) => {
+      const group = make('span', 'vinson-blood-word'); group.setAttribute('aria-hidden', 'true');
+      [...word].forEach((letter, i) => {
+        const glyph = make('span', 'vinson-blood-letter', letter);
+        glyph.style.setProperty('--blood-length', `${.14 + ((i * 7 + wordIndex * 3) % 9) * .035}em`);
+        glyph.style.setProperty('--blood-delay', `${(i % 4) * -.27}s`);
+        group.append(glyph);
+      });
+      target.append(group, document.createTextNode(' '));
+    });
+  };
   const infected = (phase) => ['doom', 'freed', 'warn', 'consequence', 'locked'].includes(phase);
   const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
   function repairUi() {
@@ -247,7 +262,8 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     host.replaceChildren();
     const screen = make('div', 'vinson-screen vinson-cinematic'); screen.setAttribute('role', 'alertdialog');
     screen.setAttribute('aria-label', "IT'S NOT WORTH IT");
-    const prologue = make('div', 'vinson-prologue', 'YOU WERE WARNED');
+    const prologue = make('div', 'vinson-prologue');
+    const warningTitle = make('strong', 'vinson-blood-heading'); bloodTitle(warningTitle, 'YOU WERE WARNED'); prologue.append(warningTitle);
     const tile = make('div', 'vinson-tiles');
     const intertitle = make('strong', 'vinson-intertitle');
     screen.append(prologue, tile, intertitle); host.append(screen);
@@ -272,7 +288,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (current !== 'banned' || !host.contains(screen)) return;
       addTile(count++);
       if (count === 12 || count === 32 || count === 54) {
-        intertitle.textContent = count === 12 ? 'SHE IS HERE' : count === 32 ? 'THERE IS NO ESCAPE' : "IT'S NOT WORTH IT";
+        bloodTitle(intertitle, count === 12 ? 'SHE IS HERE' : count === 32 ? 'THERE IS NO ESCAPE' : "IT'S NOT WORTH IT");
         intertitle.classList.remove('vinson-intertitle-show');
         void intertitle.offsetWidth;
         intertitle.classList.add('vinson-intertitle-show');
