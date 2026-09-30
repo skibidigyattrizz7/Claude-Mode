@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { launchVinsonBattle } from '../ui/vinsonbattle.js';
+import { launchVinsonBattle, registerVinsonBattleAttempt } from '../ui/vinsonbattle.js';
 
 class FakeElement {
   constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.listeners = new Map(); this.dataset = {}; this.style = {}; this.hidden = false; }
@@ -18,7 +18,15 @@ class FakeElement {
 }
 
 testNoContextReturnsUsableCleanup();
-console.log('1 Vinson battle UI test passed');
+const calls = [];
+const api = {vinson:{status:async()=>{calls.push('status');return {ok:true,phase:'locked'};},
+  battleStart:async()=>{calls.push('start');return {ok:true,nonce:'account-attempt'};}}};
+assert.equal((await registerVinsonBattleAttempt(api)).nonce,'account-attempt');
+assert.deepEqual(calls,['status','start'],'refresh cached ban before requesting a nonce');
+api.vinson.status=async()=>({ok:false,error:'offline'});
+assert.equal((await registerVinsonBattleAttempt(api)).error,'offline');
+assert.equal(calls.length,2,'failed status must not register a fight');
+console.log('3 Vinson battle UI tests passed');
 
 function testNoContextReturnsUsableCleanup() {
   const oldDocument = globalThis.document;

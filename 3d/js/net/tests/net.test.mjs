@@ -1688,6 +1688,169 @@ test('019 wipe.js forgets exactly the keys the game uses for the club (UT save, 
   });
 });
 
+// ------------------------------------------------------------------ Vinson battle (migration 020)
+async function vinsonWorld() {
+  let t = 1_800_000_000_000;
+  const be = createMockBackend(memoryStore(), { now: () => t });
+  const pw = 'Pitch-pass1';
+  const mkAcc = async (username, extra = {}) => { const c = mk3(be); const r = await c.account.signup({ username, password: pw, confirm: pw, ...extra }); assert.equal(r.ok, true, username); return { c, id: r.id }; };
+  const O = await mkAcc('Shawky Fc', { adminCode: 'mock-super' });
+  const A = await mkAcc('Cursed One'), B = await mkAcc('Cursed Two');
+  return { be, O, A, B, tick: (ms) => { t += ms; } };
+}
+const vCurse = async (who) => { assert.equal((await who.c.vinson.pull()).phase, 'doom'); };
+/** curse -> doom expires -> owner unban -> player locks the card */
+const vCursedAndLocked = async (w, who) => {
+  await vCurse(who); w.tick(61000);
+  assert.equal((await who.c.vinson.status()).phase, 'banned');
+  assert.equal((await w.O.c.moderation.unban(who.id)).ok, true);
+  assert.equal((await who.c.vinson.status()).phase, 'released'); // the client polls status, which clears its cached ban
+  assert.equal((await who.c.vinson.lock()).phase, 'locked');
+};
+
+test('vinson battle: happy path start -> win -> claim, status reconciles, never re-cursed', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A);
+  const st0 = await w.A.c.vinson.status();
+  assert.deepEqual([st0.phase, st0.immune, st0.battleWon, st0.rewardsClaimed], ['locked', false, false, false]);
+  const s = await w.A.c.vinson.battleStart();
+  assert.equal(s.ok, true); assert.match(s.nonce, /^[0-9a-f]{32}$/);
+  w.tick(61000);
+  const win = await w.A.c.vinson.battleWin({ nonce: s.nonce });
+  assert.deepEqual([win.ok, win.immune, win.phase], [true, true, 'lifted']);
+  const st = await w.A.c.vinson.status();
+  assert.deepEqual([st.phase, st.immune, st.battleWon, st.rewardsClaimed], ['lifted', true, true, false]);
+  assert.equal(st.restrictions?.market, undefined); // restrictions added by the lock are gone, like an owner lift
+  const c1 = await w.A.c.vinson.claimBattleRewards();
+  assert.deepEqual([c1.ok, c1.claimed, c1.cards], [true, true, ['vinson_reward_world', 'vinson_reward_phonk', 'vinson_reward_captain']]);
+  assert.equal((await w.A.c.vinson.status()).rewardsClaimed, true);
+  // an immune profile is never re-cursed and cannot start another fight
+  const pull = await w.A.c.vinson.pull();
+  assert.deepEqual([pull.ok, pull.phase, pull.immune], [true, 'lifted', true]);
+  w.tick(3600000);
+  assert.equal((await w.A.c.vinson.status()).phase, 'lifted');
+  assert.equal((await w.A.c.vinson.battleStart()).error, 'already_immune');
+});
+
+test('vinson battle: win without start, bad nonce, never cursed, claim before win', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A);
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: 'a'.repeat(32) })).error, 'no_battle');
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: 'nope' })).error, 'bad_nonce');
+  assert.equal((await w.A.c.vinson.battleWin()).error, 'bad_nonce');
+  const s = await w.A.c.vinson.battleStart(); w.tick(61000);
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: 'f'.repeat(32) })).error, 'bad_nonce');
+  assert.equal((await w.B.c.vinson.battleStart()).error, 'not_cursed'); // never cursed
+  assert.equal((await w.B.c.vinson.battleWin({ nonce: s.nonce })).error, 'no_battle');
+  assert.equal((await w.O.c.vinson.battleStart()).error, 'not_cursed'); // owner is exempt
+  assert.equal((await w.A.c.vinson.claimBattleRewards()).error, 'not_won');
+  assert.equal((await w.B.c.vinson.claimBattleRewards()).error, 'not_won');
+});
+
+test('vinson battle: too-fast win refused but nonce kept; restart replaces nonce; stale nonce expires', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A); await vCursedAndLocked(w, w.B);
+  const s = await w.A.c.vinson.battleStart();
+  w.tick(5000);
+  const fast = await w.A.c.vinson.battleWin({ nonce: s.nonce });
+  assert.deepEqual([fast.ok, fast.error], [false, 'too_soon']);
+  assert.ok(fast.retryAfter > 0 && fast.retryAfter <= 55);
+  assert.equal((await w.A.c.vinson.status()).immune, false);
+  w.tick(60000);
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: s.nonce })).ok, true); // the honest, slower win still lands
+  const s1 = await w.B.c.vinson.battleStart();
+  const s2 = await w.B.c.vinson.battleStart();
+  assert.notEqual(s1.nonce, s2.nonce);
+  w.tick(61000);
+  assert.equal((await w.B.c.vinson.battleWin({ nonce: s1.nonce })).error, 'bad_nonce'); // replaced
+  w.tick(2 * 3600000);
+  assert.equal((await w.B.c.vinson.battleWin({ nonce: s2.nonce })).error, 'expired');
+  const s3 = await w.B.c.vinson.battleStart(); w.tick(61000);
+  assert.equal((await w.B.c.vinson.battleWin({ nonce: s3.nonce })).immune, true);
+});
+
+test('vinson battle: nonce is bound to its profile; a reused nonce is idempotent', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A); await vCursedAndLocked(w, w.B);
+  const sa = await w.A.c.vinson.battleStart(), sb = await w.B.c.vinson.battleStart();
+  w.tick(61000);
+  assert.equal((await w.B.c.vinson.battleWin({ nonce: sa.nonce })).error, 'bad_nonce'); // A's nonce, B's identity
+  assert.equal((await w.B.c.vinson.status()).immune, false);
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: sa.nonce })).ok, true);
+  const again = await w.A.c.vinson.battleWin({ nonce: sa.nonce }); // replay: same success, no second grant
+  assert.deepEqual([again.ok, again.immune, again.phase, again.rewardsClaimed], [true, true, 'lifted', false]);
+  assert.equal((await w.A.c.vinson.claimBattleRewards()).claimed, true);
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: sa.nonce })).rewardsClaimed, true);
+  assert.equal((await w.B.c.vinson.battleWin({ nonce: sb.nonce })).ok, true);
+});
+
+test('vinson battle: double claim returns claimed:false with the same ids', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A);
+  const s = await w.A.c.vinson.battleStart(); w.tick(61000);
+  await w.A.c.vinson.battleWin({ nonce: s.nonce });
+  const c1 = await w.A.c.vinson.claimBattleRewards(), c2 = await w.A.c.vinson.claimBattleRewards(), c3 = await w.A.c.vinson.claimBattleRewards();
+  assert.deepEqual([c1.claimed, c2.claimed, c3.claimed], [true, false, false]);
+  assert.deepEqual(c2.cards, c1.cards); assert.deepEqual(c3.cards, c1.cards);
+  assert.equal(c1.cards.length, 3);
+});
+
+test('vinson battle: a banned player cannot fight until unbanned; start is rate limited', async () => {
+  const w = await vinsonWorld();
+  await vCurse(w.A); w.tick(61000);
+  assert.equal((await w.A.c.vinson.status()).phase, 'banned');
+  assert.equal((await w.A.c.vinson.battleStart()).error, 'banned');
+  assert.equal((await w.O.c.moderation.unban(w.A.id)).ok, true);
+  assert.equal((await w.A.c.vinson.status()).phase, 'released');
+  let last;
+  for (let i = 0; i < 31; i++) last = await w.A.c.vinson.battleStart();
+  assert.equal(last.error, 'rate_limited');
+});
+
+test('vinson battle: unban, owner lift and earned immunity stay distinct', async () => {
+  const w = await vinsonWorld();
+  await vCurse(w.A); w.tick(61000); // unban only releases: not immune, not lifted
+  assert.equal((await w.O.c.moderation.unban(w.A.id)).ok, true);
+  let st = await w.A.c.vinson.status();
+  assert.deepEqual([st.phase, st.immune, st.battleWon], ['released', false, false]);
+  assert.equal((await w.B.c.vinson.lift(w.A.id)).error, 'not_allowed'); // only the owner lifts
+  assert.equal((await w.O.c.vinson.lift(w.A.id)).ok, true); // owner lift: lifted, NOT immune, no rewards
+  st = await w.A.c.vinson.status();
+  assert.deepEqual([st.phase, st.immune, st.battleWon], ['lifted', false, false]);
+  assert.equal((await w.A.c.vinson.claimBattleRewards()).error, 'not_won');
+  assert.equal((await w.A.c.vinson.battleStart()).error, 'not_cursed'); // nothing left to fight
+  assert.equal((await w.A.c.vinson.pull()).phase, 'lifted');
+  await vCursedAndLocked(w, w.B); // earned immunity is its own thing
+  const s = await w.B.c.vinson.battleStart(); w.tick(61000);
+  await w.B.c.vinson.battleWin({ nonce: s.nonce });
+  assert.equal((await w.O.c.vinson.lift(w.B.id)).error, 'not_vinson');
+  assert.equal((await w.O.c.vinson.unban(w.B.id)).error, 'not_vinson');
+  assert.equal((await w.B.c.vinson.status()).immune, true);
+  assert.equal((await w.B.c.vinson.pull()).immune, true);
+});
+
+test('vinson battle: an owner lift during the fight keeps the nonce; the win still immunises', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A);
+  const s = await w.A.c.vinson.battleStart();
+  assert.equal((await w.O.c.vinson.lift(w.A.id)).ok, true);
+  w.tick(61000);
+  const win = await w.A.c.vinson.battleWin({ nonce: s.nonce });
+  assert.deepEqual([win.ok, win.immune], [true, true]);
+});
+
+test('vinson battle: win marks the cloud save lifted so the locked card may leave the XI', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A);
+  const club = { club: ['secret_vinson'], squad: { slots: ['secret_vinson'], bench: [] }, vinson: { phase: 'locked' } };
+  assert.equal((await w.A.c.cloud.put(club, 0)).ok, true);
+  const s = await w.A.c.vinson.battleStart(); w.tick(61000);
+  await w.A.c.vinson.battleWin({ nonce: s.nonce });
+  const got = await w.A.c.cloud.get();
+  assert.equal(got.data.vinson.phase, 'lifted');
+  assert.equal((await w.A.c.cloud.put({ club: [], squad: { slots: [], bench: [] } }, got.rev)).ok, true);
+});
+
 // ------------------------------------------------------------------ run
 for (const [name, fn] of queue) {
   try { await fn(); passed++; console.log(`  ok  ${name}`); }

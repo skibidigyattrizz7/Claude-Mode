@@ -313,5 +313,11 @@ export function errorText(code) {
     bad_card_gift: 'That card cannot be sent.',
     restricted: 'The owner has restricted this feature for your account.',
     no_save: 'This player has no club saved on the server yet.',
+    not_cursed: 'Vinson has not cursed this account.',
+    already_immune: 'You already defeated Vinson. His curse can never touch you again.',
+    no_battle: 'No battle is in progress. Start the fight first.',
+    bad_nonce: 'That battle attempt is not valid. Start the fight again.',
+    too_soon: 'That was too fast to be a real fight. Try again in a moment.',
+    not_won: 'Win the battle against Vinson first.',
   })[code] || 'Something went wrong. Please try again.';
 }

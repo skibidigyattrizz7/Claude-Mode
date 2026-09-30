@@ -156,6 +156,13 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
 }
 
 /** One canvas, one RAF, one fixed-step clock. The account API owns win/reward authority. */
+// Status clears the online layer's cached Vinson ban after an owner unban.
+export async function registerVinsonBattleAttempt(online) {
+  const remote = await online.vinson.status();
+  if (!remote?.ok) return remote || { ok: false, error: 'offline' };
+  return online.vinson.battleStart();
+}
+
 export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
   if (document.querySelector('.vb-screen')) return null;
   const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css', import.meta.url).href; document.head.append(link);
@@ -229,14 +236,15 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     panel.append(row); panel.hidden = false;
   }
   async function startFight() {
-    if (victoryBusy) return;
+    if (victoryBusy || closed) return;
     victoryBusy = true;
     try {
-      if (online && (!online.vinson?.battleStart || !online.vinson?.battleWin || !online.vinson?.claimBattleRewards)) {
+      if (online && (!online.vinson?.status || !online.vinson?.battleStart || !online.vinson?.battleWin || !online.vinson?.claimBattleRewards)) {
         showPanel('Battle unavailable', 'The battle service is not ready yet. Return to Pitchside and try again later.', [['Return to Pitchside', close]]); return;
       }
       if (!nonce && online?.vinson?.battleStart) {
-        const result = await online.vinson.battleStart();
+        const result = await registerVinsonBattleAttempt(online);
+        if (closed) return;
         if (!result?.ok) { showPanel('Unable to start', 'Your battle could not be registered. Try again.', [['Retry', startFight]]); return; }
         nonce = result.nonce;
       }
@@ -252,7 +260,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       const result = onWin ? await onWin({ nonce }) : await online?.vinson?.battleWin?.({ nonce });
       if (closed) return;
       if (!result?.ok || !result.immune) {
-        showPanel('Victory', 'Your victory could not be confirmed. Your curse and rewards have not changed.', [['Retry confirmation', confirmVictory], ['Return to Pitchside', close]]); return;
+        showPanel('Victory', result?.error === 'too_soon' ? `The server needs ${Math.max(1, Math.ceil(Number(result.retryAfter) || 60))} more seconds before confirming. Retry after that wait.` : 'Your victory could not be confirmed. Your curse and rewards have not changed.', [['Retry confirmation', confirmVictory], ['Return to Pitchside', close]]); return;
       }
       victoryConfirmed = true;
       showPanel('The curse is broken', 'Congratulations. Claim your three exclusive cards. Vinson can no longer curse this account.', [['Collect rewards', claimRewards], ['Return to Pitchside', close]]);
@@ -297,7 +305,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     } else if (s.phase !== mode) {
       mode = s.phase;
       if (mode === 'intro') showPanel(s.stage ? 'Captain Israel' : 'Fight Suppression', s.stage ? 'Vinson has returned in Phonk Mode. Dodge her attacks and fight back.' : "Israeli Patel: I'll avenge my fallen Israelis once and for all. Vinson: That's too humble. I'm going to assign pain.", [['Begin fight', startFight]]);
-      else if (mode === 'defeat') showPanel('Suppressed', 'Retry this stage. Your curse remains until you win and the victory is confirmed.', [['Retry stage', () => { battle.retry(); viewHero = { ...battle.state.hero }; mode = ''; }], ['Return to Pitchside', close]]);
+      else if (mode === 'defeat') showPanel('Suppressed', 'Retry this stage. Your curse remains until you win and the victory is confirmed.', [['Retry stage', () => { nonce = null; battle.retry(); viewHero = { ...battle.state.hero }; mode = ''; }], ['Return to Pitchside', close]]);
     }
   }
   function frame(now) {

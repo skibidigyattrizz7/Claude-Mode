@@ -254,6 +254,13 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   Quick selling/resolving does not clear the curse; mods remain affected and only owner is exempt.
 
 - CHECKPOINT Sep 30, chatgpt/vinson-animation: existing Vinson effects/X-chains/XI lock/10s pack exit and playable
-  two-stage battle/cinematics are implemented. Win/immunity/rewards integrate with Claude's pending server APIs.
+  two-stage battle/cinematics are implemented. Win/immunity/rewards integrate with Claude's live migration-020 server APIs.
   Full live-account/browser review remains pending; isolated preview: 3d/vinson-battle-test.html.
 - URGENT Sep 30, PR11: roll-time curse started before pack Open; move trigger to first post-opening grid render.
+
+- URGENT Sep 30: Vinson roll-time curse activation interrupted pack opening. chatgpt/vinson-reveal-fix moves it
+  to the first actual post-opening item-grid render, preserving quick-sell protection and the original timer.
+
+- READY FOR BROWSER GATE Sep 30, PR12: live battle API connected; status-before-start clears cached unban,
+  retries replace nonce, too-soon confirmation is recoverable, and interrupted local reward saves reconcile without
+  duplicates. Claude owns the final curse/unban/lock/fight/win/claim/reload browser review before merging.

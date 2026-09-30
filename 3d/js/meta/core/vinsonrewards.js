@@ -20,3 +20,9 @@ export function applyVinsonRewardClaim(state, result) {
   state.vinson.rewardsClaimed = true;
   return true;
 }
+
+// Server claim receipt and locally saved cards can arrive at different times.
+export function hasPendingVinsonRewards(state) {
+  return state?.vinson?.battleWon === true && (state.vinson.rewardsClaimed !== true ||
+    !VINSON_REWARD_IDS.every(id => state.club?.includes(id)));
+}

@@ -3,7 +3,7 @@
 import { loadUT, saveUT } from '../core/ut.js';
 import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, cursedPack, hasDoomEffects, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
 import { fractureElement } from './vinsonfracture.js';
-import { applyVinsonRewardClaim } from '../core/vinsonrewards.js';
+import { applyVinsonRewardClaim, hasPendingVinsonRewards } from '../core/vinsonrewards.js';
 
 const asset = (name) => new URL(`../../../assets/cards/${name}`, import.meta.url).href;
 const warning = asset('vinson-warning.png');
@@ -176,7 +176,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     document.body.classList.toggle('vinson-aftermath', phase === 'warn' || phase === 'consequence');
     if (!phase || phase === 'lifted') {
       repairUi(); cinematic = false;
-      const pendingRewards = v?.battleWon && !v.rewardsClaimed;
+      const pendingRewards = hasPendingVinsonRewards(s);
       if (current !== phase || pendingRewards !== !!host.querySelector('.vb-fight-button')) {
         host.replaceChildren(); current = phase;
         if (pendingRewards) {
@@ -386,10 +386,10 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
         if (locked.ok) remote = { ...remote, phase: 'locked' };
       }
       if (remote.ok) {
-        const old = s.vinson?.phase;
+        const old = s.vinson?.phase, before = JSON.stringify(s.vinson);
         reconcileServer(s, remote);
         if (old === 'banned' && remote.phase === 'released') squadChanged(s);
-        if (s.vinson?.phase !== old) { persist(s); if (app && !app.destroyed) app.refresh(); }
+        if (JSON.stringify(s.vinson) !== before) { persist(s); if (app && !app.destroyed) app.refresh(); }
         if (s.vinson?.phase === 'locked') app?.applyRestrictions?.(remote.restrictions || { admin: true, codes: true });
         draw();
       }
@@ -415,7 +415,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     async openBattle() {
       if (battleExperience || isOwner(online)) return;
       const s = state(), identity = online?.identityId?.();
-      const resumeRewards = s?.vinson?.battleWon && !s.vinson.rewardsClaimed;
+      const resumeRewards = hasPendingVinsonRewards(s);
       if (!s || (s.vinson?.phase !== 'locked' && !resumeRewards)) return;
       const { launchVinsonBattle } = await import('./vinsonbattle.js');
       if (battleExperience || state() !== s) return;
@@ -425,7 +425,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
           if (online?.identityId?.() !== identity || state() !== s) return { ok: false };
           const result = await online?.vinson?.battleWin?.({ nonce });
           if (result?.ok && result.immune && state() === s) {
-            reconcileServer(s, { ok: true, phase: 'lifted' });
+            reconcileServer(s, result);
             s.vinson.immune = true; s.vinson.battleWon = true;
             persist(s); draw(); app?.refresh();
           }
@@ -476,7 +476,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);
-  remoteInterval = setInterval(() => { const v = state()?.vinson; if (v?.phase && (v.phase !== 'lifted' || (v.battleWon && !v.rewardsClaimed))) void poll(); }, 12000);
+  remoteInterval = setInterval(() => { const v = state()?.vinson; if (v?.phase && (v.phase !== 'lifted' || hasPendingVinsonRewards(state()))) void poll(); }, 12000);
   online?.account?.onChange?.(() => {
     const id = online?.identityId?.() || null;
     if (id !== boundId) { boundId = id; if (!app) { localState = null; host.replaceChildren(); current = ''; } }
