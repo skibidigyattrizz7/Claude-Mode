@@ -48,6 +48,7 @@ function test(name, fn) {
   catch (err) { console.error(`  FAIL ${name}\n       ${err.stack.split('\n').slice(0, 3).join('\n       ')}`); process.exitCode = 1; }
 }
 
+const fifa23 = PROMOS.filter((p) => p.year === undefined || p.year === 23);
 console.log('FIFA 23 promo tests');
 
 test('all requested campaigns use their real FIFA 23 names and unique stable ids', () => {
@@ -80,8 +81,8 @@ test('campaign artwork matches the requested and visually verified rarity backgr
   for (const [id, rarity] of Object.entries(designs)) assert.equal(PROMO_BY_ID[id].design, `f23-${rarity}`, `${id} artwork`);
 });
 
-test('every campaign has a local FIFA 23 card design, valid range and usable release week', () => {
-  for (const p of PROMOS) {
+test('every FIFA 23 campaign has a local FIFA 23 card design, valid range and usable release week', () => {
+  for (const p of fifa23) {
     assert.match(p.design, /^f23-[\w-]+$/, `${p.id}: invalid design key`);
     assert.ok(existsSync(new URL(`../../../assets/cards/${p.design}.webp`, import.meta.url)), `${p.id}: missing ${p.design}.webp`);
     assert.ok(Array.isArray(p.range) && p.range.length === 2, `${p.id}: missing range`);
@@ -118,14 +119,15 @@ test('campaign availability obeys release week and remains deterministic', () =>
   assert.equal(fingerprint(), first, 'promo card builder changed output across database regenerations');
 });
 
-test('promo pool spreads cards across players when campaign alternatives are available', () => {
-  const cards = getDB().promos;
+test('FIFA 23 promo pool spreads cards across players when campaign alternatives are available', () => {
+  const ids = new Set(fifa23.map((p) => p.id));
+  const cards = getDB().promos.filter((p) => ids.has(p.special));
   const usage = new Map();
   for (const p of cards) usage.set(p.person || p.baseId, (usage.get(p.person || p.baseId) || 0) + 1);
   const counts = [...usage.values()];
   assert.ok(usage.size >= 80, `only ${usage.size} distinct players across ${cards.length} promo cards`);
   assert.ok(counts.filter((n) => n >= 4).length <= 12, 'too many players have four or more promo versions');
-  for (const campaign of PROMOS) {
+  for (const campaign of fifa23) {
     const people = cards.filter((p) => p.special === campaign.id).map((p) => p.person || p.baseId);
     assert.equal(new Set(people).size, people.length, `${campaign.id}: duplicate player within campaign`);
   }

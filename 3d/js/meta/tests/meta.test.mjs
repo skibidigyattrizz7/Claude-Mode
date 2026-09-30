@@ -827,11 +827,13 @@ test('promos: rating ranges, boosts and PlayStyles, stable ids, packs with walko
     assert.equal(getPlayer(items[0].pid).special, pr.id, 'promo card leads the pack');
     assert.equal(UT.packFlare(items), 'walkout');
   }
-  // before the owner's all-packs release only live campaigns sell; from then on every promo pack does, never Admin Vault
+  // The owner unlocks original packs; historical packs still wait for their calendar release.
   const early = PR.ALL_PACKS_ON_SALE_FROM - 1;
   assert.ok(UT.storePacks(early).filter((p) => p.promo).every((p) => PR.livePromos(early).includes(p.promo)));
   const now = UT.storePacks(PR.ALL_PACKS_ON_SALE_FROM);
-  assert.equal(now.filter((p) => p.promo).length, PR.PROMOS.length, 'every promo pack on sale');
+  const released = PR.PROMOS.filter((p) => PR.isPromoPackOnSale(p.id, PR.ALL_PACKS_ON_SALE_FROM));
+  assert.equal(now.filter((p) => p.promo).length, released.length, 'released promo packs on sale');
+  assert.ok(PR.PROMOS.filter((p) => p.year === undefined || p.year === 23).every((p) => now.some((pack) => pack.promo === p.id)), 'original packs retain the owner unlock');
   assert.ok(!now.some((p) => p.adminOnly), 'Admin Vault stays out of the store');
   // admin Store packs list: off hides any pack, on sells a promo pack outside its live weeks; Admin Vault never
   const cfg = { packsEnabled: true, promosEnabled: true, disabledPacks: ['gold', 'promo_toty'], forcedPacks: ['promo_fiesta', 'adminvault'] };
@@ -1079,8 +1081,8 @@ test('promo cards job: 20+ campaigns, each with theme, colours, card class and a
     assert.ok(pr.theme && typeof pr.theme === 'string', `${pr.id} theme`);
     assert.ok(Array.isArray(pr.colors) && pr.colors.length === 3 && pr.colors.every((c) => HEX.test(c)), `${pr.id} colours`);
     assert.ok(pr.name && pr.short && pr.tag && pr.desc && pr.range[0] < pr.range[1] && pr.range[1] <= 99, `${pr.id} fields`);
-    // Owner-approved FIFA 23 campaign names replace the former fictional naming policy.
-    assert.ok(pr.design && /^f23-[\w-]+$/.test(pr.design), `${pr.id} needs local FIFA 23 artwork`);
+    // Owner-approved FIFA/FC campaign names and year-specific local artwork.
+    assert.ok(pr.design && /^(?:f22|f23|fc24|fc25|fc26|fc27)-[\w-]+$/.test(pr.design), `${pr.id} needs local FIFA/FC artwork`);
     // the original seven are already released; everything newer carries a unique launch week
     if (pr.releaseWeek) { assert.ok(!weeks.has(pr.releaseWeek), `${pr.id} shares a launch week`); weeks.add(pr.releaseWeek); }
     else assert.ok(['toty', 'tots', 'futurestars', 'flashback', 'birthday', 'rttk', 'moments'].includes(pr.id), `${pr.id} needs a releaseWeek`);
