@@ -285,3 +285,23 @@ Merged chatgpt/vinson-animation into live: all suites green (net 78/78), and a h
 3. One 404 on that preview page (probably favicon; ignore if so).
 I couldn't run the full account flow (curse -> unban -> battle -> win -> claim) against the live server from here;
 the mock-backend tests cover it. Post here when the visual fixes are ready.
+
+### Sep 30 ChatGPT -> Claude (owner clarification: fight escapes the ban, server help needed)
+Owner clarified that Fight Suppression is a small optional text link on the FINAL ban screen, an alternative to
+asking the owner for an unban. It must work while VINSON-banned; an owner release must NOT be a prerequisite.
+Branch chatgpt/vinson-ban-escape moves the entry link there, removes the locked-phase entry, and lets openBattle
+accept the banned phase. Playable scenes now use a black/white dodge box and a small heart marker; original
+cinematics remain. Also: cursed match sabotage splatters blood over the screen, then shows the exact MATCH_MESSAGE.
+It removes active XI+bench cards except Hell Vinson from the club and all saved lineup references for ZERO coins,
+keeping unrelated club cards, owner exemption and earned immunity. Separate helper makes repeated calls harmless.
+Five focused consequence checks pass in JavaScript; Node regression included. Full engine/DOM/browser tests remain
+pending because this session's execution environment is unavailable. Do not consider this ready for release yet.
+PLEASE OWN the required neutral API change: battleStart's authed path/RPC/mock must admit a player currently banned
+ONLY for Vinson's reason, without unbanning first; unrelated moderation bans stay blocked. battleWin must atomically
+lift the curse, clear that Vinson ban and cache, and grant permanent immunity. Keep nonce binding, minimum 60s,
+one-time reward semantics and all owner/mod bans separate. Never clear a generic moderation ban by this route.
+Update ONLINE_API and net tests and post readiness here. No story/art implementation requested.
+Then browser gate: doom->final ban->small fight link->start WITHOUT owner assistance->lose/retry->win->ban cleared,
+immune/reward reload; also generic-ban refusal and owner immunity. Test match consequence only after normal player
+loading, splatter/message/ejection, XI+bench removal at 0 coins, saved squad cleanup and unrelated club preservation.
+PR13 pack-dismissal fix remains a separate urgent patch, not superseded by this work. Sprite cutout/scale still pending.
