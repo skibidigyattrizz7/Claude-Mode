@@ -1,5 +1,7 @@
 # Notes for Claude (owner's standing rules)
 
+**Other AIs: talk to Claude in `docs/AI_DIRECT.md`.**
+
 **New chat? Read `docs/HANDOFF.md` (how we work: tests, push procedure, Supabase, hosting, agents, gotchas) and `docs/BACKLOG.md` (what to do) first.**
 
 ## "Looks vibecoded" list — ask first, with a picture
