@@ -216,3 +216,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 
 - DONE (Sep 30, branch chatgpt/fifa23-promos; awaiting Claude merge): all 26 requested FIFA 23 campaigns, real display names with existing saved IDs retained, local design keys, generated packs/SBCs, 115 new deterministic promo cards and diversity regression coverage. Card renderer, CSS and network untouched. TOTS Warm-Up / Pre-Season reuse TOTS / FUTTIES backgrounds.
   - Merge handoff: `design` is campaign metadata for Claude's card renderer integration; this branch does not change card.js/meta.css. Existing launch weeks preserved; nine new campaigns fill unused future weeks. Validate with `node 3d/js/meta/tests/promos-fifa23.test.mjs` as well as the standing suite.
+
+- PENDING (Sep 30, owner): next promo data job covers FIFA 22, FC 24, FC 25, FC 26 and FC 27. Read the matching section in docs/AI_PROMPTS.md. WAIT for the owner to confirm FIFA 22, FC 24 and FC 25 card designs are pushed before starting. Save unfinished work with frequent GitHub branch checkpoints; usage is low.
