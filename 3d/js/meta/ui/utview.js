@@ -620,8 +620,10 @@ function storeView() {
       const onSale = UT.storePacks();
       const promoPacks = onSale.filter((p) => p.promo);
       const normalPacks = onSale.filter((p) => !p.promo);
-      // Store sections (owner, Sep 30): Normal packs · Promo packs · Managers; the chosen tab is remembered for the visit
-      const tabs = [['normal', 'Normal packs', normalPacks.length], ['promo', 'Promo packs', promoPacks.length], ['managers', 'Managers', UT.REAL_MANAGERS.length]];
+      const games = [['fifa22', 'FIFA 22'], ['fifa23', 'FIFA 23'], ['fc24', 'FC 24'], ['fc25', 'FC 25'], ['fc26', 'FC 26'], ['fc27', 'FC 27']];
+      const packsByGame = Object.fromEntries(games.map(([game]) => [game, promoPacks.filter((pack) => PROMO_BY_ID[pack.promo]?.game === game)]));
+      const tabs = [['normal', 'Normal packs', normalPacks.length], ...games.map(([game, label]) => [game, label, packsByGame[game].length]), ['managers', 'Managers', UT.REAL_MANAGERS.length]];
+      if (app.storeTab === 'promo') app.storeTab = 'fifa23';
       if (!tabs.some(([k]) => k === app.storeTab)) app.storeTab = 'normal';
       const tabBar = h('div', { class: 'pm-storetabs', role: 'tablist', 'aria-label': 'Store sections' }, tabs.map(([k, label, n]) => h('button', {
         class: `pm-chip ${app.storeTab === k ? 'on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(app.storeTab === k),
@@ -630,7 +632,12 @@ function storeView() {
       let sectionBody;
       if (app.storeTab === 'managers') sectionBody = managerShop(app);
       else if (!cfg.packsInShop) sectionBody = h('div', { class: 'pm-empty-state' }, h('p', null, 'Packs are temporarily disabled in the shop by the owner.'));
-      else if (app.storeTab === 'promo') sectionBody = promoPacks.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, promoPacks.map((pack) => storeItem(pack))) : h('p', { class: 'pm-dim' }, 'No promo packs on sale right now.');
+      else if (packsByGame[app.storeTab]) {
+        const packs = packsByGame[app.storeTab];
+        const label = games.find(([game]) => game === app.storeTab)[1];
+        sectionBody = packs.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, packs.map((pack) => storeItem(pack)))
+          : h('p', { class: 'pm-dim' }, `No ${label} promo packs on sale right now.`);
+      }
       else sectionBody = h('div', { class: 'pm-storegrid' }, normalPacks.map((pack) => storeItem(pack)));
       const store = h('section', { class: 'pm-section' }, tabBar, sectionBody);
       async function buyPack(pack) {

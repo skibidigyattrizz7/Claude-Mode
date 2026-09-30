@@ -6,12 +6,13 @@ import { Rng, clamp, hashStr } from './rng.js';
 import { weekNumber } from './calendar.js';
 import { genPhysique } from './physique.js';
 import { PLAYER_DYN } from './playerphotos.js';
+import { HISTORICAL_PROMOS } from './historicalpromos.js';
 const USE_SHARED_DYN = false;
 
 // colours: [dark, main, light/ink]. `theme` is a stable id for the UI agent's pack-opening background/rig
 // per campaign (see docs/META_API.md). `releaseWeek` (absolute calendar week, from calendar.js) is the first
 // week a campaign may ever appear anywhere — omitted/1 means "already released" (the original 7 campaigns).
-export const PROMOS = [
+const ORIGINAL_PROMOS = [
   { id: 'toty', design: 'f23-5', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#040a26', '#2f6bff', '#dfe9ff'], range: [96, 98], price: 180000, theme: 'toty',
     desc: 'The best XI of the year: real stars boosted to 96–98.' },
   { id: 'tots', design: 'f23-11', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#061a5c', '#1f4fd6', '#ffd66b'], range: [92, 97], price: 120000, theme: 'tots',
@@ -101,6 +102,7 @@ export const PROMOS = [
   { id: 'preseason', design: 'f23-16', name: 'Pre-Season', short: 'PRE-SEASON', tag: 'PRE-SEASON', colors: ['#182049', '#d26da9', '#fff0ce'], range: [86, 98], price: 125000, theme: 'preseason', releaseWeek: 76,
     desc: 'New-season favourites and transfer prospects.' },
 ];
+export const PROMOS = ORIGINAL_PROMOS.map((promo) => ({ ...promo, game: 'fifa23' })).concat(HISTORICAL_PROMOS);
 export const PROMO_BY_ID = Object.fromEntries(PROMOS.map((p) => [p.id, p]));
 export const PROMO_IDS = PROMOS.map((p) => p.id);
 export const isPromoSpecial = (sp) => !!PROMO_BY_ID[sp];
@@ -154,7 +156,11 @@ export const isPromoLive = (id, week = weekNumber()) => livePromos(week).include
 /** Owner release (Sep 29, week 39): from this week on every campaign's pack is on sale in the Store, whatever the
  * calendar says. Only the Store uses this; rotation, objectives, SBCs and the market still follow the calendar. */
 export const ALL_PACKS_ON_SALE_FROM = 39;
-export const isPromoPackOnSale = (id, week = weekNumber()) => !!PROMO_BY_ID[id] && (week >= ALL_PACKS_ON_SALE_FROM || isPromoLive(id, week));
+export const isPromoPackOnSale = (id, week = weekNumber()) => {
+  const promo = PROMO_BY_ID[id];
+  return !!promo && (promo.year ? isPromoReleased(id, week) && (week >= ALL_PACKS_ON_SALE_FROM || isPromoLive(id, week))
+    : week >= ALL_PACKS_ON_SALE_FROM || isPromoLive(id, week));
+};
 
 // ---------- boosts ----------
 /** In-Form / TOTW boost scaled to the base card: +3 (low 70s) … +8 (90+). */

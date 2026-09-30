@@ -216,5 +216,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 
 - DONE (Sep 30, branch chatgpt/fifa23-promos; awaiting Claude merge): all 26 requested FIFA 23 campaigns, real display names with existing saved IDs retained, local design keys, generated packs/SBCs, 115 new deterministic promo cards and diversity regression coverage. Card renderer, CSS and network untouched. TOTS Warm-Up / Pre-Season reuse TOTS / FUTTIES backgrounds.
   - Merge handoff: `design` is campaign metadata for Claude's card renderer integration; this branch does not change card.js/meta.css. Existing launch weeks preserved; nine new campaigns fill unused future weeks. Validate with `node 3d/js/meta/tests/promos-fifa23.test.mjs` as well as the standing suite.
-
-- IN PROGRESS (Sep 30, chatgpt/multi-year-promos): FIFA22/FC24/25/26/27 campaign metadata and verified local design keys, year-specific IDs, spread release weeks and diverse draws. All525 artwork pushed perAI_DIRECT. Realcardstats12,738 publishedrecords are in PR7 for Claude integration. Game renderer/player/network files owned byClaude, not this branch.
+- Sep 30 (owner, late): promo cards must be the REAL EA cards (real rating/stats/picture/design per card), not boosted
+  copies; store section per game (FIFA 22, 23, FC 24-27); secret cards stay unique (custom art, not reused EA designs);
+  no picture outside the card; no photo backgrounds unless the real FIFA card has one; no shared celebration picture
+  across promos. SECRET CARDS: owner says leave them alone (own category). Split with ChatGPT in docs/AI_DIRECT.md (group chat). Real FC 26/27 promo items: Claude agent 3.
