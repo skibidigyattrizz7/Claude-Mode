@@ -201,3 +201,10 @@ html[data-ui] .lr-card.lr-card--full::after { display: none; }
 .lr.is-vxi .lr-node--card .pm-card { font-size: min(1.6cqw, 1.25cqh); }
 @media (orientation: portrait) { .lr.is-cardxi:not(.is-vxi) .lr-node--card .pm-card { font-size: min(1.6cqw, 1.25cqh); } }
 @media (orientation: landscape) { .lr.is-cardxi:not(.is-vxi) .lr-node { top: calc(12% + var(--u) * .76%); } }
+/* phones: the line title (name + line rating) always fits the screen width (owner video, Sep 30: "LINE RATIN" was cut off) */
+@media (orientation: portrait) {
+  .lr-line-title { width: 100%; box-sizing: border-box; column-gap: var(--sp-3); }
+  .lr-line-name { font-size: clamp(26px, 9vw, 56px); min-width: 0; overflow-wrap: anywhere; }
+  .lr-line-avg { font-size: clamp(36px, 11vw, 64px); }
+  .lr-line-lbl { font-size: 10px; letter-spacing: .08em; white-space: nowrap; }
+}

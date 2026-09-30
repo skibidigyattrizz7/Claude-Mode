@@ -40,6 +40,35 @@ function cleanKit(k, dflt) {
   return out;
 }
 
+const CARD_STATS = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
+const CARD_GK = ['div', 'han', 'kic', 'ref', 'spd', 'pos'];
+const ASSET_RE = /^assets\/cards\/[A-Za-z0-9_.-]{1,60}$/;
+const WORD_RE = /^[a-z0-9_]{1,24}$/;
+/**
+ * Display-only card summary a player sends with their team (owner, Sep 30): the lineup reveal draws the real card
+ * (name, rating up to 999, face stats, design) even when the other game has never seen that card (Admin Cards,
+ * evolved or edited cards). Never used by the match engine. Photos only as bundled asset paths, never data URLs.
+ */
+export function cleanCardView(c) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
+  const out = { name: cleanStr(c.name, 24, ''), ovr: int(c.ovr, 1, 999, 60) };
+  if (!out.name) return null;
+  const last = cleanStr(c.last, 24, ''); if (last) out.last = last;
+  const stats = c.stats && typeof c.stats === 'object' ? c.stats : {};
+  const gk = c.gk && typeof c.gk === 'object' ? c.gk : {};
+  out.stats = {}; for (const k of CARD_STATS) out.stats[k] = int(stats[k], 1, 999, 50);
+  out.gk = {}; for (const k of CARD_GK) out.gk[k] = int(gk[k], 1, 999, 50);
+  for (const k of ['tier', 'special', 'artTheme']) if (typeof c[k] === 'string' && WORD_RE.test(c[k])) out[k] = c[k];
+  if (typeof c.nat === 'string' && /^[A-Z]{2,4}$/.test(c.nat)) out.nat = c.nat;
+  for (const k of ['rare', 'glitch', 'cursed', 'evil', 'angel', 'hell', 'customAdmin']) if (c[k] === true) out[k] = true;
+  for (const k of ['statText', 'statSup', 'statGlyph', 'cardTag']) { const v = cleanStr(c[k], 16, ''); if (v) out[k] = v; }
+  for (const k of ['photo', 'fullArt']) if (typeof c[k] === 'string' && ASSET_RE.test(c[k])) out[k] = c[k];
+  if (c.photoCut === true) out.photoCut = true;
+  if (Number.isInteger(c.skin) && c.skin >= 0 && c.skin <= 9) out.skin = c.skin;
+  if (Number.isInteger(c.look) && c.look >= 0 && c.look < 1000) out.look = c.look;
+  return out;
+}
+
 function cleanPlayer(p, idx, prefix, usedIds, usedNums, forceGK) {
   if (!p || typeof p !== 'object') throw new Error(`player ${idx} is not an object`);
   let id = cleanId(p.id, 40, `${prefix}p${idx}`);
@@ -54,7 +83,15 @@ function cleanPlayer(p, idx, prefix, usedIds, usedNums, forceGK) {
   const a = p.attrs && typeof p.attrs === 'object' ? p.attrs : {};
   const attrs = {};
   for (const k of ATTRS) attrs[k] = int(a[k], 1, 99, 50);
-  return { id, name: cleanStr(p.name, 24, `Player ${number}`), number, pos, ovr: int(p.ovr, 1, 99, 60), attrs };
+  const out = { id, name: cleanStr(p.name, 24, `Player ${number}`), number, pos, ovr: int(p.ovr, 1, 99, 60), attrs };
+  // Admin / secret card tiers (core/teams.js toMatchPlayer) now reach the other game too, as they do offline
+  // (owner, Sep 30): OVR over 99, the glitch (∞) tier and the cursed tier.
+  if (typeof p.rawOvr === 'number' && p.rawOvr > 99) out.rawOvr = int(p.rawOvr, 100, 999, 100);
+  if (p.glitch === true) out.glitch = true;
+  if (p.cursed === true) out.cursed = true;
+  const card = cleanCardView(p.card);
+  if (card) out.card = card;
+  return out;
 }
 
 /**

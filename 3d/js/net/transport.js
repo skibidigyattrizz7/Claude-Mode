@@ -492,13 +492,17 @@ export class PeerTransport extends BaseTransport {
   }
   send(obj, { rt = false } = {}) {
     if (this.blackhole) return false;
-    const raw = encode(obj);
     const c = rt && this.rt && this.rt.open ? this.rt : this.ctl;
+    // Realtime messages (snapshots / inputs) only matter while fresh. On a slow link the browser queues
+    // them faster than they leave, and the other player ends up seconds behind (owner, Sep 30: ~30 s).
+    // Drop a realtime message while the channel still has a backlog; the next one carries the newer state.
+    if (rt && c && c.open && backlogged(c)) return false;
+    const raw = encode(obj);
     if (c && c.open && !this.closed) { try { c.send(raw); return true; } catch { return false; } }
     // relay path (guest after welcome; host once a guest said hello). Realtime msgs capped ~20/s.
     if (this.closed || !this.relay || !this.relayN || (this.role === 'guest' && !this.relayOpen)) return false;
     if (rt) { const now = Date.now(); if (this._lastRelayRt && now - this._lastRelayRt < 50) return false; this._lastRelayRt = now; }
-    return this.relay.send(raw, this.relayN);
+    return this.relay.send(raw, this.relayN, rt);
   }
   close() {
     if (this.closed) return;
@@ -508,6 +512,17 @@ export class PeerTransport extends BaseTransport {
     this.peer = null; this.ctl = null; this.rt = null; this.relay = null;
     this._setStatus('closed');
   }
+}
+
+/** Bytes a data channel may hold unsent before realtime messages are dropped (about half a second of snapshots). */
+export const RT_BACKLOG_BYTES = 48 * 1024;
+/** True when a PeerJS connection still has a send backlog (browser buffer or PeerJS's own queue). */
+export function backlogged(conn) {
+  try {
+    const dc = conn.dataChannel || conn._dc;
+    if (dc && dc.bufferedAmount > RT_BACKLOG_BYTES) return true;
+    return (conn.bufferSize || 0) > 0;
+  } catch { return false; }
 }
 
 /** Factory: kind = 'peer' | 'bc' | 'loopback'. */

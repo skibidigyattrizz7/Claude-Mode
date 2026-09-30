@@ -410,6 +410,7 @@ export async function openMatch(opts) {
     layer.remove();
     document.body.classList.remove('in-match');
     if (matchState.active === ctl) matchState.active = null;
+    if (!matchState.active) globalThis.__pitchsideInMatch = false; // online presence back to its normal pace
     try { if (prevFocus && prevFocus.isConnected) prevFocus.focus({ preventScroll: true }); } catch { /* ignore */ }
   };
   const ctl = { get handle() { return handle; }, done, overlay, layer, close };
@@ -421,6 +422,7 @@ export async function openMatch(opts) {
     throw e;
   }
   matchState.active = ctl;
+  globalThis.__pitchsideInMatch = true; // online presence checks in less often while a match runs (net/services.js)
   // keep focus inside the match so menu/meta Escape handlers don't fire on <body>
   try { if (!layer.contains(document.activeElement)) layer.focus({ preventScroll: true }); } catch { /* ignore */ }
   return ctl;
@@ -442,7 +444,14 @@ async function revealCardRenderer() {
       const known = mp.id ? getPlayer(mp.id) : null;
       const a = mp.attrs || {};
       const ovr = Number(mp.rawOvr || mp.ovr) || 0;
-      const c = known || {
+      // the owner's exact card as they have it (mp.card, sent with the team: evolutions, edits, Admin Cards the other
+      // game has never seen), on top of this game's copy of the card when it has one (photos, art, PlayStyles)
+      const view = mp.card || null;
+      const c = view && known ? { ...known, ...view, id: known.id, pos: known.pos, alt: known.alt, club: known.club, league: known.league,
+        playstyles: known.playstyles, photo: view.photo || known.photo, photoCut: view.photo ? view.photoCut : known.photoCut, fullArt: view.fullArt || known.fullArt }
+        : view ? { id: String(mp.id || mp.name), pos: mp.pos, alt: [], club: '', playstyles: [], rare: true, ...view,
+          tier: view.tier || (view.ovr >= 75 ? 'gold' : view.ovr >= 65 ? 'silver' : 'bronze') }
+        : known || {
         id: String(mp.id || mp.name), name: mp.name, last: String(mp.name || '').split(' ').slice(-1)[0], pos: mp.pos, alt: [], ovr,
         tier: ovr >= 75 ? 'gold' : ovr >= 65 ? 'silver' : 'bronze', rare: true, nat: mp.nat || '', club: mp.club || '', playstyles: [],
         stats: { pac: a.pac, sho: a.sho, pas: a.pas, dri: a.dri, def: a.def, phy: a.phy },

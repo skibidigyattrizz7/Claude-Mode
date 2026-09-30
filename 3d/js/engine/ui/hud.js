@@ -52,6 +52,7 @@ const CSS = `
 .ps3d-menu button{display:block;width:100%;margin:8px 0;padding:11px 14px;font-size:16px;font-weight:700;border:0;border-radius:6px;background:#26314f;color:#fff;cursor:pointer;text-align:left}
 .ps3d-menu button:hover,.ps3d-menu button:focus{background:#3fa9ff;color:#081022;outline:none}
 .ps3d-menu button.quit{background:#5a1a24}.ps3d-menu button.quit:hover{background:#ff4d4d}
+.ps3d-menu button.admin{color:#ffe14d;border:1px solid rgba(255,212,0,.45)}
 .ps3d-menu table{border-collapse:collapse;font-size:13px;margin:6px 0 10px;width:100%}
 .ps3d-menu td{padding:3px 8px;border-bottom:1px solid rgba(255,255,255,.07)}
 .ps3d-menu td:first-child{color:#9fb6de}
@@ -519,6 +520,7 @@ export class Hud {
       camBtn.textContent = `Camera: ${this.camMode === 'pro' ? 'Pro (behind player)' : 'Broadcast'}`;
     });
     if (this.teamInfo && (info.localSides || []).length) btn('Team management', () => this._menuTeam(info, info.localSides[0], 'subs'));
+    if (this.onAdmin) btn('♛ Admin effects', () => this.onAdmin(), 'admin');
     btn('Instant replay', () => this.onReplay());
     btn('Controls', () => this._menuControls(info));
     btn('Quit match', () => this.onQuit(), 'quit');

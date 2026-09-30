@@ -89,6 +89,16 @@ export function assignNumbers(starterPositions, benchCount, preset = []) {
 }
 
 /** Converts a DB/career player into the contract match-player shape. scale: attribute multiplier (fitness/morale). */
+/** Display summary of a card for the lineup reveal (face stats as shown on the card, not the match attributes). */
+function cardView(p) {
+  const v = { name: p.name, last: p.last, ovr: p.ovr, tier: p.tier, special: p.special, nat: p.nat, rare: p.rare, skin: p.skin, look: p.look,
+    stats: { ...p.stats }, gk: { ...p.gk } };
+  for (const k of ['glitch', 'cursed', 'evil', 'angel', 'hell', 'customAdmin', 'photoCut']) if (p[k] === true) v[k] = true;
+  for (const k of ['statText', 'statSup', 'statGlyph', 'cardTag', 'artTheme', 'fullArt']) if (p[k]) v[k] = p[k];
+  if (typeof p.photo === 'string' && !p.photo.startsWith('data:')) v.photo = p.photo;
+  return v;
+}
+
 export function toMatchPlayer(p, pos, number, scale = 1) {
   const sc = (v) => Math.max(1, Math.min(99, Math.round(v * scale)));
   const fit = positionFit(p, pos);
@@ -104,6 +114,7 @@ export function toMatchPlayer(p, pos, number, scale = 1) {
     // THE NII (secretcard.js `cursed`): the anti-glitch tier, see engine/core/sim.js `p.cursed`
     ...(p.cursed === true ? { cursed: true } : {}),
     ...matchPhysique(p),
+    card: cardView(p), // display only: the other game's lineup reveal draws this exact card (net/protocol.js cleanCardView)
     attrs: {
       pac: sc(p.stats.pac), sho: sc(p.stats.sho), pas: sc(p.stats.pas), dri: sc(p.stats.dri), def: sc(p.stats.def), phy: sc(p.stats.phy),
       div: sc(p.gk.div), han: sc(p.gk.han), kic: sc(p.gk.kic), ref: sc(p.gk.ref), spd: sc(p.gk.spd), pos: sc(p.gk.pos),

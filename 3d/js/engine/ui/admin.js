@@ -7,7 +7,11 @@ const CSS = `
 .ps3d-adm-chips span{background:rgba(16,19,26,.9);border:1px solid rgba(255,212,0,.75);color:#fff;font-size:11px;font-weight:800;letter-spacing:.5px;padding:2px 7px;border-radius:10px;white-space:nowrap}
 .ps3d-adm-chips span b{color:#ffe14d;font-weight:800;margin-left:4px}
 .ps3d-hud.compact~.ps3d-adm-chips{top:48px}
-.ps3d-adm-crown{position:absolute;right:68px;top:14px;width:44px;height:40px;border-radius:6px;border:1px solid rgba(255,212,0,.6);background:rgba(16,19,26,.8);color:#ffe14d;font-size:20px;pointer-events:auto;z-index:4}
+.ps3d-adm-crown{position:absolute;right:68px;top:14px;height:40px;display:flex;align-items:center;gap:7px;padding:0 12px 0 10px;border-radius:6px;border:1px solid rgba(255,212,0,.7);background:rgba(16,19,26,.86);color:#ffe14d;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;cursor:pointer;pointer-events:auto;z-index:4;transition:background 120ms,color 120ms}
+.ps3d-adm-crown b{font-size:18px;letter-spacing:0}
+.ps3d-adm-crown kbd{font:700 11px/1 ui-monospace,monospace;color:#9aa4b4;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:2px 5px;letter-spacing:0}
+.ps3d-adm-crown:hover,.ps3d-adm-crown:focus-visible{background:#ffd400;color:#14161b;outline:none}
+.ps3d-adm-crown:hover kbd,.ps3d-adm-crown:focus-visible kbd{color:#14161b;border-color:rgba(0,0,0,.35)}
 .ps3d-adm{position:absolute;inset:0;background:rgba(6,8,12,.66);display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:6}
 .ps3d-adm .box{background:#12161d;border:1px solid rgba(255,212,0,.45);border-radius:10px;padding:16px 18px;width:min(760px,94vw);max-height:90vh;overflow:auto;color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.6);font-size:13px}
 .ps3d-adm h2{margin:0 0 4px;letter-spacing:3px;color:#ffe14d;font-size:20px}
@@ -57,11 +61,14 @@ export class AdminUi {
       } else if (this.open && e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); this.toggle(false); }
     };
     window.addEventListener('keydown', this._kd, true);
-    if (opts.touch) {
+    {
+      // visible on every device (owner, Sep 30: on a laptop the key-only menu was never found); ` / \ still work
       this.crown = document.createElement('button');
       this.crown.className = 'ps3d-adm-crown';
-      this.crown.textContent = '♛';
-      this.crown.title = 'Admin';
+      this.crown.type = 'button';
+      this.crown.innerHTML = opts.touch ? '<b>♛</b>ADMIN' : '<b>♛</b>ADMIN <kbd>`</kbd>';
+      this.crown.title = 'Admin effects';
+      this.crown.setAttribute('aria-label', 'Open the admin menu');
       this.crown.addEventListener('click', (e) => { e.preventDefault(); this.toggle(); });
       this.crown.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
       root.appendChild(this.crown);

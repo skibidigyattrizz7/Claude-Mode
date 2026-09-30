@@ -10,7 +10,7 @@ import { GAMEPLAY_DEFAULTS } from '../../shared/gameplay.js';
 import { createMockBackend, memoryStore } from '../mockbackend.js';
 import { createMatchmaker, randomPeerId } from '../matchmaker.js';
 import { createOnline, online as defaultOnline } from '../services.js';
-import { LoopbackTransport } from '../transport.js';
+import { LoopbackTransport, backlogged, RT_BACKLOG_BYTES } from '../transport.js';
 import { NetSession } from '../session.js';
 import { usernameError, passwordError, passwordHint, COMMON_PASSWORDS, nameNorm, isReservedName, usernameKey, parseBan, banActive, banText, BLOCKED_WORDS } from '../accountcore.js';
 import { errorText } from '../validate.js';
@@ -1260,6 +1260,59 @@ test('owner panel: restrictions (market, messages, codes, admin) are enforced se
   assert.ok(found.includes(1) && found.includes(5e12));
 });
 const o_id = (p) => p.id;
+
+test('online team: card view + admin / secret tiers survive sanitizeTeam; data-URL photos and junk are dropped', () => {
+  const mkP = (i, extra = {}) => ({ id: `x${i}`, name: `P${i}`, number: i + 1, pos: i ? 'CM' : 'GK', ovr: 99, attrs: {}, ...extra });
+  const players = Array.from({ length: 11 }, (_, i) => mkP(i));
+  players[1] = mkP(1, { rawOvr: 999, card: { name: 'Pain Man', ovr: 999, customAdmin: true, special: 'hero', photo: 'data:image/png;base64,AAAA', stats: { pac: 999 }, evil: 'yes', onclick: 'x' } });
+  players[2] = mkP(2, { glitch: true, card: { name: 'The Shawky', last: 'Shawky', ovr: 999, glitch: true, photo: 'assets/cards/oelke.webp', photoCut: true } });
+  players[3] = mkP(3, { cursed: true, rawOvr: 5000, card: { name: '' } });
+  const t = sanitizeTeam({ name: 'T', players }, 'g');
+  assert.equal(t.players[1].rawOvr, 999);
+  assert.equal(t.players[1].card.ovr, 999);
+  assert.equal(t.players[1].card.customAdmin, true);
+  assert.equal(t.players[1].card.photo, undefined, 'no data URLs over the wire');
+  assert.equal(t.players[1].card.evil, undefined);
+  assert.equal(t.players[1].card.onclick, undefined);
+  assert.equal(t.players[1].card.stats.pac, 999);
+  assert.equal(t.players[2].glitch, true);
+  assert.equal(t.players[2].card.photo, 'assets/cards/oelke.webp');
+  assert.equal(t.players[3].cursed, true);
+  assert.equal(t.players[3].rawOvr, 999, 'clamped');
+  assert.equal(t.players[3].card, undefined, 'a nameless card view is dropped');
+  assert.equal(t.players[0].card, undefined);
+});
+
+test('owner pokes: an owner write wakes that player at once (no waiting for the next check-in); reads do not poke', async () => {
+  const be = createMockBackend(memoryStore());
+  be.setAdminCodes({ full: 'full-code-1', super: 'super-code-1' });
+  const bus = new Set(); const sent = [];
+  const pokes = (onPoke) => { bus.add(onPoke); return Promise.resolve({ send(to) { sent.push(to); for (const f of bus) if (f !== onPoke) f({ to }); }, close() { bus.delete(onPoke); } }); };
+  const extra = { pokes, presenceMs: 600000 };
+  const B = mk3(be, { extra }), O = mk3(be, { extra });
+  const b = await B.account.signup({ username: 'Bob Jones', password: 'Pitch-pass2', confirm: 'Pitch-pass2' });
+  await O.account.signup({ username: 'Shawky Fc', password: 'Pitch-pass9', confirm: 'Pitch-pass9', adminCode: 'super-code-1' });
+  B.presence.start(); O.presence.start();
+  await new Promise((r) => setTimeout(r, 1700)); // poke channel joins 1.5 s after start
+  assert.equal(bus.size, 2);
+  await B.presence.tick();
+  assert.equal(B.presence.last.unread, 0);
+  await O.owner.players();
+  assert.deepEqual(sent, [], 'reads never poke');
+  assert.equal((await O.owner.message(b.id, 'Hello from the owner')).ok, true);
+  assert.deepEqual(sent, [b.id]);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(B.presence.last.unread, 1, 'B checked in right after the poke');
+  B.presence.stop(); O.presence.stop();
+  assert.equal(bus.size, 0);
+});
+
+test('realtime backlog: snapshots / inputs are dropped while a data channel still has unsent data', () => {
+  assert.equal(backlogged({ dataChannel: { bufferedAmount: 0 }, bufferSize: 0 }), false);
+  assert.equal(backlogged({ dataChannel: { bufferedAmount: RT_BACKLOG_BYTES + 1 }, bufferSize: 0 }), true);
+  assert.equal(backlogged({ dataChannel: { bufferedAmount: 10 }, bufferSize: 3 }), true, "PeerJS's own queue counts too");
+  assert.equal(backlogged({}), false);
+});
 
 test('owner panel: club edits go through owner patches the player applies + acks (add, edit any field, tradable, remove, reset objectives); guests have cloud saves', async () => {
   const { be, B, O, b } = await world3();

@@ -101,10 +101,10 @@ function card(p, shirtSVG, kit, i, renderCard) {
   if (Number(p.ovr) >= ELITE) c.classList.add('is-elite');
   const inner = el('div', 'lr-card-in');
   const top = el('div', 'lr-card-top');
-  top.append(el('b', 'lr-ovr', p.ovr), el('span', 'lr-pos', p.pos));
+  top.append(el('b', 'lr-ovr', shownOvr(p)), el('span', 'lr-pos', p.pos));
   const art = el('div', 'lr-card-art');
   art.append(shirtSVG(kit, p.number, 96));
-  inner.append(top, art, el('div', 'lr-name', surname(p.name)));
+  inner.append(top, art, el('div', 'lr-name', cardLabel(p)));
   c.append(inner);
   return c;
 }
@@ -122,6 +122,20 @@ function pitchCardNode(p, renderCard, u, d, order) {
   return n;
 }
 
+/** The name as the card prints it: Admin Cards keep their full name ("Pain Man", not "Man"), others the surname. */
+function cardLabel(p) {
+  const c = p.card || {};
+  if (c.customAdmin && c.name) return c.name;
+  return c.last || surname(p.name);
+}
+/** The rating the player's card shows: over 99 for Admin Cards, ∞ / -∞ for the secret glitch / cursed cards. */
+function shownOvr(p) {
+  const c = p.card || {};
+  if (p.cursed || c.cursed) return '-∞';
+  if (p.glitch || c.glitch) return '∞';
+  return String(c.ovr || p.rawOvr || p.ovr);
+}
+
 function pitchNode(p, shirtSVG, kit, u, d, order) {
   const n = el('div', 'lr-node');
   n.style.setProperty('--u', u.toFixed(1));
@@ -129,8 +143,8 @@ function pitchNode(p, shirtSVG, kit, u, d, order) {
   n.style.setProperty('--o', String(order));
   if (Number(p.ovr) >= ELITE) n.classList.add('is-elite');
   const art = el('div', 'lr-node-art');
-  art.append(shirtSVG(kit, '', 64), el('b', 'lr-node-ovr', p.ovr));
-  n.append(art, el('span', 'lr-node-name', surname(p.name)), el('span', 'lr-node-pos', p.pos));
+  art.append(shirtSVG(kit, '', 64), el('b', 'lr-node-ovr', shownOvr(p)));
+  n.append(art, el('span', 'lr-node-name', cardLabel(p)), el('span', 'lr-node-pos', p.pos));
   return n;
 }
 

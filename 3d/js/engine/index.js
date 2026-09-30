@@ -167,6 +167,8 @@ export function createMatch(container, opts = {}) {
     // offline, the match pauses while the menu is open; online it keeps running
     onOpen: (open) => { if (netRole === 'local' && !menuOpen) { paused = open; if (!open) last = performance.now(); } },
   });
+  // pause menu entry for the same menu (only when this player has an admin level)
+  hud.onAdmin = adminUi.el ? () => { resume(); adminUi.toggle(true); } : null;
   const input = new InputManager(root, binds, {
     touch,
     onCommand: (cmd, arg, slot) => {

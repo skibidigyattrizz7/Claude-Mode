@@ -829,12 +829,14 @@ export function createOnline(deps) {
         const a = readAcc();
         if (!a || a.role !== 'owner') return fail('not_allowed');
         const r = dataOr(await rpc('vinson_unban', { p_id: a.id, p_secret: a.token, p_player: playerId }));
+        if (r.ok) pokeAfter('vinson_unban', { p_player: playerId });
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
       },
       async lift(playerId) {
         const a = readAcc();
         if (!a || a.role !== 'owner') return fail('not_allowed');
         const r = dataOr(await rpc('vinson_lift', { p_id: a.id, p_secret: a.token, p_player: playerId }));
+        if (r.ok) pokeAfter('vinson_lift', { p_player: playerId });
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
       },
     },
@@ -1115,7 +1117,16 @@ export function createOnline(deps) {
         if (pres.running) return;
         pres.running = true;
         presenceTick(true);
-        pres.timer = setInterval(() => presenceTick(false), deps.presenceMs || PRESENCE_MS);
+        // Check-in pace: every 3 s; every 8 s once the poke channel is live (pokes bring owner actions at once);
+        // every 15 s during a match so nothing competes with the match traffic (owner, Sep 30: online lag).
+        const nextMs = () => deps.presenceMs || (globalThis.__pitchsideInMatch ? 15000 : pres.poke ? 8000 : PRESENCE_MS);
+        const loop = () => { pres.timer = setTimeout(async () => { if (!pres.running) return; try { await presenceTick(false); } catch { /* ignore */ } loop(); }, nextMs()); };
+        loop();
+        if (typeof deps.pokes === 'function' && !pres.poke) {
+          setTimeout(() => {
+            deps.pokes((p) => onPoke(p)).then((c) => { if (pres.running) pres.poke = c; else c.close(); }).catch((e) => console.warn('[online] poke channel unavailable', e && e.message));
+          }, 1500);
+        }
         pres.cfgTimer = setInterval(() => { online.config.get(true); }, CONFIG_TTL_MS);
         online.config.get();
         if (typeof document !== 'undefined' && document.addEventListener) {
@@ -1125,7 +1136,8 @@ export function createOnline(deps) {
       },
       stop() {
         pres.running = false;
-        clearInterval(pres.timer); clearInterval(pres.cfgTimer);
+        clearTimeout(pres.timer); clearInterval(pres.cfgTimer);
+        if (pres.poke) { pres.poke.close(); pres.poke = null; }
         if (pres.onVis && typeof document !== 'undefined') document.removeEventListener('visibilitychange', pres.onVis);
       },
       /** One tick now (tests / after actions). */
@@ -1304,7 +1316,15 @@ export function createOnline(deps) {
     if (!r.ok) { if (r.error === 'banned') setBan(r.ban); return fail(r.error, r.ban ? { ban: parseBan(r.ban) } : undefined); }
     const out = r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' };
     if (out.ok !== true && out.error === 'not_admin' && readAdm()) sdel(volatile, ADM_KEY); // expired / revoked token
+    if (out.ok === true) pokeAfter(fn, args);
     return out.ok === true ? out : fail(out.error || 'bad_response');
+  }
+  // Owner / mod writes wake the affected player (or everyone) at once through the poke channel (relay.js openPokes).
+  const POKE_READS = new Set(['admin_players', 'admin_player_detail', 'admin_gifts', 'mod_player', 'mod_search']);
+  function pokeAfter(fn, args) {
+    if (POKE_READS.has(fn) || !pres.poke) return;
+    const to = args && (typeof args.p_player === 'string' ? args.p_player : typeof args.p_to === 'string' ? args.p_to : null);
+    pres.poke.send(to);
   }
   // config cache
   const CFG_KEY = `${deps.accountKey || 'pitchside.account'}.config`;
@@ -1312,10 +1332,18 @@ export function createOnline(deps) {
   try { const c = JSON.parse(sget(storage, CFG_KEY) || 'null'); if (c && typeof c === 'object') cfg = { ...cfg, version: Number(c.version) || 0, config: sanitizeConfig(c.config) }; } catch { /* ignore */ }
   const cfgListeners = new Set();
   // presence
-  const pres = { running: false, timer: null, cfgTimer: null, last: null, listeners: new Set(), bcast: new Set(), seen: new Set(), busy: false, onVis: null };
+  const pres = { running: false, timer: null, cfgTimer: null, last: null, listeners: new Set(), bcast: new Set(), seen: new Set(), busy: false, onVis: null, poke: null, pokeT: null, again: false };
   const emitPresence = () => { for (const f of [...pres.listeners]) { try { f(pres.last); } catch (e) { console.error('[online] presence listener failed', e); } } };
+  /** A poke for this player (or everyone): check in now (coalesced, at most one extra check-in in flight). */
+  function onPoke(p) {
+    const a = readAcc(); const d = a ? null : readIdent();
+    const me = (a && a.id) || (d && d.id) || null;
+    if (p && p.to && p.to !== me) return;
+    if (pres.pokeT) return;
+    pres.pokeT = setTimeout(() => { pres.pokeT = null; presenceTick(true); }, 120);
+  }
   async function presenceTick(force) {
-    if (pres.busy) return pres.last;
+    if (pres.busy) { if (force) pres.again = true; return pres.last; }
     if (!force && typeof document !== 'undefined' && document.hidden) return pres.last;
     pres.busy = true;
     try {
@@ -1344,7 +1372,10 @@ export function createOnline(deps) {
       }
       void prev;
       return u;
-    } finally { pres.busy = false; }
+    } finally {
+      pres.busy = false;
+      if (pres.again) { pres.again = false; setTimeout(() => presenceTick(true), 0); }
+    }
   }
   function staffRole() { const a = readAcc(); return a && !banActive(a.ban) && !restrictedNow('admin') && (a.role === 'owner' || a.role === 'mod') ? a.role : null; }
   /** Owner restrictions on this profile (server presence; enforced server-side too). */
@@ -1361,6 +1392,7 @@ export function createOnline(deps) {
     const r = await rpc(fn, { p_code: c || null, ...args, p_id: a ? a.id : null, p_secret: a ? a.token : null });
     if (!r.ok) { if (r.error === 'banned') setBan(r.ban); return fail(r.error, r.ban ? { ban: parseBan(r.ban) } : undefined); }
     const d = r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' };
+    if (d.ok === true) pokeAfter(fn, args);
     return d.ok === true ? d : fail(d.error || 'bad_response');
   }
   return online;
@@ -1458,6 +1490,7 @@ function browserOnline() {
     matchmakerConfig: mock && Q.get('mmTimeout') ? { timeoutMs: Number(Q.get('mmTimeout')) * 1000 } : undefined,
     invitePollMs: mock ? 700 : 2000,
     presenceMs: (mock || mockServer) && Number(Q.get('presenceMs')) >= 500 ? Number(Q.get('presenceMs')) : undefined,
+    pokes: mock || mockServer ? null : (onPoke) => import('./relay.js').then((m) => m.openPokes(onPoke)),
   });
 }
 
