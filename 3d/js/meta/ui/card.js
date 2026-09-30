@@ -133,7 +133,6 @@ export function cardClasses(p) {
   if (p.promo || PROMO_BY_ID[p.special]) c.push('is-promo');
   // Icons (retired legends, club ICN) and the fictional CLASSIC legends share the Icon design.
   else if (p.club === 'ICN' || p.special === 'legend') c.push('is-icon');
-  if (p.club === 'ICN' && !p.stillPlaying) c.push('is-retired'); // only retired Icons are shown in black and white
   return c;
 }
 
@@ -172,7 +171,7 @@ export function playerCard(p, opts = {}) {
   const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true || p.angel === true || p.hell === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
-    ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : isRealPhoto(p) ? ` pc-photo--real${p.photoDyn ? ' pc-photo--dyn' : ''}` : ''}" src="${esc(p.photo)}" alt=""${isRealPhoto(p) ? ' loading="lazy" decoding="async"' : ''} />` : avatarSVG(p, 'pc-avatar')}
+    ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : isRealPhoto(p) ? ' pc-photo--real' : ''}" src="${esc(p.photo)}" alt=""${isRealPhoto(p) ? ' loading="lazy" decoding="async"' : ''} />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
       <div class="pc-ovr${p.statText ? ' pc-ovr--text' : ''}">${p.statText ? glyph : inf ? infHtml(infLabel(p)) : num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>

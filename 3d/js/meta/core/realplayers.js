@@ -381,7 +381,7 @@ export function buildRealPlayers(helpers) {
     p.intended = ovr;
     // Real photo from Wikimedia Commons where a freely licensed one exists (tools/fetch_player_photos.py; credits.html).
     // A plain rectangle (no photoCut); promo copies are structuredClone()d from these base cards and inherit it.
-    if (PLAYER_PHOTOS.has(p.person)) p.photo = `assets/players/${p.person}.webp`; // FIFA-style cutout (tools/photos_v2.py)
+    if (PLAYER_PHOTOS.has(p.person)) p.photo = `assets/players/${p.person}.webp`;
     // real personal data (core/bios.js) wins over the row: height / weight / preferred foot
     p.physReal = true; // Icon / Star rows are hand-authored real values
     applyBio(p);
@@ -476,8 +476,5 @@ export function buildRealPlayers(helpers) {
     }
     return LATE_REG_ROWS.map(makeRegular);
   };
-  // Icons of people who still play (Messi, Ronaldo...) keep their colour photo; only retired Icons are monochrome (card.js)
-  const playing = new Set(stars.concat(regulars).map((p) => p.person));
-  for (const ic of icons.concat(lateIcons)) if (playing.has(ic.person)) ic.stillPlaying = true;
   return { icons, stars, regulars, lateIcons, buildLate };
 }

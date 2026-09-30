@@ -200,3 +200,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - IN PROGRESS: bulk player photo download (fetch_photos_wp.py), then commit webp files + credits + playerphotos.js.
 - DONE (Sep 30): Rabbi Patel celebration: star spins 2.6 s/turn (was 1.1), owner's 3 photos left/top/bottom (assets/celebration; the fabricated kiss image was declined, right side left empty). -∞ cursed cards: no instant giveaway (_curseFumble removed), slow but mobile (vmax x0.3), tackles/contests on them ~8% as effective; shots still own goals worth 10.
 - TODO (Sep 30): photos v2: base cards = FIFA-style face crop with background removed (face-detected, no foreheads), wrong-era photos rejected (old retired legends, childhood photos); monochrome only for retired Icons (Messi/Ronaldo etc. still play, keep colour); promo cards = dynamic look (bigger cutout like FUT TOTS).
+
+- Sep 30: Photos v2 (FIFA face cutouts, dynamic promo cutouts, colour for active icons) PAUSED by owner at ~300/807 to save usage. Live photos reverted to before v2. Saved state is on branch wip/paused-work (resume: tools/photos_v2.py --no-download, then tools/write_photos_js.py).

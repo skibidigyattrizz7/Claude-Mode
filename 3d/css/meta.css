@@ -314,16 +314,12 @@
 .pm-card .pc-photo.pc-avatar { right: .7em; top: 1.3em; width: 6.2em; height: 6.2em; }
 /* real portrait (Wikimedia Commons, 4:5 rectangle): fills the avatar area and fades into the card face at the bottom and sides,
    so it never reaches the rating / position column, the name bar or the stats */
-/* v2 (owner, Sep 30): FIFA-style cutouts (transparent background, face-centred, tools/photos_v2.py): the player stands on
-   the card face; only the bottom edge fades so a photo that ends at the chest never shows a hard line */
-.pm-card .pc-photo.pc-photo--real.pc-avatar { right: .2em; top: .35em; width: 7em; height: 8.75em; border-radius: 0; object-fit: contain; object-position: 50% 0; z-index: 2;
-  -webkit-mask: linear-gradient(180deg, #000 72%, transparent 100%); mask: linear-gradient(180deg, #000 72%, transparent 100%); }
-.pm-card--xs .pc-photo.pc-photo--real.pc-avatar { right: .15em; top: .3em; width: 6.6em; height: 8.25em; }
-/* promo cards: the bigger "dynamic" upper-body cutout, breaking out over the top of the frame like FUT promos */
-.pm-card .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: -.35em; top: -.6em; width: 8.4em; height: 10.5em; }
-.pm-card--xs .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: -.2em; top: -.3em; width: 7.6em; height: 9.5em; }
-/* retired Icons: black and white like FIFA (Icons of people who still play keep their colour) */
-.pm-card.is-icon.is-retired .pc-photo.pc-photo--real.pc-avatar { filter: grayscale(1) contrast(1.08); }
+.pm-card .pc-photo.pc-photo--real.pc-avatar { right: .4em; top: .55em; width: 6.6em; height: 6.45em; border-radius: 0; object-fit: cover; object-position: 50% 8%; z-index: 2;
+  -webkit-mask: radial-gradient(ellipse 52% 92% at 50% 15%, #000 70%, transparent 100%);
+  mask: radial-gradient(ellipse 52% 92% at 50% 15%, #000 70%, transparent 100%); }
+.pm-card--xs .pc-photo.pc-photo--real.pc-avatar { right: .25em; top: .4em; width: 6.5em; height: 5.9em; }
+/* Icons: black and white like FIFA, the photo melts into the marble card */
+.pm-card.is-icon .pc-photo.pc-photo--real.pc-avatar { filter: grayscale(1) contrast(1.05); mix-blend-mode: multiply; }
 /* cut-out photo (transparent background, e.g. secret cards): sits like a drawn face, bottom-aligned on the nameplate */
 .pm-card .pc-photo.pc-photo--cut { right: .1em; top: .75em; width: 7.3em; height: 7.3em; border-radius: 0; object-fit: contain; object-position: 50% 100%; }
 /* name bar + 6 stats in two columns (PAC SHO PAS | DRI DEF PHY) */
