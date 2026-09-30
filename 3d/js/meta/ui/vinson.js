@@ -11,22 +11,35 @@ const seconds = (ms) => String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, '0
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK BEHIND YOU', 'THE CLOCK IS LYING'];
 
-export function startVinsonExperience(online) {
+export function startVinsonExperience(online, { initialState = loadUT() } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
   const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
-  let app = null, localState = loadUT(), boundId = online?.identityId?.() || null;
-  let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null, lastOmen = -1;
+  let app = null, localState = initialState, boundId = online?.identityId?.() || null;
+  let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null, lastOmen = -1, falling = false;
+  const broken = new Map();
   let soundContext = null;
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
   const remember = (key) => { try { return sessionStorage.getItem(key); } catch { return null; } };
   const mark = (key) => { try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
   const make = (tag, cls, txt) => { const el = document.createElement(tag); el.className = cls; if (txt) el.textContent = txt; return el; };
-  const infected = (phase) => ['doom', 'warn', 'consequence', 'locked'].includes(phase);
+  const infected = (phase) => ['doom', 'freed', 'warn', 'consequence', 'locked'].includes(phase);
   const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
-  // The hit stays usable: squad removal during the warning, cursed packs and sabotaged matches still need clicks.
+  function repairUi() {
+    for (const [el, wasInert] of broken) { el.classList.remove('vinson-control-broken', 'vinson-tab-falling'); el.inert = wasInert; }
+    broken.clear(); root()?.classList.remove('vinson-ui-falling');
+    falling = false;
+  }
+  function breakControl(target, cls = 'vinson-control-broken') {
+    if (broken.has(target)) return;
+    broken.set(target, target.inert);
+    target.classList.add(cls);
+    // Let its first click finish (including removing Vinson during a warning), then the broken control is gone.
+    queueMicrotask(() => { if (broken.has(target)) target.inert = true; });
+    for (const el of broken.keys()) if (!el.isConnected) broken.delete(el);
+  }
   function fracture(target) {
     if (!target || reduce()) return;
     const bounds = target.getBoundingClientRect();
@@ -40,8 +53,11 @@ export function startVinsonExperience(online) {
   }
   function onInfectedClick(event) {
     if (!infected(state()?.vinson?.phase) || isOwner(online)) return;
-    const target = event.target.closest?.('.pm-root button, .pm-root [role="tab"], .pm-root a');
-    if (target && root()?.contains(target)) fracture(target);
+    const target = event.target.closest?.('.pm-root button, .pm-root [role="tab"], .pm-root a, .pm-root input, .pm-root select, .pm-root .pc-card');
+    if (target && root()?.contains(target)) {
+      if (broken.has(target)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      fracture(target); breakControl(target);
+    }
   }
   document.addEventListener('click', onInfectedClick, true);
   function collapseUi(done) {
@@ -86,18 +102,39 @@ export function startVinsonExperience(online) {
   }
 
   function draw() {
-    const s = state(); if (!s || isOwner(online)) { host.replaceChildren(); document.body.classList.remove('vinson-infected', 'vinson-critical'); current = ''; return; }
+    const s = state(); if (!s || isOwner(online)) { repairUi(); host.replaceChildren(); document.body.classList.remove('vinson-infected', 'vinson-critical'); current = ''; return; }
     const v = s.vinson; const phase = v?.phase || '';
+    if (current === 'banned' && phase !== 'banned') repairUi();
     document.body.classList.toggle('vinson-infected', infected(phase));
     document.body.classList.toggle('vinson-critical', phase === 'doom' && v.doomUntil - Date.now() <= 10000);
-    if (!phase || phase === 'freed' || phase === 'lifted') { host.replaceChildren(); current = phase; cinematic = false; return; }
+    if (!phase || phase === 'lifted') { repairUi(); host.replaceChildren(); current = phase; cinematic = false; return; }
+    if (phase === 'freed') { host.replaceChildren(); current = phase; cinematic = false; return; }
+    if (phase === 'doom' && v.doomUntil - Date.now() <= 10000) {
+      const left = Math.max(0, v.doomUntil - Date.now());
+      const tabs = [...(root()?.querySelectorAll('.pm-uttab') || [])];
+      const n = Math.min(tabs.length, Math.floor((10000 - left) / 850));
+      for (let i = 0; i < n; i++) breakControl(tabs[i], 'vinson-tab-falling');
+      if (left <= 3000 && !falling) { falling = true; root()?.classList.add('vinson-ui-falling'); }
+      if (!host.querySelector('.vinson-countdown-blood')) host.append(make('div', 'vinson-countdown-blood'));
+    }
     if (phase === 'banned') {
       const key = stamp(`${online?.identityId?.() || 'guest'}.${v.doomUntil}`);
       if (current !== 'banned') { host.replaceChildren(); current = 'banned'; cinematic = false; }
       if (!cinematic) {
         cinematic = true;
         if (remember(key) || reduce()) finalScene();
+        else if (falling) playCinematic(key);
         else collapseUi(() => { if (current === 'banned') playCinematic(key); });
+      }
+      const final = host.querySelector('.vinson-final');
+      const cycle = Math.floor(Date.now() / 7000);
+      if (final && final.dataset.hauntCycle !== String(cycle)) {
+        final.dataset.hauntCycle = String(cycle);
+        [...final.querySelectorAll('.vinson-final-word, .vinson-final-ghosts img')].forEach((el, i) => {
+          const rand = (n) => (Math.sin((cycle + i * 17) * n) * 1437.71 % 1 + 1) % 1;
+          el.style.left = `${3 + rand(13) * 65}%`; el.style.top = `${8 + rand(31) * 67}%`;
+          el.style.right = 'auto'; el.style.bottom = 'auto';
+        });
       }
       return;
     }
@@ -123,12 +160,12 @@ export function startVinsonExperience(online) {
     }
     const whisper = host.querySelector('.vinson-whisper');
     if (whisper) {
-      const index = Math.floor(Date.now() / 4500) % OMENS.length;
+      const index = Math.floor(Date.now() / 4500);
       if (index !== lastOmen) {
-        lastOmen = index; whisper.textContent = OMENS[index];
-        whisper.style.left = `${7 + (index * 31) % 58}%`;
+        lastOmen = index; whisper.textContent = OMENS[index % OMENS.length];
+        whisper.style.left = `${5 + (index * 31) % 58}%`;
         whisper.style.top = `${21 + (index * 19) % 52}%`;
-        whisper.style.setProperty('--tilt', `${(index % 2 ? 1 : -1) * (4 + index)}deg`);
+        whisper.style.setProperty('--tilt', `${(index % 2 ? 1 : -1) * (4 + index % 7)}deg`);
       }
     }
   }
@@ -227,7 +264,7 @@ export function startVinsonExperience(online) {
   function tick() {
     const s = state(); if (!s || isOwner(online)) { draw(); return; }
     const old = s.vinson?.phase;
-    advance(s);
+    squadChanged(s);
     const repaired = s.vinson?.phase === 'locked' && enforceLock(s);
     if (old !== s.vinson?.phase || repaired) {
       persist(s);
@@ -252,7 +289,7 @@ export function startVinsonExperience(online) {
     },
     async onPull() {
       const s = state(); if (!s || isOwner(online)) return;
-      if (s.vinson?.phase === 'locked' || s.vinson?.phase === 'lifted') return;
+      if (['doom', 'banned', 'locked', 'lifted'].includes(s.vinson?.phase)) return;
       beginDoom(s); persist(s); draw();
       sound('warning');
       const remote = await online?.vinson?.pull?.();
@@ -269,7 +306,7 @@ export function startVinsonExperience(online) {
       screen.remove();
     },
     tick, poll,
-    destroy() { clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
+    destroy() { repairUi(); current = ''; clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);

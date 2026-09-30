@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { defaultSquad } from '../core/ut.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
+import { dispatchOnlineEntry } from '../ui/app.js';
 import { DOOM_MS, FIRST_WARNING_MS, FINAL_WARNING_MS, BAN_MESSAGE, MATCH_MESSAGE,
   beginDoom, advance, release, lift, squadChanged, enforceLock, inSquad, cursedPack, reconcileServer } from '../core/vinson.js';
 
@@ -51,6 +52,34 @@ test('match curse follows the locked saved squad even if a mode-built team omits
   assert.equal(cursedPack(state), true);
   lift(state);
   assert.equal(cursedPack(state), false);
+});
+
+test('cursed online UT entry opens local pitch sabotage without matchmaking', async () => {
+  const state = s();
+  state.vinson = { phase: 'locked', pin: { area: 'slot', idx: 9 } };
+  state.squad.slots[9] = HELL_CARD_ID;
+  const requestedTeam = { name: 'My UT squad', kit: { primary: '#111111', secondary: '#eeeeee' }, gkKit: { primary: '#00ff00' } };
+  let localArgs = null, onlineCalled = false;
+  const result = await dispatchOnlineEntry({
+    state,
+    args: { mode: 'ut', team: requestedTeam },
+    halfMinutes: 4,
+    startMatch: async (...args) => { localArgs = args; return { abandoned: true, reason: 'vinson_curse' }; },
+    startOnlineMatch: async () => { onlineCalled = true; },
+  });
+  assert.equal(onlineCalled, false);
+  assert.equal(localArgs[0], requestedTeam);
+  assert.equal(localArgs[2].vinsonCurse, true);
+  assert.equal(localArgs[2].mode, 'ut');
+  assert.equal(localArgs[2].halfMinutes, 4);
+  assert.equal(localArgs[1].players.length, 11);
+  assert.deepEqual(result, { abandoned: true, reason: 'vinson_curse' });
+  localArgs = null;
+  await dispatchOnlineEntry({ state, exempt: true, args: { mode: 'ut', team: requestedTeam },
+    startMatch: async (...args) => { localArgs = args; },
+    startOnlineMatch: async () => { onlineCalled = true; } });
+  assert.equal(onlineCalled, true, 'owner exemption keeps normal online entry');
+  assert.equal(localArgs, null);
 });
 
 test('server release changes ban to freed, lock persists across devices', () => {

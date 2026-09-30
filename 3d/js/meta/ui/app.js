@@ -1,10 +1,11 @@
 // Meta UI shell: view stack, top bar, hub, shared match + result screens.
 import { h, clear, toast, fmtNum, add, infNodes } from './dom.js';
 import { load, save } from '../core/storage.js';
-import { validateTeam } from '../core/teams.js';
+import { validateTeam, resolveKitClash, gkKitFor } from '../core/teams.js';
+import { aiOpponent } from '../core/rivals.js';
 import { utHomeView, ensureUTView } from './utview.js';
 import { careerHomeView } from './careerview.js';
-import { loadUT, saveUT, rescuePendingPack } from '../core/ut.js';
+import { loadUT, saveUT, rescuePendingPack, utTeam } from '../core/ut.js';
 import { normalizeWallet, settleInfinite, setInfinite as walletSetInfinite, realCoins, isInfinite, cleanCoins } from '../core/wallet.js';
 import { getAdminLevel, bindOnline as bindAdminOnline, clearAdminSession } from '../../shared/adminauth.js';
 import { adminButton, adminView } from './adminview.js';
@@ -14,7 +15,7 @@ import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { applyOwnerPatches } from '../core/ownerpatch.js';
 import { startVinsonExperience } from './vinson.js';
-import { cursedPack, inSquad, enforceLock, MATCH_MESSAGE } from '../core/vinson.js';
+import { cursedPack, enforceLock, isOwner } from '../core/vinson.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
 export function coinNum(r) {
@@ -29,6 +30,32 @@ export async function safeCall(fn, fallback = null) {
 
 const SETTINGS_KEY = 'meta.settings';
 
+/** A cursed UT online entry uses the local pitch/reveal sabotage path without matchmaking a real opponent. */
+export function shouldSabotageOnlineUT(state, args) {
+  return args?.mode === 'ut' && cursedPack(state);
+}
+
+export function dispatchOnlineEntry({ state, args = {}, startMatch, startOnlineMatch, halfMinutes = 3, exempt = false }) {
+  if (exempt || !shouldSabotageOnlineUT(state, args)) return startOnlineMatch(args);
+  // Give the normal local match opener the requested UT squad, so the players and pitch
+  // appear before startMatch performs the curse sabotage. Do not queue a real opponent
+  // for a match that will be abandoned moments later.
+  const home = args.team || utTeam(state);
+  if (!home) return Promise.resolve({ ok: false, abandoned: true, reason: 'no_team' });
+  if (typeof startMatch !== 'function') return Promise.resolve({ ok: false, abandoned: true, reason: 'no_match_engine' });
+  const opponent = aiOpponent(`vinson-training-${Date.now()}`, 'pro', { label: 'VIN' });
+  const away = structuredClone(opponent.team);
+  away.kit = resolveKitClash(home.kit, away.kit, opponent.awayKit);
+  away.gkKit = gkKitFor(home.kit, away.kit, home.gkKit);
+  return startMatch(home, away, {
+    halfMinutes,
+    difficulty: opponent.difficulty,
+    userSide: 'home',
+    mode: 'ut',
+    vinsonCurse: true,
+  });
+}
+
 function ensureCss(root) {
   try {
     const has = [...document.querySelectorAll('link[rel="stylesheet"]')].some((l) => /(^|\/)css\/meta\.css(\?|#|$)/.test(l.getAttribute('href') || '') || l.dataset.pmCss);
@@ -42,13 +69,14 @@ export class MetaApp {
   constructor(container, { startMatch, startOnlineMatch = null, online = null, onExit = null } = {}) {
     this.container = container;
     this.startMatchFn = startMatch;
-    this.startOnlineMatchFn = typeof startOnlineMatch === 'function' ? (args) => {
-      if (this.ut?.vinson?.phase === 'locked' && inSquad(this.ut.squad)) {
-        this.toast(MATCH_MESSAGE, 'bad');
-        return Promise.resolve({ ok: false, abandoned: true, reason: 'vinson_curse', message: MATCH_MESSAGE });
-      }
-      return startOnlineMatch(args);
-    } : null;
+    this.startOnlineMatchFn = typeof startOnlineMatch === 'function' ? (args = {}) => dispatchOnlineEntry({
+      state: this.ut,
+      args,
+      startMatch: this.startMatchFn,
+      startOnlineMatch,
+      halfMinutes: this.settings?.halfMinutes || 3,
+      exempt: isOwner(this.online),
+    }) : null;
     this.online = online && typeof online === 'object' ? online : null;
     this.onExit = onExit;
     /** UT coin wallet: 'local' (saved with the club) or 'online' (server balance via online.coins). */
@@ -418,7 +446,7 @@ export class MetaApp {
   async playMatch(home, away, opts) {
     // Curse state belongs to the saved squad, not a match Team assembled by a mode.
     // Some builders can omit / replace a slot, which must not bypass the locked curse.
-    const vinsonCurse = cursedPack(this.ut);
+    const vinsonCurse = cursedPack(this.ut) && !isOwner(this.online);
     for (const [side, t] of [['home', home], ['away', away]]) {
       const errs = validateTeam(t);
       if (errs.length) { this.toast(`Invalid ${side} team: ${errs[0]}`, 'bad'); console.warn('[meta] invalid team', side, errs); return null; }
