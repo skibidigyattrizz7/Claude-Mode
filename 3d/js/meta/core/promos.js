@@ -11,75 +11,94 @@ import { PLAYER_DYN } from './playerphotos.js';
 // per campaign (see docs/META_API.md). `releaseWeek` (absolute calendar week, from calendar.js) is the first
 // week a campaign may ever appear anywhere — omitted/1 means "already released" (the original 7 campaigns).
 export const PROMOS = [
-  { id: 'toty', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#040a26', '#2f6bff', '#dfe9ff'], range: [96, 98], price: 180000, theme: 'toty',
+  { id: 'toty', design: 'f23-5', name: 'Team of the Year', short: 'TOTY', tag: 'TEAM OF THE YEAR', colors: ['#040a26', '#2f6bff', '#dfe9ff'], range: [96, 98], price: 180000, theme: 'toty',
     desc: 'The best XI of the year: real stars boosted to 96–98.' },
-  { id: 'tots', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#061a5c', '#1f4fd6', '#ffd66b'], range: [92, 97], price: 120000, theme: 'tots',
+  { id: 'tots', design: 'f23-11', name: 'Team of the Season', short: 'TOTS', tag: 'TEAM OF THE SEASON', colors: ['#061a5c', '#1f4fd6', '#ffd66b'], range: [92, 97], price: 120000, theme: 'tots',
     desc: 'Season standouts across every league, rated 92–96.' },
-  { id: 'futurestars', name: 'Future Stars', short: 'FUTURE STARS', tag: 'FUTURE STARS', colors: ['#050a2e', '#3d5afe', '#8ff3ff'], range: [82, 93], price: 70000, theme: 'futurestars',
+  { id: 'futurestars', design: 'f23-71', name: 'Future Stars', short: 'FUTURE STARS', tag: 'FUTURE STARS', colors: ['#050a2e', '#3d5afe', '#8ff3ff'], range: [82, 93], price: 70000, theme: 'futurestars',
     desc: 'The brightest young talents, boosted +4 to +7.' },
-  { id: 'flashback', name: 'Heroes Flashback', short: 'FLASHBACK', tag: 'FLASHBACK', colors: ['#2b1f14', '#c9975a', '#fff1dc'], range: [88, 99], price: 160000, theme: 'flashback',
+  { id: 'flashback', design: 'f23-51', name: 'Heroes Flashback', short: 'FLASHBACK', tag: 'FLASHBACK', colors: ['#2b1f14', '#c9975a', '#fff1dc'], range: [88, 99], price: 160000, theme: 'flashback',
     desc: 'Legends relive their most famous season.' },
-  { id: 'birthday', name: 'Ultimate Birthday', short: 'BIRTHDAY', tag: 'ULTIMATE BIRTHDAY', colors: ['#3a0620', '#ff4f9a', '#ffe0ef'], range: [84, 96], price: 90000, theme: 'birthday',
+  { id: 'birthday', design: 'f23-30', name: 'FUT Birthday', short: 'BIRTHDAY', tag: 'FUT BIRTHDAY', colors: ['#3a0620', '#ff4f9a', '#ffe0ef'], range: [84, 96], price: 90000, theme: 'birthday',
     desc: 'Party cards: +2 to +4 overall, +1 skill moves and +1 weak foot.' },
-  { id: 'rttk', name: 'Road to the Knockouts', short: 'RTTK', tag: 'ROAD TO THE KNOCKOUTS', colors: ['#040b22', '#19d3a4', '#e2fff6'], range: [83, 94], price: 80000, theme: 'rttk',
+  { id: 'rttk', design: 'f23-47', name: 'Road to the Knockouts', short: 'RTTK', tag: 'ROAD TO THE KNOCKOUTS', colors: ['#040b22', '#19d3a4', '#e2fff6'], range: [83, 94], price: 80000, theme: 'rttk',
     desc: 'Upgradable cards: +1 overall for every knockout round reached (max +4).' },
-  { id: 'moments', name: 'Moments', short: 'MOMENTS', tag: 'MOMENTS', colors: ['#1d1d1d', '#f2f2f2', '#ffffff'], range: [86, 99], price: 110000, theme: 'moments',
+  { id: 'moments', design: 'f23-91', name: 'Moments', short: 'MOMENTS', tag: 'MOMENTS', colors: ['#1d1d1d', '#f2f2f2', '#ffffff'], range: [86, 99], price: 110000, theme: 'moments',
     desc: 'Iconic moments turned into boosted cards.' },
   // V4 (owner request Sep 26): new campaigns, each with a genuine future release date and its own pack theme.
-  { id: 'showdown', name: 'Rivals Showdown', short: 'SHOWDOWN', tag: 'RIVALS SHOWDOWN', colors: ['#3a0a0a', '#ff3b3b', '#ffd9d9'], range: [87, 96], price: 130000, theme: 'showdown',
+  { id: 'showdown', design: 'f23-58', name: 'Showdown Series', short: 'SHOWDOWN', tag: 'SHOWDOWN SERIES', colors: ['#3a0a0a', '#ff3b3b', '#ffd9d9'], range: [87, 96], price: 130000, theme: 'showdown',
     releaseWeek: 41, desc: 'Head-to-head rivals get matching boosted cards, +3 to +6.' },
-  { id: 'oty', name: 'One to Watch', short: 'OTW', tag: 'ONE TO WATCH', colors: ['#062017', '#12c48b', '#daffee'], range: [82, 91], price: 60000, theme: 'oty',
+  { id: 'oty', design: 'f23-21', name: 'Ones to Watch', short: 'OTW', tag: 'ONES TO WATCH', colors: ['#062017', '#12c48b', '#daffee'], range: [82, 91], price: 60000, theme: 'oty',
     releaseWeek: 44, desc: 'A dynamic card that grows with the real player’s current form.' },
-  { id: 'centurions', name: 'Centurions', short: 'CENT', tag: 'CENTURIONS', colors: ['#241100', '#e8a33d', '#fff2da'], range: [90, 97], price: 150000, theme: 'centurions',
+  { id: 'centurions', design: 'f23-151', name: 'FUT Centurions', short: 'CENT', tag: 'FUT CENTURIONS', colors: ['#241100', '#e8a33d', '#fff2da'], range: [90, 97], price: 150000, theme: 'centurions',
     releaseWeek: 47, desc: 'Career milestone cards for real players closing in on a big number.' },
-  // V5 (promo cards job): the wider FC-style calendar, generic names. Each has its own card design (CSS class
-  // `sp-<id>` in meta.css), pack theme and a unique launch week — a campaign headlines the week it launches.
-  { id: 'storm', name: 'Storm Surge', short: 'STORM', tag: 'STORM SURGE', colors: ['#05070d', '#7fd7ff', '#ffffff'], range: [84, 94], price: 100000, theme: 'storm',
+  // V5 calendar: retain each historical id, even where the display name now uses its FIFA 23 campaign name.
+  // Card art is referenced by `design`; each campaign headlines its launch week.
+  { id: 'storm', design: 'f23-49', name: 'Storm Surge', short: 'STORM', tag: 'STORM SURGE', colors: ['#05070d', '#7fd7ff', '#ffffff'], range: [84, 94], price: 100000, theme: 'storm',
     releaseWeek: 39, desc: 'Lightning-charged dynamic cards: +3 to +5 for players on a hot streak.' },
-  { id: 'rulebenders', name: 'Rule Benders', short: 'BENDERS', tag: 'RULE BENDERS', colors: ['#43050f', '#ff2447', '#ffffff'], range: [82, 93], price: 90000, theme: 'rulebenders',
+  { id: 'rulebenders', design: 'f23-149', name: 'Rulebreakers', short: 'RULEBREAKERS', tag: 'RULEBREAKERS', colors: ['#43050f', '#ff2447', '#ffffff'], range: [82, 93], price: 90000, theme: 'rulebenders',
     releaseWeek: 40, desc: 'Cards that break the mould: +2 to +4, extra pace and +1 skill moves.' },
-  { id: 'potm', name: 'Player of the Month', short: 'POTM', tag: 'PLAYER OF THE MONTH', colors: ['#0e1a2b', '#4f8fd9', '#f2f7ff'], range: [84, 94], price: 80000, theme: 'potm',
+  { id: 'potm', design: 'f23-93', name: 'Player of the Month', short: 'POTM', tag: 'PLAYER OF THE MONTH', colors: ['#0e1a2b', '#4f8fd9', '#f2f7ff'], range: [84, 94], price: 80000, theme: 'potm',
     releaseWeek: 42, desc: 'The month’s standout in each league, +2 to +4.' },
-  { id: 'fright', name: 'Fright Night', short: 'FRIGHT', tag: 'FRIGHT NIGHT', colors: ['#0a0604', '#ff7a00', '#ffe0b8'], range: [83, 94], price: 95000, theme: 'fright',
+  { id: 'fright', design: 'f23-92', name: 'Fright Night', short: 'FRIGHT', tag: 'FRIGHT NIGHT', colors: ['#0a0604', '#ff7a00', '#ffe0b8'], range: [83, 94], price: 95000, theme: 'fright',
     releaseWeek: 43, desc: 'Halloween scares: +3 to +5 cards that haunt the opposition.' },
-  { id: 'roleswap', name: 'Role Swap', short: 'SWAP', tag: 'ROLE SWAP', colors: ['#061c33', '#16c7c7', '#e0ffff'], range: [80, 93], price: 90000, theme: 'roleswap',
+  { id: 'roleswap', design: 'f23-150', name: 'Out of Position', short: 'OOP', tag: 'OUT OF POSITION', colors: ['#061c33', '#16c7c7', '#e0ffff'], range: [80, 93], price: 90000, theme: 'roleswap',
     releaseWeek: 45, desc: 'Players reinvented in a brand-new position, +2 to +4.' },
-  { id: 'halo', name: 'Hall of Heroes', short: 'HEROES', tag: 'HALL OF HEROES', colors: ['#0c0a14', '#e8c35a', '#fff5d6'], range: [88, 96], price: 140000, theme: 'halo',
+  { id: 'halo', design: 'f23-156', name: 'Hall of Heroes', short: 'HEROES', tag: 'HALL OF HEROES', colors: ['#0c0a14', '#e8c35a', '#fff5d6'], range: [88, 96], price: 140000, theme: 'halo',
     releaseWeek: 46, desc: 'Cult legends crowned with a golden halo, +2 to +3.' },
-  { id: 'blackout', name: 'Blackout', short: 'BLACKOUT', tag: 'BLACKOUT', colors: ['#050505', '#ff1e56', '#ffffff'], range: [80, 92], price: 60000, theme: 'blackout',
+  { id: 'blackout', design: 'f23-120', name: 'Blackout', short: 'BLACKOUT', tag: 'BLACKOUT', colors: ['#050505', '#ff1e56', '#ffffff'], range: [80, 92], price: 60000, theme: 'blackout',
     releaseWeek: 48, desc: 'Flash-sale week: cheap packs and +2 to +4 cards in black and neon.' },
-  { id: 'champions', name: 'Champions Night', short: 'CHAMPIONS', tag: 'CHAMPIONS NIGHT', colors: ['#1a0838', '#7a36ff', '#ffd76a'], range: [88, 96], price: 130000, theme: 'champions',
+  { id: 'champions', design: 'f23-124', name: 'Champions Night', short: 'CHAMPIONS', tag: 'CHAMPIONS NIGHT', colors: ['#1a0838', '#7a36ff', '#ffd76a'], range: [88, 96], price: 130000, theme: 'champions',
     releaseWeek: 49, desc: 'Continental club-cup heroes, +3 to +5.' },
-  { id: 'frost', name: 'Frost Wildcards', short: 'FROST', tag: 'FROST WILDCARDS', colors: ['#0d2a4a', '#8fd4ff', '#ffffff'], range: [81, 93], price: 90000, theme: 'frost',
+  { id: 'frost', design: 'f23-118', name: 'Winter Wildcards', short: 'WINTER', tag: 'WINTER WILDCARDS', colors: ['#0d2a4a', '#8fd4ff', '#ffffff'], range: [81, 93], price: 90000, theme: 'frost',
     releaseWeek: 50, desc: 'Winter wildcards: +3 to +5 and a new secondary position.' },
-  { id: 'yuletide', name: 'Yuletide Stars', short: 'YULETIDE', tag: 'YULETIDE STARS', colors: ['#07301b', '#d6202f', '#fff4e6'], range: [84, 95], price: 100000, theme: 'yuletide',
+  { id: 'yuletide', design: 'f23-122', name: 'Yuletide Stars', short: 'YULETIDE', tag: 'YULETIDE STARS', colors: ['#07301b', '#d6202f', '#fff4e6'], range: [84, 95], price: 100000, theme: 'yuletide',
     releaseWeek: 51, desc: 'Festive gifts under the tree: actives and Icons, +2 to +4.' },
-  { id: 'fantasy', name: 'Fantasy XI', short: 'FANTASY', tag: 'FANTASY XI', colors: ['#0d1400', '#c8ff00', '#f4ffd0'], range: [82, 93], price: 85000, theme: 'fantasy',
+  { id: 'fantasy', design: 'f23-134', name: 'Fantasy FUT', short: 'FANTASY', tag: 'FANTASY FUT', colors: ['#0d1400', '#c8ff00', '#f4ffd0'], range: [82, 93], price: 85000, theme: 'fantasy',
     releaseWeek: 52, desc: 'Fantasy-league favourites in radioactive neon, +2 to +4.' },
-  { id: 'wildfire', name: 'Wildfire', short: 'WILDFIRE', tag: 'WILDFIRE', colors: ['#2a0600', '#ff5a1f', '#ffd27a'], range: [81, 93], price: 85000, theme: 'wildfire',
+  { id: 'wildfire', design: 'f23-50', name: 'Wildfire', short: 'WILDFIRE', tag: 'WILDFIRE', colors: ['#2a0600', '#ff5a1f', '#ffd27a'], range: [81, 93], price: 85000, theme: 'wildfire',
     releaseWeek: 54, desc: 'Young players spreading like wildfire, +3 to +5.' },
-  { id: 'finalchapter', name: 'Final Chapter', short: 'FINAL', tag: 'FINAL CHAPTER', colors: ['#141414', '#a8977a', '#f3e6c9'], range: [83, 95], price: 110000, theme: 'finalchapter',
+  { id: 'finalchapter', design: 'f23-91', name: 'Final Chapter', short: 'FINAL', tag: 'FINAL CHAPTER', colors: ['#141414', '#a8977a', '#f3e6c9'], range: [83, 95], price: 110000, theme: 'finalchapter',
     releaseWeek: 72, desc: 'A farewell to veterans writing the last pages of their careers, +3 to +5.' },
-  { id: 'fiesta', name: 'Summer Fiesta', short: 'FIESTA', tag: 'SUMMER FIESTA', colors: ['#2a0a4a', '#ff2d95', '#ffd1ec'], range: [85, 99], price: 120000, theme: 'fiesta',
+  { id: 'fiesta', design: 'f23-16', name: 'FUTTIES', short: 'FUTTIES', tag: 'FUTTIES', colors: ['#2a0a4a', '#ff2d95', '#ffd1ec'], range: [85, 99], price: 120000, theme: 'fiesta',
     releaseWeek: 75, desc: 'The end-of-season party: favourites and Icons, +2 to +4 and +1 weak foot.' },
-  // V5 — the Global Cup: a World-Cup-like tournament set, one campaign a week (maroon player / red path /
-  // teal star / gold hero / purple road / yellow stories / holographic phenoms / white-gold Icons).
-  { id: 'cupplayer', name: 'Global Cup', short: 'GLOBAL CUP', tag: 'GLOBAL CUP', colors: ['#3a0716', '#9c1d3f', '#ffe3ea'], range: [80, 94], price: 70000, theme: 'cupplayer', set: 'cup',
+  // V5 tournament set. The older Global Cup player, star, Icon and Hero ids remain available to saved clubs.
+  { id: 'cupplayer', design: 'f23-129', name: 'Global Cup', short: 'GLOBAL CUP', tag: 'GLOBAL CUP', colors: ['#3a0716', '#9c1d3f', '#ffe3ea'], range: [80, 94], price: 70000, theme: 'cupplayer', set: 'cup',
     releaseWeek: 57, desc: 'The tournament kicks off: national-team favourites, +2 to +3.' },
-  { id: 'roadtocup', name: 'Road to the Cup', short: 'ROAD TO CUP', tag: 'ROAD TO THE CUP', colors: ['#1d0845', '#7b2ff7', '#ffd76a'], range: [80, 93], price: 75000, theme: 'roadtocup', set: 'cup',
+  { id: 'roadtocup', design: 'f23-139', name: 'Road to the World Cup', short: 'ROAD TO WC', tag: 'ROAD TO THE WORLD CUP', colors: ['#1d0845', '#7b2ff7', '#ffd76a'], range: [80, 93], price: 75000, theme: 'roadtocup', set: 'cup',
     releaseWeek: 58, desc: 'Players who carried their nation through qualifying, +2 to +4.' },
-  { id: 'cupstories', name: 'Cup Stories', short: 'STORIES', tag: 'CUP STORIES', colors: ['#3a2a00', '#ffc21a', '#fff6d1'], range: [82, 94], price: 85000, theme: 'cupstories', set: 'cup',
+  { id: 'cupstories', design: 'f23-145', name: 'World Cup Stories', short: 'STORIES', tag: 'WORLD CUP STORIES', colors: ['#3a2a00', '#ffc21a', '#fff6d1'], range: [82, 94], price: 85000, theme: 'cupstories', set: 'cup',
     releaseWeek: 59, desc: 'Remarkable tournament tales retold, +2 to +4.' },
-  { id: 'cupstar', name: 'Cup Stars', short: 'CUP STARS', tag: 'CUP STARS', colors: ['#032a2c', '#10b5a8', '#dcfffb'], range: [82, 94], price: 90000, theme: 'cupstar', set: 'cup',
+  { id: 'cupstar', design: 'f23-130', name: 'Cup Stars', short: 'CUP STARS', tag: 'CUP STARS', colors: ['#032a2c', '#10b5a8', '#dcfffb'], range: [82, 94], price: 90000, theme: 'cupstar', set: 'cup',
     releaseWeek: 60, desc: 'The breakout stars of the group stage, +3 to +5.' },
-  { id: 'gloryroad', name: 'Path of Glory', short: 'GLORY', tag: 'PATH OF GLORY', colors: ['#3a0508', '#e11d2e', '#ffe1e3'], range: [80, 94], price: 90000, theme: 'gloryroad', set: 'cup',
+  { id: 'gloryroad', design: 'f23-131', name: 'World Cup Path to Glory', short: 'PATH TO GLORY', tag: 'WORLD CUP PATH TO GLORY', colors: ['#3a0508', '#e11d2e', '#ffe1e3'], range: [80, 94], price: 90000, theme: 'gloryroad', set: 'cup',
     releaseWeek: 61, desc: 'Upgradable: +1 overall for every round the nation survives (max +4).' },
-  { id: 'cupicon', name: 'Global Cup Icons', short: 'CUP ICONS', tag: 'GLOBAL CUP ICON', colors: ['#5a4108', '#e9dcc0', '#fffaf0'], range: [87, 96], price: 170000, theme: 'cupicon', set: 'cup',
+  { id: 'cupicon', design: 'f23-129', name: 'Global Cup Icons', short: 'CUP ICONS', tag: 'GLOBAL CUP ICON', colors: ['#5a4108', '#e9dcc0', '#fffaf0'], range: [87, 96], price: 170000, theme: 'cupicon', set: 'cup',
     releaseWeek: 62, desc: 'Icons in their tournament prime, +1 to +2.' },
-  { id: 'cuphero', name: 'Global Cup Heroes', short: 'CUP HEROES', tag: 'GLOBAL CUP HERO', colors: ['#2e1a02', '#e0a526', '#fff1c9'], range: [86, 93], price: 120000, theme: 'cuphero', set: 'cup',
+  { id: 'cuphero', design: 'f23-133', name: 'Global Cup Heroes', short: 'CUP HEROES', tag: 'GLOBAL CUP HERO', colors: ['#2e1a02', '#e0a526', '#fff1c9'], range: [86, 93], price: 120000, theme: 'cuphero', set: 'cup',
     releaseWeek: 63, desc: 'Cult tournament heroes in copper and gold, +2 to +3.' },
-  { id: 'phenoms', name: 'Cup Phenoms', short: 'PHENOMS', tag: 'CUP PHENOMS', colors: ['#2a2350', '#9ea8ff', '#ffffff'], range: [80, 93], price: 80000, theme: 'phenoms', set: 'cup',
+  { id: 'phenoms', design: 'f23-146', name: 'World Cup Phenoms', short: 'PHENOMS', tag: 'WORLD CUP PHENOMS', colors: ['#2a2350', '#9ea8ff', '#ffffff'], range: [80, 93], price: 80000, theme: 'phenoms', set: 'cup',
     releaseWeek: 64, desc: 'Holographic cards for the tournament’s teenage sensations, +4 to +6.' },
+  // Additional FIFA 23 campaigns. Keep these after the original rows: IDs and seeded selections above remain stable.
+  { id: 'totw', design: 'f23-3', name: 'Team of the Week', short: 'TOTW', tag: 'TEAM OF THE WEEK', colors: ['#171715', '#d8ba65', '#fff6d5'], range: [80, 94], price: 70000, theme: 'totw', releaseWeek: 53,
+    desc: 'Weekly in-form standouts, boosted according to their base rating.' },
+  { id: 'cuptot', design: 'f23-138', name: 'World Cup Team of the Tournament', short: 'WC TOTT', tag: 'WORLD CUP TEAM OF THE TOURNAMENT', colors: ['#240919', '#ba8c4c', '#fff4df'], range: [87, 97], price: 120000, theme: 'cuptot', set: 'cup', releaseWeek: 65,
+    desc: 'The standout XI of the World Cup, with elite tournament boosts.' },
+  { id: 'rttf', design: 'f23-124', name: 'Road to the Final', short: 'RTTF', tag: 'ROAD TO THE FINAL', colors: ['#061436', '#516de4', '#fff4d3'], range: [84, 96], price: 100000, theme: 'rttf', releaseWeek: 66,
+    desc: 'European knockout contenders upgrade as their clubs advance.' },
+  { id: 'ballers', design: 'f23-163', name: 'FUT Ballers', short: 'BALLERS', tag: 'FUT BALLERS', colors: ['#28200d', '#ffcc24', '#fff8cb'], range: [84, 95], price: 95000, theme: 'ballers', releaseWeek: 67,
+    desc: 'Skillful stars with flair, dribbling and passing boosts.' },
+  { id: 'titans', design: 'f23-156', name: 'Trophy Titans', short: 'TITANS', tag: 'TROPHY TITANS', colors: ['#211209', '#bd9756', '#fff3d6'], range: [88, 99], price: 170000, theme: 'titans', releaseWeek: 68,
+    desc: 'Iconic trophy winners in their finest seasons.' },
+  // Warm-Up and Pre-Season were lead-in events without dedicated player-card art: reuse the next set's design.
+  { id: 'totswarmup', design: 'f23-11', name: 'TOTS Warm-Up Series', short: 'WARM-UP', tag: 'TOTS WARM-UP SERIES', colors: ['#071d46', '#4e9ad2', '#ffe088'], range: [82, 94], price: 80000, theme: 'totswarmup', releaseWeek: 69,
+    desc: 'Season contenders gearing up for Team of the Season.' },
+  { id: 'shapeshifters', design: 'f23-161', name: 'Shapeshifters', short: 'SHAPESHIFTERS', tag: 'SHAPESHIFTERS', colors: ['#071b26', '#5fe7c2', '#e7fff7'], range: [85, 98], price: 140000, theme: 'shapeshifters', releaseWeek: 70,
+    desc: 'Unexpected positions and dramatically transformed attributes.' },
+  { id: 'levelup', design: 'f23-167', name: 'Level Up', short: 'LEVEL UP', tag: 'LEVEL UP', colors: ['#07152c', '#32a4ff', '#fff2b1'], range: [84, 97], price: 110000, theme: 'levelup', releaseWeek: 71,
+    desc: 'Breakout performances rewarded with another level of quality.' },
+  { id: 'preseason', design: 'f23-16', name: 'Pre-Season', short: 'PRE-SEASON', tag: 'PRE-SEASON', colors: ['#182049', '#d26da9', '#fff0ce'], range: [86, 98], price: 125000, theme: 'preseason', releaseWeek: 76,
+    desc: 'New-season favourites and transfer prospects.' },
 ];
 export const PROMO_BY_ID = Object.fromEntries(PROMOS.map((p) => [p.id, p]));
 export const PROMO_IDS = PROMOS.map((p) => p.id);
@@ -339,6 +358,27 @@ export function buildPromoCards(src, helpers, week = weekNumber(), { diverse = t
   campaign('cupicon', icons.filter((p) => p.ovr <= 94), 8, 1, 2);
   campaign('cuphero', icons.filter((p) => p.ovr <= 90), 8, 2, 3);
   campaign('phenoms', src.regulars.filter((p) => p.age <= 23 && p.ovr >= 76).concat(src.generated.filter((p) => p.age <= 21 && p.ovr >= 76 && !p.special)), 10, 4, 6);
+
+  // Further FIFA 23 sets. Appended after the older seeded campaigns so existing card IDs and picks persist.
+  campaign('totw', actives.filter((p) => p.ovr >= 74 && p.ovr <= 90), 18, 3, 8, { totw: true });
+  campaign('cuptot', actives.slice(0, 95), 11, 4, 7);
+  campaign('rttf', src.regulars.filter((p) => p.ovr >= 78 && p.ovr <= 88), 12, 2, 4, (b) => {
+    const lv = rttkLevel(b.id, week, 'rttf');
+    return { upg: { level: lv, max: 4 } };
+  });
+  for (const p of out) if (p.special === 'rttf' && p.upg.level) setOvr(p, Math.min(PROMO_BY_ID.rttf.range[1], p.ovr + p.upg.level), helpers);
+  campaign('ballers', outfield.filter((p) => ['CAM', 'CM', 'CF', 'ST', 'LW', 'RW', 'LM', 'RM'].includes(p.pos)).slice(0, 125), 12, 3, 6, null,
+    (p) => { p.stats.dri = Math.min(99, p.stats.dri + 5); p.stats.pas = Math.min(99, p.stats.pas + 3); });
+  campaign('titans', icons.filter((p) => p.ovr <= 96), 12, 2, 5, { moment: 'Career trophy winner' });
+  campaign('totswarmup', actives.slice(0, 110), 12, 2, 4);
+  campaign('shapeshifters', outfield.filter((p) => ROLE_SWAP[p.pos]).slice(0, 125).concat(icons.filter((p) => p.pos !== 'GK' && ROLE_SWAP[p.pos] && p.ovr <= 95)), 14, 4, 7,
+    (b) => ({ wf: Math.min(5, (b.wf || 3) + 1) }), (p) => {
+      const from = p.pos;
+      p.pos = ROLE_SWAP[from];
+      p.alt = [from].concat((p.alt || []).filter((x) => x !== p.pos && x !== from)).slice(0, 3);
+    });
+  campaign('levelup', src.regulars.filter((p) => p.ovr >= 76 && p.ovr <= 88).concat(src.stars.filter((p) => p.ovr <= 88)), 12, 4, 7);
+  campaign('preseason', actives.slice(0, 105).concat(icons.filter((p) => p.ovr <= 94)), 14, 3, 6);
 
   // Owner request (Sep 27): several guaranteed Neymar promo versions on top of his boosted base card
   // (realplayers.js STAR_ROWS, now 91), reaching up to 99 for at least one already-released campaign —
