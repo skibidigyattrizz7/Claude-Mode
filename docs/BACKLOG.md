@@ -212,3 +212,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - LATER (owner, Sep 30): accounts/progress: signing out in one tab still showed the Shawky FC cards (save is per browser/device, not per
   account), and the game treats "Shawky FC" and "Phonk Mode FC" as different clubs. Merge those two into one (Shawky FC = the name after login),
   and make sign-out / a second account in another tab not share the same local club.
+  Clarified: "Shawky FC" is the ACCOUNT name, "Phonk Mode FC" is the UT CLUB name of that same account (not two people). Link them as one.
