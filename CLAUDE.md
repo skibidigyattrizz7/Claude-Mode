@@ -43,7 +43,7 @@ This list wins over any design skill in `.claude/skills` (taste-skill, frontend-
 - Supabase: never edit an applied migration; add a new numbered file, then rename it to
   the version Supabase records.
 - Keep answers to the owner short and simple.
-- Subagents: Haiku for small/simple tasks, Sonnet or an older (cheaper) Opus for bigger coding tasks. Not the newest Opus unless the owner says so.
+- Subagents (owner, Sep 30): Sonnet 5.5 for hard tasks, Sonnet 5 (or Haiku if Sonnet 5 is not selectable) for easier ones. Not Opus unless the owner says so.
 - "Notes mode": when the owner sends info to save for later, append it to docs/BACKLOG.md and reply with one word ("Saved"). Minimal usage.
 
 ## Saving usage (owner's request)
