@@ -268,3 +268,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Oct 1): Kilner, Masilang and The Shawky secret cards use the owner's photos (cut out, sharpened); originals in tools/photo_sources/.
 - DONE (Oct 1): merged ChatGPT PR13 (doom after pack closes), PR14 (ban-screen fight + zero-coin consequence), PR15 (six-punch pack collapse); browser-checked.
 - DONE (Oct 1): merged ChatGPT PR16 (Doom breaks one clicked control at a time; Home tab stays usable).
+
+## Vinson visual review follow-up (Sep 30, review ready)
+- chatgpt/vinson-visual-review: asymmetric punched hole, shaded articulated reaching hand, larger framed boss
+  portraits and visible Phonk matte. Tests and native frame inspection passed; Claude browser review/merge pending.
