@@ -198,8 +198,10 @@ export function positionName(pos) {
 export function makeGrid(stage, pack, players, opts, destroy) {
   let coinsGained = 0;
   let corrupting = false;
+  let revealed = false;
   const canTransfer = (pid) => (typeof opts.canTransfer === 'function' ? opts.canTransfer(pid) : true);
   function renderGrid() {
+    if (!revealed) { revealed = true; opts.onReveal?.(); }
     clear(stage);
     const newCount = players.filter((x) => !x.dup).length;
     const dupCount = players.length - newCount;

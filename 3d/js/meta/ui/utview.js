@@ -585,12 +585,11 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   const done = (pid) => UT.resolvePending(s, pid);
   let claimedVinson = false;
   const claim = (pid) => { if (pid === HELL_CARD_ID && !claimedVinson) { claimedVinson = true; void app.vinson?.onPull(); } };
-  // The pull starts the account curse, regardless of how the player resolves the item.
-  // Selling it, leaving the opening or reloading must not provide an escape route.
-  if (items.some((it) => it.pid === HELL_CARD_ID)) claim(HELL_CARD_ID);
   runPackOpening(app.root, {
     pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
     curse,
+    // Rolling contents happens before the player taps Open. Start only after the reveal.
+    onReveal: () => { if (items.some((it) => it.pid === HELL_CARD_ID)) claim(HELL_CARD_ID); },
     sellValue: (p) => curse ? 0 : quickSellValue(p),
     onSend: (pid) => { done(pid); UT.addToClub(s, pid); persist(app); claim(pid); },
     onVault: (pid) => { done(pid); UT.sendToVault(s, pid); persist(app); claim(pid); },
