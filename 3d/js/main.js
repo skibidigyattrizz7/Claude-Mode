@@ -400,6 +400,8 @@ export async function openMatch(opts) {
     try { lvl = getAdminLevel(); } catch { /* ignore */ }
     full.adminLevel = lvl === 'super' || lvl === 'full' ? 'owner' : lvl === 'mod' ? 'mod' : null;
   }
+  // real Ultimate Team cards in the in-match Team management screen (engine/ui/hud.js); shirts if the card UI can't load
+  if (full.renderCard === undefined) full.renderCard = await revealCardRenderer();
   if (Q.get('timeScale')) full.timeScale = Number(Q.get('timeScale')); // dev/testing: fast-forward the sim
   let handle = null;
   let closed = false;

@@ -145,6 +145,7 @@ export function createMatch(container, opts = {}) {
     onTactic: (side, cmd) => localTactic(side, cmd),
     teamInfo: (side) => teamInfo(side),
     gameplay: gp,
+    renderCard: typeof opts.renderCard === 'function' ? opts.renderCard : null, // UT cards in Team management
   });
   hud.camMode = camMode;
   const goalCard = new GoalCard(hud.el || root, { home: rHome, away: rAway, touch });

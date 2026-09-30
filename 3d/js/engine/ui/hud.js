@@ -3,6 +3,7 @@
 import { PHASE, SP, PITCH, halfBase, halfLen, GOAL, BALL_R } from '../core/constants.js';
 import { PLAYSTYLES } from '../core/playstyles.js';
 import { MENTALITY } from '../core/tactics.js';
+import { FORMATIONS as SHAPES } from '../core/formations.js';
 
 const CSS = `
 .ps3d-root{position:absolute;inset:0;overflow:hidden;background:#0b1020;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;user-select:none;-webkit-user-select:none}
@@ -46,17 +47,17 @@ const CSS = `
 .ps3d-stats .row{display:grid;grid-template-columns:50px 1fr 50px;gap:10px;align-items:center;margin:6px 0;font-size:15px}
 .ps3d-stats .row span:nth-child(2){text-align:center;color:#cfd8ea;font-size:13px;font-weight:600}
 .ps3d-stats .row span:last-child{text-align:right}
-.ps3d-menu{position:absolute;inset:0;background:rgba(4,8,18,.72);display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:5}
-.ps3d-menu .box{background:linear-gradient(#18203a,#0f1428);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:22px 26px;min-width:300px;max-width:92vw;max-height:88vh;overflow:auto;color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.6)}
-.ps3d-menu h2{margin:0 0 14px;font-style:italic;letter-spacing:3px;text-align:center}
-.ps3d-menu button{display:block;width:100%;margin:8px 0;padding:11px 14px;font-size:16px;font-weight:700;border:0;border-radius:6px;background:#26314f;color:#fff;cursor:pointer;text-align:left}
-.ps3d-menu button:hover,.ps3d-menu button:focus{background:#3fa9ff;color:#081022;outline:none}
+.ps3d-menu{position:absolute;inset:0;background:rgba(6,8,11,.74);display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:5}
+.ps3d-menu .box{background:#12151a;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:22px 26px;min-width:300px;max-width:92vw;max-height:88vh;overflow:auto;color:#fff;box-shadow:0 18px 48px rgba(0,0,0,.6)}
+.ps3d-menu h2{margin:0 0 14px;letter-spacing:.14em;text-align:center;font-weight:800}
+.ps3d-menu button{display:block;width:100%;margin:8px 0;padding:11px 14px;font-size:16px;font-weight:700;border:0;border-radius:6px;background:#1f242c;color:#fff;cursor:pointer;text-align:left;transition:background 120ms,color 120ms}
+.ps3d-menu button:hover,.ps3d-menu button:focus{background:#cdfb3c;color:#0b0d10;outline:none}
 .ps3d-menu button.quit{background:#5a1a24}.ps3d-menu button.quit:hover{background:#ff4d4d}
 .ps3d-menu button.admin{color:#ffe14d;border:1px solid rgba(255,212,0,.45)}
 .ps3d-menu table{border-collapse:collapse;font-size:13px;margin:6px 0 10px;width:100%}
 .ps3d-menu td{padding:3px 8px;border-bottom:1px solid rgba(255,255,255,.07)}
-.ps3d-menu td:first-child{color:#9fb6de}
-.ps3d-menu kbd{background:#2b3656;border-radius:3px;padding:1px 6px;font-family:inherit;font-weight:700}
+.ps3d-menu td:first-child{color:#aeb6c2}
+.ps3d-menu kbd{background:#262b33;border-radius:3px;padding:1px 6px;font-family:inherit;font-weight:700}
 .ps3d-loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:800;letter-spacing:3px;color:#9fb6de;text-align:center;z-index:20}
 .ps3d-loading .bar{width:min(320px,70vw);height:6px;margin:12px auto 0;border-radius:3px;background:rgba(159,182,222,.18);overflow:hidden}
 .ps3d-loading .bar i{display:block;height:100%;width:0;background:#19f5a4;border-radius:3px;transition:width .25s ease-out}
@@ -112,7 +113,7 @@ const CSS = `
 .ps3d-pens .row{display:flex;align-items:center;gap:5px;margin:2px 0}
 .ps3d-pens i{display:inline-block;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.2)}
 .ps3d-pens i.ok{background:#46d17a}.ps3d-pens i.no{background:#ff4d4d}
-.ps3d-menu select,.ps3d-menu input[type=range]{background:#26314f;color:#fff;border:0;border-radius:4px;padding:4px;font-size:13px;max-width:100%}
+.ps3d-menu select,.ps3d-menu input[type=range]{background:#1f242c;color:#fff;border:0;border-radius:4px;padding:4px;font-size:13px;max-width:100%}
 .ps3d-menu .tm{font-size:13px;width:100%;border-collapse:collapse}
 .ps3d-menu .tm td{padding:3px 6px}
 .ps3d-menu .tm tr.sel{background:#3fa9ff;color:#081022}
@@ -121,6 +122,109 @@ const CSS = `
 .ps3d-menu .tabs button{width:auto;display:inline-block;margin:0;padding:6px 10px;font-size:13px}
 .ps3d-menu .tabs button.on{background:#3fa9ff;color:#081022}
 .ps3d-menu label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:5px 0;font-size:13px}
+/* ---- Team management (owner, Sep 30: FC-style, real cards) ---- */
+.ps3d-menu .box.is-team{width:min(1180px,96vw);height:min(720px,94vh);max-width:none;max-height:none;padding:0;overflow:hidden;display:flex}
+.tmx{flex:1;min-width:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;color:#eef1f5;font:500 14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.tmx button{display:inline-flex;width:auto;margin:0;padding:0;font:inherit;text-align:inherit;background:none;color:inherit;border-radius:6px}
+.tmx button:hover,.tmx button:focus{background:none;color:inherit}
+.tmx button:focus-visible{outline:2px solid #cdfb3c;outline-offset:2px}
+.tmx-head{display:flex;align-items:center;gap:18px;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.08);background:#0e1115}
+.tmx-title{display:grid;line-height:1.1}
+.tmx-title b{font-size:22px;font-weight:800;letter-spacing:.04em}
+.tmx-title span{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aeb6c2}
+.tmx-tabs{display:flex;gap:4px;margin-left:10px;flex-wrap:wrap}
+.tmx .tmx-tabs button{padding:9px 14px;font-weight:700;font-size:14px;color:#c9cfd8;border-radius:6px;transition:background 120ms,color 120ms}
+.tmx .tmx-tabs button:hover{background:#1f242c;color:#fff}
+.tmx .tmx-tabs button.on{background:#eef1f5;color:#0b0d10}
+.tmx .tmx-tabs .tmx-other{color:#aeb6c2}
+.tmx-subs{margin-left:auto;display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.tmx-subs b{font-size:24px;font-weight:800}
+.tmx-subs span{font-size:12px;color:#aeb6c2;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.tmx-subs em{font-style:normal;font-size:12px;color:#ffcf4a;margin-left:6px}
+.tmx-body{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 260px;grid-template-rows:minmax(0,1fr) auto;gap:12px 16px;padding:16px 20px 8px}
+.tmx-body--tac,.tmx-body--sp{grid-template-columns:minmax(0,1fr);overflow:auto}
+.tmx-pitchwrap{container-type:size;min-height:0;min-width:0;display:grid;place-items:center}
+.tmx-pitch{position:relative;width:min(100cqw,calc(100cqh * 105 / 68));aspect-ratio:105/68;border-radius:8px;overflow:visible;
+  background:repeating-linear-gradient(90deg,#1c5a33 0 9.52%,#1a5230 9.52% 19.04%);box-shadow:inset 0 0 0 2px rgba(255,255,255,.28)}
+.tmx-lines{position:absolute;inset:0;pointer-events:none}
+.tmx-lines i{position:absolute;border:2px solid rgba(255,255,255,.28)}
+.tmx-lines .half{left:50%;top:0;bottom:0;border-width:0 0 0 2px}
+.tmx-lines .circle{left:50%;top:50%;width:17%;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%)}
+.tmx-lines .pbox{top:20%;bottom:20%;width:15.5%}
+.tmx-lines .pbox.l{left:0;border-left:0}.tmx-lines .pbox.r{right:0;border-right:0}
+.tmx .tmx-card{position:relative;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border-radius:8px;padding:3px;transition:transform 140ms cubic-bezier(.2,.8,.2,1),background 140ms}
+.tmx .tmx-card:hover{transform:translateY(-2px);background:rgba(255,255,255,.08)}
+.tmx .tmx-card.is-sel{background:rgba(205,251,60,.22);box-shadow:0 0 0 2px #cdfb3c}
+.tmx .tmx-card.is-pending{box-shadow:0 0 0 2px #ffcf4a}
+.tmx .tmx-card.is-off,.tmx .tmx-card.is-used{opacity:.4;cursor:default}
+.tmx .tmx-card:disabled{cursor:default}
+.tmx .tmx-card .pm-card{pointer-events:none}
+.tmx-card.on-pitch{position:absolute;left:calc(var(--d) * 1%);top:calc(var(--u) * 1%);transform:translate(-50%,-50%)}
+.tmx .tmx-card.on-pitch:hover{transform:translate(-50%,calc(-50% - 2px))}
+.tmx-card.on-pitch .pm-card{font-size:min(1.15cqh,1.45cqw)}
+.tmx-role{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#0b0d10;color:#fff;font:800 10px/1 system-ui,sans-serif;letter-spacing:.06em;padding:3px 6px;border-radius:4px}
+.tmx-foot{display:flex;align-items:center;gap:5px;width:100%}
+.tmx-stam{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.18);position:relative;overflow:hidden}
+.tmx-stam::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--s,100%);background:#34d987;border-radius:3px}
+.tmx-stam.mid::after{background:#ffcf4a}.tmx-stam.low::after{background:#ff5a5a}
+.tmx-rate{font:800 11px/1 system-ui,sans-serif;background:#0b0d10;color:#fff;padding:2px 4px;border-radius:3px}
+.tmx-plain{display:grid;justify-items:center;width:64px;padding:8px 4px;border-radius:6px;background:#1f242c}
+.tmx-plain b{font-size:20px}.tmx-plain i{font-style:normal;font-size:11px;color:#aeb6c2}.tmx-plain span{font-size:11px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tmx-bench,.tmx-side{min-height:0;display:flex;flex-direction:column;gap:10px;background:#0e1115;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px}
+.tmx-bench h3,.tmx-side h3{margin:0;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#c9cfd8}
+.tmx-bench h3 span{color:#aeb6c2;font-weight:700;margin-left:4px}
+.tmx-benchlist{min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
+.tmx-card.on-bench .pm-card{font-size:9px}
+.tmx .tmx-card.on-bench.is-ready{box-shadow:0 0 0 1px rgba(205,251,60,.55)}
+.tmx .tmx-card.on-bench.is-ready:hover{background:rgba(205,251,60,.18)}
+.tmx-hint{grid-column:1/-1;margin:0;color:#c9cfd8;font-size:13px}
+.tmx-empty{color:#aeb6c2;font-size:13px}
+.tmx-chips{display:flex;flex-wrap:wrap;gap:6px}
+.tmx .tmx-chips button,.tmx .tmx-seg button{padding:8px 11px;border-radius:6px;background:#1f242c;font-weight:700;font-size:13px;transition:background 120ms,color 120ms}
+.tmx .tmx-chips button:hover,.tmx .tmx-seg button:hover{background:#2a3039}
+.tmx .tmx-chips button.on,.tmx .tmx-seg button.on{background:#cdfb3c;color:#0b0d10}
+.tmx-seg{display:flex;flex-wrap:wrap;gap:4px}
+.tmx-side .tmx-seg{flex-direction:column}
+.tmx-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 28px;align-content:start}
+.tmx-row{display:grid;gap:7px}
+.tmx-lbl{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#c9cfd8}
+.tmx-range{display:flex;align-items:center;gap:10px}
+.tmx-range input{flex:1;accent-color:#cdfb3c;background:transparent}
+.tmx-range b{min-width:22px;text-align:right;font-size:16px}
+.tmx-takers{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-content:start}
+.tmx-taker{display:flex;gap:12px;align-items:center;background:#0e1115;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px}
+.tmx-taker-card{flex:none;width:64px;display:grid;place-items:center}
+.tmx-taker-card .pm-card{font-size:6.4px}
+.tmx-auto{display:grid;place-items:center;width:58px;height:80px;border-radius:6px;border:1px dashed rgba(255,255,255,.25);color:#aeb6c2;font-weight:800;font-size:12px;letter-spacing:.08em}
+.tmx-taker-txt{flex:1;min-width:0;display:grid;gap:6px}
+.tmx-taker select{width:100%;padding:8px;border-radius:6px;background:#1f242c;color:#fff;border:1px solid rgba(255,255,255,.12);font:inherit}
+.tmx-footbar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-top:1px solid rgba(255,255,255,.08);background:#0e1115}
+.tmx .tmx-back{padding:10px 20px;background:#1f242c;font-weight:800}
+.tmx .tmx-back:hover,.tmx .tmx-back:focus{background:#eef1f5;color:#0b0d10}
+.tmx-keys{color:#aeb6c2;font-size:12px}
+@media (max-width:760px),(max-height:520px){
+  .ps3d-menu .box.is-team{width:100vw;height:100vh;border-radius:0}
+  .tmx-head{gap:8px 12px;padding:8px 12px}
+  .tmx-title b{font-size:18px}
+  .tmx .tmx-tabs button{padding:7px 10px;font-size:13px}
+  .tmx-subs b{font-size:18px}
+  .tmx-body{grid-template-columns:minmax(0,1fr) 190px;padding:8px 12px 4px;gap:8px 10px}
+  .tmx-card.on-pitch .pm-card{font-size:min(1.6cqh,1.9cqw)}
+  .tmx-bench,.tmx-side{padding:8px;gap:6px}
+  .tmx-card.on-bench .pm-card{font-size:6px}
+  .tmx-hint{font-size:12px}
+  .tmx-footbar{padding:6px 12px}
+  .tmx .tmx-back{padding:7px 16px}
+  .tmx-form{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:760px) and (orientation:portrait){
+  .tmx-head{flex-wrap:wrap}
+  .tmx-tabs{margin-left:0;order:3;width:100%}
+  .tmx-body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(220px,1fr) auto auto;overflow:auto}
+  .tmx-benchlist{grid-template-columns:repeat(auto-fill,minmax(80px,1fr))}
+}
+@media (prefers-reduced-motion:reduce){.tmx .tmx-card,.tmx button{transition:none}}
+
 @media (max-width:700px){.ps3d-banner .big{font-size:40px}.ps3d-sb{transform:scale(.85);transform-origin:left top}.ps3d-hint{bottom:210px;font-size:12px}}
 `;
 
@@ -155,7 +259,8 @@ const el = (tag, cls, parent, html) => {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Hud {
-  constructor(root, { home, away, binds, slots, onResume, onCamera, onQuit, onReplay, onTactic, teamInfo, gameplay, touch = false }) {
+  constructor(root, { home, away, binds, slots, onResume, onCamera, onQuit, onReplay, onTactic, teamInfo, gameplay, touch = false, renderCard = null }) {
+    this.renderCard = typeof renderCard === 'function' ? renderCard : null; // real UT cards in Team management (main.js)
     addStyle();
     this.root = root;
     this.touch = touch;
@@ -512,6 +617,7 @@ export class Hud {
   }
   _menuMain(info) {
     const b = this.menuBox;
+    b.classList.remove('is-team');
     b.innerHTML = '<h2>PAUSED</h2>';
     const btn = (label, fn, cls = '') => { const e = el('button', cls, b, esc(label)); e.addEventListener('click', fn); return e; };
     const first = btn('Resume', () => this.onResume());
@@ -526,97 +632,190 @@ export class Hud {
     btn('Quit match', () => this.onQuit(), 'quit');
     setTimeout(() => first.focus(), 0);
   }
-  // In-match team management: substitutions, formation / positions, tactics, set-piece takers, mentality
+  // In-match team management (owner, Sep 30: "make it look like FC"): the XI as real cards on a pitch, the bench
+  // as cards, stamina + match rating under each. Tap a player, then a substitute (sub) or another player (swap).
+  // Tabs: Squad (subs + swaps) · Formation (shape + mentality) · Tactics · Set pieces.
   _menuTeam(info, side, tab) {
     const b = this.menuBox;
     const ti = this.teamInfo(side);
     if (!ti) return;
+    if (tab === 'subs') tab = 'squad';
     const team = side === 0 ? this.home : this.away;
-    const send = (cmd) => { const r = this.onTactic(side, cmd); setTimeout(() => this._menuTeam(info, side, tab), 30); return r; };
-    b.innerHTML = `<h2>TEAM · ${esc(team.short || team.name)}</h2>`;
-    const tabs = el('div', 'tabs', b);
-    for (const [k, lab] of [['subs', 'Subs'], ['shape', 'Formation'], ['tac', 'Tactics'], ['sp', 'Set pieces']]) {
+    const rerender = () => this._menuTeam(info, side, tab);
+    const send = (cmd) => { const r = this.onTactic(side, cmd); setTimeout(rerender, 30); return r; };
+    b.classList.add('is-team');
+    b.innerHTML = '';
+    const root = el('div', 'tmx', b);
+    // ---- header: title, tabs, subs counter
+    const head = el('div', 'tmx-head', root);
+    el('div', 'tmx-title', head, `<b>${esc(team.short || team.name)}</b><span>Team management</span>`);
+    const tabs = el('div', 'tmx-tabs', head);
+    tabs.setAttribute('role', 'tablist');
+    for (const [k, lab] of [['squad', 'Squad'], ['shape', 'Formation'], ['tac', 'Tactics'], ['sp', 'Set pieces']]) {
       const t = el('button', tab === k ? 'on' : '', tabs, lab);
-      t.addEventListener('click', () => this._menuTeam(info, side, k));
+      t.type = 'button'; t.setAttribute('role', 'tab'); t.setAttribute('aria-selected', String(tab === k));
+      t.addEventListener('click', () => { this._subOut = null; this._swapA = null; this._menuTeam(info, side, k); });
     }
     if ((info.localSides || []).length > 1) {
-      const o = el('button', '', tabs, 'Other side');
+      const o = el('button', 'tmx-other', tabs, 'Other team');
+      o.type = 'button';
       o.addEventListener('click', () => this._menuTeam(info, info.localSides.find((x) => x !== side), tab));
     }
-    const body = el('div', '', b);
-    if (tab === 'subs') {
-      body.innerHTML = `<div style="font-size:12px;color:#9fb6de;margin-bottom:4px">Subs used ${ti.subsMade}/${ti.maxSubs}${ti.pending.length ? ` · ${ti.pending.length} waiting for a stoppage` : ''}. Pick a player, then a substitute.</div>`;
-      const tbl = el('table', 'tm', body);
-      this._subOut = this._subOut ?? null;
-      for (const p of ti.players) {
-        if (p.role === 'GK' && false) continue;
-        const tr = el('tr', this._subOut === p.i ? 'sel' : '', tbl, `<td>${esc(p.role || p.pos)}</td><td>${esc(p.name)}</td><td>${p.ovr ?? ''}</td><td>${Math.round((p.stam ?? 1) * 100)}%</td><td>${p.rating != null ? p.rating.toFixed(1) : ''}</td>`);
-        if (p.sentOff) tr.style.opacity = 0.4;
-        else tr.addEventListener('click', () => { this._subOut = p.i; this._menuTeam(info, side, tab); });
+    const subsLeft = Math.max(0, (ti.maxSubs || 0) - (ti.subsMade || 0));
+    el('div', 'tmx-subs', head, `<b>${subsLeft}</b><span>subs left</span>${ti.pending.length ? `<em>${ti.pending.length} at next stoppage</em>` : ''}`);
+    const body = el('div', `tmx-body tmx-body--${tab}`, root);
+
+    // card lookup: match players carry the card they were built from (team.players / bench, see lineup reveal)
+    const byId = new Map([...(team.players || []), ...(team.bench || [])].map((p) => [p.id, p]));
+    const cardFor = (id, fallback) => {
+      const mp = byId.get(id) || fallback;
+      if (!this.renderCard || !mp) return null;
+      try { return this.renderCard(mp, 'xs'); } catch { return null; }
+    };
+    const stamCls = (s) => (s >= 0.7 ? 'ok' : s >= 0.45 ? 'mid' : 'low');
+    const tile = (p, cls, onPick) => {
+      const t = el('button', `tmx-card ${cls}`, null);
+      t.type = 'button';
+      const c = cardFor(p.id, p);
+      if (c) t.appendChild(c); else el('div', 'tmx-plain', t, `<b>${esc(p.ovr ?? '')}</b><i>${esc(p.pos || '')}</i><span>${esc(p.name)}</span>`);
+      const foot = el('div', 'tmx-foot', t);
+      if (p.stam != null) { const bar = el('i', `tmx-stam ${stamCls(p.stam)}`, foot); bar.style.setProperty('--s', `${Math.round(Math.max(0, Math.min(1, p.stam)) * 100)}%`); }
+      if (p.rating != null) el('b', 'tmx-rate', foot, p.rating.toFixed(1));
+      t.setAttribute('aria-label', `${p.name}, ${p.role || p.pos}${p.stam != null ? `, stamina ${Math.round(p.stam * 100)}%` : ''}`);
+      if (onPick) t.addEventListener('click', onPick); else t.disabled = true;
+      return t;
+    };
+
+    // ---- the XI on a pitch (formation rows: goalkeeper, then the formation's lines back to front)
+    const pitchPanel = (mode) => {
+      const wrap = el('div', 'tmx-pitchwrap', body);
+      const pitch = el('div', 'tmx-pitch', wrap);
+      el('div', 'tmx-lines', pitch, '<i class="half"></i><i class="circle"></i><i class="pbox l"></i><i class="pbox r"></i>');
+      // each player stands on the formation slot matching his current role (a swap moves the card, not just the label)
+      const shape = SHAPES[ti.formation] || SHAPES['4-4-2'];
+      const at = new Map();
+      const free = new Set(ti.players.map((p) => p.i));
+      for (const sl of shape) {
+        const p = ti.players.find((q) => free.has(q.i) && q.role === sl.r);
+        if (p) { free.delete(p.i); at.set(p.i, sl); }
       }
-      el('div', '', body, '<div style="margin:8px 0 4px;font-weight:800">Bench</div>');
-      const tb = el('table', 'tm', body);
+      const spare = shape.filter((sl) => ![...at.values()].includes(sl));
+      for (const p of ti.players) if (free.has(p.i)) at.set(p.i, spare.shift() || { d: 0.4, l: 0 });
+      ti.players.forEach((p) => {
+        const sl = at.get(p.i);
+        const s = { d: 6 + (sl.d / 0.72) * 86, u: 50 + sl.l * 46 }; // 46% keeps a strike pair (l ±0.2) a full card apart
+        const selOut = this._subOut === p.i, selSwap = this._swapA === p.i;
+        const pick = p.sentOff ? null : () => {
+          if (mode === 'squad') {
+            if (this._subOut == null) { this._subOut = p.i; rerender(); return; }
+            if (this._subOut === p.i) { this._subOut = null; rerender(); return; }
+            const a = this._subOut; this._subOut = null; send({ k: 'swap', i: a, j: p.i }); return;
+          }
+          if (this._swapA == null) { this._swapA = p.i; rerender(); return; }
+          const a = this._swapA; this._swapA = null; if (a !== p.i) send({ k: 'swap', i: a, j: p.i }); else rerender();
+        };
+        const t = tile(p, `on-pitch${selOut || selSwap ? ' is-sel' : ''}${p.sentOff ? ' is-off' : ''}${ti.pending.some((q) => q.i === p.i) ? ' is-pending' : ''}`, pick);
+        t.style.setProperty('--u', s.u.toFixed(1)); t.style.setProperty('--d', s.d.toFixed(1));
+        el('span', 'tmx-role', t, esc(p.role || p.pos));
+        pitch.appendChild(t);
+      });
+      return wrap;
+    };
+    const hint = (text) => el('p', 'tmx-hint', body, text);
+
+    if (tab === 'squad') {
+      pitchPanel('squad');
+      const side2 = el('div', 'tmx-bench', body);
+      el('h3', null, side2, `Substitutes <span>${ti.bench.filter((q) => !q.used).length}</span>`);
+      const list = el('div', 'tmx-benchlist', side2);
       for (const q of ti.bench) {
-        const tr = el('tr', '', tb, `<td>${esc(q.pos)}</td><td>${esc(q.name)}</td><td>${q.ovr ?? ''}</td>`);
-        if (q.used) tr.style.opacity = 0.35;
-        else tr.addEventListener('click', () => { if (this._subOut == null) return; send({ k: 'sub', i: this._subOut, bi: q.bi }); this._subOut = null; });
-      }
-    } else if (tab === 'shape') {
-      const lab = el('label', '', body, 'Formation ');
-      const sel = el('select', '', lab);
-      for (const f of ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2', '4-1-2-1-2']) { const o = el('option', '', sel, f); o.value = f; if (f === ti.formation) o.selected = true; }
-      sel.addEventListener('change', () => send({ k: 'formation', f: sel.value }));
-      el('div', '', body, '<div style="margin:8px 0 4px;font-size:12px;color:#9fb6de">Swap positions: click two players.</div>');
-      const tbl = el('table', 'tm', body);
-      for (const p of ti.players) {
-        if (p.i === 0) continue;
-        const tr = el('tr', this._swapA === p.i ? 'sel' : '', tbl, `<td>${esc(p.role || '')}</td><td>${esc(p.name)}</td>`);
-        tr.addEventListener('click', () => {
-          if (this._swapA == null) { this._swapA = p.i; this._menuTeam(info, side, tab); }
-          else { const a = this._swapA; this._swapA = null; if (a !== p.i) send({ k: 'swap', i: a, j: p.i }); else this._menuTeam(info, side, tab); }
+        const canSub = !q.used && this._subOut != null && subsLeft > 0;
+        const t = tile(q, `on-bench${q.used ? ' is-used' : ''}${canSub ? ' is-ready' : ''}`, q.used ? null : () => {
+          if (this._subOut == null) { this._flash = 'Pick the player coming off first.'; rerender(); return; }
+          if (subsLeft <= 0) { this._flash = 'No substitutions left.'; rerender(); return; }
+          const out = this._subOut; this._subOut = null; send({ k: 'sub', i: out, bi: q.bi });
         });
+        list.appendChild(t);
+      }
+      if (!ti.bench.length) el('p', 'tmx-empty', list, 'No substitutes on the bench.');
+      const outP = ti.players.find((p) => p.i === this._subOut);
+      hint(this._flash || (outP ? `${outP.name} selected: pick a substitute to bring on, or another player to swap positions.` : 'Pick a player on the pitch to substitute or move.'));
+      this._flash = null;
+    } else if (tab === 'shape') {
+      pitchPanel('shape');
+      const panel = el('div', 'tmx-side', body);
+      el('h3', null, panel, 'Formation');
+      const fl = el('div', 'tmx-chips', panel);
+      for (const f of ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2', '4-1-2-1-2']) {
+        const c = el('button', f === ti.formation ? 'on' : '', fl, f);
+        c.type = 'button';
+        c.addEventListener('click', () => { if (f !== ti.formation) send({ k: 'formation', f }); });
       }
       const m = ti.tac && ti.tac.mentality != null ? ti.tac.mentality : 0;
-      el('div', '', body, `<div style="margin-top:8px">Mentality: <b>${MENTALITY[m + 2] || 'BALANCED'}</b></div>`);
-      const mr = el('div', 'tabs', body);
-      el('button', '', mr, '◀ More defensive').addEventListener('click', () => send({ k: 'ment', d: -1 }));
-      el('button', '', mr, 'More attacking ▶').addEventListener('click', () => send({ k: 'ment', d: 1 }));
+      el('h3', null, panel, 'Mentality');
+      const ml = el('div', 'tmx-seg', panel);
+      [-2, -1, 0, 1, 2].forEach((v) => {
+        const c = el('button', v === m ? 'on' : '', ml, esc(String(MENTALITY[v + 2] || '').toLowerCase().replace(/(^|\s)\S/g, (x) => x.toUpperCase())));
+        c.type = 'button';
+        c.addEventListener('click', () => { if (v !== m) send({ k: 'ment', d: v - m }); });
+      });
+      hint(this._swapA != null ? 'Now pick the player to swap with.' : 'Pick two players on the pitch to swap their positions.');
     } else if (tab === 'tac') {
       const t = ti.tac || {};
-      const pick = (label, key, opts) => {
-        const l = el('label', '', body, esc(label));
-        const s = el('select', '', l);
-        for (const o of opts) { const e = el('option', '', s, o); e.value = o; if ((t[key] || opts[0]) === o) e.selected = true; }
-        s.addEventListener('change', () => send({ k: 'set', tactics: { [key]: s.value } }));
+      const grid = el('div', 'tmx-form', body);
+      const nice = (s) => String(s).replace(/([A-Z])/g, ' $1').replace(/^./, (x) => x.toUpperCase());
+      const seg = (label, key, opts) => {
+        const row = el('div', 'tmx-row', grid);
+        el('span', 'tmx-lbl', row, esc(label));
+        const s = el('div', 'tmx-seg', row);
+        const cur = t[key] || opts[0];
+        for (const o of opts) { const c = el('button', o === cur ? 'on' : '', s, esc(nice(o))); c.type = 'button'; c.addEventListener('click', () => { if (o !== cur) send({ k: 'set', tactics: { [key]: o } }); }); }
       };
       const slider = (label, key, lo, hi) => {
-        const l = el('label', '', body, `${esc(label)} <b>${t[key] ?? Math.round((lo + hi) / 2)}</b>`);
-        const r = el('input', '', l); r.type = 'range'; r.min = lo; r.max = hi; r.value = t[key] ?? Math.round((lo + hi) / 2);
+        const row = el('div', 'tmx-row', grid);
+        const v = t[key] ?? Math.round((lo + hi) / 2);
+        el('span', 'tmx-lbl', row, esc(label));
+        const box = el('div', 'tmx-range', row);
+        const r = el('input', '', box); r.type = 'range'; r.min = lo; r.max = hi; r.value = v; r.setAttribute('aria-label', label);
+        const out = el('b', '', box, String(v));
+        r.addEventListener('input', () => { out.textContent = r.value; });
         r.addEventListener('change', () => send({ k: 'set', tactics: { [key]: +r.value } }));
       };
-      pick('Defensive style', 'defensiveStyle', ['balanced', 'pressAfterLoss', 'constantPressure', 'dropBack']);
+      seg('Defensive style', 'defensiveStyle', ['balanced', 'pressAfterLoss', 'constantPressure', 'dropBack']);
       slider('Width', 'width', 1, 10); slider('Depth', 'depth', 1, 10);
-      pick('Build-up', 'buildUp', ['balanced', 'shortPassing', 'longBall', 'counter']);
-      pick('Chance creation', 'chanceCreation', ['balanced', 'possession', 'directPassing', 'forwardRuns']);
+      seg('Build-up', 'buildUp', ['balanced', 'shortPassing', 'longBall', 'counter']);
+      seg('Chance creation', 'chanceCreation', ['balanced', 'possession', 'directPassing', 'forwardRuns']);
       slider('Players in box', 'playersInBox', 1, 10); slider('Corners', 'corners', 1, 5); slider('Free kicks', 'freeKicks', 1, 5);
-      el('div', '', body, `<div style="font-size:12px;color:#9fb6de;margin-top:6px">Quick tactics: keys 1–4 (presets from your team's tactics), − / = mentality, gamepad LB + d-pad.</div>`);
+      hint('Quick tactics in play: keys 1–4, mentality − / =, gamepad LB + d-pad.');
     } else {
       const tk = (ti.tac && ti.tac.setPieceTakers) || {};
+      const grid = el('div', 'tmx-takers', body);
       for (const [key, lab] of [['fk', 'Free kicks'], ['pen', 'Penalties'], ['cornerL', 'Left corners'], ['cornerR', 'Right corners'], ['captain', 'Captain']]) {
-        const l = el('label', '', body, esc(lab));
-        const s = el('select', '', l);
-        el('option', '', s, 'Auto').value = '';
-        for (const p of ti.players) { if (p.i === 0 && key !== 'captain') continue; const o = el('option', '', s, esc(p.name)); o.value = p.id; if (tk[key] === p.id) o.selected = true; }
+        const row = el('div', 'tmx-taker', grid);
+        const who = ti.players.find((p) => p.id === tk[key]);
+        const c = who ? cardFor(who.id, who) : null;
+        const face = el('div', 'tmx-taker-card', row);
+        if (c) face.appendChild(c); else el('span', 'tmx-auto', face, 'AUTO');
+        const txt = el('div', 'tmx-taker-txt', row);
+        el('span', 'tmx-lbl', txt, esc(lab));
+        const s = el('select', '', txt);
+        s.setAttribute('aria-label', lab);
+        el('option', '', s, 'Auto (best player)').value = '';
+        for (const p of ti.players) { if (p.i % 11 === 0 && key !== 'captain') continue; const o = el('option', '', s, esc(p.name)); o.value = p.id; if (tk[key] === p.id) o.selected = true; }
         s.addEventListener('change', () => send({ k: 'takers', takers: { [key]: s.value || undefined } }));
       }
     }
-    const back = el('button', '', b, 'Back');
-    back.addEventListener('click', () => this._menuMain(info));
-    setTimeout(() => back.focus(), 0);
+    const foot = el('div', 'tmx-footbar', root);
+    const back = el('button', 'tmx-back', foot, 'Back');
+    back.type = 'button';
+    back.addEventListener('click', () => { this._subOut = null; this._swapA = null; this._menuMain(info); });
+    el('span', 'tmx-keys', foot, '<kbd>Esc</kbd> resume');
+    setTimeout(() => { const f = root.querySelector('.tmx-tabs button.on') || back; f.focus(); }, 0);
   }
 
   _menuControls(info) {
     const b = this.menuBox;
+    b.classList.remove('is-team');
     const rows = (slot) => {
       const k = this.binds[slot];
       const r = (label, key) => `<tr><td>${label}</td><td><kbd>${esc(keyName(k[key]))}</kbd></td></tr>`;
