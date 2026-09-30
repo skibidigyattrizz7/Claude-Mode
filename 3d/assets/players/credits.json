@@ -1,0 +1,44 @@
+{
+ "debruyne": {
+  "author": "Bryan Berlin",
+  "file": "debruyne.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Kevin De Bruyne",
+  "url": "https://commons.wikimedia.org/wiki/File:Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_(cropped).jpg"
+ },
+ "mbappe": {
+  "author": "Bryan Berlin",
+  "file": "mbappe.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Kylian Mbappé",
+  "url": "https://commons.wikimedia.org/wiki/File:Kylian_Mbappe_France_v_Senegal_16_June_2026-391_(cropped).jpg"
+ },
+ "messi": {
+  "author": "Bryan Berlin",
+  "file": "messi.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Lionel Messi",
+  "url": "https://commons.wikimedia.org/wiki/File:Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg"
+ },
+ "neymar": {
+  "author": "Bryan Berlin",
+  "file": "neymar.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Neymar Jr.",
+  "url": "https://commons.wikimedia.org/wiki/File:Neymar_Junior_Brazil_V_Morocco_13_June_2026-40.jpg"
+ },
+ "ronaldo": {
+  "author": "Bryan Berlin",
+  "file": "ronaldo.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Cristiano Ronaldo",
+  "url": "https://commons.wikimedia.org/wiki/File:Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_(cropped).jpg"
+ },
+ "salah": {
+  "author": "Bryan Berlin",
+  "file": "salah.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Mohamed Salah",
+  "url": "https://commons.wikimedia.org/wiki/File:Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_(cropped).jpg"
+ }
+}

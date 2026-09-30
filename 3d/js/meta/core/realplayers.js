@@ -5,8 +5,9 @@
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS } from './data.js';
 import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES, assignPlus } from './physique.js';
-import { REG_ROWS } from './realregulars.js';
+import { REG_ROWS, LATE_REG_ROWS } from './realregulars.js';
 import { bioFor } from './bios.js';
+import { PLAYER_PHOTOS } from './playerphotos.js';
 
 // Row: [slug, full name, card name, nation, pos, alt positions, foot, weak foot, skill moves, OVR,
 //       face stats (outfield: pac sho pas dri def phy | GK: div han kic ref spd pos), age, height, skin tone 0..5, extra]
@@ -373,6 +374,9 @@ export function buildRealPlayers(helpers) {
     p.wage = weeklyWage({ ...p, age: 29 });
     p.look = hashStr(p.id) % 997;
     p.intended = ovr;
+    // Real photo from Wikimedia Commons where a freely licensed one exists (tools/fetch_player_photos.py; credits.html).
+    // A plain rectangle (no photoCut); promo copies are structuredClone()d from these base cards and inherit it.
+    if (PLAYER_PHOTOS.has(p.person)) p.photo = `assets/players/${p.person}.webp`;
     // real personal data (core/bios.js) wins over the row: height / weight / preferred foot
     p.physReal = true; // Icon / Star rows are hand-authored real values
     applyBio(p);
@@ -395,15 +399,18 @@ export function buildRealPlayers(helpers) {
   // varies club to club (22-35!) independently of anything here, so this loop cannot assume 22 headroom
   // per club — it must track and respect each club's real current total throughout.
   const HARD_CEIL = 31;
-  const order = REG_ROWS.map((r, i) => [r, i]).sort((a, b) => b[0][9] - a[0][9] || (a[0][0] < b[0][0] ? -1 : 1));
   const placed = new Map();
   // V5 (+300ish players): tier-1 clubs alone (60 across 6 leagues) run out of REG_CAP headroom well before
   // every regular is placed, so tier-2 clubs (also under the Career 32-squad limit) share the load too.
   const top = CLUBS.filter((c) => c.tier === 1 || c.tier === 2);
+  // Places a list of rows (best players first, into the clubs that suit them). Called once for REG_ROWS and, after all
+  // of those are settled, once for the late list, so the late players can never move an existing regular.
+  const placeRows = (rows, cap = REG_CAP, hard = HARD_CEIL) => {
+  const order = rows.map((r, i) => [r, i]).sort((a, b) => b[0][9] - a[0][9] || (a[0][0] < b[0][0] ? -1 : 1));
   for (const [row] of order) {
     const lg = row[15];
     const score = (c) => c.rep * 10 - (count.get(c.id) || 0) * 3 + (c.league === lg ? 100 : c.league === 'CON' ? 50 : 0) + (hashStr(`${row[0]}-${c.id}`) % 7) / 10;
-    const open = top.filter((c) => (count.get(c.id) || 0) < REG_CAP);
+    const open = top.filter((c) => (count.get(c.id) || 0) < cap);
     let club;
     if (open.length) {
       club = open.reduce((a, c) => (score(c) > score(a) ? c : a), open[0]);
@@ -411,7 +418,7 @@ export function buildRealPlayers(helpers) {
       // Every club has spilled past REG_CAP: from here on, ignore rep/league entirely and always fill
       // whichever club is currently least loaded (ties broken by a stable per-row hash) — never the same
       // already-crowded "famous" club again — and never past HARD_CEIL while any club still has room under it.
-      const underHard = top.filter((c) => (count.get(c.id) || 0) < HARD_CEIL);
+      const underHard = top.filter((c) => (count.get(c.id) || 0) < hard);
       const pool = underHard.length ? underHard : top;
       club = pool.reduce((a, c) => {
         const [na, nc] = [count.get(a.id) || 0, count.get(c.id) || 0];
@@ -421,7 +428,9 @@ export function buildRealPlayers(helpers) {
     placed.set(row[0], club);
     count.set(club.id, (count.get(club.id) || 0) + 1);
   }
-  const regulars = REG_ROWS.map((row) => {
+  };
+  placeRows(REG_ROWS);
+  const makeRegular = (row) => {
     const [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, weight, skin, lg, styles] = row;
     const base = make([slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, { lg }], 'star');
     const club = placed.get(slug);
@@ -441,6 +450,26 @@ export function buildRealPlayers(helpers) {
     p.wage = weeklyWage(p);
     p.look = hashStr(p.id) % 997;
     return p;
-  });
-  return { icons, stars, regulars, lateIcons };
+  };
+  const regulars = REG_ROWS.map(makeRegular);
+  // Late regulars (realregulars.js LATE_REG_ROWS) are built on demand by players.js once every other player is in
+  // `players`, from the REAL club sizes at that point (`actual`: club id -> count). Every top-flight club is already at
+  // 31+, so a club that still has a free Career signing must not lose it: the newcomers go to clubs that are ALREADY over
+  // Career's 32 cap (signing is blocked there anyway), spread evenly, league-matched where possible. No existing card moves.
+  const buildLate = (actual) => {
+    count.clear();
+    for (const [k, v] of Object.entries(actual)) count.set(k, v);
+    const full = top.filter((c) => (count.get(c.id) || 0) >= 32);
+    const pool = full.length ? full : top;
+    const order = LATE_REG_ROWS.slice().sort((a, b) => b[9] - a[9] || (a[0] < b[0] ? -1 : 1));
+    for (const row of order) {
+      const lg = row[15];
+      const score = (c) => c.rep - (count.get(c.id) || 0) * 6 + (c.league === lg ? 8 : 0) + (hashStr(`${row[0]}-${c.id}`) % 7) / 10;
+      const club = pool.reduce((a, c) => (score(c) > score(a) ? c : a), pool[0]);
+      placed.set(row[0], club);
+      count.set(club.id, (count.get(club.id) || 0) + 1);
+    }
+    return LATE_REG_ROWS.map(makeRegular);
+  };
+  return { icons, stars, regulars, lateIcons, buildLate };
 }

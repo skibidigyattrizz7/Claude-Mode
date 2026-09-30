@@ -110,6 +110,9 @@ function nameOnCard(p) { return p.customAdmin && typeof p.name === 'string' && p
 const tok = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
 const num = (v, lo = 0, hi = 999) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo; };
 
+/** Real-person portrait from Wikimedia Commons (assets/players/<person>.webp): a plain rectangle that is faded into the card. */
+const isRealPhoto = (p) => typeof p.photo === 'string' && p.photo.startsWith('assets/players/') && !p.photoCut && !p.fullArt;
+
 export function cardClasses(p) {
   const c = ['pm-card', `t-${tok(p.tier)}`];
   if (p.cursed === true) c.push('is-cursed');
@@ -128,7 +131,8 @@ export function cardClasses(p) {
   // Promo design: real promo cards carry `promo`; Admin card-creator cards only store the chosen design in
   // `special`, so any special that names a promo campaign renders in that campaign's design too.
   if (p.promo || PROMO_BY_ID[p.special]) c.push('is-promo');
-  else if (p.club === 'ICN') c.push('is-icon');
+  // Icons (retired legends, club ICN) and the fictional CLASSIC legends share the Icon design.
+  else if (p.club === 'ICN' || p.special === 'legend') c.push('is-icon');
   return c;
 }
 
@@ -167,7 +171,7 @@ export function playerCard(p, opts = {}) {
   const tag = p.fullArt ? String(p.cardTag || '') : (p.cursed === true || p.evil === true || p.angel === true || p.hell === true) && p.cardTag ? String(p.cardTag) : p.special || p.evo ? (p.totw ? (p.headliner ? 'TOTW HEADLINER' : 'TEAM OF THE WEEK') : p.special ? (Object.hasOwn(SPECIAL_LABEL, p.special) ? SPECIAL_LABEL[p.special] : '') : 'EVOLUTION') : '';
   const html = `<div class="${esc(cls.join(' '))}" data-pid="${esc(p.id)}">
     <div class="pc-in"><div class="pc-shine"></div></div>
-    ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : ''}" src="${esc(p.photo)}" alt="" />` : avatarSVG(p, 'pc-avatar')}
+    ${p.fullArt ? `<img class="pc-fullart" src="${esc(p.fullArt)}" alt="" />` : p.photo ? `<img class="pc-avatar pc-photo${p.photoCut ? ' pc-photo--cut' : isRealPhoto(p) ? ' pc-photo--real' : ''}" src="${esc(p.photo)}" alt=""${isRealPhoto(p) ? ' loading="lazy" decoding="async"' : ''} />` : avatarSVG(p, 'pc-avatar')}
     <div class="pc-side">
       <div class="pc-ovr${p.statText ? ' pc-ovr--text' : ''}">${p.statText ? glyph : inf ? infHtml(infLabel(p)) : num(p.ovr, 0, 999)}</div>
       <div class="pc-pos">${esc(posLabel)}</div>

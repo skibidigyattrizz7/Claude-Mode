@@ -909,6 +909,7 @@ function settingsScreen(tab = 'general') {
     segmented('Starting XI at the end', LINEUP_XI, s.lineupXI, upd('lineupXI'), 'set-lineup-xi'),
     h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
     h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
+    h('p', { class: 'hint' }, 'Player and manager photos are from Wikimedia Commons. ', h('a', { href: 'credits.html', target: '_blank', rel: 'noopener' }, 'Photo credits')),
     adminCodesField());
   const gameplay = h('div', { class: 'gp-wrap', id: 'settings-gameplay' });
   let gpPlayer = 'p1';
