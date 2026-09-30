@@ -214,10 +214,11 @@ export function createOnline(deps) {
   /**
    * Authenticated call. Banned accounts are refused locally (cached ban) and by the server ('banned').
    * An expired / revoked session logs the account out; a legacy device identity re-registers once.
+   * vinsonOk: the Vinson battle calls (021) go through a cached Vinson ban (fight from the ban screen).
    */
-  async function authed(fn, args = {}) {
+  async function authed(fn, args = {}, { vinsonOk = false } = {}) {
     const acc = readAcc();
-    if (acc && banActive(acc.ban)) return { ok: false, error: 'banned', ban: acc.ban };
+    if (acc && banActive(acc.ban) && !(vinsonOk && acc.ban.reason === VINSON_BAN_REASON)) return { ok: false, error: 'banned', ban: acc.ban };
     let ident = await identity();
     if (!ident) return { ok: false, error: requireAccount ? 'no_account' : (await isAvailable()) ? 'auth' : 'offline' };
     let r = await rpc(fn, { p_id: ident.id, p_secret: ident.secret, ...args });
@@ -873,7 +874,7 @@ export function createOnline(deps) {
       // ---- battle (migration 020): nonce -> win -> rewards. The server owns all of it; the client only relays the nonce.
       /** Cursed + not immune only. -> { ok, nonce, minSeconds, maxSeconds }. Starting again replaces the open nonce. */
       async battleStart() {
-        const r = dataOr(await authed('vinson_battle_start'));
+        const r = dataOr(await authed('vinson_battle_start', {}, { vinsonOk: true }));
         return r.ok && typeof r.nonce === 'string' && VINSON_NONCE_RE.test(r.nonce)
           ? { ok: true, nonce: r.nonce, minSeconds: Number(r.minSeconds) || 60, maxSeconds: Number(r.maxSeconds) || 7200 }
           : vinsonFail(r);
@@ -882,7 +883,7 @@ export function createOnline(deps) {
        *  server minimum answers { ok:false, error:'too_soon', retryAfter } and keeps the nonce valid. */
       async battleWin({ nonce } = {}) {
         if (typeof nonce !== 'string' || !VINSON_NONCE_RE.test(nonce)) return fail('bad_nonce');
-        const r = dataOr(await authed('vinson_battle_win', { p_nonce: nonce }));
+        const r = dataOr(await authed('vinson_battle_win', { p_nonce: nonce }, { vinsonOk: true }));
         if (!(r.ok && r.immune === true)) return vinsonFail(r);
         const a = readAcc();
         if (a?.ban?.reason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") setBan(null);
@@ -890,7 +891,7 @@ export function createOnline(deps) {
       },
       /** After a win only. -> { ok, claimed:boolean, cards:[ids] }. claimed:false = already claimed before (same ids returned). */
       async claimBattleRewards() {
-        const r = dataOr(await authed('vinson_claim_rewards'));
+        const r = dataOr(await authed('vinson_claim_rewards', {}, { vinsonOk: true }));
         if (!r.ok) return vinsonFail(r);
         const cards = Array.isArray(r.cards) ? r.cards.filter((c) => VINSON_REWARD_IDS.includes(c)) : [];
         return cards.length === VINSON_REWARD_IDS.length ? { ok: true, claimed: r.claimed === true, cards } : fail('bad_response');

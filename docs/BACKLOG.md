@@ -264,3 +264,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - READY FOR BROWSER GATE Sep 30, PR12: live battle API connected; status-before-start clears cached unban,
   retries replace nonce, too-soon confirmation is recoverable, and interrupted local reward saves reconcile without
   duplicates. Claude owns the final curse/unban/lock/fight/win/claim/reload browser review before merging.
+- DONE (Oct 1): Vinson-banned players can fight from the ban screen (migration 021; moderation bans still blocked).

@@ -166,10 +166,8 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
 }
 
 /** One canvas, one RAF, one fixed-step clock. The account API owns win/reward authority. */
-// Status clears the online layer's cached Vinson ban after an owner unban.
+// Migration 021 admits Vinson-banned accounts for battle calls without owner release.
 export async function registerVinsonBattleAttempt(online) {
-  const remote = await online.vinson.status();
-  if (!remote?.ok) return remote || { ok: false, error: 'offline' };
   return online.vinson.battleStart();
 }
 
@@ -249,7 +247,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if (victoryBusy || closed) return;
     victoryBusy = true;
     try {
-      if (online && (!online.vinson?.status || !online.vinson?.battleStart || !online.vinson?.battleWin || !online.vinson?.claimBattleRewards)) {
+      if (online && (!online.vinson?.battleStart || !online.vinson?.battleWin || !online.vinson?.claimBattleRewards)) {
         showPanel('Battle unavailable', 'The battle service is not ready yet. Return to Pitchside and try again later.', [['Return to Pitchside', close]]); return;
       }
       if (!nonce && online?.vinson?.battleStart) {

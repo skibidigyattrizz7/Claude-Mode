@@ -180,6 +180,14 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     if (p && isBanned(p)) throw bannedError(p);
     return p;
   }
+  /** Battle auth (021): like auth, but a Vinson ban lets the player through so they can fight from the ban screen. */
+  function authBattle(db, id, secret) {
+    const p = authRaw(db, id, secret);
+    const modBan = p && p.banned && (!p.bannedUntil || p.bannedUntil > now()) && p.bannedBy !== 'vinson'
+      && p.banReason !== "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON";
+    if (modBan) throw bannedError(p);
+    return p;
+  }
   const mmResult = (r) => (r.matchedWith == null
     ? { ok: true, matched: false, queueId: r.id, waitedMs: Math.max(0, now() - r.createdAt) }
     : { ok: true, matched: true, queueId: r.id, role: r.host ? 'host' : 'guest', opponentPeerId: r.oppPeerId, token: r.token, opponent: { name: r.oppName, rating: r.oppRating, role: r.oppRole || 'player' } });
@@ -824,7 +832,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     },
     // ---------------------------------------------------------------- Vinson battle (020): nonce -> win -> rewards
     vinson_battle_start({ p_id, p_secret }) {
-      const db = load(), p = auth(db, p_id, p_secret);
+      const db = load(), p = authBattle(db, p_id, p_secret);
       if (!p) return err('auth');
       if (!p.vinson) return err('not_cursed');
       if (p.vinson.immune) return err('already_immune');
@@ -836,7 +844,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       return { ok: true, nonce, minSeconds: 60, maxSeconds: 7200, serverNow: new Date(now()).toISOString() };
     },
     vinson_battle_win({ p_id, p_secret, p_nonce }) {
-      const db = load(), p = auth(db, p_id, p_secret);
+      const db = load(), p = authBattle(db, p_id, p_secret);
       if (!p) return err('auth');
       const x = p.vinson;
       if (!x) return err('no_battle');
@@ -862,7 +870,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       return { ok: true, immune: true, phase: 'lifted', battleWon: true, rewardsClaimed: false };
     },
     vinson_claim_rewards({ p_id, p_secret }) {
-      const db = load(), p = auth(db, p_id, p_secret);
+      const db = load(), p = authBattle(db, p_id, p_secret);
       if (!p) return err('auth');
       const x = p.vinson;
       if (!x || !x.immune || !x.battleWonAt) return err('not_won');

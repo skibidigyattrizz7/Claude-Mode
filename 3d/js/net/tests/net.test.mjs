@@ -1795,11 +1795,10 @@ test('vinson battle: double claim returns claimed:false with the same ids', asyn
   assert.equal(c1.cards.length, 3);
 });
 
-test('vinson battle: a banned player cannot fight until unbanned; start is rate limited', async () => {
+test('vinson battle: a released player can still fight; start is rate limited', async () => {
   const w = await vinsonWorld();
   await vCurse(w.A); w.tick(61000);
-  assert.equal((await w.A.c.vinson.status()).phase, 'banned');
-  assert.equal((await w.A.c.vinson.battleStart()).error, 'banned');
+  assert.equal((await w.A.c.vinson.status()).phase, 'banned'); // 021: a Vinson ban may fight (see the ban-screen test)
   assert.equal((await w.O.c.moderation.unban(w.A.id)).ok, true);
   assert.equal((await w.A.c.vinson.status()).phase, 'released');
   let last;
@@ -1858,3 +1857,23 @@ for (const [name, fn] of queue) {
 }
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
+
+test('vinson battle (021): a Vinson-banned player fights from the ban screen; moderation bans stay blocked', async () => {
+  const w = await vinsonWorld();
+  await vCurse(w.A); await vCurse(w.B); w.tick(61000);
+  assert.equal((await w.A.c.vinson.status()).phase, 'banned'); // caches the Vinson ban locally
+  assert.equal(w.A.c.account.current().state, 'banned');
+  const s = await w.A.c.vinson.battleStart();
+  assert.equal(s.ok, true, 'start from the ban screen');
+  w.tick(61000);
+  const win = await w.A.c.vinson.battleWin({ nonce: s.nonce });
+  assert.deepEqual([win.ok, win.immune, win.phase], [true, true, 'lifted']);
+  assert.equal(w.A.c.account.current().state, 'account'); // local ban cleared
+  assert.equal((await w.A.c.vinson.claimBattleRewards()).claimed, true);
+  assert.equal((await w.A.c.vinson.status()).phase, 'lifted');
+  // B: Vinson-banned, then the owner puts a real moderation ban on top -> the fight is refused
+  assert.equal((await w.B.c.vinson.status()).phase, 'banned');
+  assert.equal((await w.O.c.moderation.ban(w.B.id, 'spam')).ok, true);
+  assert.equal((await w.B.c.vinson.battleStart()).error, 'banned');
+  assert.equal((await w.B.c.vinson.claimBattleRewards()).error, 'banned');
+});
