@@ -33,6 +33,7 @@ import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
 import { cursedPack, isOwner, enforceLock } from '../core/vinson.js';
 import { createVinsonChains } from './vinsonchains.js';
+import { createVinsonPackClaim } from '../core/vinsonpackclaim.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
 import { byDisplayRank, secretFirst } from '../core/rank.js';
 import { managerCard } from './managercard.js';
@@ -584,13 +585,14 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   s.pendingPack = (Array.isArray(s.pendingPack) ? s.pendingPack : []).concat(items.map((it) => it.pid));
   persist(app);
   const done = (pid) => UT.resolvePending(s, pid);
-  let claimedVinson = false;
-  const claim = (pid) => { if (pid === HELL_CARD_ID && !claimedVinson) { claimedVinson = true; void app.vinson?.onPull(); } };
+  const pull = createVinsonPackClaim(items, HELL_CARD_ID, () => {
+    if (app.ut === s) void app.vinson?.onPull();
+  });
+  const claim = (pid) => pull.observe(pid);
   runPackOpening(app.root, {
     pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
     curse,
-    // Wait for the actual reveal; rolling contents is earlier than tapping the pack open.
-    onReveal: () => { if (items.some((it) => it.pid === HELL_CARD_ID)) claim(HELL_CARD_ID); },
+    // Initial Doom starts after destroy() closes the pack and its items are saved.
     sellValue: (p) => curse ? 0 : quickSellValue(p),
     onSend: (pid) => { done(pid); UT.addToClub(s, pid); persist(app); claim(pid); },
     onVault: (pid) => { done(pid); UT.sendToVault(s, pid); persist(app); claim(pid); },
@@ -600,7 +602,7 @@ export function openPackFlow(app, packType, onDone, count = 1) {
     onTransfer: (pid) => { done(pid); UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); claim(pid); return r; },
     onSell: (pid) => { claim(pid); done(pid); const v = curse ? 0 : quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
     onCurseExit: () => { UT.rescuePendingPack(s); persist(app); app.popTo((v) => v.utHome); app.refresh(); },
-    onDone: (sum) => { if (s.pendingPack?.includes(HELL_CARD_ID)) claim(HELL_CARD_ID); UT.rescuePendingPack(s); persist(app); app.refresh(); if (onDone) onDone(sum); },
+    onDone: (sum) => { if (s.pendingPack?.includes(HELL_CARD_ID)) claim(HELL_CARD_ID); UT.rescuePendingPack(s); persist(app); app.refresh(); pull.close(); if (onDone) onDone(sum); },
   });
 }
 

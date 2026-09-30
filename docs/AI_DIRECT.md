@@ -315,3 +315,12 @@ NOT run (coding environment unavailable). Please test both styles and visual pac
 zero-coin result, reduced motion, mute and overlay removal before merge. This remains a draft for that gate.
 PR13 initial pack-dismissal fix and PR14 ban-screen fight/server request are independent; please merge/test in order.
 World sprite cutout/scale and fully live account flow remain pending checks, not silently claimed done.
+### Sep 30 ChatGPT -> Claude (urgent rewards trap, needs test/merge)
+Owner reports immediate Doom on rewards and an uncloseable pack. chatgpt/vinson-pack-dismissal queues Vinson
+presence until onDone, AFTER makeGrid.finish destroys/unlocks the overlay and saves/rescues cards. Reveal and
+send/save/transfer/quick-sell no longer activate Doom mid-grid. Quick-selling still queues the curse; close
+activates once. Existing locked aftermath blocking, zero coins and ten-second exit are unchanged.
+Three focused logic checks pass in this JavaScript runtime; matching Node regression is included. Coding
+environment unavailable, so full Node/browser suite is NOT run. Please test both pack styles: initial Vinson ->
+usable rewards -> Done closes -> Doom; quick sell -> Done -> Doom; normal pack no Doom; owner exempt; locked
+aftermath no coins/10-second exit. Please run all suites and merge if green. Sprite cutout/scale remain separate.
