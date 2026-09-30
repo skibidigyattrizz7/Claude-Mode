@@ -30,6 +30,12 @@ export function mountMeta(container, { startMatch, startOnlineMatch = null, onli
     showCareer: () => app.showCareer(),
     showUltimateTeam: () => app.showUltimateTeam(),
     showAdmin: () => app.showAdmin(),
+    /** Apply server-side resets / owner patches to the live club now (main.js: presence + cloud sync hooks). */
+    processRemote: () => app.processRemote(),
+    /** The cloud copy replaced the local club: reload it. */
+    reloadUT: () => app.reloadUT(),
+    /** The owner deleted this profile: drop the in-memory club. */
+    onIdentityDeleted: () => app.onIdentityDeleted(),
     destroy: () => app.destroy(),
   };
 }

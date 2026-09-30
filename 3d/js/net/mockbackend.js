@@ -70,6 +70,20 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
     return d;
   };
   const SESSION_TTL = 60 * DAY;
+  /** Delete a profile and every row that belongs to it (the SQL foreign keys cascade the same way; audit rows stay). */
+  function purgeProfile(db, id) {
+    delete db.profiles[id]; delete db.squads[id]; delete db.saves[id];
+    db.sessions = db.sessions.filter((x) => x.profileId !== id);
+    db.listings = db.listings.filter((l) => l.sellerId !== id);
+    for (const l of db.listings) if (l.buyerId === id) l.buyerId = null;
+    db.queue = db.queue.filter((q) => q.playerId !== id);
+    db.friends = db.friends.filter((f) => f.a !== id && f.b !== id);
+    db.invites = db.invites.filter((i) => i.fromId !== id && i.toId !== id);
+    db.gifts = db.gifts.filter((g) => g.toId !== id);
+    db.giftClaims = db.giftClaims.filter((c) => c.profileId !== id);
+    db.messages = db.messages.filter((m) => m.fromId !== id && m.toId !== id);
+    db.patches = db.patches.filter((x) => x.profileId !== id);
+  }
   const vinsonBanned = (p) => p.vinson && (p.vinson.phase === 'banned' || (p.vinson.phase === 'doom' && p.vinson.deadline <= now()));
   const isBanned = (p) => (!!p.banned && (!p.bannedUntil || p.bannedUntil > now())) || !!vinsonBanned(p);
   const banJson = (p) => vinsonBanned(p) ? { reason: "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON", until: null }
@@ -1032,10 +1046,20 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
         v.resetClub = (v.resetClub || 0) + 1;
         delete db.squads[v.id];
         for (const l of db.listings) if (l.sellerId === v.id && (l.status === 'active' || l.status === 'expired')) l.status = 'cancelled';
+        // 019: the cloud copy of the club goes too (else the next sync would upload the old club again), and owner
+        // patches queued for the old club are moot. A Vinson-locked profile keeps its save (the curse owns it).
+        if (!(v.vinson && v.vinson.phase === 'locked')) delete db.saves[v.id];
+        for (const x of db.patches) if (x.profileId === v.id && !x.appliedAt) x.appliedAt = now();
       }
       audit(db, v.id, 'admin_reset', { what: p_what, by: a });
       store.save(db);
       return { ok: true, player: modRow(v), resets: epochs(v) };
+    },
+    // ---------------------------------------------------------------- 019: does this profile still exist? (no secret needed:
+    // the id is an unguessable uuid). The client asks after an 'auth' error to tell a DELETED profile from an expired session.
+    identity_state({ p_id }) {
+      if (typeof p_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p_id)) return err('bad_value');
+      return { ok: true, exists: !!load().profiles[p_id] };
     },
     // ---------------------------------------------------------------- 010: delete players
     admin_delete_player({ p_code, p_player, p_id = null, p_secret = null }) {
@@ -1046,7 +1070,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (!v) return err('not_found');
       if (v.role === 'owner' || v.id === p_id) return err('not_allowed');
       audit(db, null, 'admin_delete_player', { player: v.id, by: a });
-      delete db.profiles[v.id]; delete db.squads[v.id];
+      purgeProfile(db, v.id);
       store.save(db);
       return { ok: true, deleted: 1 };
     },
@@ -1059,7 +1083,7 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       for (const v of Object.values(db.profiles)) {
         if (v.username || (v.role && v.role !== 'player') || v.id === p_id) continue;
         if (Date.parse(v.lastSeenAt || v.createdAt || 0) >= cut) continue;
-        delete db.profiles[v.id]; delete db.squads[v.id]; n++;
+        purgeProfile(db, v.id); n++;
       }
       audit(db, null, 'admin_delete_guests', { days: p_days, deleted: n, by: a });
       store.save(db);
@@ -1458,6 +1482,11 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       if (!Array.isArray(p_ops) || p_ops.length < 1 || p_ops.length > 100 || JSON.stringify(p_ops).length > 262144 || !p_ops.every((o) => isObj(o) && OPS.includes(o.op))) return err('bad_value');
       const x = { id: ++db.patchSeq, profileId: v.id, ops: JSON.parse(JSON.stringify(p_ops)), by: a, at: now(), appliedAt: null };
       db.patches.push(x);
+      // 019: a removed card (or a reset club) must not stay for sale on the market
+      for (const o of p_ops) {
+        if (o.op !== 'removeCard' && o.op !== 'resetClub') continue;
+        for (const l of db.listings) if (l.sellerId === v.id && (l.status === 'active' || l.status === 'expired') && (o.op === 'resetClub' || (l.card && l.card.id === o.id))) l.status = 'cancelled';
+      }
       audit(db, v.id, 'admin_patch', { patch: x.id, ops: p_ops.map((o) => o.op), by: a });
       store.save(db);
       return { ok: true, patchId: x.id };
