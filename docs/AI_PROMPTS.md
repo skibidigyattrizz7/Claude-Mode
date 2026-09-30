@@ -158,3 +158,21 @@ Portrait (about 840x1200), card on a plain black background. Make one image per 
 6. "Admin Card": black and gold circuit board with a crown.
 7. "Rabbi Patel": royal blue and white with gold, a Star of David in the art.
 ```
+
+### ChatGPT (Codex): promos from FIFA 22, FC 24, FC 25, FC 26, FC 27 (after the FIFA 23 ones, merged Sep 30)
+```
+Repo skibidigyattrizz7/Claude-Mode (branch claude/compassionate-gates-n9kfni), game in 3d/. Read CLAUDE.md first.
+Work on a new branch; Claude merges it. Use subagents / parallel tasks if you can (e.g. one per game year).
+Same job as your FIFA 23 promos (already merged, great work), now for every promo campaign of FIFA 22, EA SPORTS FC 24,
+FC 25, FC 26 and FC 27 (use your knowledge of each year's promo list: e.g. FC 24 Centurions, Trailblazers, Thunderstruck,
+TOTY, Future Stars, Fantasy FC, TOTS, Futties...; FC 25/26/27 the same idea). Add them to 3d/js/meta/core/promos.js with
+the same fields and a `design` key. If a campaign exists in several years, make one entry per year with the year in the
+name only when needed (e.g. "Team of the Year 25"), and don't duplicate what FIFA 23 already added.
+Design keys = 3d/assets/cards/<key>.webp: f22-<EA rarity id> (FIFA 22), f23-..., fc24-<id> (FC 24),
+fc25-<id>-<level>, fc26-<id>-<level>, fc27-<id>-<level> (level 0 = special). 3d/js/meta/core/carddesigns.js lists
+every key. Open the images and pick the matching design for each campaign.
+Keep releases spread over the season (release weeks) so the store isn't flooded, packs priced like the existing ones,
+promo draws stay diverse (buildPromoCards usage map). Do NOT edit card.js, meta.css, carddesign*.js, realplayers.js,
+players.js or 3d/js/net/** (Claude's agents are changing those). Run node 3d/js/meta/tests/meta.test.mjs and your
+promos tests; add tests.
+```

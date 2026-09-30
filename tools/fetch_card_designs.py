@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """EA SPORTS card designs (blank card backgrounds) for the card faces (owner, Sep 30: use the real FIFA / FC designs;
 non-commercial fan game). Sources, all via FUT.GG's asset CDN:
-  * FIFA 23: every rarity background  2023/rarities/<eaRarityId>_e_<level>.png            -> key f23-<id>[-<level>]
-  * FC 26 / FC 27: the rarity backgrounds named in the fut.gg player pages cached by photos_futgg.py
+  * FIFA 22 / FIFA 23 / FC 24: every rarity background  2023/rarities/<eaRarityId>_e_<level>.png            -> key f22|f23|fc24-<id>[-<level>]
+  * FC 25 / FC 26 / FC 27: the rarity backgrounds named in the fut.gg player pages cached by photos_futgg.py
     (<year>/rarities-level-<level>-large/<eaRarityId>.<hash>.png)                              -> key fc26-<id>-<level>
 Writes 3d/assets/cards/<key>.webp (420 px wide, alpha) and 3d/js/meta/core/carddesigns.js:
   CARD_DESIGNS = { key: { file, ink, dark } }  ink = text colour picked from the lower half of the card.
@@ -68,22 +68,31 @@ def main():
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     designs = {}
+    old = {}
+    if os.path.exists(JS):
+        t = open(JS, encoding='utf-8').read()
+        old = json.loads(t[t.index('{'):t.rindex('}') + 1])
     # FIFA 23: specials at level 0, base cards (0 common, 1 rare) at levels 1-3 (bronze, silver, gold)
-    for rid in range(0, 171):
-        for lvl in ((1, 2, 3) if rid in (0, 1) else (0,)):
-            key = f'f23-{rid}' + (f'-{lvl}' if rid in (0, 1) else '')
-            data = get(f'{CDN}2023/rarities/{rid}_e_{lvl}.png')
-            if data:
-                save(key, data, designs)
+    for year, pre in (('2022', 'f22'), ('2023', 'f23'), ('2024', 'fc24')):
+        for rid in range(0, 200):
+            for lvl in ((1, 2, 3) if rid in (0, 1) else (0,)):
+                key = f'{pre}-{rid}' + (f'-{lvl}' if rid in (0, 1) else '')
+                if os.path.exists(os.path.join(OUT, key + '.webp')) and key in old:
+                    designs[key] = old[key]; continue
+                data = get(f'{CDN}{year}/rarities/{rid}_e_{lvl}.png')
+                if data:
+                    save(key, data, designs)
     # FC 26 / 27 from the cached fut.gg pages
     paths = set()
     for fn in os.listdir(a.cache) if os.path.isdir(a.cache) else []:
         s = open(os.path.join(a.cache, fn), encoding='utf-8', errors='replace').read()
-        paths.update(re.findall(r'(20(?:26|27)/rarities-level-(\d)-large/(\d+)\.[0-9a-f]+\.png)', s))
+        paths.update(re.findall(r'(20(?:25|26|27)/rarities-level-(\d)-large/(\d+)\.[0-9a-f]+\.png)', s))
     for path, lvl, rid in sorted(paths):
         key = f'fc{path[2:4]}-{rid}-{lvl}'
         if key in designs:
             continue
+        if os.path.exists(os.path.join(OUT, key + '.webp')) and key in old:
+            designs[key] = old[key]; continue
         data = get('https://game-assets.fut.gg/cdn-cgi/image/quality=90,format=png,width=420/' + path)
         if data:
             save(key, data, designs)
