@@ -321,6 +321,11 @@ export function getDB() {
   for (const p of real.icons) specials.push(p);
   // V3 real regulars: ordinary gold / rare gold cards at fictional clubs (packs, market, career, national teams).
   for (const p of real.regulars) players.push(p);
+  // Real players added after launch (realregulars.js LATE_REG_ROWS): appended after every existing card, so no earlier id or order moves.
+  const clubSizes = {};
+  for (const p of players) clubSizes[p.club] = (clubSizes[p.club] || 0) + 1;
+  const lateRegulars = real.buildLate(clubSizes);
+  for (const p of lateRegulars) players.push(p);
 
   // V2 "Pathfinder" cards: exclusive objective rewards (boosted versions of generated players, private RNG).
   const prng = new Rng('pathfinder-v1');
@@ -350,7 +355,7 @@ export function getDB() {
 
   const all = players.concat(specials);
   const byId = new Map(all.map((p) => [p.id, p]));
-  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, promos };
+  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, lateRegulars, promos };
   for (const c of _foreign.values()) if (!byId.has(c.id)) byId.set(c.id, c);
   return _db;
 }

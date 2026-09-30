@@ -312,6 +312,14 @@
 .pm-card.is-promo .pc-avatar, .pm-card.sp-lotg .pc-avatar, .pm-card.sp-hero .pc-avatar { right: -.15em; top: -1.25em; width: 9em; height: 9em; }
 .pc-photo { object-fit: cover; border-radius: .6em; }
 .pm-card .pc-photo.pc-avatar { right: .7em; top: 1.3em; width: 6.2em; height: 6.2em; }
+/* real portrait (Wikimedia Commons, 4:5 rectangle): fills the avatar area and fades into the card face at the bottom and sides,
+   so it never reaches the rating / position column, the name bar or the stats */
+.pm-card .pc-photo.pc-photo--real.pc-avatar { right: .4em; top: .55em; width: 6.6em; height: 6.45em; border-radius: 0; object-fit: cover; object-position: 50% 8%; z-index: 2;
+  -webkit-mask: radial-gradient(ellipse 52% 92% at 50% 15%, #000 70%, transparent 100%);
+  mask: radial-gradient(ellipse 52% 92% at 50% 15%, #000 70%, transparent 100%); }
+.pm-card--xs .pc-photo.pc-photo--real.pc-avatar { right: .25em; top: .4em; width: 6.5em; height: 5.9em; }
+/* Icons: black and white like FIFA, the photo melts into the marble card */
+.pm-card.is-icon .pc-photo.pc-photo--real.pc-avatar { filter: grayscale(1) contrast(1.05); mix-blend-mode: multiply; }
 /* cut-out photo (transparent background, e.g. secret cards): sits like a drawn face, bottom-aligned on the nameplate */
 .pm-card .pc-photo.pc-photo--cut { right: .1em; top: .75em; width: 7.3em; height: 7.3em; border-radius: 0; object-fit: contain; object-position: 50% 100%; }
 /* name bar + 6 stats in two columns (PAC SHO PAS | DRI DEF PHY) */
@@ -357,7 +365,7 @@
 .pm-card.is-icon .pc-avatar { filter: sepia(.5) saturate(.85); }
 .pm-card.pm-card.sp-hero { --bord: linear-gradient(135deg, #fff1b3 0%, #c9951a 26%, #1b2f5a 50%, #e8c35a 74%, #fff6cf 100%);
   --face: linear-gradient(165deg, #2f5ea8 0%, #173a78 45%, #0b1d45 100%); --ink: #f3e6bf; --num: #ffffff; --pat: var(--art-paint-hero) 0 0/100% 100%; }
-.pm-card.pm-card.sp-legend { --bord: linear-gradient(135deg, #fffbe6 0%, #d4a72c 30%, #fff3c4 55%, #8a6410 80%, #f0d487 100%); --face: linear-gradient(172deg, #fffef7 0%, #f3e8c8 45%, #d8c38c 100%); --ink: #3b2a07;
+.pm-card.pm-card.sp-legend:not(.is-icon) { --bord: linear-gradient(135deg, #fffbe6 0%, #d4a72c 30%, #fff3c4 55%, #8a6410 80%, #f0d487 100%); --face: linear-gradient(172deg, #fffef7 0%, #f3e8c8 45%, #d8c38c 100%); --ink: #3b2a07;
   --pat: var(--art-marble) 0 0/100% 100%, repeating-conic-gradient(from 0deg at 58% 28%, rgba(212,167,44,.14) 0deg 6deg, transparent 6deg 18deg); }
 .pm-card.pm-card.sp-lotg:not(.is-icon) { --bord: linear-gradient(135deg, #fff3b0, #d4af37 22%, #6b4e0a 45%, #ffe27a 62%, #9c7412 80%, #fff3b0); --face: linear-gradient(165deg, #1b1b1b 0%, #0b0b0b 48%, #1a1407 100%); --ink: #f6d56a; --num: #fff5d6;
   --pat: var(--art-wire) 0 0/100% 100%, radial-gradient(80% 50% at 50% 30%, rgba(255,210,90,.22), transparent 65%);
