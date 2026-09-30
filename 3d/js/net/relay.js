@@ -45,7 +45,8 @@ export async function openPokes(onPoke) {
     });
   });
   return {
-    send(to) { try { ch.send({ type: 'broadcast', event: 'p', payload: { to: typeof to === 'string' ? to : null } }); } catch { /* ignore */ } },
+    // k: what changed ('cfg' = global config such as store packs), so receivers can refetch it directly
+    send(to, k) { try { ch.send({ type: 'broadcast', event: 'p', payload: { to: typeof to === 'string' ? to : null, k: k === 'cfg' ? 'cfg' : null } }); } catch { /* ignore */ } },
     close() { try { sb.removeChannel(ch); } catch { /* ignore */ } },
   };
 }

@@ -1361,7 +1361,7 @@ export function createOnline(deps) {
   function pokeAfter(fn, args) {
     if (POKE_READS.has(fn) || !pres.poke) return;
     const to = args && (typeof args.p_player === 'string' ? args.p_player : typeof args.p_to === 'string' ? args.p_to : null);
-    pres.poke.send(to);
+    pres.poke.send(to, fn === 'admin_set_config' ? 'cfg' : null);
   }
   // config cache
   const CFG_KEY = `${deps.accountKey || 'pitchside.account'}.config`;
@@ -1376,8 +1376,11 @@ export function createOnline(deps) {
     const a = readAcc(); const d = a ? null : readIdent();
     const me = (a && a.id) || (d && d.id) || null;
     if (p && p.to && p.to !== me) return;
+    // a config change (store packs, feature switches): fetch the config at once instead of waiting for presence
+    // to report the new version (saves a whole round trip; owner, Oct 1: admin commands as fast as possible)
+    if (p && p.k === 'cfg') online.config.get(true);
     if (pres.pokeT) return;
-    pres.pokeT = setTimeout(() => { pres.pokeT = null; presenceTick(true); }, 120);
+    pres.pokeT = setTimeout(() => { pres.pokeT = null; presenceTick(true); }, 30);
   }
   async function presenceTick(force) {
     if (pres.busy) { if (force) pres.again = true; return pres.last; }
