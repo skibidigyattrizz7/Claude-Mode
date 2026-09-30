@@ -73,6 +73,7 @@ export function sanitizePresence(d) {
     broadcasts: Array.isArray(d.broadcasts) ? d.broadcasts.slice(0, 5).map(sanitizeBroadcast).filter(Boolean) : [],
     gifts: n(d.gifts), unread: n(d.unread), invites: n(d.invites), requests: n(d.requests),
     resets: sanitizeEpochs(d.resets),
+    hasResets: isObj(d.resets), // false for the anonymous fallback (online count only): its zeros must never be read as epochs
     configVersion: Number.isFinite(d.configVersion) ? d.configVersion : null,
     role: ['player', 'mod', 'owner'].includes(d.role) ? d.role : null,
     resetEpoch: Number.isInteger(d.resetEpoch) && d.resetEpoch > 0 ? d.resetEpoch : 0,

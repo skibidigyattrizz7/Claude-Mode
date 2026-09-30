@@ -13,6 +13,8 @@ export const isVinson = (id) => id === HELL_CARD_ID;
 export const isOwner = (online) => online?.account?.current?.().role === 'owner';
 export const inSquad = (sq) => !!sq && [ ...(sq.slots || []), ...(sq.bench || []) ].includes(HELL_CARD_ID);
 export const cursedPack = (state) => state?.vinson?.phase === 'locked' && inSquad(state.squad);
+// Destructive UI effects belong to the initial pull, not the surviving squad curse after unban.
+export const hasDoomEffects = (phase) => phase === 'doom';
 
 export function beginDoom(state, now = Date.now(), deadline = now + DOOM_MS) {
   state.vinson = { phase: 'doom', doomUntil: deadline, phaseUntil: 0, pin: null };

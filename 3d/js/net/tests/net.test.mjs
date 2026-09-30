@@ -690,7 +690,11 @@ test('expired session logs the account out instead of creating an anonymous prof
   await A.account.signup({ username: 'Sleepy', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   let events = 0;
   A.account.onChange(() => { events++; });
-  be.reset(); // server forgot the session (expired / revoked)
+  // the session ends on the server (expired / revoked elsewhere) while the profile still exists. (A server that lost the
+  // whole profile is the "deleted" case, see the 019 tests: that one wipes the device instead.)
+  const B = mkAcc(be);
+  await B.account.login({ username: 'Sleepy', password: 'Pitch-pass1' });
+  await B.account.logout({ all: true });
   const r = await A.profile();
   assert.equal(r.error, 'auth');
   assert.equal(A.account.current().state, 'none');
@@ -1363,6 +1367,325 @@ test('owner panel: club edits go through owner patches the player applies + acks
   const again = UT.migrateUT(JSON.parse(JSON.stringify(state)));
   assert.equal(getPlayer(keep).name, 'Edited Name');
   assert.ok(again.club.includes(custom.id));
+});
+
+// ------------------------------------------------------------------ 019: owner resets / deletes / removals reach the device and stick
+// Each "device" = its own storage (identity + local club, the way the game uses localStorage). remote.js and the UT
+// save read the global localStorage, so `dev.as(fn)` swaps it while that device acts.
+const lsShim = () => {
+  const m = new Map();
+  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), key: (i) => [...m.keys()][i] ?? null, get length() { return m.size; } };
+};
+async function withRemote(fn) {
+  const R = await import('../../meta/core/remote.js');
+  const W = await import('../../meta/core/wipe.js');
+  const { createCloudSync } = await import('../cloudsave.js');
+  const prev = globalThis.localStorage;
+  try { return await fn({ R, W, createCloudSync }); } finally { if (prev === undefined) delete globalThis.localStorage; else globalThis.localStorage = prev; }
+}
+/** A device of `be`: online client + its own disk + cloud sync wired like main.js (beforeSync applies remote commands, afterSync acks). */
+function mkDevice(be, { R, W, createCloudSync }, { rpc = null } = {}) {
+  const disk = lsShim();
+  const on = createOnline({ rpc: rpc || ((f, a) => be.call(f, a)), storage: disk, volatileStorage: lsShim(), transportKind: 'loopback' });
+  const dev = { disk, on, deleted: [] };
+  dev.as = async (fn) => { const p = globalThis.localStorage; globalThis.localStorage = disk; try { return await fn(); } finally { globalThis.localStorage = p; } };
+  dev.ut = () => dev.as(() => UT.loadUT());
+  dev.putUT = (st) => dev.as(() => UT.saveUT(st));
+  dev.remote = (o = {}) => dev.as(async () => {
+    const st = UT.loadUT();
+    return R.syncRemote({ online: on, state: st, cloud: true, persist: () => (st ? UT.saveUT(st) : true), ...o });
+  });
+  dev.cloud = createCloudSync(on, { storage: disk, beforeSync: () => dev.remote(), afterSync: (r) => dev.as(() => R.flushAcks(on, r)) });
+  dev.sync = () => dev.as(() => dev.cloud.syncNow());
+  // main.js: the moment the profile is reported deleted, the local club is wiped synchronously
+  on.account.onDeleted(() => { dev.deleted.push(1); const p = globalThis.localStorage; globalThis.localStorage = disk; try { W.wipeLocalProfile(); R.forgetPendingAcks(); } finally { globalThis.localStorage = p; } });
+  return dev;
+}
+
+test('019 owner reset club/progress/coins/all reaches the player, once, and is not undone by the next sync', async () => {
+  await withRemote(async (ctx) => {
+    const { R } = ctx;
+    const { be, O, b } = await world3();
+    const D = mkDevice(be, ctx);
+    await D.on.account.login({ username: 'Bob Jones', password: 'Pitch-pass2' });
+    const st = UT.createUTState();
+    st.coins = 777; st.stats.matches = 9; st.stats.wins = 4; st.obj = { x: 1 }; st.sbc = { s: 1 }; st.rivals = { division: 3 };
+    await D.putUT(st);
+    // first sight of the profile: epochs are only recorded, nothing is reset
+    const first = await D.remote();
+    assert.equal(first.first, true);
+    assert.deepEqual(first.resets, []);
+    assert.equal((await D.ut()).coins, 777);
+    assert.equal((await D.sync()).action, 'uploaded');
+    assert.deepEqual((await O.owner.playerDetail(b.id)).save.data.club, st.club);
+    assert.deepEqual((await D.remote()).resets, []); // nothing new: nothing happens
+    // --- club reset
+    assert.equal((await O.owner.reset(b.id, 'club')).ok, true);
+    assert.equal((await O.owner.playerDetail(b.id)).save.exists, false, 'the server copy of the club is gone');
+    const r1 = await D.remote();
+    assert.deepEqual(r1.resets, ['club']);
+    assert.deepEqual(r1.notices, ['An admin reset your club.']);
+    const fresh = await D.ut();
+    assert.notDeepEqual(fresh.club, st.club);
+    assert.equal(fresh.coins, 777, 'club reset keeps coins');
+    assert.equal(fresh.stats.matches, 9, 'club reset keeps progress');
+    // the next sync uploads the FRESH club (never the old one); later syncs / check-ins neither undo nor repeat it
+    assert.equal((await D.sync()).action, 'uploaded');
+    assert.deepEqual((await O.owner.playerDetail(b.id)).save.data.club, fresh.club);
+    assert.deepEqual((await D.remote()).resets, []);
+    assert.deepEqual((await D.ut()).club, fresh.club);
+    // --- progress reset
+    assert.equal((await O.owner.reset(b.id, 'progress')).ok, true);
+    assert.deepEqual((await D.remote()).resets, ['progress']);
+    const p = await D.ut();
+    assert.deepEqual([p.stats.matches, p.stats.wins, p.obj, p.sbc, p.rivals, p.coins, p.club], [0, 0, {}, {}, undefined, 777, fresh.club]);
+    // --- coins reset (server wallet 5000; the local balance follows)
+    assert.equal((await O.owner.reset(b.id, 'coins')).ok, true);
+    assert.deepEqual((await D.remote()).resets, ['coins']);
+    assert.equal((await D.ut()).coins, 5000);
+    // --- everything
+    const s2 = await D.ut(); s2.stats.matches = 5; s2.obj = { y: 2 }; s2.coins = 123; await D.putUT(s2);
+    assert.equal((await D.sync()).ok, true);
+    assert.equal((await O.owner.reset(b.id, 'all')).ok, true);
+    const r4 = await D.remote();
+    assert.deepEqual(r4.resets, ['coins', 'progress', 'club']);
+    assert.deepEqual(r4.notices, ['An admin reset your account.']);
+    const s3 = await D.ut();
+    assert.deepEqual([s3.stats.matches, s3.obj, s3.coins], [0, {}, 5000]);
+    assert.notDeepEqual(s3.club, fresh.club);
+    assert.equal((await D.sync()).action, 'uploaded');
+    assert.deepEqual((await O.owner.playerDetail(b.id)).save.data.club, s3.club);
+    assert.equal(R.resetMessage(['progress', 'coins']), 'An admin reset your progress and coins.');
+  });
+});
+
+test('019 a stale device that plays on after an owner club reset applies it before uploading (the old club never comes back)', async () => {
+  await withRemote(async (ctx) => {
+    const { be, O, b } = await world3();
+    const D = mkDevice(be, ctx);
+    await D.on.account.login({ username: 'Bob Jones', password: 'Pitch-pass2' });
+    const st = UT.createUTState(); await D.putUT(st);
+    await D.remote(); await D.sync();
+    const oldClub = [...st.club];
+    assert.equal((await O.owner.reset(b.id, 'club')).ok, true);
+    // the player plays a match before the next check-in (the local save changes) and the cloud sync fires
+    const s = await D.ut(); s.coins += 100; s.stats.matches++; await D.putUT(s);
+    assert.equal((await D.sync()).ok, true);
+    const server = (await O.owner.playerDetail(b.id)).save;
+    assert.equal(server.exists, true);
+    assert.notDeepEqual(server.data.club, oldClub, 'the old club did not come back');
+    assert.deepEqual(server.data.club, (await D.ut()).club);
+  });
+});
+
+test('019 first sight of a profile only records the epochs: new devices and new logins are never reset by old epochs', async () => {
+  await withRemote(async (ctx) => {
+    const { R } = ctx;
+    const { be, O, b } = await world3();
+    assert.equal((await O.owner.reset(b.id, 'all')).ok, true); // long before this device ever saw the account
+    assert.equal((await O.owner.reset(b.id, 'club')).ok, true);
+    const D = mkDevice(be, ctx);
+    const st = UT.createUTState(); st.coins = 4242; await D.putUT(st);
+    await D.on.account.login({ username: 'Bob Jones', password: 'Pitch-pass2' });
+    const r = await D.remote();
+    assert.deepEqual([r.first, r.resets, r.notices], [true, [], []]);
+    assert.equal((await D.ut()).coins, 4242);
+    assert.deepEqual((await D.ut()).club, st.club);
+    assert.deepEqual(await D.as(() => R.readSeenEpochs(b.id)), { coins: 1, progress: 1, club: 2 });
+    // ...but a reset issued afterwards does apply
+    assert.equal((await O.owner.reset(b.id, 'coins')).ok, true);
+    assert.deepEqual((await D.remote()).resets, ['coins']);
+    assert.equal((await D.ut()).coins, 5000);
+    // a brand new account starts at epoch 0 and is unaffected
+    const N = mkDevice(be, ctx);
+    await N.on.account.signup({ username: 'Newbie One', password: 'Pitch-pass3', confirm: 'Pitch-pass3' });
+    const n = UT.createUTState(); n.coins = 10000; await N.putUT(n);
+    assert.deepEqual([(await N.remote()).first, (await N.ut()).coins], [true, 10000]);
+    // the anonymous fallback check-in (no identity) carries no epochs and is never read as "0, 0, 0"
+    const anon = createOnline({ rpc: (f, a) => be.call(f, a), storage: lsShim(), volatileStorage: lsShim(), transportKind: 'loopback' });
+    assert.equal((await anon.presence.tick()).hasResets, false);
+  });
+});
+
+test('019 owner deletes a player: the device forgets its identity and wipes its club instead of re-registering with it', async () => {
+  await withRemote(async (ctx) => {
+    const { R } = ctx;
+    const { be, O } = await world3();
+    // a guest device with a club
+    const G = mkDevice(be, ctx);
+    const gp = await G.on.profile();
+    assert.equal(gp.ok, true);
+    await G.putUT(UT.createUTState());
+    await G.remote(); assert.equal((await G.sync()).action, 'uploaded');
+    const before = (await O.owner.allPlayers()).total;
+    assert.equal((await O.owner.deletePlayer(gp.id)).ok, true);
+    assert.equal((await O.owner.allPlayers()).total, before - 1);
+    assert.equal((await O.owner.playerDetail(gp.id)).ok, false, 'no profile, no save');
+    assert.equal((await be.call('identity_state', { p_id: gp.id })).data.exists, false);
+    // the next check-in: the server answers "auth", identity_state says "deleted"
+    await G.as(() => G.on.presence.tick());
+    assert.equal(G.deleted.length, 1);
+    assert.equal(G.on.hasIdentity(), false);
+    assert.equal(await G.ut(), null, 'local club wiped');
+    assert.equal(G.disk.getItem('pitchside.ut.cloud'), null);
+    // nothing re-registers or re-uploads: the profile count does not grow, further calls are quiet
+    const after = (await O.owner.allPlayers()).total;
+    assert.equal((await G.sync()).ok, false);
+    await G.as(() => G.on.presence.tick());
+    assert.equal((await O.owner.allPlayers()).total, after);
+    assert.equal(G.deleted.length, 1, 'fires once');
+    // an ACCOUNT device: logged out and wiped too, with the message
+    const A = mkDevice(be, ctx);
+    const login = await A.on.account.login({ username: 'Alice Smith', password: 'Pitch-pass1' });
+    await A.putUT(UT.createUTState()); await A.remote(); await A.sync();
+    assert.equal((await O.owner.deletePlayer(login.id)).ok, true);
+    const pr = await A.as(() => A.on.profile());
+    assert.equal(pr.error, 'deleted');
+    assert.equal(pr.message, 'Your account was deleted by an admin.');
+    assert.equal(A.on.account.current().state, 'none');
+    assert.equal(await A.ut(), null);
+    assert.equal(A.deleted.length, 1);
+    assert.equal(await A.as(() => R.readSeenEpochs(login.id)), null);
+  });
+});
+
+test('019 a network error or an expired session does NOT wipe anything', async () => {
+  await withRemote(async (ctx) => {
+    const { be, O } = await world3();
+    // (1) profile deleted, but the identity_state check cannot be answered (network): nothing changes
+    let blockCheck = true;
+    const flaky = (f, args) => (f === 'identity_state' && blockCheck ? { ok: false, error: 'offline' } : be.call(f, args));
+    const D = mkDevice(be, ctx, { rpc: flaky });
+    const login = await D.on.account.login({ username: 'Bob Jones', password: 'Pitch-pass2' });
+    await D.putUT(UT.createUTState());
+    assert.equal((await O.owner.deletePlayer(login.id)).ok, true);
+    const r = await D.as(() => D.on.profile());
+    assert.equal(r.error, 'offline');
+    assert.equal(D.on.account.current().state, 'account', 'still logged in: we could not tell');
+    assert.notEqual(await D.ut(), null);
+    assert.equal(D.deleted.length, 0);
+    blockCheck = false; // the network is back: now it is known
+    assert.equal((await D.as(() => D.on.profile())).error, 'deleted');
+    assert.equal(D.deleted.length, 1);
+    // (2) the whole server is unreachable
+    const E = mkDevice(be, ctx);
+    await E.on.account.login({ username: 'Alice Smith', password: 'Pitch-pass1' });
+    await E.putUT(UT.createUTState());
+    be.down = true;
+    await E.as(() => E.on.presence.tick());
+    be.down = false;
+    assert.equal(E.on.account.current().state, 'account');
+    assert.notEqual(await E.ut(), null);
+    // (3) expired / revoked session (the profile still exists): the old behaviour, the club stays on the device
+    const other = mkDevice(be, ctx);
+    await other.on.account.login({ username: 'Alice Smith', password: 'Pitch-pass1' });
+    await other.on.account.logout({ all: true }); // ends every session of Alice on the server
+    const pr = await E.as(() => E.on.profile());
+    assert.equal(pr.error, 'auth');
+    assert.equal(E.on.account.current().state, 'none', 'logged out as before');
+    assert.notEqual(await E.ut(), null, 'but the local club is kept');
+    assert.equal(E.deleted.length, 0);
+  });
+});
+
+test('019 removeCard removes the card everywhere (club, squad, saved squads, saved list, vault, pending pack, transfer list, market records) and is idempotent', () => {
+  const state = UT.createUTState();
+  const victim = state.club.find((id) => state.squad.slots.includes(id));
+  const other = state.club.find((id) => id !== victim && !state.squad.slots.includes(id));
+  state.saved = [victim, other, victim];
+  state.vault = [victim, other];
+  state.pendingPack = [victim];
+  state.transferList = [victim];
+  state.untradeable = [victim];
+  state.forcedPulls = [victim];
+  state.listed = [{ listingId: 'l1', pid: victim, price: 500, status: 'active' }, { listingId: 'l2', pid: other, price: 500, status: 'active' }];
+  state.squads = [{ name: 'Squad 1', squad: null }, { name: 'B', squad: { formation: '4-3-3', slots: [...state.squad.slots], bench: [victim, null, null, null, null, null, null] } }];
+  const patch = { id: 7, ops: [{ op: 'removeCard', id: victim }, { op: 'removeCard', id: 'not_a_card' }, { op: 'removeCard', id: 'bad id!' }] };
+  const r1 = applyOwnerPatches(state, [patch]);
+  assert.deepEqual(r1.applied, [7]);
+  assert.equal(JSON.stringify(state).split(`"${victim}"`).length - 1, 0, 'no trace of the card is left in the save');
+  assert.ok(state.club.length > 5 && state.vault.includes(other) && state.saved.includes(other) && state.listed.length === 1);
+  // loading the save again keeps it removed; "claim all saved" cannot bring it back
+  const again = UT.migrateUT(JSON.parse(JSON.stringify(state)));
+  UT.claimAllSaved(again);
+  assert.equal(again.club.includes(victim), false);
+  // the same patch delivered again (its ack was lost) changes nothing
+  const snap = JSON.stringify(state);
+  const r2 = applyOwnerPatches(state, [patch]);
+  assert.deepEqual([r2.applied, r2.changed, JSON.stringify(state)], [[7], 0, snap]);
+  // ...and a resetClub patch is never replayed over what the player did since
+  applyOwnerPatches(state, [{ id: 8, ops: [{ op: 'resetClub' }] }]);
+  state.coins = 4321; state.club.push('___bought');
+  applyOwnerPatches(state, [{ id: 8, ops: [{ op: 'resetClub' }] }]);
+  assert.ok(state.club.includes('___bought'), 'the second delivery of patch 8 did not wipe the club again');
+  assert.equal(state.coins, 4321);
+});
+
+test('019 owner removeCard end to end: applied before the upload, acknowledged only once the patched club is on the server, survives a download of an older server copy', async () => {
+  await withRemote(async (ctx) => {
+    const { R } = ctx;
+    const { be, O, b } = await world3();
+    const D1 = mkDevice(be, ctx);
+    await D1.on.account.login({ username: 'Bob Jones', password: 'Pitch-pass2' });
+    const st = UT.createUTState();
+    const victim = st.club.find((id) => st.squad.slots.includes(id));
+    st.saved = [victim]; st.vault = [victim];
+    await D1.putUT(st);
+    await D1.remote(); await D1.sync();
+    assert.ok((await O.owner.playerDetail(b.id)).save.data.club.includes(victim));
+    // a second device of the same account, in sync with the server
+    const D2 = mkDevice(be, ctx);
+    await D2.on.account.login({ username: 'Bob Jones', password: 'Pitch-pass2' });
+    await D2.remote(); assert.equal((await D2.sync()).action, 'downloaded');
+    assert.deepEqual((await D2.ut()).club, st.club);
+    // the owner removes the card; D2 plays and syncs first: the patch is applied BEFORE its upload and acknowledged after it
+    assert.equal((await O.owner.patchPlayer(b.id, [{ op: 'removeCard', id: victim }])).ok, true);
+    const s2 = await D2.ut(); s2.coins += 5; await D2.putUT(s2);
+    assert.equal((await D2.sync()).action, 'uploaded');
+    const det = await O.owner.playerDetail(b.id);
+    assert.equal(det.patches.length, 0);
+    assert.equal(JSON.stringify(det.save.data).includes(`"${victim}"`), false, 'gone from club, squad, saved cards and vault on the server');
+    // D1 (stale) plays on: its upload conflicts and the server copy (already patched) replaces it
+    const s1 = await D1.ut(); s1.coins += 1; await D1.putUT(s1);
+    assert.equal((await D1.sync()).action, 'downloaded');
+    const c1 = await D1.ut();
+    assert.equal(JSON.stringify(c1).includes(`"${victim}"`), false);
+    // --- the risky order: an OLD client (no remote step) uploads a copy that still has the next card, D1 applies the
+    // patch locally, but its upload loses to that newer server copy: the patch must not be acknowledged, then re-applies
+    const victim2 = c1.club.find((id) => id !== victim && !c1.squad.slots.includes(id));
+    assert.equal((await O.owner.patchPlayer(b.id, [{ op: 'removeCard', id: victim2 }])).ok, true);
+    const s3 = await D2.ut(); s3.stats.matches += 1; await D2.putUT(s3);
+    const oldClient = createCloudSyncFor(D2);
+    assert.equal((await D2.as(() => oldClient.syncNow())).action, 'uploaded');
+    assert.equal((await O.owner.playerDetail(b.id)).save.data.club.includes(victim2), true);
+    assert.equal((await O.owner.playerDetail(b.id)).patches.length, 1, 'still pending on the server');
+    await D1.remote(); // applied to D1's local club; acknowledgement waits for the upload
+    assert.equal(R.pendingAcks(), 1);
+    assert.equal((await D1.ut()).club.includes(victim2), false);
+    const lost = await D1.sync(); // conflict with the newer server copy: it replaces the local club
+    assert.equal(lost.action, 'downloaded');
+    assert.equal(R.pendingAcks(), 0);
+    assert.equal((await O.owner.playerDetail(b.id)).patches.length, 1, 'never acknowledged while the patched club was not on the server');
+    const again = await D1.remote(); // the patch re-applies to the downloaded copy
+    assert.ok(again.patches && again.patches.changed >= 1);
+    assert.equal((await D1.sync()).action, 'uploaded');
+    const done = await O.owner.playerDetail(b.id);
+    assert.equal(done.patches.length, 0, 'acknowledged after the upload');
+    assert.equal(done.save.data.club.includes(victim2), false);
+    function createCloudSyncFor(dev) { return ctx.createCloudSync(dev.on, { storage: dev.disk }); }
+  });
+});
+
+test('019 wipe.js forgets exactly the keys the game uses for the club (UT save, backup, cloud link, season, reset records)', async () => {
+  await withRemote(async ({ R, W }) => {
+    const { SEASON_KEY } = await import('../../meta/core/seasons.js');
+    assert.deepEqual(W.WIPE_KEYS, [UT.UT_KEY, `${UT.UT_KEY}.backup`, `${UT.UT_KEY}.cloud`, SEASON_KEY]);
+    const ls = lsShim(); globalThis.localStorage = ls;
+    for (const k of ['pitchside.ut', 'pitchside.ut.backup', 'pitchside.ut.cloud', 'pitchside.season', 'pitchside.resetSeen.abc', 'pitchside.resetApplied.abc', 'pitchside.settings', 'pitchside.gameplay']) ls.setItem(k, '1');
+    W.wipeLocalProfile();
+    assert.deepEqual([...Array(ls.length)].map((_, i) => ls.key(i)).sort(), ['pitchside.gameplay', 'pitchside.settings']);
+    assert.equal(R.RESET_COINS, 5000);
+  });
 });
 
 // ------------------------------------------------------------------ run

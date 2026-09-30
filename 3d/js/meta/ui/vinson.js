@@ -1,7 +1,8 @@
 // EVIL VINSON presentation and lifecycle. This is global (not tied to a UT view), so a timer continues when
 // the player changes screens. Server status is polled while active; the saved absolute deadline survives reload.
 import { loadUT, saveUT } from '../core/ut.js';
-import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, cursedPack, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
+import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, cursedPack, hasDoomEffects, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
+import { fractureElement } from './vinsonfracture.js';
 
 const asset = (name) => new URL(`../../../assets/cards/${name}`, import.meta.url).href;
 const warning = asset('vinson-warning.png');
@@ -44,13 +45,14 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       target.append(group, document.createTextNode(' '));
     });
   };
-  const infected = (phase) => ['doom', 'freed', 'warn', 'consequence', 'locked'].includes(phase);
+  const infected = hasDoomEffects;
   const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
   function repairUi() {
     for (const [el, wasInert] of broken) { el.classList.remove('vinson-control-broken', 'vinson-tab-falling'); el.inert = wasInert; }
     broken.clear(); root()?.classList.remove('vinson-ui-falling');
     damagedKeys.clear();
     root()?.querySelectorAll('.vinson-control-gone').forEach((el) => { el.classList.remove('vinson-control-gone'); el.inert = false; });
+    document.querySelectorAll('.vinson-fracture').forEach((el) => el.remove());
     falling = false;
   }
   function breakControl(target, cls = 'vinson-control-broken') {
@@ -67,17 +69,6 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       }
     }, 1300);
     for (const el of broken.keys()) if (!el.isConnected) broken.delete(el);
-  }
-  function fracture(target) {
-    if (!target || reduce()) return;
-    const bounds = target.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) return;
-    const effect = make('div', 'vinson-fracture');
-    effect.style.cssText = `left:${bounds.left}px;top:${bounds.top}px;width:${bounds.width}px;height:${bounds.height}px`;
-    const caption = (target.textContent || '').trim().slice(0, 34);
-    for (let i = 0; i < 3; i++) effect.append(make('span', `vinson-shard vinson-shard-${i}`, caption));
-    document.body.append(effect);
-    setTimeout(() => effect.remove(), 1300);
   }
   function onInfectedClick(event) {
     if (!infected(state()?.vinson?.phase) || isOwner(online)) return;
@@ -104,7 +95,12 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       const packScene = lockedPack && !!target.closest('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback');
       const matchScene = lockedPack && /^(play|start match|play rivals|play squad battles|kick off)$/i.test(label);
       const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
-      fracture(target);
+      const pack = target.closest('.pm-storeitem, .pm-packitem')?.querySelector('.pm-pack');
+      if (pack && pack !== target && !broken.has(pack)) {
+        fractureElement(pack, { x: event.clientX, y: event.clientY });
+        breakControl(pack);
+      }
+      fractureElement(target, { x: event.clientX, y: event.clientY });
       // Result screens own their coordinated button collapse and exit timer.
       if (!packScene) breakControl(target);
       if (!packEntry && !packScene && !matchScene && !squadWarning) {
@@ -169,7 +165,8 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   function draw() {
     const s = state(); if (!s || isOwner(online)) { repairUi(); host.replaceChildren(); document.body.classList.remove('vinson-infected', 'vinson-critical'); current = ''; return; }
     const v = s.vinson; const phase = v?.phase || '';
-    if (current === 'banned' && phase !== 'banned') repairUi();
+    if (!infected(phase) && phase !== 'banned' &&
+      (infected(current) || current === 'banned' || broken.size || damagedKeys.size || falling)) repairUi();
     document.body.classList.toggle('vinson-infected', infected(phase));
     document.body.classList.toggle('vinson-critical', phase === 'doom' && v.doomUntil - Date.now() <= 10000);
     if (!phase || phase === 'lifted') { repairUi(); host.replaceChildren(); current = phase; cinematic = false; return; }
@@ -416,7 +413,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);
-  remoteInterval = setInterval(() => { const phase = state()?.vinson?.phase; if (phase && phase !== 'freed' && phase !== 'lifted') void poll(); }, 12000);
+  remoteInterval = setInterval(() => { const phase = state()?.vinson?.phase; if (phase && phase !== 'lifted') void poll(); }, 12000);
   online?.account?.onChange?.(() => {
     const id = online?.identityId?.() || null;
     if (id !== boundId) { boundId = id; if (!app) { localState = null; host.replaceChildren(); current = ''; } }

@@ -227,4 +227,8 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - Oct 1 (owner): owner panel "Delete player", "Reset coins/progress/club/account" and other commands don't work;
   "remove card from club" sometimes fails. Root cause found: the server does the reset, but the player's client never
   applies per-player reset epochs and re-uploads its local save (same for deleted accounts). Claude agent fixing (client
-  + new migration 019). Vinson lift bug (effects stay after unban): ChatGPT is fixing it (owner asked it).
+  + new migration 019). Vinson lift bug (effects stay after unban): fixed on chatgpt/vinson-unban-recovery, awaiting Claude review/merge.
+- DONE on branch (Sep 30, owner): Vinson unban restores ordinary controls while preserving squad curse side effects;
+  Lift curse remains visible for released players and remote lifts reach freed clients. Actual pack/control artwork
+  now fractures into irregular fragments instead of caption boxes or replacement pictures. All 22 suites pass;
+  browser visual review remains pending. Handoff in docs/AI_DIRECT.md.

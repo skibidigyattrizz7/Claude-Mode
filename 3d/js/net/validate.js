@@ -249,6 +249,7 @@ export function errorText(code) {
     offline: 'Online services are unreachable right now.',
     timeout: 'The server took too long to answer.',
     auth: 'Your online profile could not be verified.',
+    deleted: 'Your account was deleted by an admin.',
     bad_price: `Price must be between ${MARKET.minPrice.toLocaleString('en-US')} and ${MARKET.maxPrice.toLocaleString('en-US')} coins.`,
     bad_card: 'That card cannot be listed.',
     card_too_large: 'That card cannot be listed.',

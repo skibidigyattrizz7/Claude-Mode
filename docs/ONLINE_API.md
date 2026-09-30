@@ -146,3 +146,26 @@ the card can be taken back with `cancel`). `claimSales()` stays for old unclaime
   { on, minutes })` (enforced server-side; `presence.last.restrictions`, `admin.restricted(key)`), `owner.message(p, text)`.
   `owner.giveCoins` / `moderation.adjustCoins` up to ±9e15. Staff may list on the market at any price (1 – 9e15).
   Guests keep a cloud save too (`cloud.get/put` for any identity) so the owner sees every club.
+
+## Migration 019 — owner resets, deletes and card removals actually reach the device
+The server already did its part (epochs bumped, rows deleted); the client used to ignore it and re-upload / re-register its
+local club. Now (client: `meta/core/remote.js`, `meta/core/wipe.js`, `net/services.js`, `net/cloudsave.js`):
+- **Per-profile reset epochs.** `presence.last.resets` = `{ coins, progress, club }` (`hasResets` is false for the anonymous
+  fallback). The device stores the last applied epochs per profile id (`pitchside.resetSeen.<id>`); higher epochs apply once:
+  coins → wallet 5 000 / infinite off; progress → match stats, Rivals, weekly battles, objectives, SBCs, season track; club →
+  fresh starter club (name, kit, coins, progress and the Vinson curse kept; saved cards, vault, saved squads, pending packs
+  and market records go); all = the three. The player sees "An admin reset your club/progress/coins/account.". **First sight of
+  a profile on a device only records** the epochs (new devices / logins are never reset by old epochs).
+- **Server.** `owner.reset(p, 'club'|'all')` also deletes the cloud save row (a Vinson-locked profile keeps it) and closes the
+  owner patches queued for the old club. `owner.patchPlayer` removeCard / resetClub cancel the player's market listings.
+- **Deleted accounts.** After an `auth` error the client asks `identity_state(p_id)` → `{ exists }`. Deleted: the online
+  identity (session, device secret, guest choice, admin token) is forgotten, `online.account.onDeleted(fn)` fires (main.js wipes
+  the local club/progress synchronously, then shows "Your account was deleted by an admin." and the account gate) and calls
+  resolve `{ ok:false, error:'deleted' }`. A network error while asking changes nothing; an expired session (profile still
+  exists) logs out as before and keeps the local club.
+- **Owner patches** (`meta/core/ownerpatch.js`): idempotent (applied ids kept in `state.appliedPatches`, so a lost ack never
+  replays resetClub); removeCard removes the card from the club, squad, other saved squads, vault, saved cards, pending pack,
+  transfer list, forced pulls and local market records. They are applied to the live club (or the saved club when the UT
+  screen is closed) BEFORE every cloud upload (`createCloudSync({ beforeSync })`), and acknowledged only after the patched club is
+  on the server (`afterSync` → `remote.flushAcks`); if a newer server copy replaces the local club first, the patch stays
+  pending and re-applies.

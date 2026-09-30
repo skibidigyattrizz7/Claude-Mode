@@ -7,6 +7,7 @@ import { clubById } from '../core/data.js';
 import { PROMOS } from '../core/promos.js';
 import { load, save } from '../core/storage.js';
 import { normalizePackAnim, bulkTargets } from './packopen_seq.js';
+import { fractureElement } from './vinsonfracture.js';
 
 export const FLARE = { bronze: '#a9b1bf', silver: '#e4ecf6', gold: '#ffc933', walkout: '#b44dff' };
 export const SPECIAL_FLARE = { legend: '#fff2c4', hero: '#27e1c1', inform: '#ffb300', lotg: '#ffd35a', objective: '#6ee7ff' };
@@ -249,9 +250,9 @@ export function makeGrid(stage, pack, players, opts, destroy) {
       if (corrupting) return;
       corrupting = true;
       stage.querySelectorAll('.pm-po-gridwrap button').forEach((b, i) => {
+        fractureElement(b, { delay: Math.min(i, 8) * 65 });
         b.classList.add('vinson-po-corrupt');
         b.style.animationDelay = `${Math.min(i, 8) * 65}ms`;
-        if (b === button) b.textContent = '666 0101 666';
       });
       setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 1700);
     }, true);

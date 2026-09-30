@@ -13,7 +13,7 @@ import { tileIcon } from './icons.js';
 import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
-import { applyOwnerPatches } from '../core/ownerpatch.js';
+import { syncRemote, remoteDue, wipeLocalProfile, DELETED_MESSAGE } from '../core/remote.js';
 import { startVinsonExperience } from './vinson.js?v=vinson8';
 import { cursedPack, enforceLock, isOwner } from '../core/vinson.js';
 
@@ -120,14 +120,19 @@ export class MetaApp {
       try {
         const un = this.online.presence.onUpdate((u) => {
           if (u && u.resetDue) this.checkResetEpoch();
-          if (u && u.patches > 0) this.applyOwnerPatches();
+          if (u && remoteDue(this.online, u)) this.processRemote({ usePresence: true }); // per-profile resets + owner patches
           if (u) this.applyRestrictions(u.restrictions);
         });
         if (typeof un === 'function') this.presenceUnsub = un;
       } catch { /* ignore */ }
     }
+    // the owner deleted this profile on the server: forget the local club (main.js wipes storage too)
+    this.deletedUnsub = null;
+    if (this.online && this.online.account && typeof this.online.account.onDeleted === 'function') {
+      try { const un = this.online.account.onDeleted(() => this.onIdentityDeleted()); if (typeof un === 'function') this.deletedUnsub = un; } catch { /* ignore */ }
+    }
     this.checkResetEpoch();
-    this.applyOwnerPatches();
+    this.processRemote();
     this.vinson?.attach(this);
   }
 
@@ -179,22 +184,54 @@ export class MetaApp {
   }
 
   /**
-   * Owner edits to this club (server "owner patch" queue, migration 007): apply them to the UT save, save,
-   * then acknowledge — a patch stays pending until applied, so a stale device can never overwrite it.
+   * Everything the server asks of this device's club, applied to the live UT save (core/remote.js):
+   *  - per-profile reset epochs ("Reset coins / progress / club / account"): applied once, first sight only records;
+   *  - owner patches (add / remove / edit cards, reset club...): applied before any upload, acknowledged once the
+   *    patched club is on the server.
+   * Then the cloud copy is synced so the server matches this device. Never throws.
    */
-  async applyOwnerPatches() {
-    if (this.patching || !this.ut || !this.online || !this.online.patches || typeof this.online.patches.pending !== 'function') return;
-    if (typeof this.online.hasIdentity === 'function' && !this.online.hasIdentity()) return;
-    this.patching = true;
+  async processRemote({ usePresence = false } = {}) {
+    if (this.remoting || this.destroyed || !this.online) return null;
+    this.remoting = true;
     try {
-      const r = await safeCall(() => this.online.patches.pending(), null);
-      if (!r || r.ok === false || !Array.isArray(r.items) || !r.items.length || !this.ut || this.destroyed) return;
-      const { applied, changed } = applyOwnerPatches(this.ut, r.items);
-      this.saveUT();
-      await safeCall(() => this.online.patches.ack(applied));
-      try { const c = globalThis.__pitchsideCloud; if (c && typeof c.syncNow === 'function') c.syncNow(); } catch { /* ignore */ }
-      if (changed && !this.destroyed) { this.toast('The owner updated your club.', 'warn'); this.refresh(); }
-    } finally { this.patching = false; }
+      const cloud = globalThis.__pitchsideCloud;
+      const hasCloud = !!(cloud && typeof cloud.syncNow === 'function');
+      const res = await syncRemote({
+        online: this.online, state: this.ut, cloud: hasCloud, usePresence,
+        // coins: the server wallet is 5 000 now; drop the local wallet link BEFORE saving so no delta is sent
+        onApply: (kinds) => { if (kinds.includes('coins')) this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0, unsub: this.wallet.unsub }; },
+        persist: () => this.saveUT() !== false,
+      });
+      if (!res || this.destroyed) return res;
+      if (res.resets.includes('coins')) safeCall(() => this.refreshOnlineCoins());
+      if ((res.resets.length || res.patches) && hasCloud) safeCall(() => cloud.syncNow());
+      if (res.changed || res.notices.length) {
+        try { globalThis.__pitchsideVinson?.reload?.(); } catch { /* ignore */ }
+        for (const n of res.notices) this.toast(n, 'warn');
+        this.refresh();
+      }
+      return res;
+    } finally { this.remoting = false; }
+  }
+  /** Compat alias (older callers / tests). */
+  applyOwnerPatches() { return this.processRemote(); }
+  /** The cloud sync replaced the local club (login on a new device, or another device saved newer): pick it up. */
+  reloadUT() {
+    if (this.destroyed) return;
+    this.ut = loadUT();
+    if (this.ut) normalizeWallet(this.ut);
+    this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0, unsub: this.wallet.unsub };
+    this.refresh();
+  }
+  /** The owner deleted this profile: nothing of its club may be written back. Storage is wiped, the hub shows a fresh start. */
+  onIdentityDeleted() {
+    if (this.destroyed) return;
+    wipeLocalProfile();
+    this.ut = null;
+    this.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0, unsub: this.wallet.unsub };
+    try { globalThis.__pitchsideVinson?.reload?.(); } catch { /* ignore */ }
+    this.reset(hubView());
+    this.toast(DELETED_MESSAGE, 'bad');
   }
   /** Owner changed the server config (Store packs on/off, prices...): redraw the Store / UT home right away when
    * one is on screen, so players see it without reloading. Skipped while the player is typing or a dialog is open. */
@@ -475,6 +512,7 @@ export class MetaApp {
     if (this.accountUnsub) { try { this.accountUnsub(); } catch { /* ignore */ } }
     if (this.configUnsub) { try { this.configUnsub(); } catch { /* ignore */ } }
     if (this.presenceUnsub) { try { this.presenceUnsub(); } catch { /* ignore */ } }
+    if (this.deletedUnsub) { try { this.deletedUnsub(); } catch { /* ignore */ } }
     if (this.wallet && this.wallet.unsub) { try { this.wallet.unsub(); } catch { /* ignore */ } this.wallet.unsub = null; }
     document.removeEventListener('keydown', this.onKey);
     this.root.remove();
