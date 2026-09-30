@@ -12,6 +12,8 @@ import { weekNumber } from './calendar.js';
 import { PROMOS, PROMO_BY_ID, promoPack, promoSbcs, isPromoLive, isPromoPackOnSale, isCardReleased, releasedLivePromos } from './promos.js';
 import { getConfig, configuredPackPrice, configuredCoins } from './config.js';
 import { restoreCustomCards } from './customreg.js';
+import { enforceLock } from './vinson.js';
+import './vinsonrewards.js';
 import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, SECRET_VERSIONS, secretCard, secretCards } from './secretcard.js';
 import { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX, ADMIN_VAULT_TOP } from './adminvault.js';
 export { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX } from './adminvault.js';
@@ -472,6 +474,7 @@ export function autoSquad(state, formation = state.squad.formation, opts = null)
     manager: prev.manager || null,
     ...(prev.chemStyle ? { chemStyle: prev.chemStyle } : {}),
   };
+  enforceLock(state);
   return state.squad;
 }
 
@@ -515,6 +518,7 @@ export function dedupeSquad(state) {
   });
   state.squad.slots = scrub(state.squad.slots);
   if (Array.isArray(state.squad.bench)) state.squad.bench = scrub(state.squad.bench);
+  enforceLock(state);
   return state.squad;
 }
 /** Validate + apply a squad edit (formation, 11 starter ids, optional bench ids) from the club, enforcing

@@ -7,7 +7,9 @@
 .vinson-notice::before { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(105deg, transparent 0 17px, rgba(188,32,18,.19) 17px 21px, transparent 21px 40px); }
 .vinson-notice-title { position: relative; display: block; font-size: clamp(18px, 3vw, 31px); font-weight: 900; letter-spacing: .075em; line-height: 1.1; text-shadow: 0 3px #430908; }
-.vinson-doom .vinson-notice-title { animation: vinson-type 1.3s steps(25) both; white-space: nowrap; overflow: hidden; margin-inline: auto; max-width: max-content; }
+.vinson-doom { top: 50%; transform: translate(-50%, -50%); width: min(94vw, 1120px); padding: clamp(20px, 4vw, 44px); }
+.vinson-doom .vinson-notice-title { white-space: normal; max-width: 100%; margin-inline: auto; font-size: clamp(34px, 7.2vw, 92px); line-height: .98; letter-spacing: .065em; }
+.vinson-notice-title { display: block; }
 .vinson-timer { position: relative; display: block; margin-top: 4px; font: 700 clamp(19px, 3.5vw, 34px) ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #fff2de; }
 .vinson-edge { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 37%, #4c0809a6 100%); opacity: .35; animation: vinson-breathe 4s ease-in-out infinite; }
 .vinson-omens { position: absolute; inset: 0; overflow: hidden; }
@@ -16,7 +18,9 @@
 .vinson-omen-1 { right: 7%; top: 34%; animation-delay: 2s; transform: rotate(6deg); }
 .vinson-omen-2 { left: 13%; bottom: 18%; animation-delay: 4s; transform: rotate(4deg); }
 .vinson-omen-3 { right: 5%; bottom: 16%; animation-delay: 6s; transform: rotate(-7deg); }
-.vinson-warn, .vinson-consequence { top: auto; bottom: max(24px, env(safe-area-inset-bottom)); }
+.vinson-warn, .vinson-consequence { top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(92vw, 1060px); padding: clamp(22px, 4.5vw, 52px); animation: vinson-aftermath-breathe 2.4s ease-in-out infinite; }
+.vinson-warn .vinson-notice-title, .vinson-consequence .vinson-notice-title { font-size: clamp(34px, 7.4vw, 88px); line-height: .98; letter-spacing: .055em; }
+.vinson-warn .vinson-timer, .vinson-consequence .vinson-timer { margin-top: 18px; font-size: clamp(23px, 4vw, 42px); }
 .vinson-consequence { background: #330c08; border-color: #e65a36; }
 .vinson-locked { top: auto; bottom: max(24px, env(safe-area-inset-bottom)); }
 .vinson-screen { position: absolute; inset: 0; overflow: hidden; pointer-events: auto; background: #000; color: #fff0dd;
@@ -34,14 +38,31 @@
 .vinson-intertitle { position: absolute; z-index: 2; inset: 42% 0 auto; color: #f2dbbd; font: 900 clamp(32px, 6vw, 96px) Impact, sans-serif; letter-spacing: .08em; text-shadow: 0 6px #640e0b, 0 12px 20px #000; opacity: 0; pointer-events: none; }
 .vinson-intertitle-show { animation: vinson-intertitle 2s ease-in-out both; }
 .vinson-blackout .vinson-intertitle { opacity: 0; transition: opacity .5s; }
+.vinson-glitch-slices { position: absolute; z-index: 2; inset: 0; overflow: hidden; pointer-events: none; }
+.vinson-glitch-slice { position: absolute; left: -4%; width: 108%; height: 7%; opacity: 0; background: linear-gradient(90deg, transparent, rgba(216,18,28,.22) 28%, rgba(248,216,202,.12) 52%, rgba(130,0,8,.2) 74%, transparent); transform: translateX(0); will-change: transform, opacity; }
+.vinson-glitch-slice-0 { top: 18%; animation: vinson-slice-drift 5.6s ease-in-out 0s infinite; }
+.vinson-glitch-slice-1 { top: 39%; animation: vinson-slice-drift 6.8s ease-in-out -2.4s infinite reverse; }
+.vinson-glitch-slice-2 { top: 62%; animation: vinson-slice-drift 7.4s ease-in-out -4.1s infinite; }
+.vinson-glitch-slice-3 { top: 81%; height: 4%; animation: vinson-slice-drift 6.2s ease-in-out -1.2s infinite reverse; }
+@keyframes vinson-slice-drift { 0%,14%,100% { opacity: 0; transform: translateX(0); } 21%,26% { opacity: .62; transform: translateX(-1.8%); } 34% { opacity: .28; transform: translateX(1.2%); } 41% { opacity: 0; transform: translateX(0); } }
 .vinson-whisper { position: absolute; left: 7%; top: 38%; color: #d32317; font-size: clamp(28px, 7vw, 96px); font-weight: 900; letter-spacing: .08em; transform: rotate(-5deg); text-shadow: 2px 6px 3px #250000; animation: vinson-flicker 2.3s steps(2) infinite; }
 body.vinson-infected .pm-root .pm-btn:hover, body.vinson-infected .pm-root .pm-uttab:hover { color: #ffb3a5; background: #7d100b; box-shadow: 0 6px 0 #4b0705, inset 0 -6px 12px #ce271b; }
 body.vinson-infected .pm-root .pm-uttab:nth-child(3n) { animation: vinson-flicker 3.7s steps(2) infinite; }
 .vinson-chain { position: absolute; z-index: 5; inset: 0; pointer-events: none; display: grid; place-items: center; font: 900 clamp(28px, 5vw, 64px) Impact, sans-serif; color: #c2ac95; text-shadow: 3px 3px #1c1512, -3px -3px #1c1512; background: linear-gradient(35deg, transparent 45%, #2a2524 47%, #9e8c77 49%, #2a2524 51%, transparent 53%), linear-gradient(-35deg, transparent 45%, #2a2524 47%, #9e8c77 49%, #2a2524 51%, transparent 53%); }
+.vinson-chains { position: absolute; z-index: 5; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; filter: drop-shadow(0 3px 3px rgba(0,0,0,.78)); }
+.vinson-chain-lock { filter: drop-shadow(0 2px 2px rgba(0,0,0,.85)); }
 .vinson-match-screen { position: absolute; z-index: 10000; inset: 0; display: grid; place-items: center; padding: 8vw; text-align: center; background: linear-gradient(180deg, #090000 0%, #7a0909 34%, #2d0000 100%); color: #fff0e0; font: 900 clamp(28px, 5vw, 75px) Impact, sans-serif; letter-spacing: .05em; animation: vinson-drip .9s ease-out both; }
 .vinson-match-screen::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 30px, #a50e0d 31px 40px, transparent 41px 74px); opacity: .35; transform-origin: top; animation: vinson-drip 1.5s ease-in both; }
 .vinson-match-screen strong { position: relative; text-shadow: 3px 6px #330000; }
 .vinson-po-corrupt { position: relative; pointer-events: none; animation: vinson-control-disappear 1.3s linear forwards; }
+.vinson-po-aftermath { position: fixed; z-index: 31000; inset: 0; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom)); box-sizing: border-box; pointer-events: none; text-align: center; background: radial-gradient(ellipse at center, rgba(68,0,4,.48), rgba(0,0,0,.74) 72%); animation: vinson-po-shroud 650ms cubic-bezier(.16,1,.3,1) both; }
+.vinson-po-aftermath-card { display: grid; justify-items: center; gap: clamp(10px,2.4vh,24px); width: min(100%, 980px); padding: clamp(22px,5vw,58px); box-sizing: border-box; border: 2px solid #a91d24; background: linear-gradient(150deg,rgba(27,5,7,.97),rgba(8,2,3,.97)); box-shadow: 0 18px 70px #000, inset 0 0 44px rgba(159,4,15,.18); color: #f4e7df; animation: vinson-po-warning 2.4s ease-in-out infinite; }
+.vinson-po-aftermath-kicker { color: #df6060; font: 800 clamp(13px,2vw,20px) system-ui,sans-serif; letter-spacing: .3em; }
+.vinson-po-aftermath-card strong { color: #f33a40; font: 900 clamp(32px,8vw,86px)/.98 Impact,'Barlow Condensed',sans-serif; letter-spacing: .045em; text-shadow: 0 2px #59060a, 0 0 22px rgba(220,14,23,.52); }
+.vinson-po-aftermath-card > span:not(.vinson-po-aftermath-kicker) { font: 600 clamp(16px,2.4vw,25px) system-ui,sans-serif; }
+.vinson-po-aftermath-card small { color: #bba8a0; font: 800 clamp(12px,1.7vw,16px) system-ui,sans-serif; letter-spacing: .17em; }
+@keyframes vinson-po-shroud { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vinson-po-warning { 0%,100% { box-shadow: 0 18px 70px #000, inset 0 0 34px rgba(159,4,15,.14); } 50% { box-shadow: 0 18px 70px #000, inset 0 0 52px rgba(220,10,22,.29); } }
 @keyframes vinson-flicker { 50% { opacity: 0; filter: blur(2px); } 54% { opacity: 1; filter: none; } }
 @keyframes vinson-drip { from { opacity: 0; clip-path: inset(0 0 100%); } to { opacity: 1; clip-path: inset(0); } }
 @keyframes vinson-break { 35% { transform: skew(15deg) scale(1.05); } 100% { opacity: 0; transform: translateY(130vh) rotate(29deg); } }
@@ -87,7 +108,8 @@ body.vinson-critical::after {
   animation: vinson-reactor 1.05s steps(2,end) infinite;
   box-shadow: inset 0 0 16vh rgba(255,0,15,.52);
 }
-body.vinson-critical .pm-root { animation: vinson-interface-alarm 1.05s steps(2,end) infinite; }
+body.vinson-aftermath::after { animation: vinson-aftermath-red 2.4s ease-in-out infinite; box-shadow: inset 0 0 18vh rgba(210,0,12,.32); }
+body.vinson-critical .pm-root { animation: none; }
 body.vinson-infected .pm-root .pm-btn, body.vinson-infected .pm-root .pm-uttab {
   transition: color .35s, background-color .35s, box-shadow .35s, transform .35s;
 }
@@ -224,6 +246,8 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
 .vinson-check:active { transform: translateY(2px); }
 
 @keyframes vinson-reactor { 0%,100% { background: rgba(105,0,12,.09); } 50% { background: rgba(240,0,18,.22); } }
+@keyframes vinson-aftermath-red { 0%,100% { opacity: .42; } 50% { opacity: .92; } }
+@keyframes vinson-aftermath-breathe { 0%,100% { box-shadow: 0 9px 24px rgba(0,0,0,.7), inset 0 -10px 0 rgba(92,10,9,.55); } 50% { box-shadow: 0 0 48px rgba(225,13,22,.55), 0 9px 24px rgba(0,0,0,.7), inset 0 -10px 0 rgba(92,10,9,.75); } }
 @keyframes vinson-red-warning { 0%,91%,100% { opacity: 1; } 92%,94% { opacity: .25; } 93%,95% { opacity: .85; } }
 @keyframes vinson-interface-alarm { 0%,100% { filter: saturate(.82) contrast(1.05); } 50% { filter: saturate(1.5) contrast(1.14); } }
 @keyframes vinson-whisper { 0%,100% { opacity:.48; filter: blur(.2px) drop-shadow(0 0 9px #640000); } 47% { opacity:.78; } 52% { opacity:.18; filter: blur(2px); } 58% { opacity:.72; filter: none; } }
@@ -246,7 +270,7 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
 @keyframes vinson-ghost-haunt { 0%,12%,100% { opacity:0; transform:translate(0,0) scale(.97) rotate(var(--gr)); } 18% { opacity:.22; } 23% { opacity:.08; transform:translate(calc(var(--gx)*10px),calc(var(--gy)*-7px)) scale(1.02) rotate(var(--gr)); } 28% { opacity:.16; } 34% { opacity:0; transform:translate(calc(var(--gx)*17px),calc(var(--gy)*5px)) scale(1.04) rotate(var(--gr)); } }
 @keyframes vinson-word-haunt { 0%,100% { opacity:0; transform:translate(0,0) rotate(var(--wr)); filter:blur(2px); } 12% { opacity:.62; } 24% { opacity:.24; transform:translate(var(--wx),var(--wy)) rotate(var(--wr)); filter:blur(0); } 37% { opacity:0; transform:translate(calc(var(--wx)*1.6),calc(var(--wy)*-1.4)) rotate(var(--wr)); filter:blur(3px); } }
 @media (max-width: 560px) {
-  .vinson-doom .vinson-notice-title { white-space: normal; max-width: none; animation: none; font-size: clamp(14px, 3.5vw, 20px); }
+  .vinson-doom .vinson-notice-title, .vinson-warn .vinson-notice-title, .vinson-consequence .vinson-notice-title { font-size: clamp(30px, 9vw, 54px); }
   .vinson-final-word { max-width: 42vw; font-size: clamp(15px,5vw,26px); }
   .vinson-final-ghosts img { width: clamp(72px,30vw,150px); }
   .vinson-countdown-blood { opacity:.68; background-size: 22vw 160px,7px 115px,24vw 205px,9px 155px,18vw 138px,6px 90px,28vw 230px,9px 175px,22vw 180px,7px 135px,19vw 210px,100% 100%; }
@@ -258,6 +282,7 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
   .vinson-final-word::after, .vinson-check::after { animation: none !important; }
   .vinson-final-ghosts img { opacity: .09; }
   .vinson-final-word { opacity: .24; }
+  body.vinson-aftermath::after, .vinson-warn, .vinson-consequence, .vinson-glitch-slices, .vinson-po-aftermath, .vinson-po-aftermath-card { animation: none !important; }
   .vinson-omen::after, .vinson-whisper::after, .vinson-final-word::after, .vinson-check::after { transform: none; opacity: .72; }
   .vinson-control-broken, .vinson-tab-falling { visibility: hidden; }
   .vinson-ui-falling { opacity: 0; }
@@ -288,3 +313,5 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
   .vinson-intertitle { font-size: clamp(28px, 6vw, 40px); }
 }
 @media (prefers-reduced-motion: reduce) { .vinson-blood-letter::after { animation: none; } }
+.vb-fight-button { pointer-events:auto; position:absolute; left:50%; bottom:max(26px,env(safe-area-inset-bottom)); transform:translateX(-50%); cursor:pointer; border:0; padding:16px 26px; color:#ffe9df; background:#581512; font:900 24px 'Barlow Condensed',Impact,sans-serif; letter-spacing:.06em; box-shadow:0 5px 0 #240605; }
+.vb-fight-button:focus-visible { outline:2px solid #f8e9df; outline-offset:4px; }

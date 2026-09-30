@@ -248,3 +248,12 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - IN PROGRESS (Sep 30, owner go-ahead): Vinson animations / Fight Suppression on chatgpt/vinson-animation.
   Scope: existing Doom/aftermath/chains, playable two-stage cinematic battle, isolated reward cards; Claude asked
   for server battle nonce/win/immunity/idempotent claim support in AI_DIRECT.
+- Sep 30 (owner): Vinson pull can lag/stick on Send to club; mods sometimes miss the curse animation; quick selling
+  must never prevent the curse. Fixed on chatgpt/vinson-pack-guard: register the curse as soon as the pack rolls
+  Vinson, keep the original pack controls usable so assignment/Close completes, retain the saved curse on RPC failure.
+  Quick selling/resolving does not clear the curse; mods remain affected and only owner is exempt.
+
+- CHECKPOINT Sep 30, chatgpt/vinson-animation: existing Vinson effects/X-chains/XI lock/10s pack exit and playable
+  two-stage battle/cinematics are implemented. Win/immunity/rewards integrate with Claude's pending server APIs.
+  Full live-account/browser review remains pending; isolated preview: 3d/vinson-battle-test.html.
+- URGENT Sep 30, PR11: roll-time curse started before pack Open; move trigger to first post-opening grid render.

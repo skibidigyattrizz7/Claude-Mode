@@ -198,8 +198,10 @@ export function positionName(pos) {
 export function makeGrid(stage, pack, players, opts, destroy) {
   let coinsGained = 0;
   let corrupting = false;
+  let revealed = false;
   const canTransfer = (pid) => (typeof opts.canTransfer === 'function' ? opts.canTransfer(pid) : true);
   function renderGrid() {
+    if (!revealed) { revealed = true; opts.onReveal?.(); }
     clear(stage);
     const newCount = players.filter((x) => !x.dup).length;
     const dupCount = players.length - newCount;
@@ -254,7 +256,14 @@ export function makeGrid(stage, pack, players, opts, destroy) {
         b.classList.add('vinson-po-corrupt');
         b.style.animationDelay = `${Math.min(i, 8) * 65}ms`;
       });
-      setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 1700);
+      const aftermath = h('div', { class: 'vinson-po-aftermath', role: 'alertdialog', 'aria-label': 'Cursed pack consequence' },
+        h('div', { class: 'vinson-po-aftermath-card' },
+          h('span', { class: 'vinson-po-aftermath-kicker' }, 'CURSED PACK'),
+          h('strong', null, 'VINSON CLAIMS THE PULL'),
+          h('span', null, 'Your cards are lost to the curse.'),
+          h('small', null, 'EJECTING IN 10 SECONDS')));
+      stage.appendChild(aftermath);
+      setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 10000);
     }, true);
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }

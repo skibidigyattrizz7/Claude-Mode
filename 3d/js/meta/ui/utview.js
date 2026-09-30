@@ -32,6 +32,7 @@ import * as PM from '../core/pmarket.js';
 import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
 import { cursedPack, isOwner, enforceLock } from '../core/vinson.js';
+import { createVinsonChains } from './vinsonchains.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
 import { byDisplayRank, secretFirst } from '../core/rank.js';
 import { managerCard } from './managercard.js';
@@ -332,7 +333,7 @@ function squadView() {
         const ed = squadEditor({
         formation: s.squad.formation, slots: s.squad.slots, bench: s.squad.bench,
         getPlayer, pool: () => UT.clubPlayers(s),
-        decorate: (p) => p.id === HELL_CARD_ID && s.vinson?.phase === 'locked' ? h('span', { class: 'vinson-chain', 'aria-label': 'Cursed card locked in squad' }, '⛓') : null,
+        decorate: (p) => p.id === HELL_CARD_ID && s.vinson?.phase === 'locked' ? createVinsonChains() : null,
         onChange: (v) => {
           s.squad = v;
           app.vinson?.onSquadChange();
@@ -585,9 +586,14 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   const done = (pid) => UT.resolvePending(s, pid);
   let claimedVinson = false;
   const claim = (pid) => { if (pid === HELL_CARD_ID && !claimedVinson) { claimedVinson = true; void app.vinson?.onPull(); } };
+  // The pull starts the account curse, regardless of how the player resolves the item.
+  // Selling it, leaving the opening or reloading must not provide an escape route.
+  if (items.some((it) => it.pid === HELL_CARD_ID)) claim(HELL_CARD_ID);
   runPackOpening(app.root, {
     pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
     curse,
+    // Wait for the actual reveal; rolling contents is earlier than tapping the pack open.
+    onReveal: () => { if (items.some((it) => it.pid === HELL_CARD_ID)) claim(HELL_CARD_ID); },
     sellValue: (p) => curse ? 0 : quickSellValue(p),
     onSend: (pid) => { done(pid); UT.addToClub(s, pid); persist(app); claim(pid); },
     onVault: (pid) => { done(pid); UT.sendToVault(s, pid); persist(app); claim(pid); },
@@ -595,7 +601,7 @@ export function openPackFlow(app, packType, onDone, count = 1) {
     // FC-style "Send all to transfer list": the card joins the club, then is flagged for sale (pmarket.js).
     canTransfer: (pid) => !(s.untradeable || []).includes(pid),
     onTransfer: (pid) => { done(pid); UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); claim(pid); return r; },
-    onSell: (pid) => { done(pid); const v = curse ? 0 : quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
+    onSell: (pid) => { claim(pid); done(pid); const v = curse ? 0 : quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
     onCurseExit: () => { UT.rescuePendingPack(s); persist(app); app.popTo((v) => v.utHome); app.refresh(); },
     onDone: (sum) => { if (s.pendingPack?.includes(HELL_CARD_ID)) claim(HELL_CARD_ID); UT.rescuePendingPack(s); persist(app); app.refresh(); if (onDone) onDone(sum); },
   });

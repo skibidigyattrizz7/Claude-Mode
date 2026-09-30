@@ -89,6 +89,17 @@ const controller = startVinsonExperience(online, { initialState: state, ephemera
 controller.attach({ ut: state, root, stack: [], refresh() {}, saveUT() {}, applyRestrictions() {} });
 await controller.poll();
 
+// A curse triggered during a pull must not strand the user on its item-assignment screen.
+const packGrid = new Element('div'); packGrid.className = 'pm-po-gridwrap';
+const packClose = new Element('button'); packClose.textContent = 'Close';
+packGrid.append(packClose); root.append(packGrid);
+const packEvent = { target: packClose, prevented: false, stopped: false,
+  preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+listeners.get('click')(packEvent);
+assert.equal(packEvent.prevented, false, 'initial doom allows pack assignment and close');
+assert.equal(packClose.classList.contains('vinson-control-broken'), false);
+packGrid.remove();
+
 const click = () => {
   const event = { target: button, clientX: 10, clientY: 10, prevented: false, stopped: false,
     preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
@@ -150,5 +161,24 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(state.vinson.phase, 'lifted', 'remote interval observes a later owner lift');
 assert.equal(body.classList.contains('vinson-infected'), false);
 controller.destroy();
+
+// Mods have no owner exemption, including when the first pull RPC fails.
+delete state.vinson;
+const modOnline = { ...online, account: { current: () => ({ role: 'mod' }), onChange() {} },
+  vinson: { async status() { return { ok: false }; }, async pull() { throw new Error('offline'); } } };
+const modController = startVinsonExperience(modOnline, { initialState: state, ephemeral: true });
+await modController.onPull();
+assert.equal(state.vinson.phase, 'doom', 'mod pull starts doom even without a server response');
+assert.equal(body.classList.contains('vinson-infected'), true, 'mod receives curse presentation');
+const deadline = state.vinson.doomUntil;
+await modController.onPull();
+assert.equal(state.vinson.doomUntil, deadline, 'multiple resolutions cannot restart the timer');
+modController.destroy();
+
+delete state.vinson;
+const ownerController = startVinsonExperience({ ...online, account: { current: () => ({ role: 'owner' }) } }, { initialState: state, ephemeral: true });
+await ownerController.onPull();
+assert.equal(state.vinson, undefined, 'only the owner is exempt from a pull');
+ownerController.destroy();
 
 console.log('Vinson UI release recovery regression passed');

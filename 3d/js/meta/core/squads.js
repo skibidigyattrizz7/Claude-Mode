@@ -5,6 +5,7 @@
 // stored copy is stale by design and is ignored; `state.squad` is the truth for it. DOM-free.
 import { getPlayer, personOf } from './players.js';
 import { teamRating } from './chemistry.js';
+import { enforceLock } from './vinson.js';
 
 export const MAX_SQUADS = 5;
 const NAME_MAX = 20;
@@ -57,6 +58,7 @@ export function switchSquad(state, i) {
   const target = state.squads[i].squad;
   state.squad = cleanSquad(state, target ? clone(target) : clone(state.squad));
   state.activeSquad = i;
+  enforceLock(state);
   return true;
 }
 

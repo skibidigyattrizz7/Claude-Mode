@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { defaultSquad } from '../core/ut.js';
+import { defaultSquad, quickSell, resolvePending, autoSquad, setSquad } from '../core/ut.js';
+import { switchSquad, addSquad } from '../core/squads.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
 import { dispatchOnlineEntry } from '../ui/app.js';
 import { DOOM_MS, FIRST_WARNING_MS, FINAL_WARNING_MS, BAN_MESSAGE, MATCH_MESSAGE,
@@ -8,6 +9,38 @@ import { DOOM_MS, FIRST_WARNING_MS, FINAL_WARNING_MS, BAN_MESSAGE, MATCH_MESSAGE
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log('ok', name); };
 const s = () => ({ club: [HELL_CARD_ID], squad: defaultSquad() });
+
+test('legacy bench lock is promoted to the XI and every core squad edit preserves it', () => {
+  const state = s(); state.vinson = { phase: 'locked', pin: { area: 'bench', idx: 1 } };
+  state.squad.bench[1] = HELL_CARD_ID;
+  assert.equal(enforceLock(state), true);
+  assert.deepEqual(state.vinson.pin, { area: 'slot', idx: 9 });
+  assert.equal(state.squad.slots[9], HELL_CARD_ID);
+  assert.equal(state.squad.bench.includes(HELL_CARD_ID), false);
+  setSquad(state, { formation: '4-4-2', slots: [], bench: [HELL_CARD_ID] });
+  assert.equal(state.squad.slots[9], HELL_CARD_ID);
+  autoSquad(state);
+  assert.equal(state.squad.slots[9], HELL_CARD_ID);
+  addSquad(state, 'Other squad');
+  state.squads[0].squad = defaultSquad();
+  switchSquad(state, 0);
+  assert.equal(state.squad.slots[9], HELL_CARD_ID);
+  assert.equal(state.squad.bench.includes(HELL_CARD_ID), false);
+});
+
+test('quick-selling or resolving the item cannot clear any account curse phase', () => {
+  for (const phase of ['doom', 'banned', 'freed', 'warn', 'consequence', 'locked']) {
+    const state = s(); state.coins = 0; state.vault = []; state.untradeable = [];
+    beginDoom(state, 1000); state.vinson.phase = phase;
+    state.pendingPack = [HELL_CARD_ID];
+    const curse = structuredClone(state.vinson);
+    resolvePending(state, HELL_CARD_ID);
+    quickSell(state, HELL_CARD_ID);
+    assert.deepEqual(state.vinson, curse, `selling cannot remove or restart ${phase}`);
+    assert.equal(state.club.includes(HELL_CARD_ID), false);
+    if (phase === 'doom') assert.equal(advance(state, curse.doomUntil).phase, 'banned');
+  }
+});
 
 test('one-minute deadline survives repeated checks and expires at the exact boundary', () => {
   const state = s(); beginDoom(state, 1000);

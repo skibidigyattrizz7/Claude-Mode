@@ -40,7 +40,9 @@ export function release(state) {
 }
 
 export function lift(state) {
-  state.vinson = { phase: 'lifted', doomUntil: 0, phaseUntil: 0, pin: null };
+  const old = state.vinson;
+  state.vinson = { phase: 'lifted', doomUntil: 0, phaseUntil: 0, pin: null,
+    ...(old?.immune ? { immune: true, battleWon: true, rewardsClaimed: old.rewardsClaimed === true } : {}) };
   return state.vinson;
 }
 
@@ -71,17 +73,24 @@ function locate(sq) {
 export function enforceLock(state) {
   const v = state?.vinson, sq = state?.squad;
   if (v?.phase !== 'locked' || !sq) return false;
-  const area = v.pin?.area === 'bench' ? 'bench' : 'slots';
-  const arr = Array.isArray(sq[area]) ? sq[area] : null;
-  const idx = Number.isInteger(v.pin?.idx) && v.pin.idx >= 0 && v.pin.idx < (arr?.length || 0) ? v.pin.idx : area === 'bench' ? 0 : 9;
+  const arr = Array.isArray(sq.slots) ? sq.slots : null;
+  const idx = v.pin?.area === 'slot' && Number.isInteger(v.pin?.idx) && v.pin.idx > 0 && v.pin.idx < (arr?.length || 0) ? v.pin.idx : 9;
   if (!arr) return false;
-  let changed = arr[idx] !== HELL_CARD_ID;
+  let changed = arr[idx] !== HELL_CARD_ID || v.pin?.area !== 'slot' || v.pin?.idx !== idx;
+  const displaced = arr[idx] === HELL_CARD_ID ? null : arr[idx];
+  v.pin = { area: 'slot', idx };
   if (Array.isArray(state.club) && !state.club.includes(HELL_CARD_ID)) { state.club.push(HELL_CARD_ID); changed = true; }
   for (const a of [sq.slots, sq.bench]) if (Array.isArray(a)) for (let i = 0; i < a.length; i++) {
     if (a[i] === HELL_CARD_ID && (a !== arr || i !== idx)) { a[i] = null; changed = true; }
   }
   if (!changed) return false;
   arr[idx] = HELL_CARD_ID;
+  if (displaced && ![...arr, ...(sq.bench || [])].includes(displaced)) {
+    const empty = arr.findIndex((id, i) => i !== idx && !id);
+    const benchEmpty = sq.bench?.findIndex((id) => !id) ?? -1;
+    if (empty >= 0) arr[empty] = displaced;
+    else if (benchEmpty >= 0) sq.bench[benchEmpty] = displaced;
+  }
   return true;
 }
 
@@ -96,7 +105,12 @@ export function reconcileServer(state, remote, now = Date.now()) {
     if (Number.isFinite(deadline) && (!v || v.phase === 'doom' || v.phase === 'banned')) beginDoom(state, now, deadline);
   } else if (remote.phase === 'banned' && (!v || v.phase !== 'banned')) {
     state.vinson = { phase: 'banned', doomUntil: v?.doomUntil || now, phaseUntil: 0, pin: null };
-  } else if (remote.phase === 'lifted') lift(state);
+  } else if (remote.phase === 'lifted') {
+    lift(state);
+    if (typeof remote.immune === 'boolean') state.vinson.immune = remote.immune;
+    if (typeof remote.battleWon === 'boolean') state.vinson.battleWon = remote.battleWon;
+    if (typeof remote.rewardsClaimed === 'boolean') state.vinson.rewardsClaimed = remote.rewardsClaimed;
+  }
   else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned')) {
     // An owner release can arrive while Vinson is already in the active squad. Start the
     // squad warning as part of reconciliation so every caller (including reload/cloud
