@@ -74,6 +74,9 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     if (!infected(state()?.vinson?.phase) || isOwner(online)) return;
     const frame = root();
     if (!frame?.contains(event.target)) return;
+    // The original pull still needs to finish assigning/selling its items and close.
+    // Cursed aftermath grids have their own capture handler and cannot award coins.
+    if (event.target.closest?.('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback')) return;
     const target = event.target.closest?.(controlSelector) || event.target.closest?.(surfaceSelector);
     if (target && root()?.contains(target)) {
       if (target.matches('[data-uttab="home"], .pm-tile--ut')) return;
@@ -395,7 +398,9 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (['doom', 'banned', 'locked', 'lifted'].includes(s.vinson?.phase)) return;
       beginDoom(s); persist(s); draw();
       sound('warning');
-      const remote = await online?.vinson?.pull?.();
+      let remote;
+      try { remote = await online?.vinson?.pull?.(); }
+      catch { return; } // Local doom is already saved; polling retries when the network recovers.
       if (remote?.exempt) { release(s); persist(s); draw(); return; }
       if (remote?.ok && remote.deadline) { reconcileServer(s, remote); persist(s); draw(); }
     },

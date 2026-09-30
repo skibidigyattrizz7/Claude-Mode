@@ -239,3 +239,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   Planning/help/skills request posted to Claude in docs/AI_DIRECT.md on chatgpt/vinson-battle-planning; no code changed.
 - Oct 1 (owner, LATER): Icons in promos must get their OWN Icon version of each promo (EA style: unique red-and-gold /
   Icon variant designs), never the normal promo design; base Icons never look silver or gold.
+- Sep 30 (owner): Vinson pull can lag/stick on Send to club; mods sometimes miss the curse animation; quick selling
+  must never prevent the curse. Fixed on chatgpt/vinson-pack-guard: register the curse as soon as the pack rolls
+  Vinson, keep the original pack controls usable so assignment/Close completes, retain the saved curse on RPC failure.
+  Quick selling/resolving does not clear the curse; mods remain affected and only owner is exempt.

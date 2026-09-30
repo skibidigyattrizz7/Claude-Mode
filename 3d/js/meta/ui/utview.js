@@ -585,6 +585,9 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   const done = (pid) => UT.resolvePending(s, pid);
   let claimedVinson = false;
   const claim = (pid) => { if (pid === HELL_CARD_ID && !claimedVinson) { claimedVinson = true; void app.vinson?.onPull(); } };
+  // The pull starts the account curse, regardless of how the player resolves the item.
+  // Selling it, leaving the opening or reloading must not provide an escape route.
+  if (items.some((it) => it.pid === HELL_CARD_ID)) claim(HELL_CARD_ID);
   runPackOpening(app.root, {
     pack: n > 1 ? { ...pack, name: `${n}× ${pack.name}` } : pack, items, getPlayer,
     curse,
@@ -595,7 +598,7 @@ export function openPackFlow(app, packType, onDone, count = 1) {
     // FC-style "Send all to transfer list": the card joins the club, then is flagged for sale (pmarket.js).
     canTransfer: (pid) => !(s.untradeable || []).includes(pid),
     onTransfer: (pid) => { done(pid); UT.addToClub(s, pid); const r = PM.sendToTransferList(s, pid); persist(app); claim(pid); return r; },
-    onSell: (pid) => { done(pid); const v = curse ? 0 : quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
+    onSell: (pid) => { claim(pid); done(pid); const v = curse ? 0 : quickSellValue(getPlayer(pid)); s.coins += v; persist(app); return v; },
     onCurseExit: () => { UT.rescuePendingPack(s); persist(app); app.popTo((v) => v.utHome); app.refresh(); },
     onDone: (sum) => { if (s.pendingPack?.includes(HELL_CARD_ID)) claim(HELL_CARD_ID); UT.rescuePendingPack(s); persist(app); app.refresh(); if (onDone) onDone(sum); },
   });

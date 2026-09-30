@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { defaultSquad } from '../core/ut.js';
+import { defaultSquad, quickSell, resolvePending } from '../core/ut.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
 import { dispatchOnlineEntry } from '../ui/app.js';
 import { DOOM_MS, FIRST_WARNING_MS, FINAL_WARNING_MS, BAN_MESSAGE, MATCH_MESSAGE,
@@ -8,6 +8,20 @@ import { DOOM_MS, FIRST_WARNING_MS, FINAL_WARNING_MS, BAN_MESSAGE, MATCH_MESSAGE
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log('ok', name); };
 const s = () => ({ club: [HELL_CARD_ID], squad: defaultSquad() });
+
+test('quick-selling or resolving the item cannot clear any account curse phase', () => {
+  for (const phase of ['doom', 'banned', 'freed', 'warn', 'consequence', 'locked']) {
+    const state = s(); state.coins = 0; state.vault = []; state.untradeable = [];
+    beginDoom(state, 1000); state.vinson.phase = phase;
+    state.pendingPack = [HELL_CARD_ID];
+    const curse = structuredClone(state.vinson);
+    resolvePending(state, HELL_CARD_ID);
+    quickSell(state, HELL_CARD_ID);
+    assert.deepEqual(state.vinson, curse, `selling cannot remove or restart ${phase}`);
+    assert.equal(state.club.includes(HELL_CARD_ID), false);
+    if (phase === 'doom') assert.equal(advance(state, curse.doomUntil).phase, 'banned');
+  }
+});
 
 test('one-minute deadline survives repeated checks and expires at the exact boundary', () => {
   const state = s(); beginDoom(state, 1000);
