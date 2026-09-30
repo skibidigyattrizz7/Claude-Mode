@@ -280,7 +280,19 @@ def definitions(client, game, eaids):
 
 
 # ---- matching against the hand-written players ------------------------------------------------------------------------
+# hand-written players fut.gg knows under a different name (id -> names to try as if they were ours)
+ALIASES = {'rp_vinicius': ['Vini Jr.'], 'rp_benwhite': ['Benjamin White']}
+
+
 def match_score(hand, card):
+    """Best score over the hand-written name and its aliases."""
+    best = _match_score(hand, card)
+    for alias in ALIASES.get(hand.get('id'), ()):
+        best = max(best, _match_score({**hand, 'name': alias}, card))
+    return best
+
+
+def _match_score(hand, card):
     """How well a fut.gg card fits a hand-written person (0 = no match). hand: {name, card, nat, pos, ovr}."""
     if (hand.get('pos') == 'GK') != (card['pos'] == 'GK'):
         return 0
@@ -404,6 +416,9 @@ def main():
     PRIMARY[0] = a.game
     asof = datetime.date.fromisoformat(a.asof)
     client = Client(refresh=a.refresh)
+    if not os.path.exists(OUT_JS):  # the game's modules import futplayers.js: a first run needs an empty stand-in to list the hand-written players
+        with open(OUT_JS, 'w', encoding='utf-8') as f:
+            f.write("export const FUT_GAME = '27';\nexport const FUT_ASOF = '';\nexport const FUT_ROWS = [];\n")
     hands = json.loads(subprocess.run(['node', os.path.join(ROOT, 'tools', 'list_hand_people.mjs')], check=True, capture_output=True, text=True, cwd=ROOT).stdout)
     print(f'{len(hands)} hand-written players', file=sys.stderr)
 
@@ -448,24 +463,42 @@ def main():
     report['ambiguous'] = amb
     report['unmatchedHand'] = [h['id'] for h in hands if h['id'] not in matched]
 
+    uniq = {}  # the same card can turn up in both games (same EA id): keep the newer game's
+    for c in cards:
+        k = (c['eaId'], c['kind'])
+        if k not in uniq or (c['game'] == a.game and uniq[k]['game'] != a.game):
+            uniq[k] = c
+    cards = list(uniq.values())
+
     # person slugs: a matched card takes the hand-written person's slug; the others keep their previous slug or get a new one
     prev = read_previous_slugs()
     hand_by_id = {h['id']: h for h in hands}
-    taken = {h['person'] for h in hands}
+    hand_persons = {h['person'] for h in hands}
+    taken = set(hand_persons)
     slug_of, consumed = {}, set()
     for hid, c in matched.items():
         h = hand_by_id[hid]
         slug_of.setdefault((c['eaId'], c['kind']), h['person'])
         if c['kind'] == ('i' if h['kind'] == 'icon' else 'b'):
             consumed.add((c['eaId'], c['kind']))  # this card only updates the hand-written player; it is not a new card
-    person_by_name = {(key(h['name']), h['nat']): h['person'] for h in hands}
+    person_by_name, kinds_of = {}, {}  # (name, nation) -> slug: a fut.gg person with both a base card and an Icon keeps ONE slug
+    for k, sl in slug_of.items():
+        kinds_of.setdefault(sl, set()).add(k[1])
     rows, people = [], {}
     for c in sorted(cards, key=lambda c: (-c['ovr'], c['base'], c['kind'])):
         k = (c['eaId'], c['kind'])
         if not c['new'] and k not in slug_of:
             continue  # a name-search result that matched nobody
-        slug = slug_of.get(k) or person_by_name.get((key(c['name']), c['nat'])) or prev.get(k) or make_slug(c, taken)
+        slug = slug_of.get(k)
+        if not slug:
+            for cand in (person_by_name.get((key(c['name']), c['nat'])), prev.get(k)):
+                if cand and c['kind'] not in kinds_of.get(cand, ()) and cand not in hand_persons:
+                    slug = cand
+                    break
+        if not slug:
+            slug = make_slug(c, taken)
         taken.add(slug)
+        kinds_of.setdefault(slug, set()).add(c['kind'])
         person_by_name.setdefault((key(c['name']), c['nat']), slug)
         c['slug'] = slug
         if not c['nat']:

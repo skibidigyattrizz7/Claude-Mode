@@ -3,7 +3,7 @@ import { Rng, clamp, hashStr } from './rng.js';
 import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, POS_GROUP, clubById } from './data.js';
 import { buildRealPlayers } from './realplayers.js';
 import { genPhysique, ensurePhysique, ensureAlts } from './physique.js';
-import { buildPromoCards, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID, setOvr } from './promos.js';
+import { buildPromoCards, promoCardFromId, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID, setOvr } from './promos.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -47,7 +47,9 @@ export function computeOvr(pos, p) {
   const src = pos === 'GK' ? p.gk : p.stats;
   let s = 0;
   for (let i = 0; i < 6; i++) s += w[i] * src[keys[i]];
-  return clamp(Math.round(s), 1, 99);
+  // `ob` (whole points, real fut.gg cards only): EA's overall uses hidden attributes the six face stats do not show, so a real
+  // card keeps its REAL face stats and REAL overall and stores the small difference here (see core/futdata.js).
+  return clamp(Math.round(s + (Number.isFinite(p.ob) ? p.ob : 0)), 1, 99);
 }
 
 export function tierOf(ovr) { return ovr >= 75 ? 'gold' : ovr >= 65 ? 'silver' : 'bronze'; }
@@ -348,24 +350,30 @@ export function getDB() {
 
   // V3 promo campaigns (TOTY, TOTS, Future Stars, Flashback, Birthday, RTTK, Moments) — no shared RNG used.
   const generated = players.filter((p) => !p.real);
-  const promoSrc = { stars: real.stars, icons: real.icons, regulars: real.regulars, generated, lateIcons: real.lateIcons || [] };
+  // the new fut.gg base cards (real.futBase) join the regulars as promo candidates: more people, more variety per campaign
+  const promoSrc = { stars: real.stars, icons: real.icons, regulars: real.regulars.concat(real.futBase), generated, lateIcons: real.lateIcons || [] };
   const promoHelpers = { adjustOvr, computeOvr, tierOf, marketValue };
   const promos = buildPromoCards(promoSrc, promoHelpers);
   // Promo cards from the older, less varied selection (before Sep 30) that players may already own: rebuilt on
   // first request so their ids keep resolving; they are never added to packs, SBCs or the market.
   let legacy = null;
+  const byBase = (id) => { const m = /^pr_[a-z0-9]+_(.+)$/.exec(id); return m ? getPlayer(m[1]) : null; };
   addResolver((id) => {
     if (typeof id !== 'string' || !id.startsWith('pr_')) return null;
     if (!legacy) legacy = new Map(buildPromoCards(promoSrc, promoHelpers, undefined, { diverse: false }).map((p) => [p.id, p]));
-    return legacy.get(id) || null;
+    // an id neither selection contains any more (ratings and people changed with the fut.gg import): rebuild it from its base card
+    return legacy.get(id) || promoCardFromId(id, byBase(id), promoHelpers);
   });
   for (const p of promos) specials.push(p);
   // Icons added after launch (realplayers.js LATE_ICON_ROWS) go last, so nothing seeded before them moves.
   for (const p of real.lateIcons || []) specials.push(p);
+  // fut.gg Icons (ic_<slug>) go after those, and the fut.gg base cards (rs_<slug>, not part of `players`: Career squads stay as they were) last
+  for (const p of real.futIcons) specials.push(p);
 
-  const all = players.concat(specials);
+  const futExtra = real.futBase;
+  const all = players.concat(specials, futExtra);
   const byId = new Map(all.map((p) => [p.id, p]));
-  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, lateRegulars, promos };
+  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, lateRegulars, promos, futExtra, futIcons: real.futIcons };
   for (const c of _foreign.values()) if (!byId.has(c.id)) byId.set(c.id, c);
   return _db;
 }
@@ -398,6 +406,7 @@ export function sanitizeCard(c) {
   };
   for (const k of FACE) p.stats[k] = num(s[k], 1, 99, 50);
   for (const k of GKFACE) p.gk[k] = num(g[k], 1, 99, 10);
+  if (Number.isFinite(Number(c.ob))) p.ob = num(c.ob, -12, 12, 0);
   p.ovr = computeOvr(pos, p);
   p.pot = Math.max(p.ovr, num(c.pot, 1, 99, p.ovr));
   p.wf = num(c.wf, 1, 5, 3); p.sm = num(c.sm, 1, 5, 2); p.foot = c.foot === 'L' ? 'L' : 'R';
