@@ -52,6 +52,34 @@ def fold(s):
     return re.sub(r'[^a-z0-9 ]', ' ', unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode().lower()).split()
 
 
+_EA = None
+# players missing from EA's current ratings list (injured / between clubs) -> their EA id
+MANUAL_EA_IDS = {'neymar jr': '190871', 'neymar': '190871'}
+
+
+def ea_lookup(name):
+    """EA player id from EA's own ratings list (tools/ea_player_ids.json, built from drop-api.ea.com) when the
+    fut.gg name search misses (it only searches the newest game: Neymar, Alisson, Benzema... were not found)."""
+    global _EA
+    if _EA is None:
+        _EA = {}
+        path = os.path.join(F.ROOT, 'tools', 'ea_player_ids.json')
+        for pid, r in (json.load(open(path)) if os.path.exists(path) else {}).items():
+            first, last, common = (fold(r.get('first') or ''), fold(r.get('last') or ''), fold(r.get('common') or ''))
+            for key in {' '.join(common), ' '.join(first + last), ' '.join(first[:1] + last[-1:])}:
+                if key:
+                    _EA.setdefault(key, pid)
+            if len(common) == 1:  # one-word card names (Carvajal, Casemiro): usable when unique
+                _EA['1:' + common[0]] = pid if '1:' + common[0] not in _EA else None
+        _EA.update(MANUAL_EA_IDS)
+    w = fold(name)
+    for key in (' '.join(w), ' '.join(w[:1] + w[-1:]), ' '.join(w[:-1]) if len(w) > 1 and w[-1] in ('jr', 'junior') else '',
+                '1:' + w[-1] if w else ''):
+        if key and key in _EA:
+            return _EA[key]
+    return None
+
+
 def find_player(name):
     """-> fut.gg player path (/players/<id>-<slug>/) or None: the first search hit whose slug holds the surname."""
     words = fold(name)
@@ -67,6 +95,9 @@ def find_player(name):
         for pid, slug in hits:
             if words and slug == '-'.join(words):
                 return f'/players/{pid}-{slug}/', pid
+    pid = ea_lookup(name)
+    if pid:
+        return f"/players/{pid}-{'-'.join(words) or 'player'}/", pid
     return None
 
 

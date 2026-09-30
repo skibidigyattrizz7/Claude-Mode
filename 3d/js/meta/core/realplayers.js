@@ -7,7 +7,7 @@ import { CLUBS } from './data.js';
 import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES, assignPlus } from './physique.js';
 import { REG_ROWS, LATE_REG_ROWS } from './realregulars.js';
 import { bioFor } from './bios.js';
-import { PLAYER_PHOTOS } from './playerphotos.js';
+import { PLAYER_PHOTOS, PHOTO_VER } from './playerphotos.js';
 
 // Row: [slug, full name, card name, nation, pos, alt positions, foot, weak foot, skill moves, OVR,
 //       face stats (outfield: pac sho pas dri def phy | GK: div han kic ref spd pos), age, height, skin tone 0..5, extra]
@@ -381,7 +381,7 @@ export function buildRealPlayers(helpers) {
     p.intended = ovr;
     // Real photo from Wikimedia Commons where a freely licensed one exists (tools/fetch_player_photos.py; credits.html).
     // A plain rectangle (no photoCut); promo copies are structuredClone()d from these base cards and inherit it.
-    if (PLAYER_PHOTOS.has(p.person)) p.photo = `assets/players/${p.person}.webp`; // FIFA-style cutout (tools/photos_v2.py)
+    if (PLAYER_PHOTOS.has(p.person)) p.photo = `assets/players/${p.person}.webp?v=${PHOTO_VER}`; // FIFA-style cutout (tools/photos_v2.py)
     // real personal data (core/bios.js) wins over the row: height / weight / preferred foot
     p.physReal = true; // Icon / Star rows are hand-authored real values
     applyBio(p);
