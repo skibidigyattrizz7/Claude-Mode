@@ -202,3 +202,9 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - TODO (Sep 30): photos v2: base cards = FIFA-style face crop with background removed (face-detected, no foreheads), wrong-era photos rejected (old retired legends, childhood photos); monochrome only for retired Icons (Messi/Ronaldo etc. still play, keep colour); promo cards = dynamic look (bigger cutout like FUT TOTS).
 
 - Sep 30: Photos v2 (FIFA face cutouts, dynamic promo cutouts, colour for active icons) PAUSED by owner at ~300/807 to save usage. Live photos reverted to before v2. Saved state is on branch wip/paused-work (resume: tools/photos_v2.py --no-download, then tools/write_photos_js.py).
+  - How to resume photos (fresh chat): `git checkout wip/paused-work -- tools/photos_v2.py tools/write_photos_js.py tools/fetch_player_photos.py 3d/assets/players 3d/js/meta/core/promos.js 3d/js/meta/ui/card.js 3d/css/meta.css 3d/index.html 3d/js/meta/core/realplayers.js`,
+    `pip install "opencv-python-headless<5" rembg`, then `python3 tools/photos_v2.py --no-download` (uses cached sources, ~30 min for all 807;
+    try `--limit 20` first), then `cd tools && python3 write_photos_js.py`. Rules: base = FIFA face cutout, no background; promos = bigger
+    "dyn" cutout; monochrome only for retired Icons; reject photos where the player is under 17 / past their playing years or the crop is bad.
+    Full download pass (no --no-download) is slow: Wikimedia rate limits.
+- Sep 30: Saved cards "Claim all" (non-duplicates to club) and "Sell all" (quick sell, Secret cards kept). DONE.

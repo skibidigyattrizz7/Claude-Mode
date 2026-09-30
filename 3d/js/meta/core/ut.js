@@ -204,6 +204,28 @@ export function takeSaved(state, i) {
   if (!state || !Array.isArray(state.saved) || !Number.isInteger(i) || i < 0 || i >= state.saved.length) return null;
   return state.saved.splice(i, 1)[0];
 }
+/** Claim all (owner, Sep 30): every saved card not already in the club goes to the club; duplicates stay saved. -> how many */
+export function claimAllSaved(state) {
+  if (!state || !Array.isArray(state.saved)) return 0;
+  let n = 0;
+  state.saved = state.saved.filter((pid) => {
+    if (!getPlayer(pid) || state.club.includes(pid)) return true;
+    addToClub(state, pid); n++; return false;
+  });
+  return n;
+}
+/** Sell all (owner, Sep 30): quick sells every saved card except Secret cards (those are never sold in bulk). -> {n, coins} */
+export function sellAllSaved(state) {
+  const out = { n: 0, coins: 0 };
+  if (!state || !Array.isArray(state.saved)) return out;
+  state.saved = state.saved.filter((pid) => {
+    const p = getPlayer(pid);
+    if (!p || p.secret === true) return true;
+    out.coins += quickSellValue(p); out.n++; return false;
+  });
+  state.coins = (Number(state.coins) || 0) + out.coins;
+  return out;
+}
 /** Pack cards the opening screen never resolved (page closed mid-opening) -> Saved cards. -> how many */
 export function rescuePendingPack(state) {
   if (!state || !Array.isArray(state.pendingPack) || !state.pendingPack.length) return 0;

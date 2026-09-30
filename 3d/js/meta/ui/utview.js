@@ -457,6 +457,18 @@ function clubView() {
       const savedSec = saved.length ? h('section', { class: 'pm-panel pm-saved' },
         h('h3', { class: 'pm-h' }, `Saved cards (${saved.length})`),
         h('p', { class: 'pm-dim' }, 'Cards from packs you did not send anywhere. Nothing here is ever sold unless you choose to.'),
+        h('div', { class: 'pm-btnrow' },
+          h('button', { class: 'pm-btn pm-btn--sm pm-btn--primary', onclick: () => {
+            const n = UT.claimAllSaved(s); persist(app);
+            app.toast(n ? `${n} card${n === 1 ? '' : 's'} added to your club${s.saved.length ? '. Duplicates stay here.' : ''}` : 'Nothing new to claim: these are all duplicates.', n ? 'good' : 'warn'); app.refresh();
+          } }, 'Claim all'),
+          h('button', { class: 'pm-btn pm-btn--sm pm-btn--ghost', onclick: async () => {
+            const sell = saved.map(getPlayer).filter((p) => p && p.secret !== true);
+            if (!sell.length) { app.toast('Nothing to sell (Secret cards are never bulk sold).', 'warn'); return; }
+            const v = sell.reduce((t, p) => t + quickSellValue(p), 0);
+            if (!(await confirmBox(app.root, 'Sell all', `Quick sell ${sell.length} saved card${sell.length === 1 ? '' : 's'} for ${fmtNum(v)} coins? Secret cards are kept.`, 'Sell all', true))) return;
+            const r = UT.sellAllSaved(s); persist(app); app.toast(`+${fmtNum(r.coins)} coins`, 'good'); app.refresh();
+          } }, 'Sell all')),
         h('div', { class: 'pm-admin-results' }, saved.map((pid, i) => {
           const p = getPlayer(pid); if (!p) return null;
           const inClub = s.club.includes(pid);
