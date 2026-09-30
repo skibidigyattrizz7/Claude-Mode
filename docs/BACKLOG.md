@@ -237,3 +237,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   and a playable cinematic Fight Suppression encounter with Patel / World-Ruler Vinson / Phonk Mode Vinson / Captain Israel,
   unique victory reward cards and permanent account curse immunity. Await owner go-ahead and verified assets.
   Planning/help/skills request posted to Claude in docs/AI_DIRECT.md on chatgpt/vinson-battle-planning; no code changed.
+- Oct 1 (owner, LATER): Icons in promos must get their OWN Icon version of each promo (EA style: unique red-and-gold /
+  Icon variant designs), never the normal promo design; base Icons never look silver or gold.
