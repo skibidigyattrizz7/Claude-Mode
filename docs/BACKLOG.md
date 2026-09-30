@@ -224,3 +224,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   binary code 0101...), reactive + animated. Do NOT touch Rabbi Patel, E-Man, E.L.I.J.A.H. (and any card designed from
   an owner picture: Rabbi Patel is Israeli-themed, Elijah and E-Man are fiery). Vinson can get a rework; the green glitch
   secret cards get a rework; Pain Man stays or gets a slight rework.
+- Oct 1 (owner): owner panel "Delete player", "Reset coins/progress/club/account" and other commands don't work;
+  "remove card from club" sometimes fails. Root cause found: the server does the reset, but the player's client never
+  applies per-player reset epochs and re-uploads its local save (same for deleted accounts). Claude agent fixing (client
+  + new migration 019). Vinson lift bug (effects stay after unban): ChatGPT is fixing it (owner asked it).
