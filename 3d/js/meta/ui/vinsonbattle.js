@@ -84,7 +84,7 @@ function field(ctx, t) {
 function health(ctx, s) {
   const bar = (x, actor, label, color) => {
     ctx.fillStyle = '#040809cc'; ctx.fillRect(x, 93, 380, 48);
-    ctx.fillStyle = '#f4eee4'; ctx.font = 'bold 17px sans-serif'; ctx.fillText(label.toUpperCase(), x + 12, 112);
+    ctx.fillStyle = '#f4eee4'; ctx.font = 'bold 17px monospace'; ctx.fillText(label.toUpperCase(), x + 12, 112);
     ctx.fillStyle = '#34413b'; ctx.fillRect(x + 12, 121, 356, 7);
     ctx.fillStyle = color; ctx.fillRect(x + 12, 121, 356 * actor.hp / actor.maxHp, 7);
   };
@@ -111,7 +111,13 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
   const zoom = shot?.zoom || 1;
   ctx.translate(W / 2 + Math.sin(t * 31) * shake * 12, H / 2 + Math.sin(t * 43) * shake * 7);
   ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
-  field(ctx, t);
+  if (shot) field(ctx, t);
+  else {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#f7f2e8'; ctx.lineWidth = 4; ctx.strokeRect(76, 184, 1128, 482);
+    ctx.fillStyle = '#f7f2e8'; ctx.font = 'bold 22px monospace';
+    ctx.fillText('DODGE THE MARKED ATTACKS', 80, 165);
+  }
   if (!shot) {
     for (const h of state.hazards) {
       const ready = h.elapsed >= h.telegraph;
@@ -127,8 +133,12 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
         ctx.restore();
       }
     }
-    sprite(ctx, images[heroArt(state.stage)], heroArt(state.stage), visualHero.x, visualHero.y, t,
-      state.hero.invulnerable > 0 ? .65 + .25 * Math.sin(t * 14) : 1, !!visualHero.moving);
+    // Small soul marker makes precise dodging readable inside the combat box.
+    ctx.save(); ctx.translate(visualHero.x, visualHero.y);
+    ctx.globalAlpha = state.hero.invulnerable > 0 ? .6 + .25 * Math.sin(t * 14) : 1;
+    ctx.fillStyle = '#ff293d'; ctx.beginPath(); ctx.moveTo(0, 11);
+    ctx.bezierCurveTo(-24,-4,-16,-21,0,-10); ctx.bezierCurveTo(16,-21,24,-4,0,11); ctx.fill();
+    ctx.restore();
     sprite(ctx, images[bossArt(state.stage)], bossArt(state.stage), state.boss.x, state.boss.y, t);
     for (const p of state.projectiles) beam(ctx, p.x - p.vx * .035, p.y - p.vy * .035, p.x, p.y, '#4faaff', 4);
   } else {
@@ -156,10 +166,8 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
 }
 
 /** One canvas, one RAF, one fixed-step clock. The account API owns win/reward authority. */
-// Status clears the online layer's cached Vinson ban after an owner unban.
+// Migration 021 admits Vinson-banned accounts for battle calls without owner release.
 export async function registerVinsonBattleAttempt(online) {
-  const remote = await online.vinson.status();
-  if (!remote?.ok) return remote || { ok: false, error: 'offline' };
   return online.vinson.battleStart();
 }
 
@@ -239,13 +247,13 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if (victoryBusy || closed) return;
     victoryBusy = true;
     try {
-      if (online && (!online.vinson?.status || !online.vinson?.battleStart || !online.vinson?.battleWin || !online.vinson?.claimBattleRewards)) {
+      if (online && (!online.vinson?.battleStart || !online.vinson?.battleWin || !online.vinson?.claimBattleRewards)) {
         showPanel('Battle unavailable', 'The battle service is not ready yet. Return to Pitchside and try again later.', [['Return to Pitchside', close]]); return;
       }
       if (!nonce && online?.vinson?.battleStart) {
         const result = await registerVinsonBattleAttempt(online);
         if (closed) return;
-        if (!result?.ok) { showPanel('Unable to start', 'Your battle could not be registered. Try again.', [['Retry', startFight]]); return; }
+        if (!result?.ok) { showPanel('Unable to start', 'Your fight could not start. If the Vinson escape service is still updating, try again shortly.', [['Retry', startFight]]); return; }
         nonce = result.nonce;
       }
       battle.step(0, { advance: true }); panel.hidden = true; mode = 'fight'; tone('fire');

@@ -2,6 +2,8 @@
 // the player changes screens. Server status is polled while active; the saved absolute deadline survives reload.
 import { loadUT, saveUT } from '../core/ut.js';
 import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, cursedPack, hasDoomEffects, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
+import { HELL_CARD_ID } from '../core/secretcard.js';
+import { forfeitVinsonSquad } from '../core/vinsonforfeit.js';
 import { fractureElement } from './vinsonfracture.js';
 import { applyVinsonRewardClaim, hasPendingVinsonRewards } from '../core/vinsonrewards.js';
 
@@ -15,7 +17,7 @@ const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK 
 
 export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson9', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson10', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
@@ -220,12 +222,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       return;
     }
     if (phase === 'locked') {
-      if (current !== phase || !host.querySelector('.vb-fight-button')) {
-        host.replaceChildren(); current = phase;
-        const fight = make('button', 'vb-fight-button', 'FIGHT SUPPRESSION');
-        fight.onclick = () => { void controller.openBattle(); };
-        host.append(fight);
-      }
+      if (current !== phase) { host.replaceChildren(); current = phase; }
       return;
     }
     if (current !== phase) {
@@ -279,6 +276,9 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     OMENS.forEach((omen, i) => words.append(make('span', `vinson-final-word vinson-final-word-${i}`, omen)));
     screen.append(words);
     const check = make('button', 'vinson-check', 'ESCAPE THE WRATH OF VINSON'); check.onclick = () => location.reload(); screen.append(check);
+    const fight = make('button', 'vinson-fight-link', 'Fight Suppression');
+    fight.onclick = () => { void controller.openBattle(); };
+    screen.append(fight);
     host.append(screen);
     sound('impact');
   }
@@ -416,7 +416,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (battleExperience || isOwner(online)) return;
       const s = state(), identity = online?.identityId?.();
       const resumeRewards = hasPendingVinsonRewards(s);
-      if (!s || (s.vinson?.phase !== 'locked' && !resumeRewards)) return;
+      if (!s || (s.vinson?.phase !== 'banned' && !resumeRewards)) return;
       const { launchVinsonBattle } = await import('./vinsonbattle.js');
       if (battleExperience || state() !== s) return;
       battleExperience = launchVinsonBattle({ online, resumeRewards,
@@ -463,12 +463,26 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (remote?.ok && remote.deadline) { reconcileServer(s, remote); persist(s); draw(); }
     },
     async matchSabotage(layer) {
-      if (!layer) return;
-      const screen = make('div', 'vinson-match-screen');
+      const s = state();
+      if (!layer || !cursedPack(s) || s.vinson?.immune || isOwner(online)) return;
+      forfeitVinsonSquad(s, HELL_CARD_ID, { owner: isOwner(online) });
+      persist(s);
+      const screen = make('div', 'vinson-match-screen vinson-match-splatter');
       screen.setAttribute('role', 'alert');
-      screen.append(make('strong', '', MATCH_MESSAGE));
+      const blood = make('div', 'vinson-match-blood'); blood.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 18; i++) {
+        const drop = make('i', 'vinson-blood-impact');
+        drop.style.setProperty('--x', `${12 + (i * 37 % 79)}%`);
+        drop.style.setProperty('--y', `${9 + (i * 23 % 83)}%`);
+        drop.style.setProperty('--size', `${8 + i % 5 * 4}vmax`);
+        drop.style.setProperty('--delay', `${i % 6 * 35}ms`);
+        drop.style.setProperty('--angle', `${i * 41}deg`);
+        blood.append(drop);
+      }
+      screen.append(blood, make('strong', 'vinson-match-message', MATCH_MESSAGE));
       layer.append(screen);
-      await new Promise((resolve) => setTimeout(resolve, reduce() ? 1800 : 2800));
+      sound('impact');
+      await new Promise((resolve) => setTimeout(resolve, reduce() ? 2400 : 3600));
       screen.remove();
     },
     tick, poll,

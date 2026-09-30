@@ -19,13 +19,13 @@ class FakeElement {
 
 testNoContextReturnsUsableCleanup();
 const calls = [];
-const api = {vinson:{status:async()=>{calls.push('status');return {ok:true,phase:'locked'};},
+const api = {vinson:{
+  status:async()=>{throw Error('ban-screen entry must not require status or owner unban');},
   battleStart:async()=>{calls.push('start');return {ok:true,nonce:'account-attempt'};}}};
 assert.equal((await registerVinsonBattleAttempt(api)).nonce,'account-attempt');
-assert.deepEqual(calls,['status','start'],'refresh cached ban before requesting a nonce');
-api.vinson.status=async()=>({ok:false,error:'offline'});
-assert.equal((await registerVinsonBattleAttempt(api)).error,'offline');
-assert.equal(calls.length,2,'failed status must not register a fight');
+assert.deepEqual(calls,['start']);
+api.vinson.battleStart=async()=>({ok:false,error:'banned'});
+assert.equal((await registerVinsonBattleAttempt(api)).error,'banned','moderation rejection is preserved');
 console.log('3 Vinson battle UI tests passed');
 
 function testNoContextReturnsUsableCleanup() {
