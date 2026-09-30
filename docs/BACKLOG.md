@@ -243,3 +243,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   must never prevent the curse. Fixed on chatgpt/vinson-pack-guard: register the curse as soon as the pack rolls
   Vinson, keep the original pack controls usable so assignment/Close completes, retain the saved curse on RPC failure.
   Quick selling/resolving does not clear the curse; mods remain affected and only owner is exempt.
+
+- URGENT Sep 30: Vinson roll-time curse activation interrupted pack opening. chatgpt/vinson-reveal-fix moves it
+  to the first actual post-opening item-grid render, preserving quick-sell protection and the original timer.
