@@ -13,7 +13,7 @@ const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK 
 
 export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson6', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson7', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
@@ -21,7 +21,8 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   const broken = new Map();
   let soundContext = null;
   const damagedKeys = new Set();
-  const controlSelector = 'button, [role="tab"], a, input, select, .pc-card';
+  const controlSelector = 'button, [role="tab"], a, input, select, textarea, .pc-card, .pm-slot';
+  const surfaceSelector = '.pm-tile, .pm-panel, .pm-section, .pm-storeitem, .pm-packitem, .pm-coins, .pm-crest, img, svg, h1, h2, h3, h4, p, label, span';
   const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.closest('.pm-modal')?.getAttribute('aria-label') || 'screen'}:${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
@@ -65,8 +66,15 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   }
   function onInfectedClick(event) {
     if (!infected(state()?.vinson?.phase) || isOwner(online)) return;
-    const target = event.target.closest?.('.pm-root button, .pm-root [role="tab"], .pm-root a, .pm-root input, .pm-root select, .pm-root .pc-card');
+    const frame = root();
+    if (!frame?.contains(event.target)) return;
+    const target = event.target.closest?.(controlSelector) || event.target.closest?.(surfaceSelector);
     if (target && root()?.contains(target)) {
+      if (target.matches('[data-uttab="home"], .pm-tile--ut')) return;
+      if (target.matches('.pm-back') && app?.stack?.some((view) => view.utHome)) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        app.popTo((view) => view.utHome); app.refresh(); return;
+      }
       if (broken.has(target)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
       const label = (target.textContent || '').trim();
       const dialog = target.closest('.pm-modal');
@@ -94,7 +102,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   document.addEventListener('click', onInfectedClick, true);
   const damageObserver = new MutationObserver(() => {
     if (!infected(state()?.vinson?.phase) || isOwner(online) || !damagedKeys.size) return;
-    root()?.querySelectorAll(controlSelector).forEach((el) => {
+    root()?.querySelectorAll(`${controlSelector}, ${surfaceSelector}`).forEach((el) => {
       if (!broken.has(el) && damagedKeys.has(controlKey(el))) {
         if (['warn', 'consequence'].includes(state()?.vinson?.phase) && el.matches('.pm-slot')) return;
         el.classList.add('vinson-control-gone'); el.inert = true;
@@ -288,8 +296,10 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
           cell.style.cssText = `left:${fills[i].x + jitter * width * .04}px;top:${fills[i].y - jitter * height * .04}px;width:${width}px;max-width:none;--tilt:${jitter * 4}deg`;
           tile.prepend(cell);
           if (i + 1 < fills.length) setTimeout(() => fill(i + 1), Math.max(18, 90 - i * 3));
-          else setTimeout(() => {
-            tile.animate([
+          else {
+            screen.classList.add('vinson-filled');
+            setTimeout(() => {
+            if (!reduce()) tile.animate([
               {transform:'translate(0,0)',filter:'contrast(1)'},
               {transform:'translate(-18px,4px) skewX(3deg)',filter:'contrast(2)'},
               {transform:'translate(14px,-5px) skewX(-3deg)',filter:'contrast(1.5)'},
@@ -300,6 +310,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
               setTimeout(() => { if (current === 'banned' && host.contains(screen)) finalScene(); }, 6500);
             }, 1000);
           }, 800);
+          }
         };
         fill(0);
       }

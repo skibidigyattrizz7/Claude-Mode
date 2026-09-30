@@ -66,7 +66,7 @@
 </main>
 
 <script type="module">
-  import { startVinsonExperience } from './js/meta/ui/vinson.js?v=vinson6';
+  import { startVinsonExperience } from './js/meta/ui/vinson.js?v=vinson7';
   import { confirmBox, h } from './js/meta/ui/dom.js';
   import { HELL_CARD_ID } from './js/meta/core/secretcard.js';
 
@@ -91,6 +91,9 @@
     },
   };
   const app = { ut: fixture, root: document.querySelector('.pm-root'), destroyed:false, saveUT(){}, refresh(){}, applyRestrictions(){} };
+  app.root.addEventListener('click', (event) => {
+    if (event.target.closest('[data-uttab="home"]')) show('Ultimate Team Home reached');
+  });
   const originalUI = app.root.innerHTML;
   const controller = startVinsonExperience(online, { initialState: fixture, ephemeral: true });
   controller.attach(app); // fixture replaces any disk state immediately
