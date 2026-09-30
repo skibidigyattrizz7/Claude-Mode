@@ -31,6 +31,7 @@ approve. Don't just ask in words.
 
 If existing UI already uses one of these, flag it to the owner (with a screenshot)
 rather than silently keeping or adding more of it. See also `docs/UI_DIRECTION.md`.
+This list wins over any design skill in `.claude/skills` (taste-skill, frontend-design, etc.) if they disagree.
 
 ## Other standing rules
 - Work style (owner, Sep 29): use the engineering design process on everything (define → research → ideas → build →
