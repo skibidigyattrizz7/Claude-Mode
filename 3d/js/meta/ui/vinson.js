@@ -1,7 +1,7 @@
 // EVIL VINSON presentation and lifecycle. This is global (not tied to a UT view), so a timer continues when
 // the player changes screens. Server status is polled while active; the saved absolute deadline survives reload.
 import { loadUT, saveUT } from '../core/ut.js';
-import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
+import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, cursedPack, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
 
 const asset = (name) => new URL(`../../../assets/cards/${name}`, import.meta.url).href;
 const warning = asset('vinson-warning.png');
@@ -11,33 +11,61 @@ const seconds = (ms) => String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, '0
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK BEHIND YOU', 'THE CLOCK IS LYING'];
 
-export function startVinsonExperience(online, { initialState = loadUT() } = {}) {
+export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson8', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
   let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null, lastOmen = -1, falling = false;
   const broken = new Map();
   let soundContext = null;
+  const damagedKeys = new Set();
+  const controlSelector = 'button, [role="tab"], a, input, select, textarea, .pc-card, .pm-slot';
+  const surfaceSelector = '.pm-tile, .pm-panel, .pm-section, .pm-storeitem, .pm-packitem, .pm-coins, .pm-crest, img, svg, h1, h2, h3, h4, p, label, span';
+  const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.closest('.pm-modal')?.getAttribute('aria-label') || 'screen'}:${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
-  const remember = (key) => { try { return sessionStorage.getItem(key); } catch { return null; } };
-  const mark = (key) => { try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
+  const remember = (key) => { if (ephemeral) return null; try { return sessionStorage.getItem(key); } catch { return null; } };
+  const mark = (key) => { if (ephemeral) return; try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
   const make = (tag, cls, txt) => { const el = document.createElement(tag); el.className = cls; if (txt) el.textContent = txt; return el; };
+  const bloodTitle = (target, text) => {
+    target.replaceChildren();
+    target.setAttribute('aria-label', text);
+    target.setAttribute('role', 'heading'); target.setAttribute('aria-level', '2');
+    text.split(' ').forEach((word, wordIndex) => {
+      const group = make('span', 'vinson-blood-word'); group.setAttribute('aria-hidden', 'true');
+      [...word].forEach((letter, i) => {
+        const glyph = make('span', 'vinson-blood-letter', letter);
+        glyph.style.setProperty('--blood-length', `${.14 + ((i * 7 + wordIndex * 3) % 9) * .035}em`);
+        glyph.style.setProperty('--blood-delay', `${(i % 4) * -.27}s`);
+        group.append(glyph);
+      });
+      target.append(group, document.createTextNode(' '));
+    });
+  };
   const infected = (phase) => ['doom', 'freed', 'warn', 'consequence', 'locked'].includes(phase);
   const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
   function repairUi() {
     for (const [el, wasInert] of broken) { el.classList.remove('vinson-control-broken', 'vinson-tab-falling'); el.inert = wasInert; }
     broken.clear(); root()?.classList.remove('vinson-ui-falling');
+    damagedKeys.clear();
+    root()?.querySelectorAll('.vinson-control-gone').forEach((el) => { el.classList.remove('vinson-control-gone'); el.inert = false; });
     falling = false;
   }
   function breakControl(target, cls = 'vinson-control-broken') {
     if (broken.has(target)) return;
     broken.set(target, target.inert);
+    damagedKeys.add(controlKey(target));
     target.classList.add(cls);
     // Let its first click finish (including removing Vinson during a warning), then the broken control is gone.
     queueMicrotask(() => { if (broken.has(target)) target.inert = true; });
+    if (target.matches('.pm-slot')) setTimeout(() => {
+      if (['warn', 'consequence'].includes(state()?.vinson?.phase) && broken.has(target)) {
+        target.inert = broken.get(target); target.classList.remove('vinson-control-broken'); broken.delete(target);
+        damagedKeys.delete(controlKey(target));
+      }
+    }, 1300);
     for (const el of broken.keys()) if (!el.isConnected) broken.delete(el);
   }
   function fracture(target) {
@@ -53,13 +81,50 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
   }
   function onInfectedClick(event) {
     if (!infected(state()?.vinson?.phase) || isOwner(online)) return;
-    const target = event.target.closest?.('.pm-root button, .pm-root [role="tab"], .pm-root a, .pm-root input, .pm-root select, .pm-root .pc-card');
+    const frame = root();
+    if (!frame?.contains(event.target)) return;
+    const target = event.target.closest?.(controlSelector) || event.target.closest?.(surfaceSelector);
     if (target && root()?.contains(target)) {
+      if (target.matches('[data-uttab="home"], .pm-tile--ut')) return;
+      if (target.matches('.pm-back') && app?.stack?.some((view) => view.utHome)) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        app.popTo((view) => view.utHome); app.refresh(); return;
+      }
       if (broken.has(target)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
-      fracture(target); breakControl(target);
+      const label = (target.textContent || '').trim();
+      const dialog = target.closest('.pm-modal');
+      // Escape routes must remain available even if a stale dialog was open when the curse began.
+      if (dialog && (target.matches('.pm-x') || /^(cancel|close|back)$/i.test(label))) return;
+      const lockedPack = cursedPack(state());
+      const packEntry = lockedPack && (
+        (!!target.closest('.pm-storeitem, .pm-show-info') && /^buy & open$/i.test(label)) ||
+        (!!target.closest('.pm-packitem') && /^open$/i.test(label)) ||
+        (dialog && /pack/i.test(dialog.getAttribute('aria-label') || '') && !/manager/i.test(dialog.getAttribute('aria-label') || '') && /^buy & open$/i.test(label))
+      );
+      const packScene = lockedPack && !!target.closest('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback');
+      const matchScene = lockedPack && /^(play|start match|play rivals|play squad battles|kick off)$/i.test(label);
+      const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
+      fracture(target);
+      // Result screens own their coordinated button collapse and exit timer.
+      if (!packScene) breakControl(target);
+      if (!packEntry && !packScene && !matchScene && !squadWarning) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        // Close blocked dialogs through their normal close callback so pending confirmations resolve false.
+        if (dialog) setTimeout(() => dialog.querySelector('.pm-x')?.click(), 1150);
+      }
     }
   }
   document.addEventListener('click', onInfectedClick, true);
+  const damageObserver = new MutationObserver(() => {
+    if (!infected(state()?.vinson?.phase) || isOwner(online) || !damagedKeys.size) return;
+    root()?.querySelectorAll(`${controlSelector}, ${surfaceSelector}`).forEach((el) => {
+      if (!broken.has(el) && damagedKeys.has(controlKey(el))) {
+        if (['warn', 'consequence'].includes(state()?.vinson?.phase) && el.matches('.pm-slot')) return;
+        el.classList.add('vinson-control-gone'); el.inert = true;
+      }
+    });
+  });
+  damageObserver.observe(document.body, { childList: true, subtree: true });
   function collapseUi(done) {
     const frame = root();
     const pieces = frame && [...frame.querySelectorAll('.pm-top, .pm-uttab, .pm-main > section, .pm-main > .pm-section, .pm-main > .pm-panel')]
@@ -132,7 +197,10 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
         final.dataset.hauntCycle = String(cycle);
         [...final.querySelectorAll('.vinson-final-word, .vinson-final-ghosts img')].forEach((el, i) => {
           const rand = (n) => (Math.sin((cycle + i * 17) * n) * 1437.71 % 1 + 1) % 1;
-          el.style.left = `${3 + rand(13) * 65}%`; el.style.top = `${8 + rand(31) * 67}%`;
+          const width = Math.min(el.getBoundingClientRect().width, innerWidth * .52);
+          const height = Math.min(el.getBoundingClientRect().height, innerHeight * .3);
+          el.style.left = `${Math.max(16, rand(13) * (innerWidth - width - 40))}px`;
+          el.style.top = `${Math.max(32, rand(31) * (innerHeight - height - 70))}px`;
           el.style.right = 'auto'; el.style.bottom = 'auto';
         });
       }
@@ -194,7 +262,8 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
     host.replaceChildren();
     const screen = make('div', 'vinson-screen vinson-cinematic'); screen.setAttribute('role', 'alertdialog');
     screen.setAttribute('aria-label', "IT'S NOT WORTH IT");
-    const prologue = make('div', 'vinson-prologue', 'YOU WERE WARNED');
+    const prologue = make('div', 'vinson-prologue');
+    const warningTitle = make('strong', 'vinson-blood-heading'); bloodTitle(warningTitle, 'YOU WERE WARNED'); prologue.append(warningTitle);
     const tile = make('div', 'vinson-tiles');
     const intertitle = make('strong', 'vinson-intertitle');
     screen.append(prologue, tile, intertitle); host.append(screen);
@@ -202,13 +271,16 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
     const addTile = (i) => {
       const cell = make('div', 'vinson-tile');
       const image = document.createElement('img'); image.src = warning; image.alt = '';
-      cell.append(image, make('span', '', "IT'S NOT WORTH IT"));
+      cell.append(image);
       if (i < 4) cell.classList.add(`corner-${i}`);
       else {
         // Seeded placement makes this event stable across a repaint, without a rigid grid.
         const rand = (n) => ((Math.sin((i + 1) * n * 93.17) * 43758.5453) % 1 + 1) % 1;
-        cell.style.left = `${rand(13) * 88}%`; cell.style.top = `${rand(29) * 80}%`;
-        cell.style.width = `${12 + rand(31) * 19}%`; cell.style.setProperty('--tilt', `${(rand(7) - .5) * 15}deg`);
+        const width = Math.min(innerWidth * (.12 + rand(31) * .19), innerHeight * .29);
+        const height = width * 594 / 477;
+        cell.style.left = `${rand(13) * Math.max(0, innerWidth - width - 20)}px`;
+        cell.style.top = `${rand(29) * Math.max(0, innerHeight - height - 20)}px`;
+        cell.style.width = `${width}px`; cell.style.setProperty('--tilt', `${(rand(7) - .5) * 10}deg`);
       }
       tile.append(cell);
     };
@@ -216,14 +288,48 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
       if (current !== 'banned' || !host.contains(screen)) return;
       addTile(count++);
       if (count === 12 || count === 32 || count === 54) {
-        intertitle.textContent = count === 12 ? 'SHE IS HERE' : count === 32 ? 'THERE IS NO ESCAPE' : "IT'S NOT WORTH IT";
+        bloodTitle(intertitle, count === 12 ? 'SHE IS HERE' : count === 32 ? 'THERE IS NO ESCAPE' : "IT'S NOT WORTH IT");
         intertitle.classList.remove('vinson-intertitle-show');
         void intertitle.offsetWidth;
         intertitle.classList.add('vinson-intertitle-show');
         sound('warning');
       }
-      if (count < 55) setTimeout(batch, Math.max(100, 1100 - count * 19));
-      else setTimeout(() => { screen.classList.add('vinson-blackout'); sound('impact'); setTimeout(() => { if (current === 'banned' && host.contains(screen)) finalScene(); }, 1400); }, 2200);
+      if (count < 70) setTimeout(batch, Math.max(35, 1100 - count * 19));
+      else {
+        // Fill uncovered areas behind the random foreground portraits. Overlap and jitter hide the coverage lattice.
+        const width = Math.min(innerWidth * .28, innerHeight * .34);
+        const height = width * 594 / 477, stepX = width * .72, stepY = height * .72;
+        const fills = [];
+        for (let y = -height * .15; y < innerHeight; y += stepY) for (let x = -width * .15; x < innerWidth; x += stepX) {
+          fills.push({x, y});
+        }
+        const fill = (i) => {
+          if (current !== 'banned' || !host.contains(screen)) return;
+          const cell = make('div', 'vinson-tile');
+          const image = document.createElement('img'); image.src = warning; image.alt = '';
+          cell.append(image);
+          const jitter = Math.sin(i * 29.7);
+          cell.style.cssText = `left:${fills[i].x + jitter * width * .04}px;top:${fills[i].y - jitter * height * .04}px;width:${width}px;max-width:none;--tilt:${jitter * 4}deg`;
+          tile.prepend(cell);
+          if (i + 1 < fills.length) setTimeout(() => fill(i + 1), Math.max(18, 90 - i * 3));
+          else {
+            screen.classList.add('vinson-filled');
+            setTimeout(() => {
+            if (!reduce()) tile.animate([
+              {transform:'translate(0,0)',filter:'contrast(1)'},
+              {transform:'translate(-18px,4px) skewX(3deg)',filter:'contrast(2)'},
+              {transform:'translate(14px,-5px) skewX(-3deg)',filter:'contrast(1.5)'},
+              {transform:'translate(0,0)',filter:'contrast(1)'},
+            ], {duration:480, iterations:2, easing:'steps(2,end)'});
+            setTimeout(() => {
+              screen.classList.add('vinson-blackout'); sound('impact');
+              setTimeout(() => { if (current === 'banned' && host.contains(screen)) finalScene(); }, 6500);
+            }, 1000);
+          }, 800);
+          }
+        };
+        fill(0);
+      }
     };
     mark(key); sound('impact');
     setTimeout(() => {
@@ -306,7 +412,7 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
       screen.remove();
     },
     tick, poll,
-    destroy() { repairUi(); current = ''; clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
+    destroy() { repairUi(); current = ''; damageObserver.disconnect(); clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);

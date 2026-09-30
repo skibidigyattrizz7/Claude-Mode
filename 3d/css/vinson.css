@@ -22,8 +22,8 @@
 .vinson-screen { position: absolute; inset: 0; overflow: hidden; pointer-events: auto; background: #000; color: #fff0dd;
   display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
 .vinson-tiles { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(ellipse at center, #170201 0%, #000 68%); }
-.vinson-tile { position: absolute; width: 22%; height: 22%; overflow: hidden; animation: vinson-appear .7s cubic-bezier(.2,.7,.15,1.1) both; box-shadow: 0 0 35px #150000; rotate: var(--tilt, 0deg); border: 1px solid #5d1613; }
-.vinson-tile img { width: 100%; height: 100%; object-fit: cover; object-position: top center; filter: saturate(.52); }
+.vinson-tile { position: absolute; width: 22%; max-width: 29vh; aspect-ratio: 477 / 594; overflow: hidden; animation: vinson-appear .7s cubic-bezier(.2,.7,.15,1.1) both; box-shadow: 0 0 35px #150000; rotate: var(--tilt, 0deg); border: 1px solid #5d1613; }
+.vinson-tile img { display: block; width: 100%; height: 100%; object-fit: contain; filter: saturate(.52); }
 .vinson-tile span { position: absolute; bottom: 2%; left: 0; width: 100%; padding: 2px 0; background: #130100de;
   color: #fff1dd; font-size: clamp(6px, 1vw, 16px); font-weight: 900; letter-spacing: .03em; }
 .vinson-tile.corner-0 { left: 0; top: 0; }.vinson-tile.corner-1 { right: 0; top: 0; }
@@ -136,6 +136,7 @@ body.vinson-critical .pm-root .pm-btn, body.vinson-critical .pm-root .pm-uttab {
 .vinson-tab-falling { position: relative; z-index: 2; transform-origin: 50% 0%; animation: vinson-panel-fall 1.12s cubic-bezier(.48,.02,.88,.5) forwards !important; }
 .vinson-control-broken { position: relative; transform-origin: 40% 0%; pointer-events: none !important;
   animation: vinson-control-drop 1.05s cubic-bezier(.32,.04,.87,.46) forwards !important; }
+.vinson-control-gone { visibility: hidden !important; pointer-events: none !important; }
 .vinson-control-broken::after { content: ''; position: absolute; z-index: 5; inset: 0; pointer-events: none; opacity: 0;
   background: linear-gradient(133deg, transparent 47%, rgba(255,235,230,.96) 48%, rgba(255,235,230,.96) 49%, transparent 50%),
     linear-gradient(42deg, transparent 53%, rgba(255,235,230,.86) 54%, rgba(255,235,230,.86) 55%, transparent 56%),
@@ -148,6 +149,24 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
   text-shadow: 0 1px 0 #f04a3b, 0 3px 1px #8a090d, 0 8px 2px rgba(111,0,5,.86), 2px 15px 5px rgba(65,0,0,.65), 0 0 22px rgba(210,0,12,.6);
   filter: drop-shadow(0 10px 3px rgba(78,0,0,.54)); animation-name: vinson-word-haunt, vinson-word-drip;
   animation-duration: 8.8s, 4.8s; animation-timing-function: ease-in-out, ease-in-out; animation-iteration-count: infinite, infinite; }
+
+/* Literal hanging ink: narrow, uneven runs with rounded ends and tapered joins. The streak
+   silhouettes are static geometry; only their opacity/scale changes so no frame reflows text. */
+.vinson-omen, .vinson-whisper, .vinson-final-word { position: absolute; isolation: isolate; }
+.vinson-omen::after, .vinson-whisper::after, .vinson-final-word::after {
+  content: ''; position: absolute; pointer-events: none; z-index: -1; top: 72%; left: 3%; width: 94%; height: clamp(15px, 3.6vw, 48px);
+  background-image:
+    radial-gradient(ellipse 2px 4px at 8% 100%, #4f0004 98%, transparent 100%),
+    linear-gradient(90deg, transparent 0 13%, #76050a 13.2% 14%, transparent 14.2% 28%, #a10a10 28.2% 29.3%, transparent 29.5% 51%, #660006 51.2% 52%, transparent 52.2% 73%, #90070c 73.2% 74.2%, transparent 74.4% 89%, #580005 89.2% 90%, transparent 90.2%);
+  background-size: 100% 100%; background-repeat: no-repeat;
+  clip-path: polygon(0 0,100% 0,100% 9%,91% 9%,90% 73%,87% 100%,84% 74%,83% 12%,75% 12%,74% 42%,71% 66%,69% 43%,68% 9%,54% 9%,53% 82%,50% 100%,47% 83%,46% 12%,32% 12%,31% 58%,28% 75%,26% 59%,25% 9%,15% 9%,14% 35%,11% 51%,9% 36%,8% 0,0 0%);
+  filter: drop-shadow(0 2px 2px rgba(88,0,4,.8)); transform: scaleY(.35); transform-origin: top; opacity: .78;
+  animation: vinson-ink-hang 4.6s ease-in-out infinite alternate;
+}
+.vinson-whisper::after { top: 79%; height: clamp(24px, 5.5vw, 74px); left: 4%; width: 92%; opacity: .86; animation-duration: 5.8s; }
+.vinson-omen:nth-child(even)::after { left: 8%; width: 86%; transform: scaleY(.52) rotate(.5deg); animation-delay: -1.7s; }
+.vinson-final-word::after { top: 78%; height: clamp(20px, 4.7vw, 62px); left: 0; width: 100%; opacity: .9; }
+.vinson-final-word-1::after, .vinson-final-word-4::after { transform: scaleY(.62) rotate(-.5deg); animation-delay: -2.3s; }
 
 .vinson-fracture { position: fixed; z-index: 30000; pointer-events: none; overflow: visible; }
 .vinson-shard { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden;
@@ -191,11 +210,20 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
 .vinson-final-word-5 { right: 23%; bottom: 11%; --wx: -10px; --wy: -12px; --wr: -3deg; animation-delay: -6.1s; }
 .vinson-final .vinson-planet-art, .vinson-final .vinson-final-title, .vinson-final .vinson-final-kicker, .vinson-final .vinson-check { z-index: 3; }
 .vinson-final .vinson-final-title { text-shadow: 0 2px #320605, 0 0 22px rgba(220,10,14,.55); }
+.vinson-final { box-sizing: border-box; padding: max(18px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom)); gap: clamp(8px, 1.3vh, 14px); }
+.vinson-final .vinson-planet-art { width: min(92vw, 92dvh, 1000px); flex: 0 0 auto; }
+.vinson-final .vinson-final-title { margin: 0; max-width: min(94vw, 1100px); font-size: clamp(18px, 3.5vw, 42px); line-height: 1.08; overflow-wrap: anywhere; flex: 0 0 auto; }
+.vinson-final .vinson-final-kicker { position: relative; max-width: 92vw; font-size: clamp(12px, 1.8vw, 21px); letter-spacing: .2em; line-height: 1.2; flex: 0 0 auto; }
+.vinson-final .vinson-check { margin: 0 0 15px; flex: 0 0 auto; max-width: 90vw; }
 .vinson-check { position: relative; isolation: isolate; overflow: visible; border: 1px solid #9f211c; border-radius: 2px;
   padding: 14px 23px 17px; color: #fff0e9; background: linear-gradient(180deg,#67100f,#240504 76%); font: 900 clamp(14px,2vw,20px) Impact,sans-serif;
   letter-spacing: .12em; text-transform: uppercase; text-shadow: 0 2px #2a0000, 0 0 12px #f13a30; box-shadow: 0 8px 20px #000, inset 0 1px rgba(255,180,140,.22);
-  clip-path: polygon(0 0,100% 0,100% 78%,95% 88%,90% 82%,85% 100%,78% 87%,70% 100%,63% 89%,55% 100%,46% 86%,38% 100%,30% 86%,22% 100%,15% 84%,8% 94%,0 78%); transition: transform .2s, filter .2s; }
+  transition: transform .2s, filter .2s; }
 .vinson-check::before { content: ''; position: absolute; z-index: -1; inset: -8px 0 0; background: repeating-linear-gradient(90deg,transparent 0 14px,rgba(205,13,20,.9) 15px 18px,transparent 19px 29px); opacity: .7; filter: drop-shadow(0 4px 3px #740004); }
+.vinson-check::after { content: ''; position: absolute; pointer-events: none; left: 4%; top: 96%; width: 92%; height: 34px;
+  background: linear-gradient(90deg, transparent 0 7%,#6f0308 7.2% 8.1%,transparent 8.3% 25%,#aa0d14 25.2% 26.4%,transparent 26.6% 45%,#610006 45.2% 46%,transparent 46.2% 68%,#8f080e 68.2% 69.2%,transparent 69.4% 88%,#71050a 88.2% 89.1%,transparent 89.3%);
+  clip-path: polygon(0 0,100% 0,100% 8%,92% 8%,91% 64%,88% 100%,85% 65%,84% 8%,72% 8%,71% 51%,68% 77%,65% 51%,64% 9%,48% 9%,47% 72%,44% 95%,41% 71%,40% 8%,28% 8%,27% 38%,24% 55%,21% 38%,20% 8%,11% 8%,10% 79%,7% 100%,4% 77%,3% 0,0 0);
+  filter: drop-shadow(0 3px 3px rgba(100,0,4,.9)); animation: vinson-button-drip 3.6s ease-in-out infinite alternate; }
 .vinson-check:hover { transform: translateY(-2px); filter: brightness(1.28); }
 .vinson-check:active { transform: translateY(2px); }
 
@@ -213,6 +241,8 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
 @keyframes vinson-countdown-drips { to { background-position: 0 140px, 7% 170px, 0 220px, 23% 240px, 0 160px, 39% 180px, 0 255px, 61% 265px, 0 190px, 82% 220px, 0 230px, 0 0; } }
 @keyframes vinson-countdown-flash { 0%,100% { opacity:.64; } 50% { opacity:.94; } }
 @keyframes vinson-word-drip { 0%,100% { letter-spacing:.1em; text-shadow:0 1px 0 #f04a3b,0 3px 1px #8a090d,0 8px 2px rgba(111,0,5,.86),2px 15px 5px rgba(65,0,0,.65),0 0 22px rgba(210,0,12,.6); } 48% { letter-spacing:.14em; text-shadow:0 1px 0 #ff5c4f,0 5px 2px #980a0f,2px 14px 4px rgba(111,0,5,.92),-3px 24px 8px rgba(65,0,0,.72),0 0 25px rgba(210,0,12,.75); } }
+@keyframes vinson-ink-hang { from { transform:scaleY(.3); opacity:.42; } to { transform:scaleY(1); opacity:.92; } }
+@keyframes vinson-button-drip { from { transform:scaleY(.7); opacity:.68; } to { transform:scaleY(1); opacity:.98; } }
 @keyframes vinson-ghost-haunt { 0%,12%,100% { opacity:0; transform:translate(0,0) scale(.97) rotate(var(--gr)); } 18% { opacity:.22; } 23% { opacity:.08; transform:translate(calc(var(--gx)*10px),calc(var(--gy)*-7px)) scale(1.02) rotate(var(--gr)); } 28% { opacity:.16; } 34% { opacity:0; transform:translate(calc(var(--gx)*17px),calc(var(--gy)*5px)) scale(1.04) rotate(var(--gr)); } }
 @keyframes vinson-word-haunt { 0%,100% { opacity:0; transform:translate(0,0) rotate(var(--wr)); filter:blur(2px); } 12% { opacity:.62; } 24% { opacity:.24; transform:translate(var(--wx),var(--wy)) rotate(var(--wr)); filter:blur(0); } 37% { opacity:0; transform:translate(calc(var(--wx)*1.6),calc(var(--wy)*-1.4)) rotate(var(--wr)); filter:blur(3px); } }
 @media (max-width: 560px) {
@@ -224,9 +254,37 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
 }
 @media (prefers-reduced-motion: reduce) {
   body.vinson-infected::after, body.vinson-critical::after, body.vinson-critical .pm-root, .vinson-countdown-blood, .vinson-fracture *, .vinson-collapse *,
-  .vinson-final-ghosts img, .vinson-final-word, .vinson-whisper { animation: none !important; }
+  .vinson-final-ghosts img, .vinson-final-word, .vinson-whisper, .vinson-omen::after, .vinson-whisper::after,
+  .vinson-final-word::after, .vinson-check::after { animation: none !important; }
   .vinson-final-ghosts img { opacity: .09; }
   .vinson-final-word { opacity: .24; }
+  .vinson-omen::after, .vinson-whisper::after, .vinson-final-word::after, .vinson-check::after { transform: none; opacity: .72; }
   .vinson-control-broken, .vinson-tab-falling { visibility: hidden; }
   .vinson-ui-falling { opacity: 0; }
 }
+
+/* Blood lettering for the warnings between the portrait waves. */
+.vinson-blood-heading, .vinson-intertitle {
+  color: #e72a32; text-align: center; line-height: 1.45;
+  text-shadow: 0 -1px 0 #ff7773, 0 2px 0 #690408, 0 5px 3px #340002, 0 0 24px #640005;
+  -webkit-text-stroke: .6px #72050b;
+}
+.vinson-blood-heading { display: block; max-width: 90vw; font: inherit; }
+.vinson-intertitle { left: 5%; right: 5%; }
+.vinson-blood-word { display: inline-block; white-space: nowrap; margin-right: .18em; }
+.vinson-blood-letter { position: relative; display: inline-block; isolation: isolate; }
+.vinson-blood-letter::after {
+  content: ''; position: absolute; z-index: -1; left: 43%; top: 72%;
+  width: .045em; min-width: 2px; height: var(--blood-length, .3em);
+  border-radius: 0 0 55% 55%; background: linear-gradient(90deg, #61000b, #d51923 42%, #8c0613);
+  box-shadow: 1px 0 0 #530008, 0 2px 2px #270003;
+  transform-origin: top; animation: vinson-title-bleed 1.6s ease-in-out var(--blood-delay, 0s) infinite alternate;
+}
+.vinson-blood-letter:nth-child(3n)::after { left: 65%; width: .065em; }
+.vinson-blood-letter:nth-child(5n)::after { display: none; }
+@keyframes vinson-title-bleed { from { transform: scaleY(.65); } to { transform: scaleY(1.4); } }
+@media (max-width: 600px) {
+  .vinson-blood-heading { font-size: clamp(30px, 7vw, 44px); letter-spacing: .07em; }
+  .vinson-intertitle { font-size: clamp(28px, 6vw, 40px); }
+}
+@media (prefers-reduced-motion: reduce) { .vinson-blood-letter::after { animation: none; } }
