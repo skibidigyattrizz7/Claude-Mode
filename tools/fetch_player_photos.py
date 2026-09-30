@@ -408,6 +408,13 @@ def write_photos_js(credits):
     for chunk in chunks(ids, 6):
         lines.append('  ' + ' '.join(json.dumps(x) + ',' for x in chunk))
     lines.append(']);')
+    # the bigger "dynamic" cutouts promo cards use (assets/players/dyn/<person>.webp, tools/photos_v2.py)
+    dyn_dir = os.path.join(PLAYER_DIR, 'dyn')
+    dyn = sorted(k for k in ids if os.path.exists(os.path.join(dyn_dir, k + '.webp')))
+    lines.append('export const PLAYER_DYN = new Set([')
+    for chunk in chunks(dyn, 6):
+        lines.append('  ' + ' '.join(json.dumps(x) + ',' for x in chunk))
+    lines.append(']);')
     lines.append('')
     with open(PHOTOS_JS, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))

@@ -66,3 +66,6 @@ export const PLAYER_PHOTOS = new Set([
   "xavisimons", "xhaka", "yamal", "zambrotta", "zapataroy", "zielinski",
   "zouma", "zubimendi", "zubizarreta",
 ]);
+// the bigger promo cutouts (assets/players/dyn/<person>.webp); filled by tools/photos_futgg.py
+export const PLAYER_DYN = new Set([
+]);

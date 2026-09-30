@@ -115,3 +115,42 @@ Files: new 3d/js/engine/ui/lineupreveal.js (+ its CSS inside the module), a one-
 2. Team AI tactics (engine/core/ai.js): compact defensive block that shifts with the ball, pressing triggers (back pass, bad touch), full-backs overlapping, third-man runs, strikers running in behind, keeper sweeping. Difficulty levels still feel different. Keep sim deterministic; add gameplay tests.
 (If Task A/C are also editing ai.js, do part 1 only.)
 ```
+
+## Sep 30: FIFA / FC card designs (split: Claude = card design system + photos, ChatGPT = promos, Grok = secret-card art)
+
+### ChatGPT (Codex, with GitHub access): promos
+```
+Repo skibidigyattrizz7/Claude-Mode, game in 3d/ (vanilla ES modules, no build). Read CLAUDE.md, docs/HANDOFF.md first.
+Work on your own new branch; Claude merges it. Use subagents / parallel tasks if you can (one for data, one for tests).
+Owner decision: this is a non-commercial fan game, so real EA promo names and EA card designs are allowed.
+Task: add every FIFA 23 promo campaign to 3d/js/meta/core/promos.js (same shape as the existing entries: id, name, short,
+tag, colors, range, price, theme, release week, pack, SBCs) and give each a `design` field naming its card background:
+Team of the Week, Ones to Watch, Road to the Knockouts, Rulebreakers, Out of Position, World Cup Path to Glory,
+Road to the World Cup, World Cup Stories, World Cup Phenoms, World Cup Team of the Tournament, Winter Wildcards,
+FUT Centurions, Team of the Year, Future Stars, Road to the Final, Showdown Series, Fantasy FUT, FUT Ballers,
+FUT Birthday, Trophy Titans, TOTS Warm-Up Series, Team of the Season, Shapeshifters, Level Up, FUTTIES, Pre-Season.
+Existing promos with a fictional name that match one of these: keep the SAME id (old saves), just change the name/tag to
+the real one (e.g. rulebenders -> Rulebreakers, frost -> Winter Wildcards, cupstories -> World Cup Stories).
+Design keys = files in 3d/assets/cards/<key>.webp (FIFA 23 = f23-<EA rarity id>). Known: TOTW f23-3, TOTY f23-5,
+MOTM f23-8, TOTS f23-11, Icon f23-12, FUTTIES f23-16, OTW f23-21, FUT Birthday f23-30, Flashback f23-51,
+UCL RTTK f23-47, Winter Wildcards f23-118, World Cup Icon f23-129, Centurions f23-151, Trophy Titans f23-156,
+Rulebreakers f23-149. For the rest, open the images in 3d/assets/cards and pick the one that matches the promo.
+Do NOT edit card.js / meta.css / 3d/js/net/** (Claude is changing those). Promo draws must stay diverse
+(buildPromoCards usage map). Run node 3d/js/meta/tests/meta.test.mjs and add tests for the new promos.
+```
+
+### Grok (Expert mode; Heavy only with SuperGrok): secret and admin card art
+```
+Make card background art for a football card game in the exact style of EA SPORTS FC 26 Ultimate Team special cards
+(shield-shaped card with the notched top corners, ornate thin metallic frame, dramatic artwork in the top 60%, a calm
+darker band in the lower 40% where name and stats go, NO text, NO player, NO numbers). Portrait 840x1200, card shape on a
+transparent or pure black background. If you can, work on several at once (subagents / parallel generations).
+1. "The Shawky" - glitch / infinity god card: black and electric cyan, digital glitch shards, an infinity sign.
+2. "Cursed -infinity" - blood red and black, cracked obsidian, dripping red, evil glow.
+3. "Hell" - fire and molten lava, charred frame.
+4. "Angel" - white marble and gold, soft light rays, feathers.
+5. "E.L.I.J.A.H." - deep purple cosmic nebula with gold runes.
+6. "Admin Card" - black and gold circuit board with a crown.
+7. "Rabbi Patel" - royal blue and white with gold, a Star of David in the art.
+Give each as a separate PNG named like shawky.png, cursed.png, hell.png, angel.png, elijah.png, admin.png, rabbi.png.
+```
