@@ -1,4 +1,20 @@
 {
+ "abbiati": {
+  "article": "Christian Abbiati",
+  "author": "goatling",
+  "file": "abbiati.webp",
+  "license": "CC BY-SA 2.0",
+  "name": "Christian Abbiati",
+  "url": "https://commons.wikimedia.org/wiki/File:Christian_Abbiati_%E2%80%93_A.C._Milan.jpg"
+ },
+ "adler": {
+  "article": "René Adler",
+  "author": "Sven Mandel",
+  "file": "adler.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "René Adler",
+  "url": "https://commons.wikimedia.org/wiki/File:Ren%C3%A9_Adler_2022_(cropped).jpg"
+ },
  "akanji": {
   "article": "Manuel Akanji",
   "author": "Steffen Prößdorf",
@@ -47,6 +63,14 @@
   "name": "Arda Güler",
   "url": "https://commons.wikimedia.org/wiki/File:Arda_G%C3%BCler_2025.jpg"
  },
+ "areola": {
+  "article": "Alphonse Areola",
+  "author": "Sandro Halank , Wikimedia Commons",
+  "file": "areola.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Alphonse Areola",
+  "url": "https://commons.wikimedia.org/wiki/File:2019-07-17_SG_Dynamo_Dresden_vs._Paris_Saint-Germain_by_Sandro_Halank%E2%80%93011_(cropped).jpg"
+ },
  "balde": {
   "article": "Alejandro Balde",
   "author": "Pedro Semitiel from Cehegín, España",
@@ -70,6 +94,14 @@
   "license": "CC BY 4.0",
   "name": "Nicolò Barella",
   "url": "https://commons.wikimedia.org/wiki/File:Nicol%C3%B2_Barella_in_2021_(cropped_2).jpg"
+ },
+ "barthez": {
+  "article": "Fabien Barthez",
+  "author": "Unknown author Unknown author",
+  "file": "barthez.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Fabien Barthez",
+  "url": "https://commons.wikimedia.org/wiki/File:Fabien_Barthez_at_OM.jpg"
  },
  "bastoni": {
   "article": "Alessandro Bastoni",
@@ -191,6 +223,22 @@
   "name": "Edinson Cavani",
   "url": "https://commons.wikimedia.org/wiki/File:PALMEIRAS_X_BOCA_JUNIORS_-_COPA_LIBERTADORES_2023_-_53286889335_(cropped_2).jpg"
  },
+ "cech": {
+  "article": "Petr Čech",
+  "author": "Amir Hosseini",
+  "file": "cech.webp",
+  "license": "CC BY 4.0",
+  "name": "Petr Čech",
+  "url": "https://commons.wikimedia.org/wiki/File:Arsenal_players_training_before_2019_UEFA_Europa_League_final_07_(cropped).jpg"
+ },
+ "claudiobravo": {
+  "article": "Claudio Bravo",
+  "author": "Fanny Schertzer",
+  "file": "claudiobravo.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Claudio Bravo",
+  "url": "https://commons.wikimedia.org/wiki/File:Claudio_Bravo_Footballteam_of_Chile_-_Spain_vs._Chile,_10th_September_2013_(cropped).jpg"
+ },
  "coman": {
   "article": "Kingsley Coman",
   "author": "Sven Mandel",
@@ -246,6 +294,14 @@
   "name": "Kevin De Bruyne",
   "url": "https://commons.wikimedia.org/wiki/File:Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_(cropped).jpg"
  },
+ "degea": {
+  "article": "David de Gea",
+  "author": "Кирилл Венедиктов",
+  "file": "degea.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "David de Gea",
+  "url": "https://commons.wikimedia.org/wiki/File:David_de_Gea_2017.jpg"
+ },
  "deligt": {
   "article": "Matthijs de Ligt",
   "author": "Derivative work: MajorPrince",
@@ -269,6 +325,14 @@
   "license": "CC BY-SA 4.0",
   "name": "Rodrigo De Paul",
   "url": "https://commons.wikimedia.org/wiki/File:Rodrigo_De_Paul_Argentina_v_Spain_19_July_2026-159.jpg"
+ },
+ "desanctis": {
+  "article": "Morgan De Sanctis",
+  "author": "Piotr Drabik",
+  "file": "desanctis.webp",
+  "license": "CC BY 2.0",
+  "name": "Morgan De Sanctis",
+  "url": "https://commons.wikimedia.org/wiki/File:Morgan_De_Sanctis_2012.jpg"
  },
  "dilorenzo": {
   "article": "Giovanni Di Lorenzo",
@@ -430,6 +494,14 @@
   "name": "Gavi",
   "url": "https://commons.wikimedia.org/wiki/File:Gavi_Argentina_v_Spain_19_July_2026-013.jpg"
  },
+ "goncaloramos": {
+  "article": "Gonçalo Ramos",
+  "author": "Bryan Berlin",
+  "file": "goncaloramos.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Gonçalo Ramos",
+  "url": "https://commons.wikimedia.org/wiki/File:Gon%C3%A7alo_Ramos_USMNT_v_Portugal_Mar_31_2026-32_(cropped).jpg"
+ },
  "goretzka": {
   "article": "Leon Goretzka",
   "author": "Bryan Berlin",
@@ -502,6 +574,14 @@
   "name": "Achraf Hakimi",
   "url": "https://commons.wikimedia.org/wiki/File:Achraf_Hakimi_Morocco_v_Norway_7_June_2026-16.jpg"
  },
+ "handanovic": {
+  "article": "Samir Handanović",
+  "author": "Дмитрий Журавель",
+  "file": "handanovic.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Samir Handanović",
+  "url": "https://commons.wikimedia.org/wiki/File:Samir_Handanovi%C4%87_Slovenia.jpg"
+ },
  "hincapie": {
   "article": "Piero Hincapié",
   "author": "Bryan Berlin",
@@ -534,6 +614,14 @@
   "name": "Alexander Isak",
   "url": "https://commons.wikimedia.org/wiki/File:Alexander_Isak_-_Sweden_-_Greece21_(cropped).jpg"
  },
+ "joaofelix": {
+  "article": "João Félix",
+  "author": "Bryan Berlin",
+  "file": "joaofelix.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "João Félix",
+  "url": "https://commons.wikimedia.org/wiki/File:Joao_Felix_Croatia_v_Portugal_2_July_2026-007.jpg"
+ },
  "joaoneves": {
   "article": "João Neves",
   "author": "Bryan Berlin",
@@ -541,6 +629,14 @@
   "license": "CC BY-SA 4.0",
   "name": "João Neves",
   "url": "https://commons.wikimedia.org/wiki/File:Joao_Neves_Croatia_v_Portugal_2_July_2026-102.jpg"
+ },
+ "joehart": {
+  "article": "Joe Hart",
+  "author": "Голубович Дмитрий",
+  "file": "joehart.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Joe Hart",
+  "url": "https://commons.wikimedia.org/wiki/File:Joe_Hart_69775.jpg"
  },
  "jonathandavid": {
   "article": "Jonathan David",
@@ -557,6 +653,14 @@
   "license": "CC BY-SA 4.0",
   "name": "Julián Álvarez",
   "url": "https://commons.wikimedia.org/wiki/File:Julian_Alvarez_Argentina_v_Spain_19_July_2026-052_(cropped).jpg"
+ },
+ "kahn": {
+  "article": "Oliver Kahn",
+  "author": "Steffen Prößdorf",
+  "file": "kahn.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Oliver Kahn",
+  "url": "https://commons.wikimedia.org/wiki/File:2022-07-30_Fu%C3%9Fball,_M%C3%A4nner,_DFL-Supercup,_RB_Leipzig_-_FC_Bayern_M%C3%BCnchen_1DX_3179_by_Stepro.jpg"
  },
  "kane": {
   "article": "Harry Kane",
@@ -686,6 +790,14 @@
   "name": "Khvicha Kvaratskhelia",
   "url": "https://commons.wikimedia.org/wiki/File:Kvaratskhelia_asse_psg_2425.png"
  },
+ "landreau": {
+  "article": "Mickaël Landreau",
+  "author": "Supporterhéninois",
+  "file": "landreau.webp",
+  "license": "CC0",
+  "name": "Mickaël Landreau",
+  "url": "https://commons.wikimedia.org/wiki/File:RC_Lens_-_FC_Lorient_(23-04-2019)_41.jpg"
+ },
  "lautaro": {
   "article": "Lautaro Martínez",
   "author": "Bryan Berlin",
@@ -702,6 +814,14 @@
   "name": "Rafael Leão",
   "url": "https://commons.wikimedia.org/wiki/File:RafaelLe%C3%A3oPortugal23.jpg"
  },
+ "lehmann": {
+  "article": "Jens Lehmann",
+  "author": "Sven Mandel",
+  "file": "lehmann.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Jens Lehmann",
+  "url": "https://commons.wikimedia.org/wiki/File:Jens_Lehmann_-_2019202184453_2019-07-21_Champions_for_Charity_-_3017_-_B70I3052_(cropped).jpg"
+ },
  "lewandowski": {
   "article": "Robert Lewandowski",
   "author": "Sven Mandel",
@@ -709,6 +829,14 @@
   "license": "CC BY-SA 4.0",
   "name": "Robert Lewandowski",
   "url": "https://commons.wikimedia.org/wiki/File:2019147183134_2019-05-27_Fussball_1.FC_Kaiserslautern_vs_FC_Bayern_M%C3%BCnchen_-_Sven_-_1D_X_MK_II_-_0228_-_B70I8527_(cropped).jpg"
+ },
+ "lloris": {
+  "article": "Hugo Lloris",
+  "author": "Кирилл Венедиктов",
+  "file": "lloris.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Hugo Lloris",
+  "url": "https://commons.wikimedia.org/wiki/File:Lloris_2018_(cropped).jpg"
  },
  "lookman": {
   "article": "Ademola Lookman",
@@ -757,6 +885,14 @@
   "license": "CC0",
   "name": "Giorgi Mamardashvili",
   "url": "https://commons.wikimedia.org/wiki/File:Liverpool_Players_04012026_(5)_-_Mamardashvili.jpg"
+ },
+ "mandanda": {
+  "article": "Steve Mandanda",
+  "author": "Кирилл Венедиктов",
+  "file": "mandanda.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Steve Mandanda",
+  "url": "https://commons.wikimedia.org/wiki/File:Steve_Mandanda_2018.jpg"
  },
  "mane": {
   "article": "Sadio Mané",
@@ -995,6 +1131,22 @@
   "name": "Pedri",
   "url": "https://commons.wikimedia.org/wiki/File:Pedri_France_v_Spain_7.24.26-245.jpg"
  },
+ "pepereina": {
+  "article": "Pepe Reina",
+  "author": "Кирилл Венедиктов",
+  "file": "pepereina.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Pepe Reina",
+  "url": "https://commons.wikimedia.org/wiki/File:Pepe_Reina_2017.jpg"
+ },
+ "peruzzi": {
+  "article": "Angelo Peruzzi",
+  "author": "Vincenzo.togni",
+  "file": "peruzzi.webp",
+  "license": "CC BY-SA 4.0",
+  "name": "Angelo Peruzzi",
+  "url": "https://commons.wikimedia.org/wiki/File:Angelo_Peruzzi_(2019).jpg"
+ },
  "porro": {
   "article": "Pedro Porro",
   "author": "Bryan Berlin",
@@ -1177,6 +1329,14 @@
   "name": "Benjamin Šeško",
   "url": "https://commons.wikimedia.org/wiki/File:FC_RB_Salzburg_gegen_SK_Austria_Klagenfurt_(2023-05-28)_38_(cropped).jpg"
  },
+ "sirigu": {
+  "article": "Salvatore Sirigu",
+  "author": "Clément Bucco-Lechat",
+  "file": "sirigu.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Salvatore Sirigu",
+  "url": "https://commons.wikimedia.org/wiki/File:20150616_-_Portugal_-_Italie_-_Gen%C3%A8ve_-_Salvatore_Sirigu_1_(cropped).jpg"
+ },
  "sommer": {
   "article": "Yann Sommer",
   "author": "Werner100359",
@@ -1208,6 +1368,14 @@
   "license": "CC BY-SA 4.0",
   "name": "John Stones",
   "url": "https://commons.wikimedia.org/wiki/File:John_Stones_England_v_Ghana_23_June_2026-038.jpg"
+ },
+ "szczesny": {
+  "article": "Wojciech Szczęsny",
+  "author": "La Gazzetta dello Sport",
+  "file": "szczesny.webp",
+  "license": "CC BY 3.0",
+  "name": "Wojciech Szczęsny",
+  "url": "https://commons.wikimedia.org/wiki/File:Wojciech_Szcz%C4%99sny.png"
  },
  "szoboszlai": {
   "article": "Dominik Szoboszlai",
@@ -1257,6 +1425,14 @@
   "name": "Marcus Thuram",
   "url": "https://commons.wikimedia.org/wiki/File:Marcus_Thuram_France_v_Senegal_16_June_2026-261_(cropped).jpg"
  },
+ "toldo": {
+  "article": "Francesco Toldo",
+  "author": "Steindy ( talk ) 13:22, 28 November 2009 (UTC)",
+  "file": "toldo.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Francesco Toldo",
+  "url": "https://commons.wikimedia.org/wiki/File:Francesco_Toldo_-_Inter_Mailand_(1).jpg"
+ },
  "tonali": {
   "article": "Sandro Tonali",
   "author": "MichaelEmilio",
@@ -1289,6 +1465,14 @@
   "name": "Federico Valverde",
   "url": "https://commons.wikimedia.org/wiki/File:Federico_Valverde_2021_(cropped).jpg"
  },
+ "vandersar": {
+  "article": "Edwin van der Sar",
+  "author": "Web Summit",
+  "file": "vandersar.webp",
+  "license": "CC BY 2.0",
+  "name": "Edwin van der Sar",
+  "url": "https://commons.wikimedia.org/wiki/File:Edwin_van_der_Sar_2015.jpg"
+ },
  "vandeven": {
   "article": "Micky van de Ven",
   "author": "KrispyKrumpets",
@@ -1312,6 +1496,14 @@
   "license": "CC BY 4.0",
   "name": "Guglielmo Vicario",
   "url": "https://commons.wikimedia.org/wiki/File:Guglielmo_Vicario.png"
+ },
+ "victorvaldes": {
+  "article": "Víctor Valdés",
+  "author": "Clément Bucco-Lechat",
+  "file": "victorvaldes.webp",
+  "license": "CC BY-SA 3.0",
+  "name": "Víctor Valdés",
+  "url": "https://commons.wikimedia.org/wiki/File:Spain_-_Chile_-_10-09-2013_-_Geneva_-_Victor_Valdes_6_(cropped).jpg"
  },
  "vinicius": {
   "article": "Vinícius Júnior",
@@ -1344,6 +1536,14 @@
   "license": "CC BY-SA 4.0",
   "name": "Ollie Watkins",
   "url": "https://commons.wikimedia.org/wiki/File:Ollie_Watkins_England_v_Ghana_23_June_2026-035.jpg"
+ },
+ "weidenfeller": {
+  "article": "Roman Weidenfeller",
+  "author": "Tim Reckmann from Hamm, Deutschland",
+  "file": "weidenfeller.webp",
+  "license": "CC BY 2.0",
+  "name": "Roman Weidenfeller",
+  "url": "https://commons.wikimedia.org/wiki/File:Roman_Weidenfeller_2014_(cropped).jpg"
  },
  "wirtz": {
   "article": "Florian Wirtz",
