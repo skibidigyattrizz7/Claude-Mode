@@ -13,7 +13,7 @@ const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK 
 
 export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson5', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;

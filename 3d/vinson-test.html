@@ -40,6 +40,7 @@
   <button data-test="lock">Lock cursed controls</button>
   <button data-test="lift">Owner lift</button>
   <button data-test="restart">Restart scene</button>
+  <button data-test="redraw">Redraw game UI</button>
   <div class="qa-status" aria-live="polite">Fixture ready · <b>no network, account, or persistence writes</b></div>
 </aside>
 
@@ -65,7 +66,7 @@
 </main>
 
 <script type="module">
-  import { startVinsonExperience } from './js/meta/ui/vinson.js';
+  import { startVinsonExperience } from './js/meta/ui/vinson.js?v=vinson5';
   import { HELL_CARD_ID } from './js/meta/core/secretcard.js';
 
   // loadUT is intentionally only read by startVinsonExperience; attach immediately swaps in this fixture.
@@ -89,6 +90,7 @@
     },
   };
   const app = { ut: fixture, root: document.querySelector('.pm-root'), destroyed:false, saveUT(){}, refresh(){}, applyRestrictions(){} };
+  const originalUI = app.root.innerHTML;
   const controller = startVinsonExperience(online, { initialState: fixture, ephemeral: true });
   controller.attach(app); // fixture replaces any disk state immediately
 
@@ -126,6 +128,7 @@
   document.querySelector('[data-test="restart"]').onclick = () => {
     role='player'; mockPhase=null; mockDeadline=0; fixture.vinson=null; fixture.squad.slots.fill(null); controller.tick(); show('fixture reset');
   };
+  document.querySelector('[data-test="redraw"]').onclick = () => { app.root.innerHTML = originalUI; show('UI redrawn · curse damage must remain'); };
   document.querySelectorAll('.qa-action').forEach((button) => button.addEventListener('click', () => {
     if (fixture.vinson?.phase === 'locked') show(`fracture interaction · ${button.textContent}`);
   }));
