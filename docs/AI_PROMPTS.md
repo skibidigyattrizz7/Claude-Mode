@@ -139,7 +139,7 @@ Do NOT edit card.js / meta.css / 3d/js/net/** (Claude is changing those). Promo 
 (buildPromoCards usage map). Run node 3d/js/meta/tests/meta.test.mjs and add tests for the new promos.
 ```
 
-### Grok (Fast mode is fine; it only makes pictures, no code)
+### ChatGPT (image chat, not Codex): secret and admin card art (Grok could not do it)
 ```
 Context: I'm building a free, non-commercial browser football game for my school friends called Pitchside, like
 EA SPORTS FC Ultimate Team. Code is on GitHub (github.com/skibidigyattrizz7/Claude-Mode), live at
