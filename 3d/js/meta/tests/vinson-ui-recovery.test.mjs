@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { defaultSquad } from '../core/ut.js';
+import { defaultSquad, createUTState } from '../core/ut.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
 import { startVinsonExperience } from '../ui/vinson.js';
 import { cursedPack } from '../core/vinson.js';
@@ -24,7 +24,7 @@ class Element {
   }
   set className(value) { this.classList = new Classes(); String(value).split(/\s+/).filter(Boolean).forEach((x) => this.classList.add(x)); }
   get className() { return [...this.classList.values].join(' '); }
-  setAttribute(key, value) { this.attributes.set(key, String(value)); }
+  setAttribute(key, value) { this.attributes.set(key, String(value)); if (key === 'data-uttab') this.dataset.uttab = String(value); }
   getAttribute(key) { return this.attributes.get(key) ?? null; }
   removeAttribute(key) { this.attributes.delete(key); }
   append(...nodes) { for (const node of nodes) { if (!node) continue; node.parentNode = this; node.isConnected = this.isConnected; this.children.push(node); if (node.isConnected) node.children.forEach((child) => { child.isConnected = true; }); } }
@@ -67,7 +67,8 @@ globalThis.matchMedia = () => ({ matches: true });
 globalThis.window = {};
 globalThis.localStorage = { getItem: () => null };
 globalThis.sessionStorage = { getItem: () => null, setItem() {} };
-globalThis.MutationObserver = class { observe() {} disconnect() {} };
+const observers = new Set();
+globalThis.MutationObserver = class { constructor(fn) { this.fn = fn; observers.add(this); } observe() {} disconnect() { observers.delete(this); } };
 const intervals = new Map(); let nextInterval = 0;
 globalThis.setInterval = (fn, delay) => { const id = ++nextInterval; intervals.set(id, { fn, delay }); return id; };
 globalThis.clearInterval = (id) => intervals.delete(id);
@@ -107,6 +108,41 @@ const click = () => {
   return event;
 };
 
+const homeTab = new Element('button'); homeTab.dataset.uttab = 'home'; root.append(homeTab);
+const squadTab = new Element('button'); squadTab.dataset.uttab = 'squad'; root.append(squadTab);
+assert.equal(controller.breakDoomControl(squadTab), true);
+assert.equal(controller.breakDoomControl(homeTab), false);
+await Promise.resolve();
+assert.equal(squadTab.inert, true);
+assert.equal(homeTab.inert, false, 'Home never becomes inert during Doom');
+state.vinson.doomUntil = Date.now() + 2500;
+controller.tick();
+assert.equal(homeTab.classList.contains('vinson-tab-falling'), false, 'Home survives the final tab cascade');
+state.vinson.doomUntil = Date.now() + 60_000;
+// One click must neither break companion artwork nor every other identically labelled button.
+const packs = [];
+for (let i = 0; i < 2; i++) {
+  const item = new Element('div'); item.className = 'pm-packitem';
+  const art = new Element('div'); art.className = 'pm-pack';
+  const action = new Element('button'); action.textContent = 'Open';
+  item.append(art, action); root.append(item); packs.push({item,art,action});
+}
+listeners.get('click')({target:packs[0].action,preventDefault(){},stopImmediatePropagation(){}});
+for (const observer of observers) observer.fn();
+assert.equal(packs[0].action.classList.contains('vinson-control-broken'),true);
+assert.equal(packs[0].art.classList.contains('vinson-control-broken'),false,'art waits for its own click');
+assert.equal(packs[1].action.classList.contains('vinson-control-gone'),false,'same label elsewhere is independent');
+assert.equal(packs[1].action.inert,false);
+const panel = new Element('section'); panel.className = 'pm-panel';
+const paragraph = new Element('p'); paragraph.textContent = 'One label';
+const sibling = new Element('p'); sibling.textContent = 'Another label';
+panel.append(paragraph,sibling); root.append(panel);
+listeners.get('click')({target:paragraph,preventDefault(){},stopImmediatePropagation(){}});
+assert.equal(paragraph.classList.contains('vinson-control-broken'),true);
+assert.equal(panel.classList.contains('vinson-control-broken'),false);
+assert.equal(sibling.classList.contains('vinson-control-broken'),false);
+listeners.get('click')({target:panel,preventDefault(){},stopImmediatePropagation(){}});
+assert.equal(panel.classList.contains('vinson-control-broken'),false,'empty panel cannot collapse its children');
 const doomedClick = click();
 assert.equal(doomedClick.prevented, true, 'doom still blocks a normal action');
 assert.equal(button.classList.contains('vinson-control-broken'), true);
@@ -181,4 +217,40 @@ await ownerController.onPull();
 assert.equal(state.vinson, undefined, 'only the owner is exempt from a pull');
 ownerController.destroy();
 
+// A cloud refresh during dynamic import must not silently cancel battle entry.
+globalThis.innerWidth = 1280; globalThis.innerHeight = 720;
+Element.prototype.getContext = () => null;
+Element.prototype.addEventListener = function(type,fn) { this.events ||= new Map(); this.events.set(type,fn); };
+
+const fightState = { club: [], squad: defaultSquad(), vinson: {phase:'banned',doomUntil:Date.now(),phaseUntil:0,pin:null} };
+const fightOnline = {...online,vinson:{status:async()=>({ok:false})}};
+const fightController = startVinsonExperience(fightOnline,{initialState:fightState,ephemeral:true});
+const fightApp = {ut:fightState,root,stack:[],refresh(){},saveUT(){}};
+fightController.attach(fightApp);
+const opening = fightController.openBattle();
+assert.equal(await fightController.openBattle(),false,'only one module load/launch runs at a time');
+fightApp.ut = structuredClone(fightState);
+assert.equal(await opening, true, 'same-account state replacement must not cancel opening');
+assert.equal(body.querySelectorAll('.vb-screen').length,1,'battle or usable fallback is displayed');
+fightController.destroy();
+const closingController = startVinsonExperience(fightOnline,{initialState:structuredClone(fightState),ephemeral:true});
+const closingOpen = closingController.openBattle();
+closingController.destroy();
+assert.equal(await closingOpen,false,'destroy during module loading cannot spawn an orphan modal');
+
+// Exercise the real tab handler without the document capture listener.
+globalThis.Node = Element;
+document.getElementById = () => null;
+const {utTabs} = await import('../ui/utview.js');
+let navigated = 0, shattered = 0;
+const tabState = createUTState(); tabState.vinson = {phase:'doom'};
+const tabApp = {ut:tabState,root,online,vinson:{breakDoomControl(){shattered++;}},popTo(){navigated++;},push(){navigated++;},toast(){}};
+const nav = utTabs(tabApp,'home');
+const realSquad = nav.children.find(el=>el.dataset.uttab==='squad');
+realSquad.events.get('click')({currentTarget:realSquad});
+assert.equal(navigated,0,'Squad handler cannot bypass Doom when capture is absent');
+assert.equal(shattered,1,'blocked Squad still requests the fracture animation');
+const realHome = nav.children.find(el=>el.dataset.uttab==='home');
+realHome.events.get('click')({currentTarget:realHome});
+assert.equal(shattered,1,'Home stays exempt');
 console.log('Vinson UI release recovery regression passed');

@@ -111,7 +111,7 @@ export function reconcileServer(state, remote, now = Date.now()) {
     if (typeof remote.battleWon === 'boolean') state.vinson.battleWon = remote.battleWon;
     if (typeof remote.rewardsClaimed === 'boolean') state.vinson.rewardsClaimed = remote.rewardsClaimed;
   }
-  else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned')) {
+  else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned' || v.phase === 'lifted')) {
     // An owner release can arrive while Vinson is already in the active squad. Start the
     // squad warning as part of reconciliation so every caller (including reload/cloud
     // reconciliation) observes the same countdown without relying on a UI callback.

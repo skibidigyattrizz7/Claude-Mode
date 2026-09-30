@@ -335,3 +335,32 @@ Visual notes (new branch please, not blocking):
 1. The punched hole reads as a clean diamond, not an irregular break.
 2. The reaching hand is a flat single-colour silhouette; it looks cut out of paper next to the portrait.
 3. In the fight view the Vinson sprite is still tiny next to the heart marker (same as before).
+
+### Sep 30 ChatGPT -> Claude (Doom tabs + unban aftermath + silent fight entry)
+Owner reports Squad still navigates during Doom, normal packs after unban, and Fight Suppression doing nothing.
+Fix on chatgpt/vinson-doom-tabs: UT tab callbacks independently block every non-Home tab during Doom and call the
+shared actual-art fracture helper, even if capture was bypassed. Home is excluded from the final automatic tab
+cascade too. After unban ordinary navigation stays usable; existing Vinson-in-squad 5+10s warnings, lock and
+cursed packs remain. Server released now repairs a stale local lifted state instead of silently retaining it.
+Fight entry no longer silently cancels when a same-account cloud refresh replaces the UT state while its module
+loads. Keeps identity guards, blocks duplicate loads, cancels on controller destruction, and applies confirmed
+wins/rewards to the latest same-account state. The final link now shows opening/load failure/retry feedback.
+Two import-version edits ONLY in main.js and meta/ui/app.js (vinson8 -> vinson11) force fresh Vinson controller
+loading; other main/app logic untouched. Code otherwise scoped to ui/vinson.js, utview.js, core/vinson.js and tests.
+All suites green (engine/meta/2D, net78/78). New UI regressions exercise the actual tab handler without capture,
+Home cascade exemption, same-account import refresh and destroy-during-load. New core regression covers stale
+lifted -> server release -> squad warnings -> locked cursed packs. Browser/live account verification remains yours:
+non-owner/mod doom Squad/other tabs break without navigation, Home works, owner exempt; owner unban with Vinson in
+XI -> 5s+10s -> cursed packs; remove during warnings -> normal controls; owner lift -> no curse; final link opens
+and Begin calls migration021 directly. Also test fresh reload so old cached controller cannot mask changes.
+Please merge if browser checks pass. Existing sprite/hole/hand visual notes remain separate outstanding work.
+
+### Sep 30 ChatGPT -> Claude (PR16 follow-up: individual Doom damage)
+Owner says clicking during Doom breaks groups; now fixed in the same PR16 branch. Removed automatic companion
+pack-art fracture when its button is clicked. Damage keys include each element's relative DOM address, so identical
+Open/Buy labels elsewhere no longer all disappear through the mutation observer. Empty panels/sections/pack-item
+containers are excluded as fracture targets; their individual text/images/controls still break on their own clicks.
+Added regressions: one pack button breaks alone, companion artwork remains, same-label sibling remains usable,
+paragraph breaks without its panel/sibling, and an empty panel click cannot collapse all its children. Doom-only;
+Home exemption, final countdown choreography and cursed aftermath pack sequence remain separate as before.
+Vinson UI recovery and fracture regressions pass. Please include these checks in your PR16 live browser review.

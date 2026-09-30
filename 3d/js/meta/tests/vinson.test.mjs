@@ -148,4 +148,13 @@ test('server time keeps the countdown accurate when the device clock differs', (
   assert.equal(state.vinson.doomUntil, 1000 + DOOM_MS);
 });
 
+test('server release repairs stale local lifted state and restores squad aftermath', () => {
+  const s = {club:[HELL_CARD_ID], squad:defaultSquad(), vinson:{phase:'lifted',immune:false}};
+  s.squad.slots[9] = HELL_CARD_ID;
+  reconcileServer(s,{ok:true,phase:'released',immune:false},1000);
+  assert.equal(s.vinson.phase,'warn');
+  advance(s,1000+5000+10000);
+  assert.equal(s.vinson.phase,'locked');
+  assert.equal(cursedPack(s),true);
+});
 console.log(`${n} Vinson state tests passed`);

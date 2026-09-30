@@ -31,7 +31,7 @@ import { PROMO_BY_ID } from '../core/promos.js';
 import * as PM from '../core/pmarket.js';
 import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
-import { cursedPack, isOwner, enforceLock } from '../core/vinson.js';
+import { cursedPack, isOwner, enforceLock, hasDoomEffects } from '../core/vinson.js';
 import { createVinsonChains } from './vinsonchains.js';
 import { createVinsonPackClaim } from '../core/vinsonpackclaim.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
@@ -106,7 +106,11 @@ export function utTabs(app, active) {
   const open = { squad: squadView, sbc: sbcListView, objectives: () => M.objectivesHubView(), transfers: marketView, store: storeView, swaps: swapsView, club: clubView };
   return h('nav', { class: 'pm-uttabs', 'aria-label': 'Ultimate Team sections' }, UT_TABS.map(([id, label]) => h('button', {
     class: `pm-uttab ${id === active ? 'on' : ''}`, 'aria-current': id === active ? 'page' : null, 'data-uttab': id,
-    onclick: () => {
+    onclick: (event) => {
+      if (id !== 'home' && hasDoomEffects(app.ut?.vinson?.phase) && !isOwner(app.online)) {
+        app.vinson?.breakDoomControl?.(event.currentTarget);
+        return;
+      }
       if (id === active) return;
       if ((id === 'sbc' || id === 'transfers') && s?.vinson?.phase === 'locked' && !isOwner(app.online)) {
         app.toast('The Vinson curse blocks this section.', 'bad'); return;

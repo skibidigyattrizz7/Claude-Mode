@@ -23,11 +23,19 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
   let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null, lastOmen = -1, falling = false;
   const broken = new Map();
-  let soundContext = null, battleExperience = null;
+  let soundContext = null, battleExperience = null, battleOpening = false, experienceClosed = false;
   const damagedKeys = new Set();
   const controlSelector = 'button, [role="tab"], a, input, select, textarea, .pc-card, .pm-slot';
-  const surfaceSelector = '.pm-tile, .pm-panel, .pm-section, .pm-storeitem, .pm-packitem, .pm-coins, .pm-crest, img, svg, h1, h2, h3, h4, p, label, span';
-  const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.closest('.pm-modal')?.getAttribute('aria-label') || 'screen'}:${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
+  const surfaceSelector = 'img, svg, h1, h2, h3, h4, p, label, span';
+  const controlKey = (el) => {
+    if (el.dataset.uttab) return `tab:${el.dataset.uttab}`;
+    const address = [];
+    for (let node = el; node && node !== root(); node = node.parentNode) {
+      const parent = node.parentNode;
+      address.unshift(`${node.tagName}:${parent ? [...parent.children].indexOf(node) : 0}`);
+    }
+    return `${address.join('/')}:${el.getAttribute('aria-label') || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.id}`;
+  };
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
   const remember = (key) => { if (ephemeral) return null; try { return sessionStorage.getItem(key); } catch { return null; } };
@@ -101,11 +109,6 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       const packScene = lockedPack && !!target.closest('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback');
       const matchScene = lockedPack && /^(play|start match|play rivals|play squad battles|kick off)$/i.test(label);
       const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
-      const pack = target.closest('.pm-storeitem, .pm-packitem')?.querySelector('.pm-pack');
-      if (pack && pack !== target && !broken.has(pack)) {
-        fractureElement(pack, { x: event.clientX, y: event.clientY });
-        breakControl(pack);
-      }
       fractureElement(target, { x: event.clientX, y: event.clientY });
       // Result screens own their coordinated button collapse and exit timer.
       if (!packScene) breakControl(target);
@@ -191,7 +194,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     if (phase === 'freed') { host.replaceChildren(); current = phase; cinematic = false; return; }
     if (phase === 'doom' && v.doomUntil - Date.now() <= 10000) {
       const left = Math.max(0, v.doomUntil - Date.now());
-      const tabs = [...(root()?.querySelectorAll('.pm-uttab') || [])];
+      const tabs = [...(root()?.querySelectorAll('.pm-uttab') || [])].filter(tab => tab.dataset.uttab !== 'home');
       const n = Math.min(tabs.length, Math.floor((10000 - left) / 850));
       for (let i = 0; i < n; i++) breakControl(tabs[i], 'vinson-tab-falling');
       if (left <= 3000 && !falling) { falling = true; root()?.classList.add('vinson-ui-falling'); }
@@ -277,7 +280,14 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     screen.append(words);
     const check = make('button', 'vinson-check', 'ESCAPE THE WRATH OF VINSON'); check.onclick = () => location.reload(); screen.append(check);
     const fight = make('button', 'vinson-fight-link', 'Fight Suppression');
-    fight.onclick = () => { void controller.openBattle(); };
+    fight.onclick = async () => {
+      fight.disabled = true; fight.textContent = 'Opening fight…';
+      try {
+        const opened = await controller.openBattle();
+        fight.textContent = opened ? 'Fight Suppression' : 'Fight unavailable. Try again';
+      } catch { fight.textContent = 'Could not load fight. Try again'; }
+      finally { fight.disabled = false; }
+    };
     screen.append(fight);
     host.append(screen);
     sound('impact');
@@ -412,34 +422,45 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   }
 
   const controller = {
+    breakDoomControl(target) {
+      if (!target || !infected(state()?.vinson?.phase) || isOwner(online) || target.dataset.uttab === 'home') return false;
+      if (!broken.has(target)) { fractureElement(target); breakControl(target); }
+      return true;
+    },
     async openBattle() {
-      if (battleExperience || isOwner(online)) return;
+      if (experienceClosed || battleExperience || battleOpening || isOwner(online)) return false;
       const s = state(), identity = online?.identityId?.();
       const resumeRewards = hasPendingVinsonRewards(s);
-      if (!s || (s.vinson?.phase !== 'banned' && !resumeRewards)) return;
-      const { launchVinsonBattle } = await import('./vinsonbattle.js');
-      if (battleExperience || state() !== s) return;
-      battleExperience = launchVinsonBattle({ online, resumeRewards,
-        seed: `${identity || 'guest'}:${s.vinson.doomUntil || 0}`,
-        onWin: async ({ nonce }) => {
-          if (online?.identityId?.() !== identity || state() !== s) return { ok: false };
-          const result = await online?.vinson?.battleWin?.({ nonce });
-          if (result?.ok && result.immune && state() === s) {
-            reconcileServer(s, result);
-            s.vinson.immune = true; s.vinson.battleWon = true;
-            persist(s); draw(); app?.refresh();
-          }
-          return result;
-        },
-        onClaim: async () => {
-          if (online?.identityId?.() !== identity || state() !== s) return { ok: false };
-          const result = await online?.vinson?.claimBattleRewards?.();
-          if (result?.ok && !applyVinsonRewardClaim(s, result)) return { ok: false };
-          if (result?.ok) { persist(s); draw(); app?.refresh(); }
-          return result;
-        },
-        onClose: () => { battleExperience = null; draw(); },
-      });
+      if (!s || (s.vinson?.phase !== 'banned' && !resumeRewards)) return false;
+      battleOpening = true;
+      try {
+        const { launchVinsonBattle } = await import('./vinsonbattle.js');
+        if (experienceClosed || battleExperience || online?.identityId?.() !== identity || !state()) return false;
+        battleExperience = launchVinsonBattle({ online, resumeRewards,
+          seed: `${identity || 'guest'}:${s.vinson.doomUntil || 0}`,
+          onWin: async ({ nonce }) => {
+            if (experienceClosed || online?.identityId?.() !== identity || !state()) return { ok: false };
+            const result = await online?.vinson?.battleWin?.({ nonce });
+            if (result?.ok && result.immune && !experienceClosed && online?.identityId?.() === identity && state()) {
+              const target = state();
+              reconcileServer(target, result);
+              target.vinson.immune = true; target.vinson.battleWon = true;
+              persist(target); draw(); app?.refresh();
+            }
+            return result;
+          },
+          onClaim: async () => {
+            if (experienceClosed || online?.identityId?.() !== identity || !state()) return { ok: false };
+            const result = await online?.vinson?.claimBattleRewards?.();
+            if (experienceClosed || online?.identityId?.() !== identity || !state()) return { ok: false };
+            if (result?.ok && !applyVinsonRewardClaim(state(), result)) return { ok: false };
+            if (result?.ok) { persist(state()); draw(); app?.refresh(); }
+            return result;
+          },
+          onClose: () => { battleExperience = null; draw(); },
+        });
+        return !!battleExperience;
+      } finally { battleOpening = false; }
     },
     attach(next) { app = next; localState = next.ut; tick(); void poll(); },
     detach(next) { if (app === next) { localState = next.ut; app = null; } },
@@ -486,7 +507,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       screen.remove();
     },
     tick, poll,
-    destroy() { battleExperience?.close(); battleExperience = null; repairUi(); current = ''; damageObserver.disconnect(); clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical', 'vinson-aftermath'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
+    destroy() { experienceClosed = true; battleExperience?.close(); battleExperience = null; repairUi(); current = ''; damageObserver.disconnect(); clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical', 'vinson-aftermath'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);
