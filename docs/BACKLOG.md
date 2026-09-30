@@ -232,3 +232,8 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   Lift curse remains visible for released players and remote lifts reach freed clients. Actual pack/control artwork
   now fractures into irregular fragments instead of caption boxes or replacement pictures. All 22 suites pass;
   browser visual review remains pending. Handoff in docs/AI_DIRECT.md.
+
+- PENDING / PAUSED (Sep 30, owner): Vinson starting-XI lock/X chains, longer aftermath pack exit, stronger doom visuals,
+  and a playable cinematic Fight Suppression encounter with Patel / World-Ruler Vinson / Phonk Mode Vinson / Captain Israel,
+  unique victory reward cards and permanent account curse immunity. Await owner go-ahead and verified assets.
+  Planning/help/skills request posted to Claude in docs/AI_DIRECT.md on chatgpt/vinson-battle-planning; no code changed.
