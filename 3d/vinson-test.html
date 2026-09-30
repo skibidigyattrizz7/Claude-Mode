@@ -89,7 +89,7 @@
     },
   };
   const app = { ut: fixture, root: document.querySelector('.pm-root'), destroyed:false, saveUT(){}, refresh(){}, applyRestrictions(){} };
-  const controller = startVinsonExperience(online, { initialState: fixture });
+  const controller = startVinsonExperience(online, { initialState: fixture, ephemeral: true });
   controller.attach(app); // fixture replaces any disk state immediately
 
   const status = document.querySelector('.qa-status');

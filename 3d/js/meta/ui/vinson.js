@@ -11,7 +11,7 @@ const seconds = (ms) => String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, '0
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK BEHIND YOU', 'THE CLOCK IS LYING'];
 
-export function startVinsonExperience(online, { initialState = loadUT() } = {}) {
+export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
   const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css', import.meta.url).href;
   document.head.appendChild(css);
@@ -20,24 +20,36 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
   let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null, lastOmen = -1, falling = false;
   const broken = new Map();
   let soundContext = null;
+  const damagedKeys = new Set();
+  const controlSelector = 'button, [role="tab"], a, input, select, .pc-card';
+  const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
-  const remember = (key) => { try { return sessionStorage.getItem(key); } catch { return null; } };
-  const mark = (key) => { try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
+  const remember = (key) => { if (ephemeral) return null; try { return sessionStorage.getItem(key); } catch { return null; } };
+  const mark = (key) => { if (ephemeral) return; try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
   const make = (tag, cls, txt) => { const el = document.createElement(tag); el.className = cls; if (txt) el.textContent = txt; return el; };
   const infected = (phase) => ['doom', 'freed', 'warn', 'consequence', 'locked'].includes(phase);
   const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
   function repairUi() {
     for (const [el, wasInert] of broken) { el.classList.remove('vinson-control-broken', 'vinson-tab-falling'); el.inert = wasInert; }
     broken.clear(); root()?.classList.remove('vinson-ui-falling');
+    damagedKeys.clear();
+    root()?.querySelectorAll('.vinson-control-gone').forEach((el) => { el.classList.remove('vinson-control-gone'); el.inert = false; });
     falling = false;
   }
   function breakControl(target, cls = 'vinson-control-broken') {
     if (broken.has(target)) return;
     broken.set(target, target.inert);
+    damagedKeys.add(controlKey(target));
     target.classList.add(cls);
     // Let its first click finish (including removing Vinson during a warning), then the broken control is gone.
     queueMicrotask(() => { if (broken.has(target)) target.inert = true; });
+    if (target.matches('.pm-slot')) setTimeout(() => {
+      if (['warn', 'consequence'].includes(state()?.vinson?.phase) && broken.has(target)) {
+        target.inert = broken.get(target); target.classList.remove('vinson-control-broken'); broken.delete(target);
+        damagedKeys.delete(controlKey(target));
+      }
+    }, 1300);
     for (const el of broken.keys()) if (!el.isConnected) broken.delete(el);
   }
   function fracture(target) {
@@ -57,9 +69,24 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
     if (target && root()?.contains(target)) {
       if (broken.has(target)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
       fracture(target); breakControl(target);
+      const label = (target.textContent || '').trim();
+      const navigating = target.matches('.pm-uttab, .pm-tab, .pm-tile, [role="tab"]');
+      const curseScene = /\b(open|play|start|match|rivals|battle)\b/i.test(label) || !!target.closest('.pm-po-gridwrap');
+      const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
+      if (!navigating && !curseScene && !squadWarning) { event.preventDefault(); event.stopImmediatePropagation(); }
     }
   }
   document.addEventListener('click', onInfectedClick, true);
+  const damageObserver = new MutationObserver(() => {
+    if (!infected(state()?.vinson?.phase) || isOwner(online) || !damagedKeys.size) return;
+    root()?.querySelectorAll(controlSelector).forEach((el) => {
+      if (!broken.has(el) && damagedKeys.has(controlKey(el))) {
+        if (['warn', 'consequence'].includes(state()?.vinson?.phase) && el.matches('.pm-slot')) return;
+        el.classList.add('vinson-control-gone'); el.inert = true;
+      }
+    });
+  });
+  damageObserver.observe(document.body, { childList: true, subtree: true });
   function collapseUi(done) {
     const frame = root();
     const pieces = frame && [...frame.querySelectorAll('.pm-top, .pm-uttab, .pm-main > section, .pm-main > .pm-section, .pm-main > .pm-panel')]
@@ -132,7 +159,10 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
         final.dataset.hauntCycle = String(cycle);
         [...final.querySelectorAll('.vinson-final-word, .vinson-final-ghosts img')].forEach((el, i) => {
           const rand = (n) => (Math.sin((cycle + i * 17) * n) * 1437.71 % 1 + 1) % 1;
-          el.style.left = `${3 + rand(13) * 65}%`; el.style.top = `${8 + rand(31) * 67}%`;
+          const width = Math.min(el.getBoundingClientRect().width, innerWidth * .52);
+          const height = Math.min(el.getBoundingClientRect().height, innerHeight * .3);
+          el.style.left = `${Math.max(16, rand(13) * (innerWidth - width - 40))}px`;
+          el.style.top = `${Math.max(32, rand(31) * (innerHeight - height - 70))}px`;
           el.style.right = 'auto'; el.style.bottom = 'auto';
         });
       }
@@ -202,13 +232,16 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
     const addTile = (i) => {
       const cell = make('div', 'vinson-tile');
       const image = document.createElement('img'); image.src = warning; image.alt = '';
-      cell.append(image, make('span', '', "IT'S NOT WORTH IT"));
+      cell.append(image);
       if (i < 4) cell.classList.add(`corner-${i}`);
       else {
         // Seeded placement makes this event stable across a repaint, without a rigid grid.
         const rand = (n) => ((Math.sin((i + 1) * n * 93.17) * 43758.5453) % 1 + 1) % 1;
-        cell.style.left = `${rand(13) * 88}%`; cell.style.top = `${rand(29) * 80}%`;
-        cell.style.width = `${12 + rand(31) * 19}%`; cell.style.setProperty('--tilt', `${(rand(7) - .5) * 15}deg`);
+        const width = Math.min(innerWidth * (.12 + rand(31) * .19), innerHeight * .29);
+        const height = width * 594 / 477;
+        cell.style.left = `${rand(13) * Math.max(0, innerWidth - width - 20)}px`;
+        cell.style.top = `${rand(29) * Math.max(0, innerHeight - height - 20)}px`;
+        cell.style.width = `${width}px`; cell.style.setProperty('--tilt', `${(rand(7) - .5) * 10}deg`);
       }
       tile.append(cell);
     };
@@ -306,7 +339,7 @@ export function startVinsonExperience(online, { initialState = loadUT() } = {}) 
       screen.remove();
     },
     tick, poll,
-    destroy() { repairUi(); current = ''; clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
+    destroy() { repairUi(); current = ''; damageObserver.disconnect(); clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);
