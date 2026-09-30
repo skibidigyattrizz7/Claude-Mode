@@ -106,6 +106,7 @@ const CSS = `
 // empty hexagon in its middle swallows the screen, as the exit before the replay / celebration ends.
 const FLAG_GOAL_IDS = new Set(['secret_knight']);
 const FLAG_T = { in: 0.25, spinEnd: 3.1, out: 4.2 }; // s after the goal
+const CELEB_IMGS = [['l', 'bibi-call.webp'], ['t', 'tel-aviv-impressed.webp'], ['b', 'bibi-impressed.webp']];
 const STAR = '<svg class="gcf-star" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="none" stroke="#0038b8" stroke-width="6" stroke-linejoin="miter">'
   + '<path d="M0 -40 34.64 20 -34.64 20Z"/><path d="M0 40 -34.64 -20 34.64 -20Z"/></g></svg>';
 const FLAG_CSS = `
@@ -115,9 +116,18 @@ const FLAG_CSS = `
 .gcf::before{top:9%}.gcf::after{bottom:9%}
 .gcf.exit::before{transform:translateY(-240%)}.gcf.exit::after{transform:translateY(240%)}
 .gcf-star{position:absolute;left:50%;top:50%;width:min(40vh,40vw);height:min(40vh,40vw);transform:translate(-50%,-50%) rotate(0) scale(1)}
-.gcf.on .gcf-star{animation:gcf-spin 1.1s linear infinite}
+.gcf.on .gcf-star{animation:gcf-spin 2.6s linear infinite}
+.gcf-img{position:absolute;z-index:2;display:block;border-radius:10px;border:3px solid #fff;box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:0}
+.gcf-img.l{left:calc(50% - min(20vh,20vw) - 3vw);top:50%;height:min(36vh,36vw);translate:-100% -50%}
+.gcf-img.t{left:50%;top:calc(50% - min(20vh,20vw) - 2vh);height:min(24vh,26vw);translate:-50% -100%}
+.gcf-img.b{left:50%;top:calc(50% + min(20vh,20vw) + 2vh);height:min(26vh,30vw);translate:-50% 0}
+.gcf.on .gcf-img{animation:gcf-pop .5s cubic-bezier(.2,.8,.2,1) both}
+.gcf.on .gcf-img.t{animation-delay:.25s}.gcf.on .gcf-img.b{animation-delay:.5s}
+.gcf.exit .gcf-img{animation:gcf-away .35s ease-in both}
+@keyframes gcf-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@keyframes gcf-away{from{opacity:1}to{opacity:0;transform:scale(.85)}}
 @keyframes gcf-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.gcf.on .gcf-star{animation:none}}
+@media (prefers-reduced-motion:reduce){.gcf.on .gcf-star{animation:none}.gcf.on .gcf-img{animation:none;opacity:1}}
 `;
 
 function addStyle() {
@@ -208,6 +218,13 @@ export class GoalCard {
     const fx = document.createElement('div');
     fx.className = 'gcf';
     fx.innerHTML = STAR;
+    // owner's photos around the star (Sep 30): left, top, bottom
+    for (const [cls, file] of CELEB_IMGS) {
+      const img = document.createElement('img');
+      img.className = `gcf-img ${cls}`; img.alt = ''; img.decoding = 'async';
+      img.src = new URL(`../../../assets/celebration/${file}`, import.meta.url).href;
+      fx.appendChild(img);
+    }
     this.parent.appendChild(fx);
     this.fx = fx;
     const star = fx.firstChild;

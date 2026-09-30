@@ -195,8 +195,8 @@ export class MatchSim {
     // _slideContact and ai.js); maxing every `boost` area here also gives him the full admin-tier rockets/
     // near-perfect-ball/win-from-anywhere effects that already exist, with no new numbers to balance.
     p.glitch = pd.glitch === true;
-    // THE NII (secretcard.js `cursed`, owner request Sep 29): the anti-glitch tier. Barely moves (below), gives
-    // the ball straight away (_curseFumble), every pass finds an opponent and every shot is an own goal worth
+    // THE NII (secretcard.js `cursed`, owner request Sep 29): the anti-glitch tier. Slow (below) but keeps the ball
+    // and is hard to tackle (owner, Sep 30), every pass finds an opponent and every shot is an own goal worth
     // 10 (_cursePlan / _goal). Never both at once.
     p.cursed = pd.cursed === true && !p.glitch;
     p.boost = null;
@@ -223,7 +223,7 @@ export class MatchSim {
     p.acc = (2.6 + pace * 0.09 + ps(p, 'quickstep') * 0.9 - (p.w - 75) * 0.025 - (p.h - 1.8) * 2.5) * (1 + bst(p, 'pac') * 1.6);
     // agility (turning) from dribbling/pace, strength from physical + body mass
     p.agil = clamp((a.dri * 0.7 + a.pac * 0.3) / 100 - 0.08 - (p.h - 1.8) * 0.4 - Math.max(0, p.w - 80) * 0.004, 0.25, 1.05) + bst(p, 'dri') * 0.9;
-    if (p.cursed) { p.vmax *= 0.12; p.acc *= 0.15; p.agil = 0.25; } // THE NII: can barely move
+    if (p.cursed) { p.vmax *= 0.3; p.acc *= 0.35; p.agil = 0.4; } // THE NII / -∞ cards: slow, but can move and dribble (owner, Sep 30)
     p.str = a.phy * 0.9 - 10 + (p.w - 75) * 0.9 + (p.h - 1.8) * 25 + ps(p, 'bruiser') * 10 + ps(p, 'enforcer') * 6 + bst(p, 'phy') * 250;
     // standing reach / jump used for headers and keeper handling
     p.jump = 0.28 + a.phy * 0.0025 + (p.isGK ? a.div * 0.002 : 0) + ps(p, 'aerial') * 0.08;
@@ -413,7 +413,6 @@ export class MatchSim {
     if (this.phase !== PHASE.PLAY) return;
     this._glitchSteal();
     if (this.phase !== PHASE.PLAY) return;
-    this._curseFumble();
     this._interactions();
     if (this.phase !== PHASE.PLAY) return;
     this._contests();
@@ -1449,27 +1448,6 @@ export class MatchSim {
     const kind = k === 'cross' ? 'lob' : ['lob', 'punt', 'throw', 'through', 'gkthrow'].includes(k) ? k : 'ground';
     return this._plan(p, kind, { target: opp.idx, power: plan.info.power ?? 0.6 }) || plan;
   }
-  // THE NII on the ball: loses it almost at once, rolled straight to the nearest opponent.
-  _curseFumble() {
-    const b = this.ball, t = this.t, p = this.owner();
-    if (!p || !p.cursed || t - (p.gainT ?? t) < 0.15) return;
-    let opp = null, bd = 1e9;
-    for (const o of this.teamList[1 - p.team]) {
-      if (o.sentOff) continue;
-      const d = Math.hypot(o.x - b.p.x, o.z - b.p.z);
-      if (d < bd) { bd = d; opp = o; }
-    }
-    if (!opp) return;
-    const dx = opp.x - b.p.x, dz = opp.z - b.p.z, dd = Math.hypot(dx, dz) || 1, sp = Math.min(20, 4 + dd * 0.8);
-    b.owner = -1; b.inHands = false;
-    b.v = { x: (dx / dd) * sp, y: 0, z: (dz / dd) * sp }; b.w = { x: 0, y: 0, z: 0 };
-    b.lastTouch = p.idx; b.lastTeam = p.team; b.intended = opp.idx;
-    p.cool.touch = t + 0.6; p.holdStart = null; p.drib = null; p.windup = 0;
-    this.lastLoss[p.team] = { idx: p.idx, t };
-    this.pendingPass = null; this.path = null; this.nextPredict = 0;
-    this.fxPush('kick', { s: 6 });
-  }
-
   _keepOnFrame(p, ideal, noisy, spin) {
     const side = this.dir[p.team];
     const b = this.ball;
@@ -2491,6 +2469,8 @@ export class MatchSim {
     if (reach) {
       // "The Shawky" can never be dispossessed: any tackle attempted on him fails outright, no roll.
       if (victim && victim.glitch) won = false;
+      // -∞ cards keep the ball so they can do what they're for (own goals): tackles on them rarely work (owner, Sep 30)
+      else if (victim && victim.cursed) won = this.rng() < 0.08;
       else if (!victim) won = true;
       else if (p.glitch) won = true; // guaranteed steal, not just a better chance
       else {
@@ -2553,6 +2533,7 @@ export class MatchSim {
         // shielding: strong players keep the ball away from a defender
         if (shielding) pr *= clamp(1.25 - (o.str - d.str * 0.5) / 80, 0.2, 0.9);
         pr = (pr + (0.97 - pr) * bst(d, 'def')) * (1 - 0.92 * bst(o, 'dri') * (1 - bst(d, 'def')));
+        if (o.cursed) pr *= 0.08; // -∞ cards are hard to dispossess (see the tackle above)
         if (this.rng() < pr) { this._winBall(d, false); d.st.tackles++; return; }
       } else if (pd < 0.85 && o.speed > 2.5 && d.speed > 2.5) {
         d.cool.steal = t + 0.3;

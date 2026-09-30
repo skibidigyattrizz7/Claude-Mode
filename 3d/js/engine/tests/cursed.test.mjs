@@ -28,12 +28,12 @@ const giveBall = (sim, p, x, z) => {
 export function runCursedTests(test) {
   console.log('THE NII (cursed tier)');
 
-  test('cursed: flag carried, and he can barely move', () => {
+  test('cursed: flag carried, and he is slow (but can still move)', () => {
     const { sim, p } = mkSim();
     assert.equal(p.cursed, true);
     assert.equal(p.glitch, false);
     const mate = sim.players[10];
-    assert.ok(p.vmax < mate.vmax * 0.2, `vmax ${p.vmax} vs ${mate.vmax}`);
+    assert.ok(p.vmax < mate.vmax * 0.35 && p.vmax > mate.vmax * 0.08, `vmax ${p.vmax} vs ${mate.vmax}`);
   });
 
   test('cursed: any shot goes in his own goal and counts as 10', () => {
@@ -59,12 +59,21 @@ export function runCursedTests(test) {
     assert.equal(plan.info.target, opp.idx);
   });
 
-  test('cursed: loses the ball almost at once', () => {
+  test('cursed: keeps the ball (no instant giveaway) and is very hard to tackle', () => {
     const { sim, p } = mkSim(4);
     giveBall(sim, p, 0, 0);
-    for (let t = 0; t < 0.4; t += DT) sim.step(DT, [null, null]);
-    assert.notEqual(sim.ball.owner, p.idx, 'still on the ball');
-    assert.ok(sim.ball.owner < 0 || sim.players[sim.ball.owner].team === 1, 'ball should head to the opponent');
+    for (let t = 0; t < 0.6; t += DT) sim.step(DT, [null, null]);
+    assert.equal(sim.ball.owner, p.idx, 'he should still have it');
+    let lost = 0;
+    for (let s = 0; s < 40; s++) {
+      const w = mkSim(100 + s);
+      giveBall(w.sim, w.p, 0, 0);
+      const d = w.sim.teamList[1][5];
+      d.x = w.p.x + 0.6; d.z = w.p.z; d.act = null; d.cool.steal = 0;
+      w.sim._contests();
+      if (w.sim.ball.owner !== w.p.idx) lost++;
+    }
+    assert.ok(lost <= 6, `dispossessed ${lost}/40 times`);
   });
 
   test('cursed: a normal teammate is unaffected', () => {
