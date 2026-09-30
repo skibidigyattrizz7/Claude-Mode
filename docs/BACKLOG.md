@@ -219,4 +219,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - Sep 30 (owner, late): promo cards must be the REAL EA cards (real rating/stats/picture/design per card), not boosted
   copies; store section per game (FIFA 22, 23, FC 24-27); secret cards stay unique (custom art, not reused EA designs);
   no picture outside the card; no photo backgrounds unless the real FIFA card has one; no shared celebration picture
-  across promos. Split with ChatGPT in docs/AI_DIRECT.md (group chat). Real FC 26/27 promo items: Claude agent 3.
+  across promos. SECRET CARDS: owner says leave them alone (own category). Split with ChatGPT in docs/AI_DIRECT.md (group chat). Real FC 26/27 promo items: Claude agent 3.
