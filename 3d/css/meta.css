@@ -319,8 +319,8 @@
   -webkit-mask: linear-gradient(180deg, #000 72%, transparent 100%); mask: linear-gradient(180deg, #000 72%, transparent 100%); }
 .pm-card--xs .pc-photo.pc-photo--real.pc-avatar { right: .15em; top: .3em; width: 6.6em; height: 8.25em; }
 /* promo cards: the bigger "dynamic" upper-body cutout, breaking out over the top of the frame like FUT promos */
-.pm-card .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: -.35em; top: -.6em; width: 8.4em; height: 10.5em; }
-.pm-card--xs .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: -.2em; top: -.3em; width: 7.6em; height: 9.5em; }
+.pm-card .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: .35em; top: .45em; width: 6.9em; height: 8.6em; }
+.pm-card--xs .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: .3em; top: .4em; width: 6.4em; height: 8em; }
 /* retired Icons: black and white like FIFA (Icons of people who still play keep their colour) */
 .pm-card.is-icon.is-retired .pc-photo.pc-photo--real.pc-avatar { filter: grayscale(1) contrast(1.08); }
 /* cut-out photo (transparent background, e.g. secret cards): sits like a drawn face, bottom-aligned on the nameplate */
@@ -487,7 +487,7 @@
 .pm-card.has-fut .pc-photo.pc-avatar { right: .5em; top: .95em; width: 6.6em; height: 6.6em; }
 .pm-card.has-fut .pc-photo.pc-photo--real.pc-avatar { right: .15em; top: .75em; width: 6.6em; height: 8.25em; }
 /* promo "dynamic" cutout: bigger, breaks out over the top edge of the card */
-.pm-card.has-fut .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: -.25em; top: -.7em; width: 7.7em; height: 9.6em; }
+.pm-card.has-fut .pc-photo.pc-photo--real.pc-photo--dyn.pc-avatar { right: .35em; top: .45em; width: 6.9em; height: 8.6em; } /* inside the card, like FC (owner) */
 .pm-card.has-fut .pc-name { left: .6em; right: .6em; top: 7.2em; border-bottom: 0; font-size: 1.1em; padding: 0; } /* top is in the name's own em: 7.9em on the card */
 .pm-card.has-fut .pc-stats { top: 9.35em; left: 1.6em; right: 1.6em; column-gap: .5em; }
 .pm-card.has-fut .pc-stat { font-size: .88em; gap: .22em; }

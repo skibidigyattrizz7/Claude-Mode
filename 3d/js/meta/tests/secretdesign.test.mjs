@@ -20,21 +20,9 @@ test('every family maps to a design that exists (entry in CARD_DESIGNS and the i
   }
 });
 
-test('every secret card gets an EA design', () => {
+test('secret cards keep their own unique look (owner: no reused EA design) until custom art exists', () => {
   assert.equal(secretCards().length, SECRET_VERSIONS.length);
-  for (const p of secretCards()) assert.ok(secretDesignFor(p), `${p.id} has no design`);
-});
-
-test('families: glitch, cursed, evil, hell, angel, full-art', () => {
-  assert.equal(secretDesignFor(byId.secret_ghost), SECRET_DESIGNS.shawky);
-  assert.equal(secretDesignFor(byId.secret_nii), SECRET_DESIGNS.cursed);
-  assert.equal(secretDesignFor(byId.secret_evilperlita), SECRET_DESIGNS.evil);
-  assert.equal(secretDesignFor(byId.secret_vinson), SECRET_DESIGNS.hell);
-  assert.equal(secretDesignFor(byId.secret_painman), SECRET_DESIGNS.angel);
-  assert.equal(secretDesignFor(byId.secret_knight), SECRET_DESIGNS.rabbi);
-  assert.equal(secretDesignFor(byId.secret_eman), SECRET_DESIGNS.eman);
-  assert.equal(secretDesignFor(byId.secret_elijah), SECRET_DESIGNS.elijah);
-  assert.equal(secretFamily(byId.secret_perlita), 'shawky');
+  for (const p of secretCards()) assert.equal(secretDesignFor(p), null, p.id);
 });
 
 test('admin cards: premium design unless the admin picked a promo or base design', () => {
@@ -59,9 +47,9 @@ test('custom art switch: custom-<family> in CARD_DESIGNS wins with no code chang
   CARD_DESIGNS[k] = { file: 'assets/cards/custom-shawky.webp', ink: '#fff', dark: true };
   try {
     assert.equal(secretDesignFor(byId.secret_ghost), k);
-    assert.equal(secretDesignFor(byId.secret_nii), SECRET_DESIGNS.cursed); // other families unaffected
+    assert.equal(secretDesignFor(byId.secret_nii), null); // other families unaffected
   } finally { delete CARD_DESIGNS[k]; }
-  assert.equal(secretDesignFor(byId.secret_ghost), SECRET_DESIGNS.shawky);
+  assert.equal(secretDesignFor(byId.secret_ghost), null);
 });
 
 console.log(`${passed} passed, ${failed} failed`);

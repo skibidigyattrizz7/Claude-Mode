@@ -51,8 +51,8 @@ ok('other specials (hero, lotg, objective, prime, evolution) never fall back to 
   assert.notEqual(designFor({ tier: 'gold', special: 'hero' }), designFor({ tier: 'gold', special: 'lotg' }));
 });
 
-ok('secret cards get their EA design from secretDesignFor (owner: no old CSS looks); unknown tiers still get a design', () => {
-  for (const flag of ['cursed', 'evil', 'hell', 'angel', 'glitch']) assert.ok(CARD_DESIGNS[designFor({ tier: 'gold', [flag]: true })], flag);
+ok('secret cards keep their own unique look (no reused EA design) until custom art exists; unknown tiers still get a design', () => {
+  for (const flag of ['cursed', 'evil', 'hell', 'angel', 'glitch']) assert.equal(designFor({ tier: 'gold', [flag]: true }), null, flag);
   assert.ok(CARD_DESIGNS[designFor({ tier: 'weird' })]);
   assert.equal(designFor(null), null);
 });

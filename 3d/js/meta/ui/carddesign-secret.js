@@ -28,6 +28,9 @@ export const SECRET_DESIGNS = {
 function keyFor(family) {
   const custom = `custom-${family}`;
   if (CARD_DESIGNS[custom]) return custom;
+  // owner, Sep 30: secret cards must stay UNIQUE (their own look until their custom art arrives), never a reused
+  // EA design; only admin cards take the EA black/gold design.
+  if (family !== 'admin') return null;
   const k = SECRET_DESIGNS[family];
   return CARD_DESIGNS[k] ? k : null;
 }
