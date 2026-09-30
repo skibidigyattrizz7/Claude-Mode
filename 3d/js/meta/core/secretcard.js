@@ -48,8 +48,8 @@ export const SECRET_VERSIONS = [
   // owner request (Sep 29): Perlita + an "evil" twin. `evil`: red design with "EVIL" across the top, and (owner) -∞ stats: cursed like THE NII
   // (card.js `is-evil`, meta.css). Nation: Kenya (owner).
   { id: 'secret_perlita', last: 'Perlita', name: 'Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/perlita.webp' },
-  { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp?v=2', evil: true, cursed: true, tag: 'EVIL' },
-  { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp?v=2', evil: true, cursed: true, tag: 'EVIL' },
+  { id: 'secret_evilperlita', last: 'Evil Perlita', name: 'Evil Perlita', nat: 'KEN', skin: 2, photo: 'assets/cards/evil-perlita.webp', evil: true, cursed: true, tag: 'EVIL' },
+  { id: 'secret_evilnickerson', last: 'Evil Nickerson', name: 'Evil Nickerson', nat: 'KEN', skin: 5, photo: 'assets/cards/evil-nickerson.webp', evil: true, cursed: true, tag: 'EVIL' },
   // owner request (Sep 29): knight card, the owner's whole picture (title + background) is the card art and every
   // stat shows a Star of David. Named Rabbi Patel (owner).
   { id: 'secret_knight', last: 'Rabbi Patel', name: 'Rabbi Patel', nat: 'ISR', skin: 1, fullArt: 'assets/cards/knight-full.webp', statGlyph: '✡' },
@@ -60,11 +60,11 @@ export const SECRET_VERSIONS = [
   // owner request (Sep 29): Pain Man, the angelic card: halo (baked into the photo), white-and-gold heavenly design,
   // every stat |∞| (absolute infinity). Nation is a guess (EGY); owner can change it.
   { id: 'secret_painman', last: 'Pain Man', name: 'Pain Man', nat: 'EGY', skin: 1, photo: 'assets/cards/pain-man.webp', angel: true, statText: '|∞|', tag: 'ANGELIC' },
-  { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp?v=2', cursed: true, tag: 'THE NII' },
+  { id: 'secret_nii', last: 'AryeetyMensah', name: 'AryeetyMensah', nat: 'GHA', skin: 5, photo: 'assets/cards/aryeety-mensah.webp', cursed: true, tag: 'THE NII' },
   // Vinson uses the same ultra-rare vault slot but has her own HELL presentation and event hook.
   // The timed event consumes `hell` + HELL_CARD_ID; it does not reuse the existing evil/cursed gameplay.
   { id: HELL_CARD_ID, last: 'Evil Vinson', name: 'Evil Vinson', nat: 'USA', skin: 5,
-    photo: 'assets/cards/evil-vinson.png?v=2', hell: true, tag: 'WORSE THAN THOMAS' },
+    photo: 'assets/cards/evil-vinson.png', hell: true, tag: 'WORSE THAN THOMAS' },
 ];
 const VERSION_BY_ID = new Map(SECRET_VERSIONS.map((v) => [v.id, v]));
 export const SECRET_CARD_IDS = SECRET_VERSIONS.map((v) => v.id);
