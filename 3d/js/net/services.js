@@ -263,6 +263,14 @@ export function createOnline(deps) {
   }
   const fail = (error, extra) => ({ ok: false, error, message: error === 'banned' && extra && extra.ban ? banText(extra.ban) : errorText(error), ...(extra || {}) });
   const dataOr = (r) => (r.ok ? (r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' }) : { ok: false, error: r.error, ...(r.ban ? { ban: r.ban } : {}) });
+  /** Failed battle RPC answer -> { ok:false, error, message, ban?, retryAfter? }. */
+  const vinsonFail = (r) => {
+    const extra = {};
+    if (r && r.ban) extra.ban = r.ban;
+    if (r && Number.isFinite(r.retryAfter)) extra.retryAfter = Math.max(0, Math.ceil(r.retryAfter));
+    if (r && r.error === 'expired') extra.message = 'That battle attempt expired. Start the fight again.';
+    return fail((r && r.error) || 'server_error', Object.keys(extra).length ? extra : undefined);
+  };
 
   async function isAvailable() {
     const t = Date.now();
@@ -851,12 +859,41 @@ export function createOnline(deps) {
           if (a?.ban?.reason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") setBan(null);
         }
         if (r.restrictions) { pres.last = { ...(pres.last || {}), restrictions: r.restrictions }; emitPresence(); }
+        // 020: immune (earned by winning the battle, permanent), battleWon, rewardsClaimed. Older servers omit them (false).
         return { ok: true, exempt: r.exempt === true, phase: ['doom', 'banned', 'released', 'locked', 'lifted'].includes(r.phase) ? r.phase : null,
-          deadline: isoOr(r.deadline), serverNow: isoOr(r.serverNow) };
+          deadline: isoOr(r.deadline), serverNow: isoOr(r.serverNow),
+          immune: r.immune === true, battleWon: r.battleWon === true, rewardsClaimed: r.rewardsClaimed === true };
       },
       async pull() {
         const r = dataOr(await authed('vinson_pull'));
-        return r.ok ? { ok: true, exempt: r.exempt === true, phase: r.phase || null, deadline: isoOr(r.deadline) } : fail(r.error || 'server_error');
+        // An immune profile is never cursed again: the server answers { immune:true, phase:'lifted' } and starts no doom.
+        return r.ok ? { ok: true, exempt: r.exempt === true, phase: r.phase || null, deadline: isoOr(r.deadline), ...(r.immune === true ? { immune: true } : {}) }
+          : fail(r.error || 'server_error');
+      },
+      // ---- battle (migration 020): nonce -> win -> rewards. The server owns all of it; the client only relays the nonce.
+      /** Cursed + not immune only. -> { ok, nonce, minSeconds, maxSeconds }. Starting again replaces the open nonce. */
+      async battleStart() {
+        const r = dataOr(await authed('vinson_battle_start'));
+        return r.ok && typeof r.nonce === 'string' && VINSON_NONCE_RE.test(r.nonce)
+          ? { ok: true, nonce: r.nonce, minSeconds: Number(r.minSeconds) || 60, maxSeconds: Number(r.maxSeconds) || 7200 }
+          : vinsonFail(r);
+      },
+      /** { nonce } -> { ok, immune:true, phase:'lifted', battleWon:true, rewardsClaimed }. Idempotent once won. A win sooner than the
+       *  server minimum answers { ok:false, error:'too_soon', retryAfter } and keeps the nonce valid. */
+      async battleWin({ nonce } = {}) {
+        if (typeof nonce !== 'string' || !VINSON_NONCE_RE.test(nonce)) return fail('bad_nonce');
+        const r = dataOr(await authed('vinson_battle_win', { p_nonce: nonce }));
+        if (!(r.ok && r.immune === true)) return vinsonFail(r);
+        const a = readAcc();
+        if (a?.ban?.reason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") setBan(null);
+        return { ok: true, immune: true, phase: 'lifted', battleWon: true, rewardsClaimed: r.rewardsClaimed === true };
+      },
+      /** After a win only. -> { ok, claimed:boolean, cards:[ids] }. claimed:false = already claimed before (same ids returned). */
+      async claimBattleRewards() {
+        const r = dataOr(await authed('vinson_claim_rewards'));
+        if (!r.ok) return vinsonFail(r);
+        const cards = Array.isArray(r.cards) ? r.cards.filter((c) => VINSON_REWARD_IDS.includes(c)) : [];
+        return cards.length === VINSON_REWARD_IDS.length ? { ok: true, claimed: r.claimed === true, cards } : fail('bad_response');
       },
       async lock() {
         const r = dataOr(await authed('vinson_lock'));
@@ -1450,6 +1487,8 @@ function sanitizeAdminPlayer(p) {
     hasSave: p.hasSave === true, saveAt: isoOr(p.saveAt), squadRating: typeof p.squadRating === 'number' ? n(p.squadRating) : null,
     vinsonPhase: vinsonPhaseOf(p) };
 }
+const VINSON_NONCE_RE = /^[0-9a-f]{32}$/;
+const VINSON_REWARD_IDS = ['vinson_reward_world', 'vinson_reward_phonk', 'vinson_reward_captain'];
 /** Active Vinson curse on an owner-list / moderation row; released remains cursed until lifted. */
 const VINSON_BAN_REASON = "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON";
 function vinsonPhaseOf(p) {
@@ -1552,7 +1591,7 @@ const unavailable = () => {
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
     owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, deletePlayer: f, deleteGuests: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f },
-    vinson: { status: f, pull: f, lock: f, unban: f, lift: f },
+    vinson: { status: f, pull: f, lock: f, unban: f, lift: f, battleStart: f, battleWin: f, claimBattleRewards: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },

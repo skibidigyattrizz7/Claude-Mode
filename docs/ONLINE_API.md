@@ -169,3 +169,36 @@ local club. Now (client: `meta/core/remote.js`, `meta/core/wipe.js`, `net/servic
   screen is closed) BEFORE every cloud upload (`createCloudSync({ beforeSync })`), and acknowledged only after the patched club is
   on the server (`afterSync` → `remote.flushAcks`); if a newer server copy replaces the local club first, the patch stays
   pending and re-applies.
+
+## Migration 020 — Vinson battle: earned immunity and one-time rewards (`online.vinson`)
+Three separate concepts, three separate paths; none implies another:
+| concept | who / call | result |
+|---|---|---|
+| moderation unban | owner: `moderation.unban(id)` / `vinson.unban(id)` | `doom`/`banned` -> `released` (curse side effects stay) |
+| owner lift | owner: `vinson.lift(id)` | any cursed phase -> `lifted`, **not** immune, no rewards |
+| earned immunity | the player: `battleStart` + `battleWin` | `lifted` + permanent `immune`, rewards claimable once |
+
+All three calls use the same auth as other authed RPCs (account session or device profile) and never throw.
+- `vinson.battleStart()` -> `{ ok, nonce, minSeconds: 60, maxSeconds: 7200 }`. Only while cursed (`doom`/`banned`/`released`/`locked`)
+  and not immune; a banned player must be unbanned first (`error:'banned'`). One open nonce per profile: starting again replaces it.
+  Max 30 starts/hour (`rate_limited`). Errors: `not_cursed` (never cursed, owner, or already lifted), `already_immune`.
+- `vinson.battleWin({ nonce })` -> `{ ok, immune:true, phase:'lifted', battleWon:true, rewardsClaimed }`. In one transaction: checks the
+  nonce (issued to THIS profile, unconsumed, 60 s <= age <= 2 h), consumes it, lifts the curse exactly like the owner lift (restores
+  restrictions added by the lock, clears the Vinson ban, marks the cloud save `vinson.phase = 'lifted'`) and sets immune + `battle_won_at`.
+  **Idempotent**: once immune, any further call (any nonce) returns the same success and changes nothing. Errors: `no_battle` (no open nonce),
+  `bad_nonce` (malformed, wrong, replaced, or another profile's), `too_soon` (`retryAfter` seconds; the nonce stays valid, retry later),
+  `expired` (older than 2 h, nonce dropped: call `battleStart` again). An owner lift during the fight does not invalidate the open nonce.
+- `vinson.claimBattleRewards()` -> `{ ok, claimed, cards:['vinson_reward_world','vinson_reward_phonk','vinson_reward_captain'] }`.
+  Only after a win (`not_won` otherwise). The first call returns `claimed:true` and stamps `rewards_claimed_at`; every later call returns
+  `claimed:false` with the **same ids**, so a device that reloaded mid-claim can reconcile. The server returns ids only: the client adds
+  the cards to the club (and should keep a pending flag until it has saved them).
+- `vinson.status()` now also returns `immune`, `battleWon`, `rewardsClaimed` (all booleans, false on older servers / owners / never cursed).
+  Reload or a second device reads them to reconcile; a cloud save can never restore the curse.
+- **Immune profiles are never re-cursed**: `vinson.pull()` answers `{ ok:true, immune:true, phase:'lifted' }` and starts no doom
+  (server `pitchside_vinson_pull` checks immunity first and again under the row lock). `vinson.lock()` / `unban` / `lift` find nothing to act on.
+- Server: table `pitchside_vinson` gains `immune`, `battle_won_at`, `rewards_claimed_at`, `battle_nonce_hash` (sha256 only), `battle_started_at`
+  (check: immune <=> battle_won_at set; claimed needs immune). RPCs `pitchside_vinson_battle_start(p_id, p_secret)`,
+  `pitchside_vinson_battle_win(p_id, p_secret, p_nonce)`, `pitchside_vinson_claim_rewards(p_id, p_secret)`; replaced `pitchside_vinson_pull`
+  and `pitchside_vinson_status`; internal `pitchside__vinson_end_curse(uuid)` (not client-callable). Audit actions: `vinson_battle_start`,
+  `vinson_battle_win`, `vinson_rewards`. Mock: same RPCs in `mockbackend.js`; tests in `net/tests/net.test.mjs` ("vinson battle: ...").
+- Not checked server-side: the fight itself (only nonce + minimum duration). The owner list has no extra column for immunity.
