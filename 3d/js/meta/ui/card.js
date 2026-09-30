@@ -147,6 +147,9 @@ export function cardClasses(p) {
  * @param p player object
  * @param opts { size: 'xs'|'sm'|'md'|'lg', pos: override position label, club: club object for crest, onClick, extra: Node, tag }
  */
+const FUT_READY = new Set();
+const FUT_LOADING = new Map();
+
 export function playerCard(p, opts = {}) {
   const size = opts.size || 'sm';
   const cls = cardClasses(p);
@@ -203,7 +206,21 @@ export function playerCard(p, opts = {}) {
     el.classList.add('has-fut', design.dark ? 'fut-dark' : 'fut-light');
     el.dataset.design = key;
     // absolute: a url() inside a custom property would otherwise resolve against css/meta.css, not the page
-    el.style.setProperty('--fut', `url("${new URL(design.file, document.baseURI).href}")`);
+    const url = new URL(design.file, document.baseURI).href;
+    el.style.setProperty('--fut', `url("${url}")`);
+    // until the art has downloaded the card would be see-through (owner, Oct 1: "cards are transparent"), so it shows
+    // a plain card-shaped placeholder; fut-ready swaps in the art the moment it has loaded (instantly once cached)
+    if (FUT_READY.has(url)) el.classList.add('fut-ready');
+    else {
+      let img = FUT_LOADING.get(url);
+      if (!img) {
+        img = new Image(); img.decoding = 'async'; FUT_LOADING.set(url, img);
+        img.addEventListener('load', () => { FUT_READY.add(url); FUT_LOADING.delete(url); }, { once: true });
+        img.src = url;
+      }
+      const ready = () => el.classList.add('fut-ready');
+      if (img.complete && img.naturalWidth) { FUT_READY.add(url); ready(); } else img.addEventListener('load', ready, { once: true });
+    }
     // ink per place: [rating column, name + stats band] (tools/card_ink.py); the design's own ink if unlisted
     const [inkTop, inkBand] = CARD_INK[key] || [design.ink, design.ink];
     el.style.setProperty('--fut-ink', inkBand);

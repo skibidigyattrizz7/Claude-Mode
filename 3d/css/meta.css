@@ -470,6 +470,10 @@
    name centred under the picture, six stats in the lower band (PAC SHO PAS | DRI DEF PHY). ---- */
 .pm-card.has-fut { --ink: var(--fut-ink); --ovr: var(--fut-ink-top, var(--fut-ink)); --num: var(--fut-ink); color: var(--fut-ink); background: var(--fut) 0 0/100% 100% no-repeat; }
 .pm-card.has-fut::before { display: none; }
+/* art still downloading: a plain card shape instead of an invisible card (the art replaces it once loaded) */
+.pm-card.has-fut:not(.fut-ready) { background: none; }
+.pm-card.has-fut:not(.fut-ready)::before { display: block; background: linear-gradient(165deg, #cfd3d8, #8b939c); }
+.pm-card.has-fut.fut-dark:not(.fut-ready)::before { background: linear-gradient(165deg, #2b2f36, #121418); }
 .pm-card.has-fut .pc-in { inset: 0; background: none; -webkit-mask: var(--fut) 0 0/100% 100% no-repeat; mask: var(--fut) 0 0/100% 100% no-repeat; }
 .pm-card.has-fut .pc-in::before, .pm-card.has-fut .pc-in::after { display: none; }
 .pm-card.has-fut .pc-side { color: var(--fut-ink-top, var(--fut-ink)); text-shadow: 0 .04em .14em var(--fut-halo-top, transparent); }
