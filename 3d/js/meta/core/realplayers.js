@@ -4,7 +4,8 @@
 // (no shared RNG is consumed, so the generated database and existing saves are unaffected).
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS } from './data.js';
-import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES, assignPlus } from './physique.js';
+import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES, PS_TIER, assignPlus, bestPlaystylesFor } from './physique.js';
+import { futFor, FUT_CARDS, FUT_NEW_BASE, FUT_NEW_ICONS } from './futdata.js';
 import { REG_ROWS, LATE_REG_ROWS } from './realregulars.js';
 import { bioFor } from './bios.js';
 import { PLAYER_PHOTOS, PHOTO_VER } from './playerphotos.js';
@@ -262,9 +263,19 @@ export const REG_ROW_COUNT = REG_ROWS.length;
 /** Every real person's full name per list (for duplicate checks). */
 export const REAL_NAMES = { icons: ICON_ROWS.map((r) => r[1]), stars: STAR_ROWS.map((r) => r[1]), regulars: REG_ROWS.map((r) => r[1]) };
 
+/** The hand-written real people (before any fut.gg data): [{ id, person, name, card, nat, kind: 'icon' | 'star' | 'regular', pos }].
+ * tools/fetch_futgg_players.py matches fut.gg cards against this list so every existing card id keeps its person slug. */
+export function handPeople() {
+  const out = [];
+  for (const r of ICON_ROWS.concat(LATE_ICON_ROWS)) out.push({ id: `ic_${r[0].replace(/_icon$/, '')}`, person: r[0].replace(/_icon$/, ''), name: r[1], card: r[2], nat: r[3], kind: 'icon', pos: r[4], ovr: r[9] });
+  for (const r of STAR_ROWS) out.push({ id: `rs_${r[0]}`, person: r[0], name: r[1], card: r[2], nat: r[3], kind: 'star', pos: r[4], ovr: r[9] });
+  for (const r of REG_ROWS.concat(LATE_REG_ROWS)) out.push({ id: `rp_${r[0]}`, person: r[0], name: r[1], card: r[2], nat: r[3], kind: 'regular', pos: r[4], ovr: r[9] });
+  return out;
+}
+
 const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
 const GKFACE = ['div', 'han', 'kic', 'ref', 'spd', 'pos'];
-const ATTACK = new Set(['LW', 'RW', 'CAM', 'CF', 'ST', 'LM', 'RM']);
+const ATTACK =new Set(['LW', 'RW', 'CAM', 'CF', 'ST', 'LM', 'RM']);
 
 /** Nudge stats (only those that count for the position) until the position formula gives exactly `target`. */
 function fitStats(src, keys, w, target) {
@@ -307,11 +318,34 @@ function normStyles(p, list) {
 
 /** Overwrite a real card's height / weight / foot with the real values from core/bios.js where known. */
 function applyBio(p) {
+  if (p.futId) return; // a real EA card: its own height / weight / foot are the real values
   const b = bioFor(p.person);
   if (!b) return;
   if (b.height) p.height = clamp(b.height, 162, 202);
   if (b.weight) p.weight = clamp(b.weight, 58, 100);
   if (b.foot) p.foot = b.foot;
+}
+
+// Ratings the owner asked for by name (Sep 26-30: Pelé / Maradona 99 as the top Legends, Cannavaro's 2006 peak): kept even though the real
+// FC Icon card is lower. Everything else is the real FC rating.
+const OWNER_MIN_OVR = { pele: 99, maradona: 99, cannavaro: 96 };
+
+/** The card's real PlayStyles ('finesse+ power ...', + = PlayStyle+), best first: PlayStyle+ first, then the position's chart styles,
+ * then the owner's tier list. normStyles then trims them to the OVR-band rules. */
+function futStyleList(pos, str) {
+  const best = bestPlaystylesFor(pos);
+  const score = (x) => (x.plus ? 100 : 0) + (best.includes(x.id) ? 10 - best.indexOf(x.id) : 0) + (PS_TIER[x.id] ?? 1);
+  return parseStyles(String(str || '').split(/\s+/).filter(Boolean)).sort((a, b) => score(b) - score(a));
+}
+
+// Skin tone (0 light .. 5 dark) for a new real card without a photo: by nation, varied per player.
+const DARK_NATS = new Set(['NGA', 'SEN', 'GHA', 'CMR', 'CIV', 'MLI', 'GUI', 'BFA', 'COD', 'GAB', 'GAM', 'GNB', 'LBR', 'TOG', 'ANG', 'MOZ', 'ZAM', 'ZIM', 'CTA', 'EQG', 'COM', 'CPV', 'RSA', 'JAM', 'HAI', 'CUW', 'SUR', 'TRI', 'BEN', 'UGA', 'KEN']);
+const MID_NATS = new Set(['BRA', 'COL', 'ECU', 'URU', 'MEX', 'PER', 'CHI', 'VEN', 'PAR', 'DOM', 'CRC', 'MAR', 'ALG', 'TUN', 'EGY', 'KSA', 'UAE', 'JOR', 'IRN', 'TUR', 'ARG', 'PLE', 'MTN', 'ISR', 'UZB']);
+function skinFor(nat, id) {
+  const h = hashStr(`skin-${id}`) % 100;
+  if (DARK_NATS.has(nat)) return h < 30 ? 3 : h < 70 ? 4 : 5;
+  if (MID_NATS.has(nat)) return h < 30 ? 1 : h < 75 ? 2 : 3;
+  return h < 55 ? 0 : h < 90 ? 1 : 2;
 }
 
 function starClub(slug, lg) {
@@ -321,26 +355,63 @@ function starClub(slug, lg) {
 }
 
 /**
+ * Real club -> the fictional club standing in for it (clubs stay fictional; core/data.js). Inside each of the five named leagues the real
+ * clubs are ranked by the mean overall of their fut.gg players and take the fictional clubs strongest-first (top ten = first tier, the
+ * rest share the second tier); every other league is the "Rest of World" league CON, where a club is spread by a stable hash.
+ */
+function futClubMapper() {
+  const strength = new Map(); // `${lg}|${club}` -> [sum, n]
+  for (const c of FUT_CARDS) {
+    if (c.kind !== 'b' || !c.club) continue;
+    const k = `${c.lg}|${c.club}`;
+    const e = strength.get(k) || [0, 0];
+    strength.set(k, [e[0] + c.ovr, e[1] + 1]);
+  }
+  const rank = new Map();
+  for (const lg of ['ISL', 'SOL', 'MEI', 'AUR', 'ETO']) {
+    const list = [...strength.entries()].filter(([k]) => k.startsWith(`${lg}|`)).map(([k, [s, n]]) => [k, s / n + Math.min(n, 12) * 0.5, n])
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+    list.forEach(([k], i) => rank.set(k, i));
+  }
+  const byLeague = new Map();
+  for (const c of CLUBS) { if (!byLeague.has(c.league)) byLeague.set(c.league, []); byLeague.get(c.league).push(c); }
+  return (c) => {
+    const lg = c.lg === 'ICN' ? 'CON' : c.lg;
+    const list = byLeague.get(lg) || byLeague.get('CON');
+    const key = `${c.lg}|${c.club}`;
+    if (lg !== 'CON' && rank.has(key)) {
+      const r = rank.get(key);
+      return r < 10 ? list[r] : list[10 + ((r - 10) % (list.length - 10))];
+    }
+    return list[hashStr(`futclub-${c.club || c.slug}`) % list.length];
+  };
+}
+
+/**
  * Build real-player records. `helpers` injects functions from players.js (avoids a circular import):
  * { POS_WEIGHTS, computeOvr, marketValue, weeklyWage, tierOf }
  */
 export function buildRealPlayers(helpers) {
   const { POS_WEIGHTS, computeOvr, marketValue, weeklyWage } = helpers;
-  const make = (row, kind) => {
-    const [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, extra = {}] = row;
+  const make = (row, kind, fut = null) => {
+    let [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, extra = {}] = row;
+    // Real EA card (fut.gg, core/futplayers.js): its rating, six face stats, positions, foot, weak foot, skill moves, age and height
+    // replace the hand-written values (id, person, names, nation and looks stay).
+    if (fut) ({ pos, alt, foot, wf, sm, ovr, face, age } = { ...fut, alt: fut.alt.slice() }), (height = fut.height || height);
+    if (fut && OWNER_MIN_OVR[slug.replace(/_icon$/, '')] > ovr) ovr = OWNER_MIN_OVR[slug.replace(/_icon$/, '')]; // owner's explicit rating call-outs win (stats stay real, `ob` makes up the difference)
     const rng = new Rng(`real-${slug}`);
     const isGK = pos === 'GK';
     const stats = {}, gk = {};
     if (isGK) {
       GKFACE.forEach((k, i) => { gk[k] = face[i]; });
-      fitStats(gk, GKFACE, POS_WEIGHTS.GK, ovr);
+      if (!fut) fitStats(gk, GKFACE, POS_WEIGHTS.GK, ovr);
       Object.assign(stats, {
         pac: clamp(gk.spd + rng.int(-3, 3), 30, 90), sho: rng.int(18, 30), pas: clamp(gk.kic - rng.int(6, 12), 30, 85),
         dri: clamp(Math.round(35 + ovr * 0.15) + rng.int(-4, 4), 25, 70), def: rng.int(25, 38), phy: clamp(Math.round(55 + ovr * 0.2) + rng.int(-4, 4), 45, 90),
       });
     } else {
       FACE.forEach((k, i) => { stats[k] = face[i]; });
-      fitStats(stats, FACE, POS_WEIGHTS[pos], ovr);
+      if (!fut) fitStats(stats, FACE, POS_WEIGHTS[pos], ovr);
       for (const k of GKFACE) gk[k] = rng.int(8, 16);
       gk.spd = stats.pac;
     }
@@ -354,6 +425,10 @@ export function buildRealPlayers(helpers) {
       club: icon ? 'ICN' : club.id, league: icon ? 'ICN' : club.league, pos, alt: alt.slice(),
       stats, gk,
     };
+    if (fut) { // real face stats stay exactly as EA has them; the overall difference to our six-stat formula goes into `ob`
+      const raw = computeOvr(pos, p);
+      if (raw !== ovr) p.ob = clamp(ovr - raw, -12, 12);
+    }
     p.ovr = computeOvr(pos, p);
     p.pot = p.ovr;
     p.wf = wf; p.sm = isGK ? 1 : sm; p.foot = foot;
@@ -362,7 +437,11 @@ export function buildRealPlayers(helpers) {
     const ph = PHYS[slug] || [75, []];
     p.weight = ph[0];
     // PlayStyle+ re-picked from the owner's tier list + best-per-position chart (see physique.assignPlus)
-    p.playstyles = assignPlus(p, parseStyles(ph[1]), { fill: true });
+    p.playstyles = assignPlus(p, fut ? normStyles(p, futStyleList(pos, fut.styles)) : parseStyles(ph[1]), { fill: true });
+    if (fut) {
+      p.weight = clamp(fut.weight || (fut.height ? Math.round(23.2 * (fut.height / 100) ** 2) : ph[0]), 58, 100); // EA has no weight for a few cards: estimate from the height
+      p.futId = fut.eaId; p.realClub = fut.club || null; p.realLeague = fut.league || null;
+    }
     p.rare = true;
     p.tier = 'gold';
     // V2: every real player is a "Legend of the Game" (LOTG) card; `era` separates retired prime
@@ -387,9 +466,9 @@ export function buildRealPlayers(helpers) {
     applyBio(p);
     return p;
   };
-  const icons = ICON_ROWS.map((r) => make(r, 'icon'));
-  const lateIcons = LATE_ICON_ROWS.map((r) => make(r, 'icon'));
-  const stars = STAR_ROWS.map((r) => make(r, 'star'));
+  const icons = ICON_ROWS.map((r) => make(r, 'icon', futFor(r[0].replace(/_icon$/, ''), 'icon')));
+  const lateIcons = LATE_ICON_ROWS.map((r) => make(r, 'icon', futFor(r[0].replace(/_icon$/, ''), 'icon')));
+  const stars = STAR_ROWS.map((r) => make(r, 'star', futFor(r[0], 'star')));
   // V3 regulars: ordinary gold / rare gold cards of real active players (no special version).
   // Balanced placement: best players go to the most famous clubs of their league, but no club grows past
   // REG_CAP players (career squads max out at 32); overflow moves to other leagues' top flights.
@@ -436,19 +515,23 @@ export function buildRealPlayers(helpers) {
   };
   placeRows(REG_ROWS);
   const makeRegular = (row) => {
-    const [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, weight, skin, lg, styles] = row;
-    const base = make([slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, { lg }], 'star');
+    let [slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, weight, skin, lg, styles] = row;
+    const fut = futFor(slug, 'regular');
+    const base = make([slug, full, card, nat, pos, alt, foot, wf, sm, ovr, face, age, height, skin, { lg }], 'star', fut);
+    age = base.age; // the real card's age when there is one
     const club = placed.get(slug);
     const p = { ...base, id: `rp_${slug}`, person: slug, club: club.id, league: club.league };
     delete p.era;
     p.special = null;
     p.rare = true;
     p.tier = helpers.tierOf(p.ovr);
-    p.weight = clamp(weight, 58, 100);
-    // compact (EXT) rows have no PlayStyles string and GENERATED height/weight — only core/bios.js values are real
-    p.physReal = !!styles;
-    applyBio(p);
-    p.playstyles = assignPlus(p, normStyles(p, parseStyles(String(styles).split(/\s+/).filter(Boolean))), { fill: true });
+    if (!fut) {
+      p.weight = clamp(weight, 58, 100);
+      // compact (EXT) rows have no PlayStyles string and GENERATED height/weight — only core/bios.js values are real
+      p.physReal = !!styles;
+      applyBio(p);
+      p.playstyles = assignPlus(p, normStyles(p, parseStyles(String(styles).split(/\s+/).filter(Boolean))), { fill: true });
+    } else p.physReal = true; // a real EA card: height / weight / foot / PlayStyles came with it (make())
     const growth = age <= 20 ? 6 : age <= 22 ? 4 : age <= 24 ? 2 : 0;
     p.pot = Math.min(95, p.ovr + growth);
     p.value = marketValue(p);
@@ -477,7 +560,34 @@ export function buildRealPlayers(helpers) {
     return LATE_REG_ROWS.map(makeRegular);
   };
   // Icons of people who still play (Messi, Ronaldo...) keep their colour photo; only retired Icons are monochrome (card.js)
-  const playing = new Set(stars.concat(regulars).map((p) => p.person));
-  for (const ic of icons.concat(lateIcons)) if (playing.has(ic.person)) ic.stillPlaying = true;
-  return { icons, stars, regulars, lateIcons, buildLate };
+  // ---- new real cards from fut.gg (core/futplayers.js rows no hand-written player covers) ----
+  // Base cards (id rs_<slug>) are ordinary rare gold cards at the fictional club that stands in for their real club; they are NOT part
+  // of `players` (so Career squads are untouched) but of `all` (packs, market, draft, promos, national teams). Icons (id ic_<slug>)
+  // are Legend-of-the-Game prime cards like the hand-written ones.
+  const clubOf = futClubMapper();
+  const makeFutBase = (c) => {
+    const row = [c.slug, c.name, c.card, c.nat, c.pos, c.alt, c.foot, c.wf, c.sm, c.ovr, c.face, c.age, c.height, skinFor(c.nat, c.slug), { lg: c.lg }];
+    const base = make(row, 'star', c);
+    const club = clubOf(c);
+    const p = { ...base, id: `rs_${c.slug}`, person: c.slug, club: club.id, league: club.league };
+    delete p.era;
+    p.special = null; p.rare = true; p.tier = helpers.tierOf(p.ovr);
+    p.first = c.name.includes(' ') ? c.name.split(' ')[0] : '';
+    const growth = p.age <= 20 ? 6 : p.age <= 22 ? 4 : p.age <= 24 ? 2 : 0;
+    p.pot = Math.min(95, p.ovr + growth);
+    p.value = marketValue(p); p.wage = weeklyWage(p);
+    p.look = hashStr(p.id) % 997;
+    return p;
+  };
+  const makeFutIcon = (c) => {
+    const row = [c.slug, c.name, c.card, c.nat, c.pos, c.alt, c.foot, c.wf, c.sm, c.ovr, c.face, c.age, c.height, skinFor(c.nat, c.slug), {}];
+    const p = make(row, 'icon', c);
+    p.first = c.name.includes(' ') ? c.name.split(' ')[0] : '';
+    return p;
+  };
+  const futBase = FUT_NEW_BASE.map(makeFutBase);
+  const futIcons = FUT_NEW_ICONS.map(makeFutIcon);
+  const playing = new Set(stars.concat(regulars, futBase).map((p) => p.person));
+  for (const ic of icons.concat(lateIcons, futIcons)) if (playing.has(ic.person)) ic.stillPlaying = true;
+  return { icons, stars, regulars, lateIcons, futBase, futIcons, buildLate };
 }

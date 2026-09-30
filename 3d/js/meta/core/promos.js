@@ -395,7 +395,8 @@ export function buildPromoCards(src, helpers, week = weekNumber(), { diverse = t
       const id = firstOf(...ids);
       if (!id || out.some((p) => p.special === id && p.baseId === neymarBase.id)) return;
       const rmax = PROMO_BY_ID[id].range[1];
-      const target = Math.min(rmax, Math.max(neymarBase.ovr + lo, neymarBase.ovr + hi));
+      // the owner's Sep 27 targets were set on a 91 base; his real FC card is lower (fut.gg), so keep the targets, not the +N
+      const target = Math.min(rmax, Math.max(neymarBase.ovr + lo, neymarBase.ovr + hi, 91 + hi));
       if (target > neymarBase.ovr) make(neymarBase, id, target, extra);
     };
     pick(['tots'], 5, 6); // season-best, ~97
@@ -447,6 +448,27 @@ export function buildPromoCards(src, helpers, week = weekNumber(), { diverse = t
 
   for (const p of out) p.tier = 'gold';
   return out;
+}
+/**
+ * A promo card for an id `pr_<promo>_<baseId>` that the current selection no longer contains (a club saved before the real fut.gg
+ * ratings / new players changed which people each campaign picks). Rebuilt from the base card with a standard +4 boost inside the
+ * campaign's range, so every id a player ever owned keeps resolving. -> card | null
+ */
+export function promoCardFromId(id, base, helpers) {
+  const m = /^pr_([a-z0-9]+)_/.exec(id || '');
+  const def = m && PROMO_BY_ID[m[1]];
+  if (!def || !base || base.promo || base.id !== id.slice(m[0].length)) return null;
+  const p = structuredClone(base);
+  p.id = id; p.baseId = base.id;
+  delete p.intended; delete p.era; delete p.totw;
+  p.ovr = helpers.computeOvr(p.pos, p);
+  setOvr(p, clamp(base.ovr + 4, def.range[0], def.range[1]), helpers);
+  p.special = def.id; p.promo = def.id; p.rare = true; p.tier = 'gold';
+  p.pot = Math.max(p.pot || p.ovr, p.ovr);
+  if (base.special === 'lotg' || base.club === 'ICN') p.linkAll = true;
+  upgradeStyles(p, 1);
+  p.value = helpers.marketValue({ ...p, age: Math.min(p.age, 30) }) * 2;
+  return p;
 }
 const ROLE_SWAP = { CB: 'CDM', CDM: 'CB', CM: 'CAM', CAM: 'ST', ST: 'CAM', CF: 'CAM', LW: 'ST', RW: 'ST', LM: 'LW', RM: 'RW', LB: 'LM', RB: 'RM', LWB: 'LM', RWB: 'RM' };
 const FROST_ALT = { CB: 'CDM', CDM: 'CM', CM: 'CAM', CAM: 'CF', ST: 'CF', CF: 'ST', LW: 'LM', RW: 'RM', LM: 'LW', RM: 'RW', LB: 'LWB', RB: 'RWB', GK: 'GK' };

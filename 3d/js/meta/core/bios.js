@@ -13,6 +13,8 @@
 //   * Fictional / generated players get "Unknown" for every personal field (DOB, age, height, weight, foot).
 // Sources: public records (club/federation profiles, Wikipedia) as remembered; entries we weren't sure of are
 // deliberately left out.
+import { futBio } from './futdata.js';
+
 export const BIOS = {
   // ---------- Icons ----------
   pele: '1940-10-23|173|R||2022-12-29', maradona: '1960-10-30|165|L|70|2020-11-25', messi: '1987-06-24|170|L|72',
@@ -193,13 +195,14 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 /** Parsed bio for a person slug, or null. */
 export function bioFor(person) {
   const raw = person && BIOS[person];
-  if (!raw) return null;
-  const [dob, h, foot, w, died] = raw.split('|');
+  const f = person ? futBio(person) : null; // the real EA card (fut.gg): its height / weight / foot are the card's own values
+  if (!raw && !f) return null;
+  const [dob, h, foot, w, died] = raw ? raw.split('|') : [];
   return {
-    dob: dob || null,
-    height: h ? Number(h) : null,
-    foot: foot === 'L' || foot === 'R' ? foot : null,
-    weight: w ? Number(w) : null,
+    dob: dob || (f && f.dob) || null,
+    height: f && f.height ? f.height : h ? Number(h) : null,
+    foot: f && f.foot ? f.foot : foot === 'L' || foot === 'R' ? foot : null,
+    weight: f && f.weight ? f.weight : w ? Number(w) : null,
     died: died || null,
   };
 }
@@ -275,6 +278,8 @@ export function profileFacts(p, now = new Date()) {
     ['Weight', i.weight ? `${i.weight} kg` : U],
     ['Preferred foot', i.foot === 'L' ? 'Left' : i.foot === 'R' ? 'Right' : U],
   ];
+  if (p && p.realClub) rows.push(['Real club', p.realClub]); // real EA card facts (clubs in the game are fictional stand-ins)
+  if (p && p.realLeague) rows.push(['Real league', p.realLeague]);
   if (i.status) rows.push(['Status', i.status]);
   if (!i.real) rows.push(['Player', 'Fictional player']);
   return rows;

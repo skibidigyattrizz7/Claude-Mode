@@ -79,6 +79,42 @@ export const EXTRA_NATIONS = EXTRA_NATION_ROWS.map((r) => ({ ...toNation(r), ext
 export const ALL_NATIONS = NATIONS.concat(EXTRA_NATIONS);
 export const NATION_BY_CODE = Object.fromEntries(ALL_NATIONS.map((n) => [n.code, n]));
 
+// Card-only nations (fut.gg import, Sep 30): the nationalities of real players from tools/fetch_futgg_players.py that the game had no
+// nation for. They are NOT national teams and NOT enumerable (Object.keys/values of NATION_BY_CODE, ALL_NATIONS and NATIONS stay as
+// they were, so generated players, Career and the national-team list are unchanged), but NATION_BY_CODE[code] finds them, so
+// flags, names and chemistry work on their cards. [code, name, flag]; kits are derived from the flag colours.
+const CARD_NATION_ROWS = [
+  ['GUI', 'Guinea', { t: 'v', c: ['#CE1126', '#FCD116', '#009460'] }], ['SVK', 'Slovakia', { t: 'h', c: ['#FFFFFF', '#0B4EA2', '#EE1C25'] }],
+  ['KVX', 'Kosovo', { t: 'solid', c: ['#244AA5'], star: '#FFFFFF' }], ['BFA', 'Burkina Faso', { t: 'h', c: ['#EF2B2D', '#009E49'], star: '#FCD116' }],
+  ['UZB', 'Uzbekistan', { t: 'h', c: ['#0099B5', '#FFFFFF', '#1EB53A'] }], ['NZL', 'New Zealand', { t: 'solid', c: ['#00247D'], star: '#FFFFFF' }],
+  ['ARM', 'Armenia', { t: 'h', c: ['#D90012', '#0033A0', '#F2A800'] }], ['PAR', 'Paraguay', { t: 'h', c: ['#D52B1E', '#FFFFFF', '#0038A8'] }],
+  ['ALG', 'Algeria', { t: 'v', c: ['#006233', '#FFFFFF'] }], ['MLI', 'Mali', { t: 'v', c: ['#14B53A', '#FCD116', '#CE1126'] }],
+  ['CRC', 'Costa Rica', { t: 'h', c: ['#002B7F', '#FFFFFF', '#CE1126', '#FFFFFF', '#002B7F'] }], ['KSA', 'Saudi Arabia', { t: 'solid', c: ['#006C35'] }],
+  ['COD', 'DR Congo', { t: 'solid', c: ['#007FFF'], star: '#F7D618' }], ['MOZ', 'Mozambique', { t: 'htri', c: ['#007168', '#000000', '#FCE100', '#D21034'] }],
+  ['BIH', 'Bosnia and Herzegovina', { t: 'solid', c: ['#002395'], star: '#FECB00' }], ['GAM', 'Gambia', { t: 'h', c: ['#CE1126', '#FFFFFF', '#0C1C8C', '#FFFFFF', '#3A7728'] }],
+  ['GAB', 'Gabon', { t: 'h', c: ['#009E60', '#FCD116', '#3A75C4'] }], ['FIN', 'Finland', { t: 'nordic', c: ['#FFFFFF', '#003580'] }],
+  ['ALB', 'Albania', { t: 'solid', c: ['#E41E20'], eagle: '#000000' }], ['IDN', 'Indonesia', { t: 'h', c: ['#FF0000', '#FFFFFF'] }],
+  ['ISR', 'Israel', { t: 'israel', c: ['#FFFFFF', '#0038B8'] }], ['MNE', 'Montenegro', { t: 'solid', c: ['#C40308'], eagle: '#D3AE3B' }],
+  ['VEN', 'Venezuela', { t: 'h', c: ['#FFCC00', '#00247D', '#CF142B'] }], ['DOM', 'Dominican Republic', { t: 'cross', c: ['#002D62', '#FFFFFF'] }],
+  ['ICE', 'Iceland', { t: 'nordic2', c: ['#02529C', '#FFFFFF', '#DC1E35'] }], ['LUX', 'Luxembourg', { t: 'h', c: ['#EF3340', '#FFFFFF', '#00A3E0'] }],
+  ['ANG', 'Angola', { t: 'h', c: ['#CC092F', '#000000'] }], ['MKD', 'North Macedonia', { t: 'solid', c: ['#D20000'], sun: '#FFE600' }],
+  ['TOG', 'Togo', { t: 'h', c: ['#006A4E', '#FFD600', '#006A4E', '#FFD600', '#006A4E'] }], ['TRI', 'Trinidad and Tobago', { t: 'solid', c: ['#CE1126'] }],
+  ['JAM', 'Jamaica', { t: 'saltire', c: ['#009B3A', '#FED100'] }], ['COM', 'Comoros', { t: 'h', c: ['#FFC61E', '#FFFFFF', '#CE1126', '#3D8E33'] }],
+  ['ZAM', 'Zambia', { t: 'solid', c: ['#198A00'] }], ['GNB', 'Guinea-Bissau', { t: 'v', c: ['#CE1126', '#FCD116', '#009E49'] }],
+  ['LBR', 'Liberia', { t: 'h', c: ['#BF0A30', '#FFFFFF', '#BF0A30', '#FFFFFF', '#BF0A30'] }], ['JOR', 'Jordan', { t: 'htri', c: ['#000000', '#FFFFFF', '#007A3D', '#CE1126'] }],
+  ['CTA', 'Central African Republic', { t: 'h', c: ['#003082', '#FFFFFF', '#289728', '#FFCE00'] }], ['TUN', 'Tunisia', { t: 'circle', c: ['#E70013', '#FFFFFF'] }],
+  ['MTN', 'Mauritania', { t: 'solid', c: ['#006233'], crescent: '#FFD700' }],
+  ['ZIM', 'Zimbabwe', { t: 'h', c: ['#319208', '#FFD200', '#DE2010', '#000000', '#DE2010', '#FFD200', '#319208'] }],
+  ['CPV', 'Cape Verde', { t: 'h', c: ['#003893', '#FFFFFF', '#CF2027', '#FFFFFF', '#003893'] }], ['UAE', 'United Arab Emirates', { t: 'htri', c: ['#00732F', '#FFFFFF', '#000000', '#FF0000'] }],
+  ['RSA', 'South Africa', { t: 'h', c: ['#E03C31', '#001489'] }], ['EQG', 'Equatorial Guinea', { t: 'htri', c: ['#3E9A00', '#FFFFFF', '#E32118', '#0073CE'] }],
+];
+/** Every card-only nation (see above). */
+export const CARD_NATIONS = CARD_NATION_ROWS.map(([code, name, flag]) => {
+  const [a, b] = [flag.c[0], flag.c[1] || '#FFFFFF'];
+  return { code, name, region: 'en', str: 2, flag, formation: '4-3-3', cardOnly: true, kit: K([a, b, b, b, a]), away: K([b, a, a, b, b]) };
+});
+for (const n of CARD_NATIONS) if (!NATION_BY_CODE[n.code]) Object.defineProperty(NATION_BY_CODE, n.code, { value: n, enumerable: false });
+
 // ---------- name material (all syllable-generated; no real people) ----------
 export const NAME_REGIONS = {
   en: {
