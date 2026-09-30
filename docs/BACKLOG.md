@@ -220,3 +220,7 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   copies; store section per game (FIFA 22, 23, FC 24-27); secret cards stay unique (custom art, not reused EA designs);
   no picture outside the card; no photo backgrounds unless the real FIFA card has one; no shared celebration picture
   across promos. SECRET CARDS: owner says leave them alone (own category). Split with ChatGPT in docs/AI_DIRECT.md (group chat). Real FC 26/27 promo items: Claude agent 3.
+- Sep 30 night (owner): secret cards get their OWN custom designs inspired by the card/pack (angelic, demonic, glitch /
+  binary code 0101...), reactive + animated. Do NOT touch Rabbi Patel, E-Man, E.L.I.J.A.H. (and any card designed from
+  an owner picture: Rabbi Patel is Israeli-themed, Elijah and E-Man are fiery). Vinson can get a rework; the green glitch
+  secret cards get a rework; Pain Man stays or gets a slight rework.
