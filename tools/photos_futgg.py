@@ -8,7 +8,10 @@ For every real person: search fut.gg by name, open his player page and take
   * dyn   = a special item image  <year>-<bigId>.*.webp (celebration / action cutout) -> 3d/assets/players/dyn/<person>.webp (300x375)
 Newest game first (2027, then 2026). Nothing found -> no file (drawn face). Polite: ~1 request / second.
 
-  python3 tools/photos_futgg.py [--limit N] [--only slug,slug]
+  python3 tools/photos_futgg.py [--limit N] [--only slug,slug] [--extra tools/futgg_people.json]
+
+--extra: a JSON list [{person, name, eaId, path}] (written by tools/fetch_futgg_players.py: every person of the fut.gg card
+import). People in it are added to the game's own list and, having a known fut.gg path, are fetched without a search.
 """
 import argparse, io, json, os, re, subprocess, sys, time, unicodedata, urllib.parse, urllib.request
 sys.path.insert(0, os.path.dirname(__file__))
@@ -151,9 +154,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--only', default='')
+    ap.add_argument('--extra', default='', help='JSON list of extra people [{person, name, eaId, path}] (tools/futgg_people.json)')
     a = ap.parse_args()
     people = json.loads(subprocess.run(['node', os.path.join(F.ROOT, 'tools', 'list_real_people.mjs')], check=True,
                                        capture_output=True, text=True, cwd=F.ROOT).stdout)
+    known = {}
+    if a.extra:
+        extra = json.load(open(a.extra if os.path.isabs(a.extra) else os.path.join(F.ROOT, a.extra), encoding='utf-8'))
+        known = {e['person']: e for e in extra}
+        have = {p['person'] for p in people}
+        people += [{'person': e['person'], 'name': e['name'], 'nat': e.get('nat', ''), 'icon': e.get('kind') == 'i'} for e in extra if e['person'] not in have]
     if a.only:
         keep = set(a.only.split(',')); people = [p for p in people if p['person'] in keep]
     if a.limit:
@@ -164,7 +174,8 @@ def main():
         k = p['person']
         name = F.ALIASES.get(k) or F.ALIASES.get(p['name']) or p['name']
         try:
-            hit = find_player(name)
+            e = known.get(k)
+            hit = (e['path'], str(e['eaId'])) if e and e.get('path') and e.get('eaId') else find_player(name)
             if not hit:
                 why[k] = 'not found on fut.gg'; continue
             base, dyn = pictures(*hit)
