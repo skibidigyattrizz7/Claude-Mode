@@ -55,6 +55,10 @@ function backgroundPane(overlay) {
 }
 /** Runs only AFTER the cursed grid intercepted the first click and broke its buttons. */
 export function playVinsonPackCollapse(stage,{onExit,reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches}={}) {
+  if(!document.querySelector('link[data-vinson-pack-collapse]')) {
+    const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('../../../css/vinsonpackcollapse.css',import.meta.url).href;
+    css.dataset.vinsonPackCollapse='1';document.head.append(css);
+  }
   const overlay=stage.closest('.pm-po') || stage;
   const layer=div('vinson-pack-collapse');layer.setAttribute('aria-hidden','true');layer.inert=true;
   const actor=div('vinson-punch-actor'),portrait=new Image();portrait.src=world;portrait.alt='';actor.append(portrait);
@@ -65,7 +69,7 @@ export function playVinsonPackCollapse(stage,{onExit,reducedMotion=globalThis.ma
   hand.append(svg('path',{d:'M105 500 L98 315 C84 270 57 253 47 218 C42 196 58 183 70 197 L113 248 L109 108 C109 82 133 78 139 105 L150 212 L154 55 C154 29 181 29 187 54 L192 209 L210 78 C214 51 241 59 240 83 L231 218 L252 130 C258 105 281 113 277 141 L263 275 C306 237 331 236 341 254 C350 274 316 290 293 327 L267 387 L282 500 Z'}));
   const black=div('vinson-punch-black');layer.append(actor,pane,cracks,hand,black);document.body.append(layer);
   let closed=false,audio=null;const timers=new Set(),dust=new Set();
-  const volume=clamp(Number(load('meta.settings',{}).volume ?? 70)/100,0,1);
+  const volume=clamp(Number((load('meta.settings',{})||{}).volume ?? 70)/100,0,1);
   try { const Audio=window.AudioContext||window.webkitAudioContext;if(volume&&Audio){audio=new Audio();void audio.resume().catch(()=>{});} } catch {}
   function thud(hit) {
     if(!audio||audio.state!=='running'||document.hidden)return;
