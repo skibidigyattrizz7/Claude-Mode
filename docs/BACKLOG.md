@@ -237,5 +237,14 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   and a playable cinematic Fight Suppression encounter with Patel / World-Ruler Vinson / Phonk Mode Vinson / Captain Israel,
   unique victory reward cards and permanent account curse immunity. Await owner go-ahead and verified assets.
   Planning/help/skills request posted to Claude in docs/AI_DIRECT.md on chatgpt/vinson-battle-planning; no code changed.
+
+- Sep 30 (owner): Vinson pull can lag/stick on Send to club; mods sometimes miss the curse animation; quick selling
+  must never prevent the curse. Fixed on chatgpt/vinson-pack-guard: register the curse as soon as the pack rolls
+  Vinson, keep the original pack controls usable so assignment/Close completes, retain the saved curse on RPC failure.
+  Quick selling/resolving does not clear the curse; mods remain affected and only owner is exempt.
 - Oct 1 (owner, LATER): Icons in promos must get their OWN Icon version of each promo (EA style: unique red-and-gold /
   Icon variant designs), never the normal promo design; base Icons never look silver or gold.
+
+- IN PROGRESS (Sep 30, owner go-ahead): Vinson animations / Fight Suppression on chatgpt/vinson-animation.
+  Scope: existing Doom/aftermath/chains, playable two-stage cinematic battle, isolated reward cards; Claude asked
+  for server battle nonce/win/immunity/idempotent claim support in AI_DIRECT.
