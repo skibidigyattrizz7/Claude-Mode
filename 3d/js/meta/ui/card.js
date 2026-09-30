@@ -149,6 +149,16 @@ export function cardClasses(p) {
  */
 const FUT_READY = new Set();
 const FUT_LOADING = new Map();
+let futSheet = null;
+function futReadyRule(key) {
+  try {
+    if (!futSheet) { const st = document.createElement('style'); st.id = 'fut-ready-rules'; document.head.appendChild(st); futSheet = st.sheet; }
+    const sel = `.pm-card.has-fut[data-design="${String(key).replace(/[^A-Za-z0-9_-]/g, '')}"]`;
+    futSheet.insertRule(`${sel} { background: var(--fut) 0 0/100% 100% no-repeat; }`, futSheet.cssRules.length);
+    futSheet.insertRule(`${sel}::before { display: none; }`, futSheet.cssRules.length);
+  } catch { /* old browser: cards keep their placeholder-free class path */ }
+  for (const c of document.querySelectorAll(`.pm-card.has-fut[data-design="${String(key).replace(/[^A-Za-z0-9_-]/g, '')}"]`)) c.classList.add('fut-ready');
+}
 
 export function playerCard(p, opts = {}) {
   const size = opts.size || 'sm';
@@ -212,14 +222,16 @@ export function playerCard(p, opts = {}) {
     // a plain card-shaped placeholder; fut-ready swaps in the art the moment it has loaded (instantly once cached)
     if (FUT_READY.has(url)) el.classList.add('fut-ready');
     else {
-      let img = FUT_LOADING.get(url);
-      if (!img) {
-        img = new Image(); img.decoding = 'async'; FUT_LOADING.set(url, img);
-        img.addEventListener('load', () => { FUT_READY.add(url); FUT_LOADING.delete(url); }, { once: true });
+      if (!FUT_LOADING.has(url)) {
+        const img = new Image(); img.decoding = 'async'; FUT_LOADING.set(url, img);
+        // done (or failed): mark EVERY card with this design, including ones re-rendered or copied since, via one CSS
+        // rule, so no card can stay stuck on the placeholder
+        const done = () => { FUT_READY.add(url); FUT_LOADING.delete(url); futReadyRule(key); };
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
         img.src = url;
+        if (img.complete && img.naturalWidth) done();
       }
-      const ready = () => el.classList.add('fut-ready');
-      if (img.complete && img.naturalWidth) { FUT_READY.add(url); ready(); } else img.addEventListener('load', ready, { once: true });
     }
     // ink per place: [rating column, name + stats band] (tools/card_ink.py); the design's own ink if unlisted
     const [inkTop, inkBand] = CARD_INK[key] || [design.ink, design.ink];
