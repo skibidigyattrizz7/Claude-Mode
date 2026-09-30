@@ -33,6 +33,8 @@ import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
 import { cursedPack, isOwner, enforceLock } from '../core/vinson.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
+import { byDisplayRank, secretFirst } from '../core/rank.js';
+import { managerCard } from './managercard.js';
 
 const persist = (app) => app.saveUT();
 const userClubObj = (s) => ({ id: 'UT-' + s.short, name: s.clubName, short: s.short, colors: { primary: s.kit.primary, secondary: s.kit.secondary }, badge: s.badge || null });
@@ -338,7 +340,7 @@ function squadView() {
           OBJ.setFlag(s, 'squadEdited'); persist(app);
         },
         toolbar: [autoBtn, autoSettingsBtn], chemToggle: true,
-        manager: { value: s.squad.manager || null, onChange: (m) => { s.squad.manager = m; persist(app); } },
+        manager: { value: s.squad.manager || null, owned: () => s.managers || [], onChange: (m) => { UT.setManager(s, m); persist(app); } },
         chemStyle: { value: s.squad.chemStyle || 'classic', onChange: (v) => { s.squad.chemStyle = v; persist(app); } },
       });
       add(main, ed.el);
@@ -408,8 +410,8 @@ function clubView() {
           && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group)
           && (!f.tier || (f.tier === 'special' ? !!p.special : f.tier === 'lotg' ? p.special === 'lotg' : f.tier === 'rare' ? p.rare : p.tier === f.tier && !p.special))
           && (!f.league || p.league === f.league));
-        const sorters = { ovr: (a, b) => b.ovr - a.ovr, name: (a, b) => a.name.localeCompare(b.name), pos: (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr, value: (a, b) => utPrice(b) - utPrice(a), nation: (a, b) => a.nat.localeCompare(b.nat) || b.ovr - a.ovr, league: (a, b) => a.league.localeCompare(b.league) || b.ovr - a.ovr };
-        list.sort(sorters[f.sort]);
+        const sorters = { ovr: byDisplayRank, name: (a, b) => a.name.localeCompare(b.name), pos: (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || b.ovr - a.ovr, value: (a, b) => utPrice(b) - utPrice(a), nation: (a, b) => a.nat.localeCompare(b.nat) || b.ovr - a.ovr, league: (a, b) => a.league.localeCompare(b.league) || b.ovr - a.ovr };
+        list.sort((a, b) => secretFirst(a, b) || sorters[f.sort](a, b)); // Secret cards first whatever the sort
         count.textContent = `${list.length} of ${s.club.length} players`;
         const inSquad = new Set(s.squad.slots.concat(s.squad.bench).filter(Boolean));
         const xi = new Set(s.squad.slots.filter(Boolean)), untr = new Set(s.untradeable || []);
@@ -605,11 +607,20 @@ function storeView() {
       const cfg = getConfig();
       const onSale = UT.storePacks();
       const promoPacks = onSale.filter((p) => p.promo);
-      const store = !cfg.packsInShop ? h('section', { class: 'pm-section' }, h('div', { class: 'pm-empty-state' }, h('p', null, 'Packs are temporarily disabled in the shop by the owner.'))) : h('section', { class: 'pm-section' },
-        promoPacks.length ? h('h3', { class: 'pm-h' }, 'Promo packs', h('span', { class: 'pm-chip on' }, 'Live')) : null,
-        promoPacks.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, promoPacks.map((pack) => storeItem(pack))) : null,
-        h('h3', { class: 'pm-h' }, 'Buy packs'),
-        h('div', { class: 'pm-storegrid' }, onSale.filter((p) => !p.promo).map((pack) => storeItem(pack))));
+      const normalPacks = onSale.filter((p) => !p.promo);
+      // Store sections (owner, Sep 30): Normal packs · Promo packs · Managers; the chosen tab is remembered for the visit
+      const tabs = [['normal', 'Normal packs', normalPacks.length], ['promo', 'Promo packs', promoPacks.length], ['managers', 'Managers', UT.REAL_MANAGERS.length]];
+      if (!tabs.some(([k]) => k === app.storeTab)) app.storeTab = 'normal';
+      const tabBar = h('div', { class: 'pm-storetabs', role: 'tablist', 'aria-label': 'Store sections' }, tabs.map(([k, label, n]) => h('button', {
+        class: `pm-chip ${app.storeTab === k ? 'on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(app.storeTab === k),
+        onclick: () => { app.storeTab = k; app.refresh(); },
+      }, label, h('small', null, String(n)))));
+      let sectionBody;
+      if (app.storeTab === 'managers') sectionBody = managerShop(app);
+      else if (!cfg.packsInShop) sectionBody = h('div', { class: 'pm-empty-state' }, h('p', null, 'Packs are temporarily disabled in the shop by the owner.'));
+      else if (app.storeTab === 'promo') sectionBody = promoPacks.length ? h('div', { class: 'pm-storegrid pm-storegrid--promo' }, promoPacks.map((pack) => storeItem(pack))) : h('p', { class: 'pm-dim' }, 'No promo packs on sale right now.');
+      else sectionBody = h('div', { class: 'pm-storegrid' }, normalPacks.map((pack) => storeItem(pack)));
+      const store = h('section', { class: 'pm-section' }, tabBar, sectionBody);
       async function buyPack(pack) {
         const price = effPrice(pack.price);
         if (!(await confirmBox(app.root, 'Buy pack', `Buy ${pack.name} for ${fmtNum(price)} coins?`, 'Buy & open'))) return;
@@ -634,6 +645,38 @@ function storeView() {
       add(main, utTabs(app, 'store'), M.picksRow(app), show, mine, store, h('p', { class: 'pm-hint' }, 'Coins are earned from matches, objectives, SBCs and selling players. There are no real-money purchases.'));
     },
   };
+}
+
+/** Store > Managers (owner, Sep 30): the Manager Pack (one real manager, duplicates refund coins) + the collection. */
+function managerShop(app) {
+  const s = app.ut;
+  const owned = new Set(s.managers || []);
+  const MP = UT.MANAGER_PACK;
+  const price = effPrice(MP.price);
+  const buy = async () => {
+    if (!(await confirmBox(app.root, 'Buy Manager Pack', `Buy a Manager Pack for ${fmtNum(price)} coins?`, 'Buy & open'))) return;
+    if (s.coins < price) return;
+    s.coins -= price;
+    const r = UT.openManagerPack(s);
+    persist(app); app.renderTop(app.stack[app.stack.length - 1]);
+    const m = UT.getManager(r.id);
+    modal(app.root, {
+      title: r.dup ? 'Duplicate manager' : 'New manager!',
+      body: h('div', { class: 'pm-mgrreveal' }, managerCard(m),
+        h('p', { class: 'pm-dim' }, r.dup ? `You already had ${m.name}: ${fmtNum(r.refund)} coins refunded.` : `${m.name} joined your club. Assign him on the Squad screen (Manager slot).`)),
+      actions: [{ label: 'Great', primary: true }],
+      onClose: () => app.refresh(),
+    });
+  };
+  return h('div', { class: 'pm-mgrshop' },
+    h('div', { class: 'pm-mgrshop-pack' },
+      managerCard({ name: 'Manager Pack', nat: '', league: null }, { locked: true }),
+      h('h4', null, MP.name), h('p', { class: 'pm-dim' }, MP.desc),
+      h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(price)),
+      h('button', { class: 'pm-btn pm-btn--primary', disabled: s.coins < price, onclick: buy }, 'Buy & open')),
+    h('div', null,
+      h('h3', { class: 'pm-h' }, `Your managers (${owned.size}/${UT.REAL_MANAGERS.length})`),
+      h('div', { class: 'pm-mgrgrid' }, UT.REAL_MANAGERS.map((m) => managerCard(m, { size: 'sm', locked: !owned.has(m.id) })))));
 }
 
 /** Home Store tile: three packs fanned like the Squad tile's cards; every 3 s the fan turns to the next pack

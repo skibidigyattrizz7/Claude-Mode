@@ -8,12 +8,15 @@
 import { h, clear, select, add, modal, frag, infNodes } from './dom.js';
 import { playerCard, emptyCard, infLabel } from './card.js';
 import { personOf } from '../core/players.js';
+import { getManager } from '../core/managers.js';
+import { managerCard } from './managercard.js';
 import { flagSVG } from './art.js';
 import { FORMATIONS, FORMATION_NAMES, positionFit, effectiveOvr, playerPositions } from '../core/formations.js';
 import { calcChemistryStyled, CHEM_STYLES } from '../core/chemistry.js';
 import { teamRating } from '../core/chemistry.js';
 import { POS_GROUP, NATION_BY_CODE, NATIONS, LEAGUES, leagueName } from '../core/data.js';
 import { icon } from './icons.js';
+import { byDisplayRank, secretFirst } from '../core/rank.js';
 
 const px = (x) => 5 + x * 0.9;
 const py = (y) => 2 + (96 - y) * 1.03;
@@ -108,10 +111,11 @@ export function squadEditor(opts) {
     btn.setAttribute('aria-label', p ? `${pos}: ${p.name} ${p.hell === true ? 'unknown rating' : p.glitch === true ? 'infinity' : p.cursed === true ? 'minus infinity' : p.ovr}` : `Empty ${pos} slot`);
     btn.draggable = !!p;
     if (p) {
-      const card = playerCard(p, { size: 'xs', pos: area === 'slot' ? pos : p.pos, extra: opts.decorate ? opts.decorate(p) : null });
+      // starters show the full card face with the six stats (owner, Sep 30: "can't see the players' stats"); the bench stays compact
+      const card = playerCard(p, { size: area === 'slot' ? 'sm' : 'xs', pos: area === 'slot' ? pos : p.pos, extra: opts.decorate ? opts.decorate(p) : null });
       if (area === 'slot' && positionFit(p, pos) === 0) card.classList.add('is-oop');
       btn.appendChild(card);
-    } else btn.appendChild(emptyCard(pos));
+    } else btn.appendChild(emptyCard(pos, area === 'slot' ? 'sm' : 'xs'));
   }
 
   /** Chemistry is team-wide: patch every slot's pip + the link-line colours without rebuilding cards. */
@@ -153,7 +157,7 @@ export function squadEditor(opts) {
 
   /** Recompute chemistry + patch the affected/whole-team visuals; far cheaper than a full render(). */
   function afterMove(touched) {
-    const chem = calcChemistryStyled(st.formation, st.slots.map(player), st.chemStyle);
+    const chem = calcChemistryStyled(st.formation, st.slots.map(player), st.chemStyle, typeof st.manager === 'string' ? getManager(st.manager) : null);
     for (const t of touched) patchSlotCard(t.area, t.idx);
     patchChemistry(chem);
     patchInfo(chem);
@@ -231,30 +235,42 @@ export function squadEditor(opts) {
     });
   }
 
+  // st.manager: a manager id (real managers you packed, see Store > Managers) or a custom {name, nat, league}
+  const mgrObj = () => (typeof st.manager === 'string' ? getManager(st.manager) : st.manager);
   function renderManager() {
     if (!managerEl) return;
     clear(managerEl);
-    const m = st.manager;
+    const m = mgrObj();
     add(managerEl, h('div', { class: 'pm-sq-label' }, 'Manager'),
       h('button', { class: `pm-mgrslot ${m ? '' : 'is-empty'}`, onclick: () => openManagerPicker() },
-        m ? [h('div', { class: 'pm-mgr-flag', html: flagSVG(m.nat, 'pc-flag') }), h('div', { class: 'pm-mgr-info' }, h('b', null, m.name), h('small', { class: 'pm-dim' }, `${NATION_BY_CODE[m.nat] ? NATION_BY_CODE[m.nat].name : m.nat} · ${leagueName(m.league)}`))]
-          : [icon('admin'), h('span', null, 'Assign a manager')]));
+        m && m.real ? [managerCard(m, { size: 'sm' }), h('div', { class: 'pm-mgr-info' }, h('b', null, m.name), h('small', { class: 'pm-dim' }, 'Boosts chemistry for players from his nation or league'))]
+          : m ? [h('div', { class: 'pm-mgr-flag', html: flagSVG(m.nat, 'pc-flag') }), h('div', { class: 'pm-mgr-info' }, h('b', null, m.name), h('small', { class: 'pm-dim' }, `${NATION_BY_CODE[m.nat] ? NATION_BY_CODE[m.nat].name : m.nat} · ${leagueName(m.league)}`))]
+            : [icon('admin'), h('span', null, 'Assign a manager')]));
   }
   function openManagerPicker() {
     const modalRoot = root.closest('.pm-root') || document.body;
-    const nameInp = h('input', { class: 'pm-input', placeholder: 'Manager name', value: st.manager ? st.manager.name : '', maxlength: '22' });
-    const natSel = select(NATIONS.slice(0, 60).map((n) => [n.code, n.name]), st.manager ? st.manager.nat : 'ENG', () => {}, { 'aria-label': 'Manager nation' });
-    const leagueSel = select(LEAGUES.map((l) => [l.id, l.name]), st.manager ? st.manager.league : LEAGUES[0].id, () => {}, { 'aria-label': 'Preferred league' });
-    modal(modalRoot, {
-      title: 'Club manager', body: h('div', { class: 'pm-mgr-form' },
+    const cur = mgrObj();
+    const custom = cur && !cur.real ? cur : null;
+    const nameInp = h('input', { class: 'pm-input', placeholder: 'Manager name', value: custom ? custom.name : '', maxlength: '22' });
+    const natSel = select(NATIONS.slice(0, 60).map((n) => [n.code, n.name]), custom ? custom.nat : 'ENG', () => {}, { 'aria-label': 'Manager nation' });
+    const leagueSel = select(LEAGUES.map((l) => [l.id, l.name]), custom ? custom.league : LEAGUES[0].id, () => {}, { 'aria-label': 'Preferred league' });
+    const owned = (opts.manager && typeof opts.manager.owned === 'function' ? opts.manager.owned() : []).map(getManager).filter(Boolean);
+    let close = null;
+    const pickReal = (m) => { st.manager = m.id; renderManager(); afterMove([]); if (opts.manager) opts.manager.onChange(m.id); if (close) close(); };
+    close = modal(modalRoot, {
+      title: 'Club manager', wide: owned.length > 0, body: h('div', { class: 'pm-mgr-form' },
+        owned.length ? h('div', { class: 'pm-sq-label' }, `Your managers (${owned.length})`) : null,
+        owned.length ? h('div', { class: 'pm-mgrgrid' }, owned.map((m) => h('button', { class: `pm-mgrpick ${cur && cur.id === m.id ? 'is-on' : ''}`, type: 'button', onclick: () => pickReal(m), 'aria-label': `Assign ${m.name}` }, managerCard(m, { size: 'sm' }))))
+          : h('p', { class: 'pm-dim' }, 'Pack real managers from Store > Managers. They boost chemistry for players from their nation or league.'),
+        h('div', { class: 'pm-sq-label' }, 'Or a custom manager'),
         h('p', { class: 'pm-dim' }, 'Cosmetic club identity: shown on your Squad and Club screens.'),
         nameInp, natSel, leagueSel),
       actions: [
-        st.manager ? { label: 'Remove', danger: true, onClick: () => { st.manager = null; renderManager(); if (opts.manager) opts.manager.onChange(null); } } : null,
+        st.manager ? { label: 'Remove', danger: true, onClick: () => { st.manager = null; renderManager(); afterMove([]); if (opts.manager) opts.manager.onChange(null); } } : null,
         { label: 'Save', primary: true, onClick: () => {
           const name = nameInp.value.trim(); if (!name) return false;
           st.manager = { name, nat: natSel.value, league: leagueSel.value };
-          renderManager();
+          renderManager(); afterMove([]);
           if (opts.manager) opts.manager.onChange(st.manager);
         } },
       ].filter(Boolean),
@@ -297,9 +313,9 @@ export function squadEditor(opts) {
       let pool = opts.pool().filter((p) => !taken.has(p.id) && !taken.has('person:' + personOf(p))
         && (group === 'ALL' || POS_GROUP[p.pos] === group) && (!q || p.name.toLowerCase().includes(q)));
       const sp = slotPos || null;
-      if (st.sort === 'ovr') pool.sort((a, b) => b.ovr - a.ovr);
-      else if (st.sort === 'fit' && sp) pool.sort((a, b) => effectiveOvr(b, sp) - effectiveOvr(a, sp));
-      else pool.sort((a, b) => a.name.localeCompare(b.name));
+      if (st.sort === 'ovr') pool.sort(byDisplayRank);
+      else if (st.sort === 'fit' && sp) pool.sort((a, b) => secretFirst(a, b) || effectiveOvr(b, sp) - effectiveOvr(a, sp));
+      else pool.sort((a, b) => secretFirst(a, b) || a.name.localeCompare(b.name));
       pool = pool.slice(0, 80);
       if (!pool.length) list.appendChild(h('p', { class: 'pm-empty' }, 'No players match.'));
       for (const p of pool) {
@@ -382,7 +398,7 @@ export function squadEditor(opts) {
     renderPitch();
     renderBench();
     renderManager();
-    const chem = calcChemistryStyled(st.formation, st.slots.map(player), st.chemStyle);
+    const chem = calcChemistryStyled(st.formation, st.slots.map(player), st.chemStyle, typeof st.manager === 'string' ? getManager(st.manager) : null);
     patchChemistry(chem);
     patchInfo(chem);
     renderPicker();

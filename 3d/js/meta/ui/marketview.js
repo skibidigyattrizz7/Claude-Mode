@@ -9,6 +9,7 @@ import { getPlayer, quickSellValue } from '../core/players.js';
 import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, POSITIONS } from '../core/data.js';
 import { playerModal, sellModal, utTabs, cardMeta, tokenChip } from './utview.js';
 import { setFlag } from '../core/objectives.js';
+import { byDisplayRank } from '../core/rank.js';
 
 const persist = (app) => app.saveUT();
 const isTop = (app, view) => app.stack[app.stack.length - 1] === view;
@@ -262,7 +263,7 @@ function safeCard(p, onClick) {
 /** Pick a tradeable club card to list. */
 function listPickerModal(app, done) {
   const s = app.ut;
-  const cards = UT.clubPlayers(s).filter((p) => PM.isTradeable(s, p.id)).sort((a, b) => b.ovr - a.ovr);
+  const cards = UT.clubPlayers(s).filter((p) => PM.isTradeable(s, p.id)).sort(byDisplayRank);
   let close = null;
   const grid = h('div', { class: 'pm-cardgrid pm-pickgrid' }, cards.length ? cards.slice(0, 80).map((p) => playerCard(p, { size: 'sm', onClick: () => { close(); setTimeout(() => playerMarketListModal(app, p, done), 0); } }))
     : h('p', { class: 'pm-empty' }, 'No tradeable cards in your club.'));

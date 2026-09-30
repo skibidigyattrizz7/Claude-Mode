@@ -15,8 +15,8 @@ import { restoreCustomCards } from './customreg.js';
 import { SECRET_CARD_ID, SECRET_PACK_ID, SECRET_ODDS, SECRET_VERSIONS, secretCard, secretCards } from './secretcard.js';
 import { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX, ADMIN_VAULT_TOP } from './adminvault.js';
 export { ADMIN_VAULT_PACK_ID, ADMIN_VAULT_SECRET_ODDS, ADMIN_VAULT_SIZE, ADMIN_VAULT_MIX } from './adminvault.js';
-import { MANAGERS, getManager } from './managers.js';
-export { MANAGERS, getManager } from './managers.js';
+import { MANAGERS, REAL_MANAGERS, getManager, isRealManager } from './managers.js';
+export { MANAGERS, REAL_MANAGERS, getManager, isRealManager } from './managers.js';
 
 export const UT_KEY = 'ut';
 
@@ -145,6 +145,26 @@ export function packAtLeastOne(pack, cat) {
 // own guaranteed slot already handles that.
 const PROMO_DROP_CATS = new Set(['goldRare', 'gold83', 'gold86', 'lotg']);
 const PROMO_DROP_CHANCE = 0.015;
+// Owner (Sep 30): "packs are beyond OP, I can pack a 99 very easily". Cards used to be picked uniformly inside a
+// category, so a 99 was as likely as the weakest card in a promo / Legend pool. Now every rating point above the
+// pool's lowest makes a card RATING_DECAY times less likely: in an 86–99 pool a 99 is ~0.1% as likely as an 86,
+// in a 96–98 pool (TOTY) a 98 is ~36% as likely as a 96. Weights are cached per pool array.
+export const RATING_DECAY = 0.6;
+const _poolWeights = new WeakMap();
+export function pickByRating(pool, rng) {
+  let cw = _poolWeights.get(pool);
+  if (!cw) {
+    let min = Infinity;
+    for (const p of pool) if (p.ovr < min) min = p.ovr;
+    let acc = 0;
+    cw = pool.map((p) => (acc += Math.pow(RATING_DECAY, Math.max(0, Math.min(40, p.ovr - min)))));
+    _poolWeights.set(pool, cw);
+  }
+  const r = rng.next() * cw[cw.length - 1];
+  let lo = 0, hi = cw.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (cw[mid] > r) hi = mid; else lo = mid + 1; }
+  return pool[lo];
+}
 export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
   const pack = PACK_BY_ID[packId];
   const pools = categoryPools();
@@ -157,8 +177,8 @@ export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
       let cat = rng.weighted(Object.entries(slot.odds));
       let pool = pools[cat] && pools[cat].length ? pools[cat] : pools.gold;
       if (promoDrop.length && PROMO_DROP_CATS.has(cat) && rng.chance(PROMO_DROP_CHANCE)) pool = promoDrop;
-      let p = rng.pick(pool);
-      for (let t = 0; t < 12 && seen.has(p.id); t++) p = rng.pick(pool);
+      let p = pickByRating(pool, rng);
+      for (let t = 0; t < 12 && seen.has(p.id); t++) p = pickByRating(pool, rng);
       if (pool === promoDrop) cat = `promo_${p.special}`;
       items.push({ pid: p.id, cat, dup: ownedSet.has(p.id) || seen.has(p.id) });
       seen.add(p.id);
@@ -236,8 +256,26 @@ export function defaultSquad() {
 /** Set (or clear with a falsy id) the squad's Manager (core/managers.js) — validated so `state.squad.manager`
  * is always either a real manager id or null. Contributes chemistry in both styles (see chemistry.js). */
 export function setManager(state, id) {
-  state.squad.manager = (id && getManager(id)) ? id : null;
+  // a manager id (fictional, or a real one this club owns), or the cosmetic custom manager {name, nat, league}
+  if (id && typeof id === 'object' && typeof id.name === 'string' && id.name.trim()) {
+    state.squad.manager = { name: id.name.trim().slice(0, 22), nat: String(id.nat || '').slice(0, 4), league: String(id.league || '').slice(0, 8) };
+  } else {
+    const ok = typeof id === 'string' && getManager(id) && (!isRealManager(id) || (state.managers || []).includes(id));
+    state.squad.manager = ok ? id : null;
+  }
   return state.squad.manager;
+}
+
+// ---------- Manager Pack (owner, Sep 30: real, packable managers) ----------
+export const MANAGER_PACK = { id: 'managers', name: 'Manager Pack', price: 40000, refund: 10000, desc: '1 real manager. A manager you already own refunds 10,000 coins.' };
+/** Buy + open a Manager Pack (caller has already taken the coins). -> { id, dup, refund } */
+export function openManagerPack(state, rng = new Rng()) {
+  state.managers = Array.isArray(state.managers) ? state.managers : [];
+  const m = rng.pick(REAL_MANAGERS);
+  const dup = state.managers.includes(m.id);
+  if (dup) state.coins = (Number(state.coins) || 0) + MANAGER_PACK.refund;
+  else state.managers.push(m.id);
+  return { id: m.id, dup, refund: dup ? MANAGER_PACK.refund : 0 };
 }
 
 export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primary = '#19F5A4', secondary = '#0B0F1A' } = {}, rng = new Rng()) {
@@ -310,6 +348,7 @@ export function migrateUT(state) {
   const valid = (id) => (id && state.club.includes(id) ? id : null);
   state.squad.slots = Array.from({ length: 11 }, (_, i) => valid((state.squad.slots || [])[i]));
   state.squad.bench = Array.from({ length: 7 }, (_, i) => valid((state.squad.bench || [])[i]));
+  state.managers = Array.isArray(state.managers) ? [...new Set(state.managers.filter((id) => isRealManager(id)))] : [];
   setManager(state, state.squad.manager); // sanitise (old/foreign save, or a manager id that no longer exists)
   dedupeSquad(state); // squad rules: no two cards of the same base player (also fixes pre-existing saves)
   state.v = UT_VERSION;

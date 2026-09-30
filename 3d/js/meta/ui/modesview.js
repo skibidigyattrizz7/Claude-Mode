@@ -22,6 +22,7 @@ import { FORMATIONS, FORMATION_NAMES } from '../core/formations.js';
 import { calcChemistry, teamRating } from '../core/chemistry.js';
 import { resolveKitClash, gkKitFor, reseat } from '../core/teams.js';
 import { PLAYSTYLES } from '../core/physique.js';
+import { byDisplayRank } from '../core/rank.js';
 
 const persist = (app) => app.saveUT();
 const DIFF_LABEL = { amateur: 'Amateur', pro: 'Professional', world: 'World Class', legendary: 'Legendary' };
@@ -259,7 +260,7 @@ function reqLines(evo) {
 }
 function chooseEvoPlayer(app, evo, elig) {
   let close = null;
-  const grid = h('div', { class: 'pm-cardgrid pm-pickgrid' }, elig.sort((a, b) => b.ovr - a.ovr).map((p) => playerCard(p, {
+  const grid = h('div', { class: 'pm-cardgrid pm-pickgrid' }, elig.sort(byDisplayRank).map((p) => playerCard(p, {
     size: 'sm', onClick: () => {
       const r = EVO.startEvolution(app.ut, evo.id, p.id);
       close();

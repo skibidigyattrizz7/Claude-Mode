@@ -15,6 +15,7 @@ import { packArt } from './packopen_common.js';
 import { icon } from './icons.js';
 import * as X from './adminextra.js';
 import * as OP from './ownerpanel.js';
+import { byDisplayRank } from '../core/rank.js';
 
 const LEVEL_NAME = { super: 'Owner Access', full: 'Admin', mod: 'Moderator', temp: 'Temporary admin' };
 const RANK = AA.ADMIN_RANK;
@@ -216,7 +217,7 @@ export function adminView() {
         const q = st.q.trim().toLowerCase();
         if (q.length < 2) { results.appendChild(h('p', { class: 'pm-dim' }, 'Type at least 2 letters (searches every card, including Legends of the Game).')); return; }
         const db = getDB();
-        const hits = db.all.filter((p) => p.name.toLowerCase().includes(q) || p.last.toLowerCase().includes(q)).sort((a, b) => b.ovr - a.ovr).slice(0, 24);
+        const hits = db.all.filter((p) => p.name.toLowerCase().includes(q) || p.last.toLowerCase().includes(q)).sort(byDisplayRank).slice(0, 24);
         if (!hits.length) results.appendChild(h('p', { class: 'pm-dim' }, 'No players found.'));
         for (const p of hits) {
           const owned = s && s.club.includes(p.id);

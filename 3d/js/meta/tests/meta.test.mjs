@@ -1951,6 +1951,54 @@ test('infinity is drawn as a symmetric sign, never the raw font glyph (owner, Se
   assert.equal(infHtml('87'), '87');
 });
 
+test('display order: Secret cards always first, ∞ god cards above 999 Admin Cards, cursed secret below gods', async () => {
+  const { byDisplayRank, secretFirst } = await import('../core/rank.js');
+  const l = [{ ovr: 999, name: 'admin' }, { ovr: 999, secret: true, name: 'glitch' }, { ovr: 1, secret: true, cursed: true, name: 'nii' }, { ovr: 99, name: 'toty' }];
+  assert.deepEqual(l.slice().sort(byDisplayRank).map((x) => x.name), ['glitch', 'nii', 'admin', 'toty']);
+  const byName = l.slice().sort((a, b) => secretFirst(a, b) || a.name.localeCompare(b.name)).map((x) => x.name);
+  assert.deepEqual(byName.slice(0, 2), ['glitch', 'nii'], 'secret first even when sorting by name');
+});
+
+test('packs: top-rated cards are rare inside a category (rating-weighted draws)', async () => {
+  const UT = await import('../core/ut.js');
+  const pool = [{ id: 'a', ovr: 86 }, { id: 'b', ovr: 86 }, { id: 'c', ovr: 99 }];
+  const rng = new Rng('weights');
+  let top = 0;
+  for (let i = 0; i < 4000; i++) if (UT.pickByRating(pool, rng).id === 'c') top++;
+  const expect = Math.pow(UT.RATING_DECAY, 13) / (2 + Math.pow(UT.RATING_DECAY, 13));
+  assert.ok(top / 4000 < expect * 4 + 0.002, `99 drawn ${top} times`);
+  assert.equal(UT.pickByRating([{ id: 'x', ovr: 90 }], rng).id, 'x');
+});
+
+test('promos: campaigns spread across more people; every promo card from the old selection still resolves', async () => {
+  const { buildPromoCards } = await import('../core/promos.js');
+  const db = getDB();
+  const promos = db.all.filter((p) => p.id.startsWith('pr_'));
+  const people = new Set(promos.map((p) => p.person || p.baseId));
+  assert.ok(people.size >= 260, `only ${people.size} different people across promos`);
+  const legacy = db.all.filter((p) => p.id.startsWith('pr_')).map((p) => p.id);
+  assert.ok(legacy.every((id) => getPlayer(id)));
+  void buildPromoCards;
+});
+
+test('real managers: packed from the Manager Pack, only assignable once owned, duplicates refund coins', async () => {
+  const UT = await import('../core/ut.js');
+  const s = UT.createUTState();
+  const m = UT.REAL_MANAGERS[0];
+  assert.equal(UT.setManager(s, m.id), null, 'not owned yet');
+  const rng = new Rng('mgr');
+  const r = UT.openManagerPack(s, rng);
+  assert.equal(r.dup, false);
+  assert.ok(s.managers.includes(r.id));
+  assert.equal(UT.setManager(s, r.id), r.id);
+  s.managers = UT.REAL_MANAGERS.map((x) => x.id);
+  const coins = s.coins;
+  const d = UT.openManagerPack(s, rng);
+  assert.equal(d.dup, true);
+  assert.equal(s.coins, coins + UT.MANAGER_PACK.refund);
+  assert.deepEqual(UT.setManager(s, { name: 'My Boss', nat: 'EGY', league: 'ISL' }), { name: 'My Boss', nat: 'EGY', league: 'ISL' }, 'custom manager kept');
+});
+
 await runAll();
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

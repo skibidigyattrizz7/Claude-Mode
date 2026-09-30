@@ -10,6 +10,7 @@ import { POS_GROUP } from '../core/data.js';
 import { PROMO_BY_ID } from '../core/promos.js';
 import { playerModal, openPackFlow, utTabs } from './utview.js';
 import { packArt } from './packopen.js';
+import { byDisplayRank } from '../core/rank.js';
 
 const persist = (app) => app.saveUT();
 const tokenLabel = (n) => `${n} token${n === 1 ? '' : 's'}`;
@@ -56,7 +57,7 @@ function renderSwapCards(body, app) {
     const bench = new Set(s.squad.bench.filter(Boolean));
     const q = f.q.trim().toLowerCase();
     let list = UT.clubPlayers(s).filter((p) => !starters.has(p.id) && !SW.isSwapHidden(p) && (!q || p.name.toLowerCase().includes(q)) && (f.group === 'ALL' || POS_GROUP[p.pos] === f.group));
-    const sorters = { ovr: (a, b) => b.ovr - a.ovr, coins: (a, b) => SW.swapCoinValue(b) - SW.swapCoinValue(a), tokens: (a, b) => SW.swapTokenValue(b) - SW.swapTokenValue(a) };
+    const sorters = { ovr: byDisplayRank, coins: (a, b) => SW.swapCoinValue(b) - SW.swapCoinValue(a), tokens: (a, b) => SW.swapTokenValue(b) - SW.swapTokenValue(a) };
     list.sort(sorters[f.sort]);
     count.textContent = `${list.length} eligible (starting XI and admin cards hidden)`;
     // built a chunk at a time as you scroll (big clubs lagged when every card was built up front)

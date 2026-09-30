@@ -343,7 +343,17 @@ export function getDB() {
 
   // V3 promo campaigns (TOTY, TOTS, Future Stars, Flashback, Birthday, RTTK, Moments) — no shared RNG used.
   const generated = players.filter((p) => !p.real);
-  const promos = buildPromoCards({ stars: real.stars, icons: real.icons, regulars: real.regulars, generated, lateIcons: real.lateIcons || [] }, { adjustOvr, computeOvr, tierOf, marketValue });
+  const promoSrc = { stars: real.stars, icons: real.icons, regulars: real.regulars, generated, lateIcons: real.lateIcons || [] };
+  const promoHelpers = { adjustOvr, computeOvr, tierOf, marketValue };
+  const promos = buildPromoCards(promoSrc, promoHelpers);
+  // Promo cards from the older, less varied selection (before Sep 30) that players may already own: rebuilt on
+  // first request so their ids keep resolving; they are never added to packs, SBCs or the market.
+  let legacy = null;
+  addResolver((id) => {
+    if (typeof id !== 'string' || !id.startsWith('pr_')) return null;
+    if (!legacy) legacy = new Map(buildPromoCards(promoSrc, promoHelpers, undefined, { diverse: false }).map((p) => [p.id, p]));
+    return legacy.get(id) || null;
+  });
   for (const p of promos) specials.push(p);
   // Icons added after launch (realplayers.js LATE_ICON_ROWS) go last, so nothing seeded before them moves.
   for (const p of real.lateIcons || []) specials.push(p);

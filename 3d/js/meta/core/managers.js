@@ -29,11 +29,30 @@ const MANAGER_ROWS = [
   ['mgr_andrade', 'Paulo Andrade', 'BRA', null, null],
 ];
 
-export const MANAGERS = MANAGER_ROWS.map(([id, name, nat, league, club]) => ({ id, name, nat, league, club }));
+// Real managers (owner, Sep 30): collectible, packed from the Store's Manager Pack (ut.js openManagerPack) and only
+// assignable once owned (state.managers). Nation + the in-game league of their best-known club drive chemistry.
+// Photos: assets/managers/<slug>.webp (freely licensed, see assets/managers/credits.json); the UI falls back to
+// initials when a photo is missing. Row: [slug, name, nation, league | null]
+const REAL_MANAGER_ROWS = [
+  ['guardiola', 'Pep Guardiola', 'ESP', 'ISL'], ['ancelotti', 'Carlo Ancelotti', 'ITA', 'SOL'], ['klopp', 'Jürgen Klopp', 'GER', 'ISL'],
+  ['mourinho', 'José Mourinho', 'POR', 'ISL'], ['zidane', 'Zinedine Zidane', 'FRA', 'SOL'], ['simeone', 'Diego Simeone', 'ARG', 'SOL'],
+  ['arteta', 'Mikel Arteta', 'ESP', 'ISL'], ['xabi_alonso', 'Xabi Alonso', 'ESP', 'SOL'], ['flick', 'Hansi Flick', 'GER', 'SOL'],
+  ['luis_enrique', 'Luis Enrique', 'ESP', 'ETO'], ['slot', 'Arne Slot', 'NED', 'ISL'], ['scaloni', 'Lionel Scaloni', 'ARG', null],
+  ['deschamps', 'Didier Deschamps', 'FRA', null], ['southgate', 'Gareth Southgate', 'ENG', null], ['ferguson', 'Alex Ferguson', 'SCO', 'ISL'],
+  ['wenger', 'Arsène Wenger', 'FRA', 'ISL'], ['low', 'Joachim Löw', 'GER', null], ['tuchel', 'Thomas Tuchel', 'GER', null],
+  ['conte', 'Antonio Conte', 'ITA', 'AUR'], ['nagelsmann', 'Julian Nagelsmann', 'GER', null], ['pochettino', 'Mauricio Pochettino', 'ARG', null],
+  ['amorim', 'Rúben Amorim', 'POR', 'ISL'], ['inzaghi', 'Simone Inzaghi', 'ITA', 'AUR'], ['kompany', 'Vincent Kompany', 'BEL', 'MEI'],
+];
+export const REAL_MANAGERS = REAL_MANAGER_ROWS.map(([slug, name, nat, league]) => ({
+  id: `mgr_real_${slug}`, slug, name, nat, league, club: null, real: true, photo: `assets/managers/${slug}.webp`,
+}));
+
+export const MANAGERS = MANAGER_ROWS.map(([id, name, nat, league, club]) => ({ id, name, nat, league, club })).concat(REAL_MANAGERS);
 export const MANAGER_BY_ID = Object.fromEntries(MANAGERS.map((m) => [m.id, m]));
 
 /** A manager by id, or null (also null for a falsy/unknown id — always safe to pass straight through). */
-export function getManager(id) { return (id && MANAGER_BY_ID[id]) || null; }
+export function getManager(id) { return (typeof id === 'string' && MANAGER_BY_ID[id]) || null; }
+export const isRealManager = (id) => !!(getManager(id) && getManager(id).real);
 
 /** True when this manager's nation/league/club lines up with the player's — the one thing both chemistry
  * styles check before adding their manager bonus. */

@@ -13,6 +13,7 @@ import { giftPayloadCard } from '../core/customreg.js';
 import { listCustomCards } from './customcards.js';
 import { save as saveLocal } from '../core/storage.js';
 import { openSendCardModal } from './adminextra.js';
+import { byDisplayRank } from '../core/rank.js';
 
 const RESTRICTIONS = [['market', 'Transfer market'], ['packs', 'Packs'], ['messages', 'Messages'], ['codes', 'Using admin codes'], ['admin', 'Activating admin (all staff powers)']];
 const DURATION_UNITS = [['s', 'sec'], ['m', 'min'], ['h', 'hr'], ['d', 'day']];
@@ -352,7 +353,7 @@ export function playerDetailView(id, summary = null) {
           club.appendChild(h('p', { class: 'pm-dim' }, 'No club saved on the server yet. It uploads the next time this player opens the game. Cards you add now are queued and land in their club when they next check in.'));
         } else {
           const data = d.save.data;
-          const cards = saveCards(data).sort((a, b) => (b.ovr || 0) - (a.ovr || 0));
+          const cards = saveCards(data).sort(byDisplayRank);
           club.appendChild(h('p', { class: 'pm-dim' }, `${data.clubName || 'Club'} · ${cards.length} cards · ${fmtNum(Number(data.coins) || 0)} local coins · saved ${when(d.save.updatedAt)}`));
           const list = h('div', { class: 'pm-admin-results' });
           for (const c of cards) {

@@ -193,8 +193,14 @@ export function rttkLevel(baseId, week = weekNumber(), key = 'rttk') {
  * Build every promo card. src = { stars, icons, regulars, generated }, helpers = { adjustOvr, computeOvr, tierOf, marketValue }.
  * Never consumes a shared RNG (the generated database is unaffected).
  */
-export function buildPromoCards(src, helpers, week = weekNumber()) {
+export function buildPromoCards(src, helpers, week = weekNumber(), { diverse = true } = {}) {
   const { marketValue } = helpers;
+  // Owner (Sep 30): "I shouldn't be seeing the same player in every promo". Every card made counts against that
+  // person; the seeded campaigns below then prefer people with the fewest promo cards so far (`diverse`). The old
+  // selection (`diverse: false`) is still built on demand so cards players already own keep resolving
+  // (players.js legacy promo resolver).
+  const usage = new Map();
+  const used = (b) => usage.get(b.person || b.id) || 0;
   const actives = src.stars.concat(src.regulars).slice().sort(byOvr);
   const icons = src.icons.slice().sort(byOvr);
   const out = [];
@@ -213,6 +219,7 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
     Object.assign(p, extra);
     p.value = marketValue({ ...p, age: Math.min(p.age, 30) }) * 2;
     out.push(p);
+    usage.set(base.person || base.id, used(base) + 1);
     return p;
   };
   const take = (list, want, used) => {
@@ -233,11 +240,14 @@ export function buildPromoCards(src, helpers, week = weekNumber()) {
   const campaign = (id, pool, n, lo, hi, extra = null, pre = null) => {
     const rng = new Rng(`promo-${id}`);
     const seen = new Set();
-    const picks = rng.shuffle(pool.filter((b) => boostTo(id, b, lo, hi) !== null)).filter((b) => {
+    let picks = rng.shuffle(pool.filter((b) => boostTo(id, b, lo, hi) !== null)).filter((b) => {
       const k = b.person || b.id;
       if (seen.has(k)) return false;
       seen.add(k); return true;
-    }).slice(0, n);
+    });
+    // least-used people first (stable, so the seeded shuffle still decides between equals)
+    if (diverse) picks = picks.map((b, i) => [b, i]).sort((x, y) => used(x[0]) - used(y[0]) || x[1] - y[1]).map((x) => x[0]);
+    picks = picks.slice(0, n);
     picks.forEach((b, i) => make(b, id, boostTo(id, b, lo, hi), typeof extra === 'function' ? extra(b, i) : extra || {}, pre));
   };
 
