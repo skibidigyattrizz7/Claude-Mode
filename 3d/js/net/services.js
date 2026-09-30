@@ -223,6 +223,12 @@ export function createOnline(deps) {
     let r = await rpc(fn, { p_id: ident.id, p_secret: ident.secret, ...args });
     if (!r.ok && r.error === 'banned') { setBan(r.ban); return { ok: false, error: 'banned', ban: r.ban ? parseBan(r.ban) : null }; }
     if (r.ok && r.data && r.data.ok === false && r.data.error === 'auth') {
+      // "auth" is also what a DELETED profile answers. Ask the server which case this is before touching anything:
+      // deleted -> forget the identity + tell the app to wipe the local club (never re-register with the old club);
+      // expired session / unknown -> the old behaviour; can't tell (network) -> change nothing.
+      const gone = await profileGone(ident.id);
+      if (gone === true) { identityDeleted(ident.id); return { ok: false, error: 'deleted', message: errorText('deleted') }; }
+      if (gone === null) { avail = { at: -Infinity, value: false, pending: null }; return { ok: false, error: 'offline' }; }
       if (ident.account) { clearAcc(); emitAcc(); return { ok: false, error: 'auth' }; }
       if (requireAccount) return { ok: false, error: 'auth' };
       ident = await identity({ reset: true });
@@ -231,6 +237,29 @@ export function createOnline(deps) {
     }
     if (!r.ok) { avail = { at: -Infinity, value: false, pending: null }; return { ok: false, error: r.error }; }
     return { ok: true, data: r.data };
+  }
+  // ---- deleted profiles (migration 019: identity_state). The owner deleted this profile on the server.
+  const delListeners = new Set();
+  /** true = the server has no such profile; false = it exists (or an old server can't say); null = couldn't tell (network). */
+  async function profileGone(id) {
+    const r = await rpc('identity_state', { p_id: id });
+    if (r.ok && r.data && typeof r.data === 'object' && r.data.ok === true && typeof r.data.exists === 'boolean') return r.data.exists === false;
+    if (!r.ok && ['offline', 'timeout', 'rate_limited'].includes(r.error)) return null;
+    return false;
+  }
+  /** Forget this device's online identity (session, device secret, guest choice, admin token) and tell the app. */
+  function identityDeleted(id) {
+    const a = readAcc();
+    const d = a ? null : readIdent();
+    if ((a ? a.id : d && d.id) !== id) return; // already handled, or the player switched identity meanwhile
+    const username = a ? a.username : null;
+    clearAcc();
+    sdel(storage, KEY); sdel(storage, GUEST_KEY); sdel(volatile, GUEST_KEY); sdel(storage, PENDING_KEY);
+    adminCode = null; sdel(volatile, ADM_KEY);
+    identP = null; nameSyncTried = false;
+    pres.last = null;
+    for (const f of [...delListeners]) { try { f({ id, username }); } catch (e) { console.error('[online] deleted listener failed', e); } }
+    emitAcc();
   }
   const fail = (error, extra) => ({ ok: false, error, message: error === 'banned' && extra && extra.ban ? banText(extra.ban) : errorText(error), ...(extra || {}) });
   const dataOr = (r) => (r.ok ? (r.data && typeof r.data === 'object' ? r.data : { ok: false, error: 'bad_response' }) : { ok: false, error: r.error, ...(r.ban ? { ban: r.ban } : {}) });
@@ -615,7 +644,12 @@ export function createOnline(deps) {
         const r = await rpc('account_status', { p_id: a.id, p_secret: a.token });
         if (!r.ok) { if (r.error !== 'banned') avail = { at: -Infinity, value: false, pending: null }; return { ok: false, online: false, error: r.error, ...online.account.current() }; }
         const d = r.data && typeof r.data === 'object' ? r.data : {};
-        if (d.ok === false && d.error === 'auth') { clearAcc(); emitAcc(); return { ok: true, online: true, expired: true, ...online.account.current() }; }
+        if (d.ok === false && d.error === 'auth') {
+          const gone = await profileGone(a.id);
+          if (gone === null) return { ok: false, online: false, error: 'offline', ...online.account.current() };
+          if (gone === true) { identityDeleted(a.id); return { ok: true, online: true, deleted: true, ...online.account.current() }; }
+          clearAcc(); emitAcc(); return { ok: true, online: true, expired: true, ...online.account.current() };
+        }
         if (d.ok !== true) return { ok: false, online: true, error: 'bad_response', ...online.account.current() };
         writeAcc({ ...a, username: cleanStr(d.username, 16, a.username), role: roleOf(d.role), ban: d.banned === true ? parseBan(d.ban) : null });
         avail = { at: Date.now(), value: true, pending: null };
@@ -729,6 +763,9 @@ export function createOnline(deps) {
       },
       /** "Continue as guest": the device profile keeps working; the account gate is not shown again. */
       guest() { sset(storage, GUEST_KEY, '1'); emitAcc(); },
+      /** fn({ id, username }) once when the server says this device's profile no longer exists (the owner deleted it).
+       *  By then the online identity is already forgotten; the app wipes the local club / progress. -> unsubscribe */
+      onDeleted(fn) { if (typeof fn !== 'function') return () => {}; delListeners.add(fn); return () => delListeners.delete(fn); },
       isGuest() { return !readAcc() && sget(storage, GUEST_KEY) === '1'; },
       onChange(fn) { accListeners.add(fn); return () => accListeners.delete(fn); },
       isReservedName,
@@ -1506,7 +1543,7 @@ const unavailable = () => {
     account: {
       current: () => ({ state: 'none', id: null, username: null, role: null, remember: true, ban: null, pending: null, hasDevice: false }),
       status: async () => ({ ok: false, online: false, error: 'offline', state: 'none' }), signup: f, claim: f, login: f,
-      logout: async () => ({ ok: true }), continueOffline() {}, changeUsername: f, changePassword: f, guest() {}, isGuest: () => false, ackReset: f, pending: () => null, retryPending: f, hasPendingCreds: false,
+      logout: async () => ({ ok: true }), continueOffline() {}, changeUsername: f, changePassword: f, guest() {}, isGuest: () => false, ackReset: f, onDeleted: () => () => {}, pending: () => null, retryPending: f, hasPendingCreds: false,
       onChange: () => () => {}, isReservedName: () => false, validateUsername: () => null, validatePassword: () => null,
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },

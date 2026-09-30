@@ -10,6 +10,7 @@ import { online } from './net/services.js';
 import { bindOnline, getAdminLevel } from './shared/adminauth.js';
 import { maybeShowAccountGate, accountSettingsPane, mountBroadcastBanner, onlineCountBadge, openAccountGate } from './net/accountui.js';
 import { createCloudSync } from './net/cloudsave.js';
+import { wipeLocalProfile, DELETED_MESSAGE } from './meta/core/wipe.js';
 import { setConfigProvider } from './meta/core/config.js';
 import { setConfig as setOwnerToggles } from './meta/ui/config.js';
 // blocked/failed module downloads (school filters, proxies) -> an actionable message, not a raw TypeError
@@ -1327,15 +1328,54 @@ function startOnlineServices() {
       if (gifts !== null && u.gifts > gifts) toast(`🎁 You received a gift: open Ultimate Team → Gifts (${u.gifts}).`, 'good');
       gifts = u.gifts;
     });
+    // Server-side commands for this device's club (owner resets, owner patches): applied to the live club while the
+    // Ultimate Team screen is open, otherwise straight to the saved club, and ALWAYS before the cloud copy is
+    // uploaded (beforeSync), so a stale local club can never undo them. Owner patches are acknowledged only once the
+    // patched club is on the server (afterSync).
+    const remoteMod = () => import('./meta/core/remote.js');
+    let headless = null;
+    const runRemote = ({ usePresence = false } = {}) => {
+      if (metaMount && typeof metaMount.processRemote === 'function') return metaMount.processRemote({ usePresence });
+      if (headless) return headless;
+      headless = (async () => {
+        if (!online.hasIdentity()) return null;
+        const [remote, utm] = await Promise.all([remoteMod(), import('./meta/core/ut.js')]);
+        const state = utm.loadUT();
+        const res = await remote.syncRemote({ online, state, cloud: true, usePresence, persist: () => (state ? utm.saveUT(state) : true) });
+        if (res && (res.changed || res.notices.length)) {
+          window.__pitchsideVinson?.reload?.();
+          for (const n of res.notices) toast(n, 'warn');
+        }
+        return res;
+      })().catch((e) => { console.warn('[pitchside] remote sync failed', e && e.message); return null; }).finally(() => { headless = null; });
+      return headless;
+    };
     const cloud = createCloudSync(online, {
+      beforeSync: () => runRemote({ usePresence: false }),
+      afterSync: async (res) => { if (online.hasIdentity()) { const remote = await remoteMod(); await remote.flushAcks(online, res); } },
       onReplaced: () => {
         toast('Your Ultimate Team club was loaded from your account.', 'good');
         window.__pitchsideVinson?.reload?.();
         if (metaMount && nav.top && nav.top.name === 'meta') { nav.back(); metaScreen('ut'); }
+        else if (metaMount && typeof metaMount.reloadUT === 'function') metaMount.reloadUT();
       },
     });
     cloud.start();
     window.__pitchsideCloud = cloud;
+    // check-ins that carry something for this device (a reset epoch, a pending owner patch): apply now, then sync
+    online.presence.onUpdate((u) => {
+      if (!u || !(u.hasResets || u.patches > 0) || (metaMount && typeof metaMount.processRemote === 'function')) return; // the open UT screen handles it itself
+      remoteMod().then((m) => { if (m.remoteDue(online, u)) runRemote({ usePresence: true }).then((res) => { if (res && (res.resets.length || res.patches)) cloud.syncNow(); }); }).catch(() => {});
+    });
+    // The owner deleted this profile: forget the local club right now (synchronously: before anything can register a
+    // new profile or upload the old club to it), then show a fresh start.
+    online.account.onDeleted(() => {
+      wipeLocalProfile();
+      if (!metaMount) toast(DELETED_MESSAGE, 'bad'); // an open Ultimate Team screen drops its in-memory club and says so itself
+      window.__pitchsideVinson?.reload?.();
+      remoteMod().then((m) => m.forgetPendingAcks()).catch(() => {});
+      setTimeout(() => { try { maybeShowAccountGate(online, { toast }); } catch { /* ignore */ } }, 300);
+    });
     // The VINSON deadline and ban screen continue across menus and page reloads.
     import('./meta/ui/vinson.js?v=vinson8').then(({ startVinsonExperience }) => startVinsonExperience(online))
       .catch((e) => console.warn('[vinson] event UI unavailable', e));
