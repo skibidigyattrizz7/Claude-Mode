@@ -237,3 +237,8 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   and a playable cinematic Fight Suppression encounter with Patel / World-Ruler Vinson / Phonk Mode Vinson / Captain Israel,
   unique victory reward cards and permanent account curse immunity. Await owner go-ahead and verified assets.
   Planning/help/skills request posted to Claude in docs/AI_DIRECT.md on chatgpt/vinson-battle-planning; no code changed.
+
+- Sep 30 (owner): Vinson pull can lag/stick on Send to club; mods sometimes miss the curse animation; quick selling
+  must never prevent the curse. Fixed on chatgpt/vinson-pack-guard: register the curse as soon as the pack rolls
+  Vinson, keep the original pack controls usable so assignment/Close completes, retain the saved curse on RPC failure.
+  Quick selling/resolving does not clear the curse; mods remain affected and only owner is exempt.
