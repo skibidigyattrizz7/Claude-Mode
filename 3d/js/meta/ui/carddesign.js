@@ -4,6 +4,14 @@
 import { CARD_DESIGNS } from '../core/carddesigns.js';
 import { PROMO_BY_ID } from '../core/promos.js';
 import { secretDesignFor } from './carddesign-secret.js';
+import { getDB } from '../core/players.js';
+
+let ICON_PEOPLE = null;
+/** Persons that have an Icon (club ICN) card, built once from the DB. */
+function iconPeople() {
+  if (!ICON_PEOPLE) { ICON_PEOPLE = new Set(); try { for (const q of getDB().all) if (q.club === 'ICN' && q.person) ICON_PEOPLE.add(q.person); } catch { /* DB not ready */ } }
+  return ICON_PEOPLE;
+}
 
 const LEVEL = { bronze: 1, silver: 2, gold: 3 };
 // first key that exists in CARD_DESIGNS
@@ -14,7 +22,8 @@ const baseKeys = (rare, lv) => [...(rare ? GENS.filter((g) => g !== 'fc27') : GE
 
 // Special (non-promo) card families -> a fitting design, newest art first, FIFA 23 as the fallback.
 const TOTW = ['fc27-3-3', 'fc26-3-0', 'f23-3'];
-const ICON = ['fc27-12-0', 'fc26-12-0', 'f23-12'];
+// FC 25's Icon (white marble, strong gold): FC 27's is so pale it read as a silver card (owner, Oct 1)
+const ICON = ['fc25-12-0', 'f23-12', 'fc26-12-0', 'fc27-12-0'];
 const HERO = ['f23-72', 'fc26-72-0', 'f23-8'];
 const LOTG = ['fc26-76-0', 'fc26-77-0', 'f23-3'];
 const OBJECTIVE = ['fc26-87-0', 'f23-10'];
@@ -32,7 +41,8 @@ export function designFor(p) {
   else {
     const promo = PROMO_BY_ID[p.promo || p.special];
     if (promo && promo.design) key = pick(promo.design);
-    if (!key && (p.club === 'ICN' || p.special === 'legend')) key = pick(...ICON);
+    // retired legends' old regular cards (rp_<person> kept for old saves) look like the Icon they are
+    if (!key && (p.club === 'ICN' || p.special === 'legend' || (typeof p.id === 'string' && p.id.startsWith('rp_') && iconPeople().has(p.person)))) key = pick(...ICON);
     else if (!key && p.special === 'hero') key = pick(...HERO);
     else if (!key && p.special === 'lotg') key = pick(...LOTG);
     else if (!key && p.special === 'objective') key = pick(...OBJECTIVE);
