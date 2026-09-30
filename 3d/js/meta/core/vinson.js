@@ -95,7 +95,13 @@ export function reconcileServer(state, remote, now = Date.now()) {
   } else if (remote.phase === 'banned' && (!v || v.phase !== 'banned')) {
     state.vinson = { phase: 'banned', doomUntil: v?.doomUntil || now, phaseUntil: 0, pin: null };
   } else if (remote.phase === 'lifted') lift(state);
-  else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned')) release(state);
+  else if (remote.phase === 'released' && (!v || v.phase === 'doom' || v.phase === 'banned')) {
+    // An owner release can arrive while Vinson is already in the active squad. Start the
+    // squad warning as part of reconciliation so every caller (including reload/cloud
+    // reconciliation) observes the same countdown without relying on a UI callback.
+    release(state);
+    if (inSquad(state.squad)) squadChanged(state, now);
+  }
   else if (remote.phase === 'locked' && (!v || v.phase !== 'locked')) {
     state.vinson = { phase: 'locked', doomUntil: 0, phaseUntil: 0, pin: v?.pin || { area: 'slot', idx: 9 } };
     enforceLock(state);

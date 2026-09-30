@@ -9,6 +9,7 @@ const planet = asset('vinson-planet.png');
 const stamp = (s) => `pitchside.vinson.shown.${s}`;
 const seconds = (ms) => String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, '0');
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK BEHIND YOU', 'THE CLOCK IS LYING'];
 
 export function startVinsonExperience(online) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
@@ -16,17 +17,79 @@ export function startVinsonExperience(online) {
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = loadUT(), boundId = online?.identityId?.() || null;
-  let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null;
+  let busy = false, current = '', cinematic = false, interval = null, remoteInterval = null, lastOmen = -1;
+  let soundContext = null;
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
   const remember = (key) => { try { return sessionStorage.getItem(key); } catch { return null; } };
   const mark = (key) => { try { sessionStorage.setItem(key, '1'); } catch { /* private mode */ } };
   const make = (tag, cls, txt) => { const el = document.createElement(tag); el.className = cls; if (txt) el.textContent = txt; return el; };
+  const infected = (phase) => ['doom', 'warn', 'consequence', 'locked'].includes(phase);
+  const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
+  // The hit stays usable: squad removal during the warning, cursed packs and sabotaged matches still need clicks.
+  function fracture(target) {
+    if (!target || reduce()) return;
+    const bounds = target.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const effect = make('div', 'vinson-fracture');
+    effect.style.cssText = `left:${bounds.left}px;top:${bounds.top}px;width:${bounds.width}px;height:${bounds.height}px`;
+    const caption = (target.textContent || '').trim().slice(0, 34);
+    for (let i = 0; i < 3; i++) effect.append(make('span', `vinson-shard vinson-shard-${i}`, caption));
+    document.body.append(effect);
+    setTimeout(() => effect.remove(), 1300);
+  }
+  function onInfectedClick(event) {
+    if (!infected(state()?.vinson?.phase) || isOwner(online)) return;
+    const target = event.target.closest?.('.pm-root button, .pm-root [role="tab"], .pm-root a');
+    if (target && root()?.contains(target)) fracture(target);
+  }
+  document.addEventListener('click', onInfectedClick, true);
+  function collapseUi(done) {
+    const frame = root();
+    const pieces = frame && [...frame.querySelectorAll('.pm-top, .pm-uttab, .pm-main > section, .pm-main > .pm-section, .pm-main > .pm-panel')]
+      .filter((el) => el.getBoundingClientRect().height > 8).slice(0, 14);
+    if (!pieces?.length || reduce()) { done(); return; }
+    const curtain = make('div', 'vinson-collapse');
+    curtain.append(make('div', 'vinson-collapse-blood'));
+    pieces.forEach((el, i) => {
+      const r = el.getBoundingClientRect(), shard = make('div', 'vinson-collapse-piece');
+      shard.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;--delay:${i < 4 ? i * .22 : 1.02 + (i % 3) * .07}s`;
+      shard.append(el.cloneNode(true)); curtain.append(shard);
+    });
+    document.body.append(curtain);
+    setTimeout(() => { curtain.remove(); done(); }, 2300);
+  }
+  function sound(kind) {
+    try {
+      const settings = JSON.parse(localStorage.getItem('meta.settings') || '{}');
+      const volume = Math.min(1, Math.max(0, Number(settings.volume ?? 70) / 100));
+      if (!volume || document.hidden) return;
+      const Context = window.AudioContext || window.webkitAudioContext;
+      if (!Context) return;
+      soundContext ||= new Context();
+      if (soundContext.state !== 'running') { void soundContext.resume(); return; }
+      const now = soundContext.currentTime;
+      const notes = kind === 'impact' ? [[43, .75], [57, 1.25], [36, 1.8]]
+        : kind === 'warning' ? [[62, .24], [49, .34]] : [[56, .42], [41, .65]];
+      for (const [frequency, length] of notes) {
+        const oscillator = soundContext.createOscillator(), gain = soundContext.createGain();
+        oscillator.type = kind === 'impact' ? 'sawtooth' : 'sine';
+        oscillator.frequency.setValueAtTime(frequency, now);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(27, frequency * .65), now + length);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(volume * (kind === 'impact' ? .045 : .025), now + .035);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + length);
+        oscillator.connect(gain).connect(soundContext.destination);
+        oscillator.start(now); oscillator.stop(now + length + .02);
+      }
+    } catch { /* audio is optional */ }
+  }
 
   function draw() {
-    const s = state(); if (!s || isOwner(online)) { host.replaceChildren(); current = ''; return; }
+    const s = state(); if (!s || isOwner(online)) { host.replaceChildren(); document.body.classList.remove('vinson-infected', 'vinson-critical'); current = ''; return; }
     const v = s.vinson; const phase = v?.phase || '';
-    document.body.classList.toggle('vinson-infected', phase === 'doom');
+    document.body.classList.toggle('vinson-infected', infected(phase));
+    document.body.classList.toggle('vinson-critical', phase === 'doom' && v.doomUntil - Date.now() <= 10000);
     if (!phase || phase === 'freed' || phase === 'lifted') { host.replaceChildren(); current = phase; cinematic = false; return; }
     if (phase === 'banned') {
       const key = stamp(`${online?.identityId?.() || 'guest'}.${v.doomUntil}`);
@@ -34,7 +97,7 @@ export function startVinsonExperience(online) {
       if (!cinematic) {
         cinematic = true;
         if (remember(key) || reduce()) finalScene();
-        else playCinematic(key);
+        else collapseUi(() => { if (current === 'banned') playCinematic(key); });
       }
       return;
     }
@@ -47,7 +110,11 @@ export function startVinsonExperience(online) {
         : phase === 'warn' ? "IT'S NOT WORTH IT" : phase === 'consequence' ? 'THIS ACTION WILL HAVE CONSEQUENCES' : "YOU'VE BEEN CURSED BY VINSON"));
       if (phase !== 'locked') box.append(make('span', 'vinson-timer'));
       host.append(box);
-      if (phase === 'doom') host.append(make('div', 'vinson-whisper'));
+      if (phase === 'doom') {
+        const omens = make('div', 'vinson-omens'); omens.setAttribute('aria-hidden', 'true');
+        for (let i = 0; i < 8; i++) omens.append(make('span', `vinson-omen vinson-omen-${i % 4}`, OMENS[i % OMENS.length]));
+        host.append(make('div', 'vinson-edge'), omens, make('div', 'vinson-whisper'));
+      }
     }
     const t = host.querySelector('.vinson-timer');
     if (t) {
@@ -55,7 +122,15 @@ export function startVinsonExperience(online) {
       t.textContent = phase === 'doom' ? `${Math.floor(Math.max(0, left) / 60000)}:${seconds(left % 60000)}` : `${seconds(left)} seconds`;
     }
     const whisper = host.querySelector('.vinson-whisper');
-    if (whisper) whisper.textContent = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK BEHIND YOU'][Math.floor(Date.now() / 2300) % 5];
+    if (whisper) {
+      const index = Math.floor(Date.now() / 4500) % OMENS.length;
+      if (index !== lastOmen) {
+        lastOmen = index; whisper.textContent = OMENS[index];
+        whisper.style.left = `${7 + (index * 31) % 58}%`;
+        whisper.style.top = `${21 + (index * 19) % 52}%`;
+        whisper.style.setProperty('--tilt', `${(index % 2 ? 1 : -1) * (4 + index)}deg`);
+      }
+    }
   }
 
   function finalScene() {
@@ -65,16 +140,27 @@ export function startVinsonExperience(online) {
     const art = make('div', 'vinson-planet-art');
     const bg = document.createElement('img'); bg.src = planet; bg.alt = 'Vinson holding the Earth';
     const orb = make('div', 'vinson-spinning-earth'); const crop = document.createElement('img'); crop.src = planet; crop.alt = '';
-    orb.append(crop); art.append(bg, orb); screen.append(art, make('strong', 'vinson-final-title', BAN_MESSAGE));
-    const check = make('button', 'vinson-check', 'Check if the owner unbanned me'); check.onclick = () => void poll(); screen.append(check);
+    orb.append(crop); art.append(bg, orb);
+    const ghosts = make('div', 'vinson-final-ghosts'); ghosts.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 6; i++) { const img = document.createElement('img'); img.src = warning; img.alt = ''; ghosts.append(img); }
+    screen.append(ghosts, make('div', 'vinson-final-embers'), make('span', 'vinson-final-kicker', 'THE END OF YOUR SQUAD'), art,
+      make('strong', 'vinson-final-title', BAN_MESSAGE));
+    const words = make('div', 'vinson-final-words'); words.setAttribute('aria-hidden', 'true');
+    OMENS.forEach((omen, i) => words.append(make('span', `vinson-final-word vinson-final-word-${i}`, omen)));
+    screen.append(words);
+    const check = make('button', 'vinson-check', 'ESCAPE THE WRATH OF VINSON'); check.onclick = () => location.reload(); screen.append(check);
     host.append(screen);
+    sound('impact');
   }
 
   function playCinematic(key) {
     host.replaceChildren();
     const screen = make('div', 'vinson-screen vinson-cinematic'); screen.setAttribute('role', 'alertdialog');
     screen.setAttribute('aria-label', "IT'S NOT WORTH IT");
-    const tile = make('div', 'vinson-tiles'); screen.append(tile); host.append(screen);
+    const prologue = make('div', 'vinson-prologue', 'YOU WERE WARNED');
+    const tile = make('div', 'vinson-tiles');
+    const intertitle = make('strong', 'vinson-intertitle');
+    screen.append(prologue, tile, intertitle); host.append(screen);
     let count = 0;
     const addTile = (i) => {
       const cell = make('div', 'vinson-tile');
@@ -85,17 +171,30 @@ export function startVinsonExperience(online) {
         // Seeded placement makes this event stable across a repaint, without a rigid grid.
         const rand = (n) => ((Math.sin((i + 1) * n * 93.17) * 43758.5453) % 1 + 1) % 1;
         cell.style.left = `${rand(13) * 88}%`; cell.style.top = `${rand(29) * 80}%`;
-        cell.style.width = `${12 + rand(31) * 19}%`; cell.style.transform = `rotate(${(rand(7) - .5) * 15}deg)`;
+        cell.style.width = `${12 + rand(31) * 19}%`; cell.style.setProperty('--tilt', `${(rand(7) - .5) * 15}deg`);
       }
       tile.append(cell);
     };
     const batch = () => {
       if (current !== 'banned' || !host.contains(screen)) return;
       addTile(count++);
-      if (count < 65) setTimeout(batch, Math.max(55, 850 - count * 17));
-      else setTimeout(() => { screen.classList.add('vinson-blackout'); setTimeout(() => { if (current === 'banned') finalScene(); }, 1000); }, 1700);
+      if (count === 12 || count === 32 || count === 54) {
+        intertitle.textContent = count === 12 ? 'SHE IS HERE' : count === 32 ? 'THERE IS NO ESCAPE' : "IT'S NOT WORTH IT";
+        intertitle.classList.remove('vinson-intertitle-show');
+        void intertitle.offsetWidth;
+        intertitle.classList.add('vinson-intertitle-show');
+        sound('warning');
+      }
+      if (count < 55) setTimeout(batch, Math.max(100, 1100 - count * 19));
+      else setTimeout(() => { screen.classList.add('vinson-blackout'); sound('impact'); setTimeout(() => { if (current === 'banned' && host.contains(screen)) finalScene(); }, 1400); }, 2200);
     };
-    mark(key); for (let i = 0; i < 4; i++) addTile(count++); setTimeout(batch, 1400);
+    mark(key); sound('impact');
+    setTimeout(() => {
+      if (current !== 'banned' || !host.contains(screen)) return;
+      prologue.classList.add('vinson-prologue-out');
+      for (let i = 0; i < 4; i++) addTile(count++);
+      setTimeout(batch, 1100);
+    }, 1600);
   }
 
   async function poll() {
@@ -134,6 +233,7 @@ export function startVinsonExperience(online) {
       persist(s);
       if (s.vinson?.phase === 'locked') { void online?.vinson?.lock?.(); app?.applyRestrictions?.({ admin: true, codes: true }); }
       if (s.vinson?.phase === 'banned') void poll();
+      if (s.vinson?.phase === 'consequence') sound('warning');
       if (app && !app.destroyed) app.refresh();
     }
     draw();
@@ -154,6 +254,7 @@ export function startVinsonExperience(online) {
       const s = state(); if (!s || isOwner(online)) return;
       if (s.vinson?.phase === 'locked' || s.vinson?.phase === 'lifted') return;
       beginDoom(s); persist(s); draw();
+      sound('warning');
       const remote = await online?.vinson?.pull?.();
       if (remote?.exempt) { release(s); persist(s); draw(); return; }
       if (remote?.ok && remote.deadline) { reconcileServer(s, remote); persist(s); draw(); }
@@ -168,7 +269,7 @@ export function startVinsonExperience(online) {
       screen.remove();
     },
     tick, poll,
-    destroy() { clearInterval(interval); clearInterval(remoteInterval); document.body.classList.remove('vinson-infected'); host.remove(); css.remove(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
+    destroy() { clearInterval(interval); clearInterval(remoteInterval); document.removeEventListener('click', onInfectedClick, true); document.body.classList.remove('vinson-infected', 'vinson-critical'); host.remove(); css.remove(); void soundContext?.close(); if (globalThis.__pitchsideVinson === controller) globalThis.__pitchsideVinson = null; },
   };
   globalThis.__pitchsideVinson = controller;
   interval = setInterval(tick, 250);

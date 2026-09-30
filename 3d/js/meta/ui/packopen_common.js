@@ -248,9 +248,12 @@ export function makeGrid(stage, pack, players, opts, destroy) {
       event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
       if (corrupting) return;
       corrupting = true;
-      button.classList.add('vinson-po-corrupt');
-      button.textContent = '666 0101 666';
-      setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 900);
+      stage.querySelectorAll('.pm-po-gridwrap button').forEach((b, i) => {
+        b.classList.add('vinson-po-corrupt');
+        b.style.animationDelay = `${Math.min(i, 8) * 65}ms`;
+        if (b === button) b.textContent = '666 0101 666';
+      });
+      setTimeout(() => { destroy(); opts.onCurseExit?.(); }, 1700);
     }, true);
   }
   function send(x, silent) { if (x.state !== 'new' || x.dup) return; opts.onSend(x.pid); x.state = 'sent'; if (!silent) renderGrid(); }
