@@ -262,9 +262,19 @@ export const REG_ROW_COUNT = REG_ROWS.length;
 /** Every real person's full name per list (for duplicate checks). */
 export const REAL_NAMES = { icons: ICON_ROWS.map((r) => r[1]), stars: STAR_ROWS.map((r) => r[1]), regulars: REG_ROWS.map((r) => r[1]) };
 
+/** The hand-written real people (before any fut.gg data): [{ id, person, name, card, nat, kind: 'icon' | 'star' | 'regular', pos }].
+ * tools/fetch_futgg_players.py matches fut.gg cards against this list so every existing card id keeps its person slug. */
+export function handPeople() {
+  const out = [];
+  for (const r of ICON_ROWS.concat(LATE_ICON_ROWS)) out.push({ id: `ic_${r[0].replace(/_icon$/, '')}`, person: r[0].replace(/_icon$/, ''), name: r[1], card: r[2], nat: r[3], kind: 'icon', pos: r[4], ovr: r[9] });
+  for (const r of STAR_ROWS) out.push({ id: `rs_${r[0]}`, person: r[0], name: r[1], card: r[2], nat: r[3], kind: 'star', pos: r[4], ovr: r[9] });
+  for (const r of REG_ROWS.concat(LATE_REG_ROWS)) out.push({ id: `rp_${r[0]}`, person: r[0], name: r[1], card: r[2], nat: r[3], kind: 'regular', pos: r[4], ovr: r[9] });
+  return out;
+}
+
 const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
 const GKFACE = ['div', 'han', 'kic', 'ref', 'spd', 'pos'];
-const ATTACK = new Set(['LW', 'RW', 'CAM', 'CF', 'ST', 'LM', 'RM']);
+const ATTACK =new Set(['LW', 'RW', 'CAM', 'CF', 'ST', 'LM', 'RM']);
 
 /** Nudge stats (only those that count for the position) until the position formula gives exactly `target`. */
 function fitStats(src, keys, w, target) {
