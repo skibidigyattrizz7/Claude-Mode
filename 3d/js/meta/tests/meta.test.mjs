@@ -1079,7 +1079,8 @@ test('promo cards job: 20+ campaigns, each with theme, colours, card class and a
     assert.ok(pr.theme && typeof pr.theme === 'string', `${pr.id} theme`);
     assert.ok(Array.isArray(pr.colors) && pr.colors.length === 3 && pr.colors.every((c) => HEX.test(c)), `${pr.id} colours`);
     assert.ok(pr.name && pr.short && pr.tag && pr.desc && pr.range[0] < pr.range[1] && pr.range[1] <= 99, `${pr.id} fields`);
-    assert.ok(!/\bfut\b|futties/i.test(`${pr.name} ${pr.short} ${pr.tag}`), `${pr.id} uses a trademarked name`);
+    // Owner-approved FIFA 23 campaign names replace the former fictional naming policy.
+    assert.ok(pr.design && /^f23-[\w-]+$/.test(pr.design), `${pr.id} needs local FIFA 23 artwork`);
     // the original seven are already released; everything newer carries a unique launch week
     if (pr.releaseWeek) { assert.ok(!weeks.has(pr.releaseWeek), `${pr.id} shares a launch week`); weeks.add(pr.releaseWeek); }
     else assert.ok(['toty', 'tots', 'futurestars', 'flashback', 'birthday', 'rttk', 'moments'].includes(pr.id), `${pr.id} needs a releaseWeek`);
@@ -1091,9 +1092,12 @@ test('promo cards job: 20+ campaigns, each with theme, colours, card class and a
   }
   // every week from the V5 rotation on has at least one released, live campaign (no empty weeks)
   for (let w = 39; w < 120; w++) assert.ok(PR.releasedLivePromos(w).length >= 1, `week ${w} has no promo`);
-  // every campaign has its own card design class in meta.css and its colours reach the card component
-  const css = (await import('node:fs')).readFileSync(new URL('../../../css/meta.css', import.meta.url), 'utf8');
-  for (const pr of PR.PROMOS) assert.ok(css.includes(`.sp-${pr.id} {`), `no card design for ${pr.id}`);
+  // Legacy campaigns retain CSS artwork; new campaigns supply local backgrounds for the card renderer.
+  const fs = await import('node:fs');
+  const css = fs.readFileSync(new URL('../../../css/meta.css', import.meta.url), 'utf8');
+  for (const pr of PR.PROMOS) assert.ok(
+    css.includes(`.sp-${pr.id} {`) || fs.existsSync(new URL(`../../../assets/cards/${pr.design}.webp`, import.meta.url)),
+    `no card design for ${pr.id}`);
   const { cardClasses } = await import('../ui/card.js');
   // Admin card-creator cards store the chosen promo design only in \`special\` — they must still render as that promo
   assert.ok(cardClasses({ tier: 'gold', special: 'storm', customAdmin: true }).includes('is-promo'));

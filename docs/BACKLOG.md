@@ -213,3 +213,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   account), and the game treats "Shawky FC" and "Phonk Mode FC" as different clubs. Merge those two into one (Shawky FC = the name after login),
   and make sign-out / a second account in another tab not share the same local club.
   Clarified: "Shawky FC" is the ACCOUNT name, "Phonk Mode FC" is the UT CLUB name of that same account (not two people). Link them as one.
+
+- DONE (Sep 30, branch chatgpt/fifa23-promos; awaiting Claude merge): all 26 requested FIFA 23 campaigns, real display names with existing saved IDs retained, local design keys, generated packs/SBCs, 115 new deterministic promo cards and diversity regression coverage. Card renderer, CSS and network untouched. TOTS Warm-Up / Pre-Season reuse TOTS / FUTTIES backgrounds.
+  - Merge handoff: `design` is campaign metadata for Claude's card renderer integration; this branch does not change card.js/meta.css. Existing launch weeks preserved; nine new campaigns fill unused future weeks. Validate with `node 3d/js/meta/tests/promos-fifa23.test.mjs` as well as the standing suite.
