@@ -5,6 +5,7 @@
 import { Rng, clamp, hashStr } from './rng.js';
 import { weekNumber } from './calendar.js';
 import { genPhysique } from './physique.js';
+import { PLAYER_DYN } from './playerphotos.js';
 
 // colours: [dark, main, light/ink]. `theme` is a stable id for the UI agent's pack-opening background/rig
 // per campaign (see docs/META_API.md). `releaseWeek` (absolute calendar week, from calendar.js) is the first
@@ -213,6 +214,8 @@ export function buildPromoCards(src, helpers, week = weekNumber(), { diverse = t
     p.ovr = helpers.computeOvr(p.pos, p);
     setOvr(p, clamp(target, 1, 99), helpers);
     p.special = promo; p.promo = promo; p.rare = true; p.tier = 'gold';
+    // promo cards get the bigger "dynamic" cutout of the same photo (owner, Sep 30: dynamic images like FUT promos)
+    if (PLAYER_DYN.has(p.person) && typeof p.photo === 'string' && p.photo.startsWith('assets/players/') && !p.photo.includes('/dyn/')) { p.photo = p.photo.replace('assets/players/', 'assets/players/dyn/'); p.photoDyn = true; }
     p.pot = Math.max(p.pot || p.ovr, p.ovr);
     if (base.special === 'lotg' || base.club === 'ICN') p.linkAll = true; // keeps the LOTG chemistry perks
     upgradeStyles(p, 1);
