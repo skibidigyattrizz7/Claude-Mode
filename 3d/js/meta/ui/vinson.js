@@ -1,7 +1,7 @@
 // EVIL VINSON presentation and lifecycle. This is global (not tied to a UT view), so a timer continues when
 // the player changes screens. Server status is polled while active; the saved absolute deadline survives reload.
 import { loadUT, saveUT } from '../core/ut.js';
-import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
+import { beginDoom, release, advance, reconcileServer, squadChanged, enforceLock, isOwner, cursedPack, BAN_MESSAGE, MATCH_MESSAGE } from '../core/vinson.js';
 
 const asset = (name) => new URL(`../../../assets/cards/${name}`, import.meta.url).href;
 const warning = asset('vinson-warning.png');
@@ -13,7 +13,7 @@ const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK 
 
 export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson5', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson6', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
@@ -22,7 +22,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   let soundContext = null;
   const damagedKeys = new Set();
   const controlSelector = 'button, [role="tab"], a, input, select, .pc-card';
-  const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
+  const controlKey = (el) => el.dataset.uttab ? `tab:${el.dataset.uttab}` : `${el.closest('.pm-modal')?.getAttribute('aria-label') || 'screen'}:${el.tagName}:${el.getAttribute('aria-label') || el.querySelector('h2')?.textContent || el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 90) || el.getAttribute('name') || el.id}`;
   const state = () => app?.ut || localState;
   const persist = (s) => { if (app?.ut === s) app.saveUT(); else if (s) saveUT(s); };
   const remember = (key) => { if (ephemeral) return null; try { return sessionStorage.getItem(key); } catch { return null; } };
@@ -68,12 +68,27 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     const target = event.target.closest?.('.pm-root button, .pm-root [role="tab"], .pm-root a, .pm-root input, .pm-root select, .pm-root .pc-card');
     if (target && root()?.contains(target)) {
       if (broken.has(target)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
-      fracture(target); breakControl(target);
       const label = (target.textContent || '').trim();
-      const navigating = target.matches('.pm-uttab, .pm-tab, .pm-tile, [role="tab"]');
-      const curseScene = /\b(open|play|start|match|rivals|battle)\b/i.test(label) || !!target.closest('.pm-po-gridwrap');
+      const dialog = target.closest('.pm-modal');
+      // Escape routes must remain available even if a stale dialog was open when the curse began.
+      if (dialog && (target.matches('.pm-x') || /^(cancel|close|back)$/i.test(label))) return;
+      const lockedPack = cursedPack(state());
+      const packEntry = lockedPack && (
+        (!!target.closest('.pm-storeitem, .pm-show-info') && /^buy & open$/i.test(label)) ||
+        (!!target.closest('.pm-packitem') && /^open$/i.test(label)) ||
+        (dialog && /pack/i.test(dialog.getAttribute('aria-label') || '') && !/manager/i.test(dialog.getAttribute('aria-label') || '') && /^buy & open$/i.test(label))
+      );
+      const packScene = lockedPack && !!target.closest('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback');
+      const matchScene = lockedPack && /^(play|start match|play rivals|play squad battles|kick off)$/i.test(label);
       const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
-      if (!navigating && !curseScene && !squadWarning) { event.preventDefault(); event.stopImmediatePropagation(); }
+      fracture(target);
+      // Result screens own their coordinated button collapse and exit timer.
+      if (!packScene) breakControl(target);
+      if (!packEntry && !packScene && !matchScene && !squadWarning) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        // Close blocked dialogs through their normal close callback so pending confirmations resolve false.
+        if (dialog) setTimeout(() => dialog.querySelector('.pm-x')?.click(), 1150);
+      }
     }
   }
   document.addEventListener('click', onInfectedClick, true);
@@ -255,8 +270,39 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
         intertitle.classList.add('vinson-intertitle-show');
         sound('warning');
       }
-      if (count < 55) setTimeout(batch, Math.max(100, 1100 - count * 19));
-      else setTimeout(() => { screen.classList.add('vinson-blackout'); sound('impact'); setTimeout(() => { if (current === 'banned' && host.contains(screen)) finalScene(); }, 1400); }, 2200);
+      if (count < 70) setTimeout(batch, Math.max(35, 1100 - count * 19));
+      else {
+        // Fill uncovered areas behind the random foreground portraits. Overlap and jitter hide the coverage lattice.
+        const width = Math.min(innerWidth * .28, innerHeight * .34);
+        const height = width * 594 / 477, stepX = width * .72, stepY = height * .72;
+        const fills = [];
+        for (let y = -height * .15; y < innerHeight; y += stepY) for (let x = -width * .15; x < innerWidth; x += stepX) {
+          fills.push({x, y});
+        }
+        const fill = (i) => {
+          if (current !== 'banned' || !host.contains(screen)) return;
+          const cell = make('div', 'vinson-tile');
+          const image = document.createElement('img'); image.src = warning; image.alt = '';
+          cell.append(image);
+          const jitter = Math.sin(i * 29.7);
+          cell.style.cssText = `left:${fills[i].x + jitter * width * .04}px;top:${fills[i].y - jitter * height * .04}px;width:${width}px;max-width:none;--tilt:${jitter * 4}deg`;
+          tile.prepend(cell);
+          if (i + 1 < fills.length) setTimeout(() => fill(i + 1), Math.max(18, 90 - i * 3));
+          else setTimeout(() => {
+            tile.animate([
+              {transform:'translate(0,0)',filter:'contrast(1)'},
+              {transform:'translate(-18px,4px) skewX(3deg)',filter:'contrast(2)'},
+              {transform:'translate(14px,-5px) skewX(-3deg)',filter:'contrast(1.5)'},
+              {transform:'translate(0,0)',filter:'contrast(1)'},
+            ], {duration:480, iterations:2, easing:'steps(2,end)'});
+            setTimeout(() => {
+              screen.classList.add('vinson-blackout'); sound('impact');
+              setTimeout(() => { if (current === 'banned' && host.contains(screen)) finalScene(); }, 6500);
+            }, 1000);
+          }, 800);
+        };
+        fill(0);
+      }
     };
     mark(key); sound('impact');
     setTimeout(() => {

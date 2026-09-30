@@ -57,7 +57,7 @@
       <h2>Pitchside FC</h2><p class="qa-note">This page runs the production Vinson presentation and curse lifecycle over an in-memory mock squad.</p>
       <div class="qa-grid">
         <article class="qa-card"><h2>Squad</h2><p>Formation · 4-3-3</p><button class="qa-action">Edit squad</button><button class="qa-action">Start match</button></article>
-        <article class="qa-card"><h2>Store</h2><p>Available packs · 3</p><button class="qa-action">Open Gold Pack</button><button class="qa-action">Open Premium Pack</button></article>
+        <article class="qa-card"><h2>Store</h2><p>Available packs · 3</p><button class="qa-action">Open Gold Pack</button><button class="qa-action">Open Premium Pack</button><div class="pm-storeitem"><button data-qa-buy>Buy &amp; open</button></div></article>
         <article class="qa-card"><h2>Club</h2><p>Players · 23</p><button class="qa-action">Manage players</button><button class="qa-action">Quick sell</button></article>
         <article class="qa-card"><h2>Match Center</h2><p>Play a game with your active squad.</p><button class="qa-action">Play Rivals</button><button class="qa-action">Play Squad Battles</button></article>
       </div>
@@ -66,7 +66,8 @@
 </main>
 
 <script type="module">
-  import { startVinsonExperience } from './js/meta/ui/vinson.js?v=vinson5';
+  import { startVinsonExperience } from './js/meta/ui/vinson.js?v=vinson6';
+  import { confirmBox, h } from './js/meta/ui/dom.js';
   import { HELL_CARD_ID } from './js/meta/core/secretcard.js';
 
   // loadUT is intentionally only read by startVinsonExperience; attach immediately swaps in this fixture.
@@ -132,6 +133,10 @@
   document.querySelectorAll('.qa-action').forEach((button) => button.addEventListener('click', () => {
     if (fixture.vinson?.phase === 'locked') show(`fracture interaction · ${button.textContent}`);
   }));
+  app.root.querySelector('[data-qa-buy]').onclick = async () => {
+    const ok = await confirmBox(app.root, 'Buy pack', 'Fixture pack. No real coins or accounts.', 'Buy & open');
+    show(ok ? 'purchase confirmed · cursed pack entry reached' : 'purchase cancelled · no transaction');
+  };
   window.addEventListener('pagehide', () => controller.destroy(), {once:true});
 </script>
 </body>

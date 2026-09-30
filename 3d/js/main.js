@@ -141,7 +141,7 @@ function loadEngine() {
 }
 function loadMeta() {
   if (!metaPromise) {
-    metaPromise = import(retryUrl('./meta/index.js?v=vinson5', ++metaTries))
+    metaPromise = import(retryUrl('./meta/index.js?v=vinson6', ++metaTries))
       .then((m) => {
         for (const fn of ['mountMeta', 'getNationalTeams', 'getSavedUltimateTeam']) {
           if (typeof m[fn] !== 'function') throw new Error(`meta/index.js does not export ${fn}()`);
@@ -1337,7 +1337,7 @@ function startOnlineServices() {
     cloud.start();
     window.__pitchsideCloud = cloud;
     // The VINSON deadline and ban screen continue across menus and page reloads.
-    import('./meta/ui/vinson.js?v=vinson5').then(({ startVinsonExperience }) => startVinsonExperience(online))
+    import('./meta/ui/vinson.js?v=vinson6').then(({ startVinsonExperience }) => startVinsonExperience(online))
       .catch((e) => console.warn('[vinson] event UI unavailable', e));
     // Accounts are optional but prominent: first visit shows Create account / Log in / Continue as guest.
     const webdriver = typeof navigator !== 'undefined' && navigator.webdriver;
