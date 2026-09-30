@@ -266,7 +266,7 @@ export function buildPromoCards(src, helpers, week = weekNumber(), { diverse = t
   for (const b of young.filter((x) => boostTo('futurestars', x, 4, 7)).slice(0, 14)) make(b, 'futurestars', boostTo('futurestars', b, 4, 7), { pot: Math.min(99, b.ovr + 12) });
 
   // Heroes Flashback: a legend's famous season (+2, max 98 — +1 for the very top)
-  for (const b of icons.filter((p) => (FLASHBACK[p.id.replace(/^ic_/, '')] || FLASHBACK[`${p.person}_icon`]) && p.ovr < 99)) {
+  for (const b of icons.filter((p) => (FLASHBACK[p.id.replace(/^ic_/, '')] || FLASHBACK[`${p.person}_icon`]) && (p.ovr < 99 || !diverse))) { // the legacy build keeps Pelé / Maradona (99 since Sep 30) so owned Flashbacks resolve
     const key = FLASHBACK[`${b.person}_icon`] ? `${b.person}_icon` : b.person;
     make(b, 'flashback', Math.max(b.ovr + 1, Math.min(98, b.ovr + 2)), { moment: FLASHBACK[key] });
   }

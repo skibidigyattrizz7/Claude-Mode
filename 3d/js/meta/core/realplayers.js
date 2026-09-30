@@ -20,8 +20,8 @@ const LATE_ICON_ROWS = [
   ['klose', 'Miroslav Klose', 'Klose', 'GER', 'ST', ['CF'], 'R', 4, 3, 91, [80, 93, 74, 80, 42, 84], 28, 182, 0],
 ];
 const ICON_ROWS = [
-  ['pele', 'Pelé', 'Pelé', 'BRA', 'CF', ['ST', 'CAM'], 'R', 4, 5, 98, [95, 96, 93, 96, 60, 78], 29, 173, 5],
-  ['maradona', 'Diego Maradona', 'Maradona', 'ARG', 'CAM', ['CF', 'ST'], 'L', 3, 5, 98, [91, 93, 94, 97, 40, 76], 26, 165, 2],
+  ['pele', 'Pelé', 'Pelé', 'BRA', 'CF', ['ST', 'CAM'], 'R', 4, 5, 99, [96, 97, 93, 97, 60, 79], 29, 173, 5], // 99: the top Legends (owner, Sep 30)
+  ['maradona', 'Diego Maradona', 'Maradona', 'ARG', 'CAM', ['CF', 'ST'], 'L', 3, 5, 99, [92, 94, 95, 98, 40, 76], 26, 165, 2],
   ['messi_icon', 'Lionel Messi', 'Messi', 'ARG', 'RW', ['RM', 'CAM', 'CF', 'ST'], 'L', 4, 4, 98, [93, 94, 92, 97, 38, 68], 25, 170, 1],
   ['ronaldo_icon', 'Cristiano Ronaldo', 'C. Ronaldo', 'POR', 'ST', ['LW', 'CF'], 'R', 4, 5, 97, [95, 96, 82, 92, 35, 84], 29, 187, 2],
   ['nazario', 'Ronaldo Nazário', 'Ronaldo', 'BRA', 'ST', ['CF'], 'R', 4, 5, 97, [97, 96, 81, 96, 45, 84], 21, 183, 3, { hs: 2 }],
@@ -255,6 +255,8 @@ const PHYS = {
   cavani: [71, ['powerheader', 'acrobatic']],
 };
 
+/** Current (non-Icon) real players need at least this row rating to be a Legend of the Game card. */
+export const LOTG_MIN_OVR = 88;
 export const REAL_ROW_COUNT = ICON_ROWS.length + STAR_ROWS.length;
 export const REG_ROW_COUNT = REG_ROWS.length;
 /** Every real person's full name per list (for duplicate checks). */
@@ -367,6 +369,9 @@ export function buildRealPlayers(helpers) {
     // versions from current active versions (Messi and Ronaldo have both).
     p.special = 'lotg';
     p.era = icon ? 'prime' : 'current';
+    // Legend of the Game is an elite tier (owner, Sep 30: an 86 "Legend of the Game" Messi made no sense): current
+    // players below LOTG_MIN_OVR are ordinary rare gold real cards. Same card ids, so owned cards keep working.
+    if (!icon && ovr < LOTG_MIN_OVR) p.special = null;
     p.real = true;
     p.skin = skin;
     if (extra.hs !== undefined) p.hair = extra.hs;

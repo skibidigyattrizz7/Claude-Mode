@@ -2,5 +2,9 @@
 // Photos are freely licensed (CC0 / Public domain / CC BY / CC BY-SA) from Wikimedia Commons; see assets/players/credits.json
 // and credits.html. Do not edit by hand.
 export const PLAYER_PHOTOS = new Set([
-  "debruyne", "mbappe", "messi", "neymar", "ronaldo", "salah",
+  "alisson", "benzema", "cavani", "courtois", "debruyne", "diogocosta",
+  "donnarumma", "ederson", "emimartinez", "kobel", "lukaku", "maignan",
+  "mamardashvili", "mbappe", "messi", "modric", "neuer", "neymar",
+  "oblak", "onana", "ramos", "raya", "ronaldo", "rubendias",
+  "salah", "sommer", "terstegen", "unaisimon", "vandijk", "vicario",
 ]);

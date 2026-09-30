@@ -361,17 +361,19 @@ test('real players: every requested player present once per version, LOTG rarity
   assert.equal(versions.size, db.real.length, 'duplicate real player version');
   assert.equal(new Set(db.real.map((p) => p.person)).size, EXPECTED_REAL.length);
   for (const p of db.real) {
-    assert.equal(p.special, 'lotg'); assert.ok(p.real);
-    assert.ok(['prime', 'current'].includes(p.era));
+    // Legend of the Game is elite since Sep 30: Icons + current players rated LOTG_MIN_OVR+; the rest are rare golds
+    assert.ok(p.real);
+    if (p.special === 'lotg') assert.ok(['prime', 'current'].includes(p.era));
+    else assert.ok(p.special == null && p.club !== 'ICN' && p.ovr < 88, `${p.name} should be a Legend of the Game`);
     assert.equal(p.ovr, p.intended, `${p.name} ovr ${p.ovr} != ${p.intended}`);
-    if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 98, `${p.name} prime ovr`);
+    if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 99, `${p.name} prime ovr`); // Pelé / Maradona 99 (owner, Sep 30)
     assert.ok(p.wf >= 1 && p.wf <= 5 && p.sm >= 1 && p.sm <= 5 && ['L', 'R'].includes(p.foot));
     assert.ok((p.alt || []).length <= 4 && !(p.alt || []).includes(p.pos));
     const face = p.pos === 'GK' ? p.gk : p.stats;
     for (const v of Object.values(face)) assert.ok(v >= 1 && v <= 99);
     if (p.pos === 'GK') assert.ok(p.gk.div >= 80 && p.gk.ref >= 80, `${p.name} GK stats`);
   }
-  assert.equal(getPlayer('ic_pele').ovr, 98);
+  assert.equal(getPlayer('ic_pele').ovr, 99); // raised to 99 with Maradona (owner, Sep 30)
   assert.equal(getPlayer('rs_messi').era, 'current');
   assert.equal(getPlayer('ic_messi').era, 'prime');
 });
@@ -1284,7 +1286,7 @@ test('B2: ratings bounds — icons 86-98, regulars 78-92, every OVR matches comp
   const db = getDB();
   for (const p of db.real) {
     assert.ok(p.ovr >= 1 && p.ovr <= 99);
-    if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 98, `${p.name} ${p.ovr}`);
+    if (p.era === 'prime') assert.ok(p.ovr >= 86 && p.ovr <= 99, `${p.name} ${p.ovr}`);
     assert.equal(p.ovr, computeOvr(p.pos, p));
   }
   for (const p of db.regulars) { assert.ok(p.ovr >= 78 && p.ovr <= 92, `${p.name} ${p.ovr}`); assert.equal(p.ovr, computeOvr(p.pos, p)); }
