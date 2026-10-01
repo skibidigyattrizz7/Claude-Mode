@@ -115,9 +115,9 @@ test('cursed online UT entry opens local pitch sabotage without matchmaking', as
   assert.equal(localArgs, null);
 });
 
-test('server release changes ban to freed, lock persists across devices', () => {
+test('server release ends the ban and starts the squad warning, lock persists across devices', () => {
   const state = s(); beginDoom(state, 0); advance(state, DOOM_MS);
-  reconcileServer(state, { ok: true, phase: 'released' }); assert.equal(state.vinson.phase, 'freed');
+  reconcileServer(state, { ok: true, phase: 'released' }); assert.equal(state.vinson.phase, 'warn'); // owned Vinson joins the XI (Oct 1)
   reconcileServer(state, { ok: true, phase: 'locked' }); assert.equal(state.vinson.phase, 'locked');
   assert.equal(inSquad(state.squad), true);
   reconcileServer(state, { ok: true, phase: 'lifted' });
@@ -153,6 +153,17 @@ test('server release repairs stale local lifted state and restores squad afterma
   s.squad.slots[9] = HELL_CARD_ID;
   reconcileServer(s,{ok:true,phase:'released',immune:false},1000);
   assert.equal(s.vinson.phase,'warn');
+  advance(s,1000+5000+10000);
+  assert.equal(s.vinson.phase,'locked');
+  assert.equal(cursedPack(s),true);
+});
+test('owner unban puts an owned Vinson into the XI so the aftermath always runs', () => {
+  const s = {club:[HELL_CARD_ID,'a','b'], squad:defaultSquad(), vinson:{phase:'banned',doomUntil:1,phaseUntil:0,pin:null}};
+  const before = s.squad.slots[9];
+  reconcileServer(s,{ok:true,phase:'released',immune:false},1000);
+  assert.equal(s.squad.slots[9], HELL_CARD_ID);
+  assert.equal(s.vinson.phase,'warn');
+  if (before && s.squad.bench.some((id) => !id)) assert.ok(s.squad.bench.includes(before));
   advance(s,1000+5000+10000);
   assert.equal(s.vinson.phase,'locked');
   assert.equal(cursedPack(s),true);

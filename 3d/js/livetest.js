@@ -46,7 +46,9 @@
     b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483000;display:flex;align-items:center;gap:8px;'
       + 'background:#ffcc00;color:#111;font:700 12px/1 system-ui,sans-serif;letter-spacing:.04em;padding:5px 6px 5px 12px;'
       + 'border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.4);white-space:nowrap';
-    var t = document.createElement('span'); t.textContent = 'LIVE TEST · test guest · real server'; b.appendChild(t);
+    // build = main.js's ?v= in index.html, so the owner can tell whether the browser runs the newest version
+    var m = document.querySelector('script[src*="js/main.js"]'), build = m && (m.getAttribute('src').split('v=')[1] || '');
+    var t = document.createElement('span'); t.textContent = 'LIVE TEST · test guest · real server' + (build ? ' · build ' + build : ''); b.appendChild(t);
     function btn(label, fn) {
       var x = document.createElement('button'); x.type = 'button'; x.textContent = label; x.onclick = fn;
       x.style.cssText = 'cursor:pointer;border:0;border-radius:999px;background:#111;color:#ffcc00;font:700 11px/1 system-ui,sans-serif;padding:5px 9px';

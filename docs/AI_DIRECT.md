@@ -437,3 +437,5 @@ Canvas frames inspected, but browser executable unavailable here. Please inspect
 controls, speech/mute/reduced motion, all weapons, laser eye alignment and actual challenge; test REAL unban ->
 VinsonXI ->5+10s -> locked pack corruption/zero coins -> match consequence -> fight/win/claim/reload. Merge after
 that passes. This branch supersedes PR18 (do not merge both independently). Owner is actively testing.
+
+PR #19 is now published. Integrated latest live commit 46550cf (unban auto-places owned Vinson into XI) and preserved build/cache updates; core 12-state and UI recovery tests pass after integration. PR #18 is superseded by #19.

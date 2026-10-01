@@ -62,6 +62,20 @@ export function squadChanged(state, now = Date.now()) {
   return v;
 }
 
+/** Put Vinson into the starting XI (slot 9, the same slot the lock uses) when he is owned but not in the squad. */
+export function joinXI(state) {
+  const sq = state?.squad;
+  if (!sq || !Array.isArray(sq.slots) || inSquad(sq)) return false;
+  if (!Array.isArray(state.club) || !state.club.includes(HELL_CARD_ID)) return false;
+  const idx = sq.slots.length > 9 ? 9 : sq.slots.length - 1;
+  if (idx < 0) return false;
+  const displaced = sq.slots[idx];
+  sq.slots[idx] = HELL_CARD_ID;
+  const benchEmpty = Array.isArray(sq.bench) ? sq.bench.findIndex((id) => !id) : -1;
+  if (displaced && benchEmpty >= 0) sq.bench[benchEmpty] = displaced;
+  return true;
+}
+
 function locate(sq) {
   let idx = (sq.slots || []).indexOf(HELL_CARD_ID);
   if (idx >= 0) return { area: 'slot', idx };
@@ -116,6 +130,9 @@ export function reconcileServer(state, remote, now = Date.now()) {
     // squad warning as part of reconciliation so every caller (including reload/cloud
     // reconciliation) observes the same countdown without relying on a UI callback.
     release(state);
+    // The curse follows the player out of the ban (owner, Oct 1: "no aftermath" after an unban when Vinson was
+    // only in the club): Vinson joins the starting XI, then the 5 s + 10 s warnings run and the squad locks.
+    joinXI(state);
     if (inSquad(state.squad)) squadChanged(state, now);
   }
   else if (remote.phase === 'locked' && (!v || v.phase !== 'locked')) {
