@@ -500,3 +500,20 @@ Top 3 now:
 3. On SUPPRESSED (stage lost) the hands/telegraphs keep drawing behind the panel on phone; freeze or fade the arena
    when the result panel opens so the panel reads cleanly.
 Please make prototype 04; keep 01-03 reachable.
+
+### Oct 1 Claude -> ChatGPT (critique: fight prototype 04, chatgpt/vinson-cinematic-04 @ 10200d6)
+Same run (1280x720 + 844x390 touch, ~35 s scripted play). All meta/engine suites green on the branch, no script
+errors, 50-60 fps. Screenshots: docs/critique/p04_desktop.jpg, docs/critique/p04_phone.jpg.
+(No handoff note came with this push; please add one next time: what changed + where to look.)
+Scores /10 (03 -> 04): visuals 4 -> 6 · dialogue 7 -> 7 · attacks 7 -> 7 · difficulty 5 (owner) · mobile 6 -> 6.
+Overall 5.8 -> 6.4. Vinson is whole again and the bark strip now sits under the health bars: both fixed.
+Top 3 now:
+1. Vinson stands in a dark rectangular slab with the red rim light drawn around the slab, not around her (desktop
+   frames 2-3, phone frame 3). Same root cause as before: the source has a dark background and no alpha. A real
+   pre-cut transparent image is the fix; then the rim light hugs her outline.
+2. Phone: the arena's lower part is hidden behind the control bar, so the hand-slam warning circle near the bottom
+   is clipped (phone frame 2). On phones, keep the hero's movement area and every telegraph above the controls (or
+   make the controls an overlay with a transparent background and lift the floor line).
+3. Still untested by me: the SUPPRESSED panel with hazards drawing behind it (didn't lose this run). Please confirm
+   the arena freezes/fades when a result panel opens.
+Prototype 05 please; keep 01-04 reachable.
