@@ -276,3 +276,6 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Oct 1) Testing mode in the real game (?livetest=1): logs out to a fresh guest, separate local save (real club untouched), still online so admin commands from the owner account work on it.
 - DONE (Oct 1) Interface style "Stadium" as the default (old saves switch once; Classic stays only if picked in Settings).
 - (Oct 1) Vinson bugs from owner testing: doom no longer breaks packs/coins on packs etc., Squad tab still works during doom; Fight Suppression button does nothing; curse aftermath fully broken (no buttons breaking, packs don't give Vinson). ChatGPT fixing; Claude reviews to find the cause.
+- DONE (Oct 1): Doom breakage restored for home tiles (Squad tile etc.), packs, store items, coins and crest (PR16 had dropped them). Fight Suppression verified working against the real server.
+- DONE (Oct 1): Fast device sync: local changes upload within ~3-15 s, other devices of the account get a poke and also check the cloud revision every 15 s / on tab focus (migration 022 pitchside_save_rev), downloading only when changed and nothing local is pending.
+- DONE (Oct 1): Tabs of one browser: another tab's club change reloads the club here; signing in/out in another tab reloads this tab (not during a match). Owner's server club was intact (1920 cards).

@@ -1132,6 +1132,17 @@ export function createOnline(deps) {
         if (r.ok !== true) return fail(r.error || 'bad_response');
         return { ok: true, exists: r.exists === true, rev: Number.isInteger(r.rev) ? r.rev : 0, updatedAt: isoOr(r.updatedAt), data: r.data && typeof r.data === 'object' && !Array.isArray(r.data) ? r.data : null };
       },
+      /** Just the cloud revision (a few bytes) so devices can notice another device's save fast. -> { ok, exists, rev } */
+      async rev() {
+        if (!online.hasIdentity()) return fail('no_account');
+        const r = dataOr(await authed('save_rev'));
+        if (r.ok !== true) return fail(r.error || 'bad_response');
+        return { ok: true, exists: r.exists === true, rev: Number.isInteger(r.rev) ? r.rev : 0 };
+      },
+      /** After an upload: poke this account's other devices (accounts only; device guests live on one device). */
+      notify() { const a = readAcc(); if (a && a.id && pres.poke) pres.poke.send(a.id, 'save'); },
+      /** fn() when another device of this account says it saved. -> unsubscribe */
+      onRemote(fn) { saveListeners.add(fn); return () => saveListeners.delete(fn); },
       /** Optimistic write (rev = the revision you last saw). -> { ok, rev } | { ok:false, error:'conflict', rev } */
       async put(data, rev) {
         if (!online.hasIdentity()) return fail('no_account');
@@ -1406,6 +1417,7 @@ export function createOnline(deps) {
   let cfg = { version: -1, config: {}, at: 0, pending: null };
   try { const c = JSON.parse(sget(storage, CFG_KEY) || 'null'); if (c && typeof c === 'object') cfg = { ...cfg, version: Number(c.version) || 0, config: sanitizeConfig(c.config) }; } catch { /* ignore */ }
   const cfgListeners = new Set();
+  const saveListeners = new Set();
   // presence
   const pres = { running: false, timer: null, cfgTimer: null, last: null, listeners: new Set(), bcast: new Set(), seen: new Set(), busy: false, onVis: null, poke: null, pokeT: null, again: false };
   const emitPresence = () => { for (const f of [...pres.listeners]) { try { f(pres.last); } catch (e) { console.error('[online] presence listener failed', e); } } };
@@ -1417,6 +1429,8 @@ export function createOnline(deps) {
     // a config change (store packs, feature switches): fetch the config at once instead of waiting for presence
     // to report the new version (saves a whole round trip; owner, Oct 1: admin commands as fast as possible)
     if (p && p.k === 'cfg') online.config.get(true);
+    // another device of this account saved its club: let the cloud sync check the revision now (cloudsave.js)
+    if (p && p.k === 'save') { if (p.to) for (const f of [...saveListeners]) { try { f(); } catch { /* ignore */ } } return; }
     if (pres.pokeT) return;
     pres.pokeT = setTimeout(() => { pres.pokeT = null; presenceTick(true); }, 30);
   }
@@ -1591,7 +1605,7 @@ const unavailable = () => {
     },
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
     owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, deletePlayer: f, deleteGuests: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
-    cloud: { get: f, put: f },
+    cloud: { get: f, put: f, rev: f, notify() {}, onRemote: () => () => {} },
     vinson: { status: f, pull: f, lock: f, unban: f, lift: f, battleStart: f, battleWin: f, claimBattleRewards: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },

@@ -1574,6 +1574,13 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       const sv = db.saves[p.id];
       return sv ? { ok: true, exists: true, rev: sv.rev, updatedAt: new Date(sv.at).toISOString(), data: JSON.parse(JSON.stringify(sv.data)) } : { ok: true, exists: false, rev: 0 };
     },
+    save_rev({ p_id, p_secret }) {
+      const db = load();
+      const p = auth(db, p_id, p_secret);
+      if (!p) return err('auth');
+      const sv = db.saves[p.id];
+      return { ok: true, exists: !!sv, rev: sv ? sv.rev : 0 };
+    },
     save_put({ p_id, p_secret, p_data, p_rev }) {
       const db = load();
       const p = auth(db, p_id, p_secret);

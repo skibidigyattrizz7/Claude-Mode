@@ -45,8 +45,9 @@ export async function openPokes(onPoke) {
     });
   });
   return {
-    // k: what changed ('cfg' = global config such as store packs), so receivers can refetch it directly
-    send(to, k) { try { ch.send({ type: 'broadcast', event: 'p', payload: { to: typeof to === 'string' ? to : null, k: k === 'cfg' ? 'cfg' : null } }); } catch { /* ignore */ } },
+    // k: what changed ('cfg' = global config such as store packs; 'save' = this account's cloud club, sent by its own
+    // other device), so receivers can refetch it directly
+    send(to, k) { try { ch.send({ type: 'broadcast', event: 'p', payload: { to: typeof to === 'string' ? to : null, k: k === 'cfg' || k === 'save' ? k : null } }); } catch { /* ignore */ } },
     close() { try { sb.removeChannel(ch); } catch { /* ignore */ } },
   };
 }

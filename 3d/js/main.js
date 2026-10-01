@@ -1354,8 +1354,8 @@ function startOnlineServices() {
     const cloud = createCloudSync(online, {
       beforeSync: () => runRemote({ usePresence: false }),
       afterSync: async (res) => { if (online.hasIdentity()) { const remote = await remoteMod(); await remote.flushAcks(online, res); } },
-      onReplaced: () => {
-        toast('Your Ultimate Team club was loaded from your account.', 'good');
+      onReplaced: (reason) => {
+        toast(reason === 'device' ? 'Club updated with changes from your other device.' : 'Your Ultimate Team club was loaded from your account.', 'good');
         window.__pitchsideVinson?.reload?.();
         if (metaMount && nav.top && nav.top.name === 'meta') { nav.back(); metaScreen('ut'); }
         else if (metaMount && typeof metaMount.reloadUT === 'function') metaMount.reloadUT();
@@ -1363,6 +1363,29 @@ function startOnlineServices() {
     });
     cloud.start();
     window.__pitchsideCloud = cloud;
+    // Tabs of the same browser share one login and one saved club (owner, Oct 1: a second tab kept its old copy,
+    // saved it over the newer one and logging out in one tab looked like it broke the other). When another tab
+    // changes the club, reload it here; when it signs in or out, reload this tab (after a match, never during one).
+    const LT = 'pitchside.livetest::';
+    let reloadQueued = false;
+    const reloadWhenSafe = () => {
+      if (reloadQueued) return; reloadQueued = true;
+      const tryNow = () => { if (globalThis.__pitchsideInMatch) { setTimeout(tryNow, 3000); return; } location.reload(); };
+      tryNow();
+    };
+    window.addEventListener('storage', (e) => {
+      if (!e.key) return;
+      const key = window.PITCHSIDE_LIVETEST ? (e.key.startsWith(LT) ? e.key.slice(LT.length) : null) : (e.key.startsWith(LT) ? null : e.key);
+      if (key === 'pitchside.ut') {
+        window.__pitchsideVinson?.reload?.();
+        if (metaMount && typeof metaMount.reloadUT === 'function') metaMount.reloadUT();
+      } else if (key === 'pitchside.account') {
+        const idOf = (v) => { try { return (JSON.parse(v || 'null') || {}).id || null; } catch { return null; } };
+        if (idOf(e.oldValue) === idOf(e.newValue)) return; // same account (a ban/role/name refresh): nothing to do
+        toast('You signed in or out in another tab. Updating this tab…', 'warn');
+        reloadWhenSafe();
+      }
+    });
     // check-ins that carry something for this device (a reset epoch, a pending owner patch): apply now, then sync
     online.presence.onUpdate((u) => {
       if (!u || !(u.hasResets || u.patches > 0) || (metaMount && typeof metaMount.processRemote === 'function')) return; // the open UT screen handles it itself
@@ -1378,7 +1401,7 @@ function startOnlineServices() {
       setTimeout(() => { try { maybeShowAccountGate(online, { toast }); } catch { /* ignore */ } }, 300);
     });
     // The VINSON deadline and ban screen continue across menus and page reloads.
-    import('./meta/ui/vinson.js?v=vinson11').then(({ startVinsonExperience }) => startVinsonExperience(online))
+    import('./meta/ui/vinson.js?v=vinson12').then(({ startVinsonExperience }) => startVinsonExperience(online))
       .catch((e) => console.warn('[vinson] event UI unavailable', e));
     // Accounts are optional but prominent: first visit shows Create account / Log in / Continue as guest.
     const webdriver = typeof navigator !== 'undefined' && navigator.webdriver;

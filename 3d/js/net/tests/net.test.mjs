@@ -1190,6 +1190,32 @@ test('cloud save: sign up uploads the local club, login elsewhere downloads it, 
   assert.deepEqual(JSON.parse(d1.getItem('pitchside.ut')).club, ['p1', 'p2', 'p3']);
 });
 
+test('cloud save: fast device switch - an idle device pulls the newer club; pending local edits are never overwritten', async () => {
+  const { createCloudSync } = await import('../cloudsave.js');
+  const be = createMockBackend(memoryStore());
+  const d1 = memStorage(), d2 = memStorage();
+  d1.setItem('pitchside.ut', JSON.stringify({ club: ['p1'], coins: 1 }));
+  const A1 = mk3(be, { storage: d1 }), A2 = mk3(be, { storage: d2 });
+  const reasons = [];
+  const c1 = createCloudSync(A1, { storage: d1 }), c2 = createCloudSync(A2, { storage: d2, onReplaced: (r) => reasons.push(r) });
+  await A1.account.signup({ username: 'Two Devices', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
+  assert.equal((await c1.syncNow()).action, 'uploaded');
+  await A2.account.login({ username: 'two devices', password: 'Pitch-pass1' });
+  assert.equal((await c2.syncNow()).action, 'downloaded');
+  assert.equal((await c2.pullNow()).action, 'unchanged'); // nothing new: only the revision was read
+  d1.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2'], coins: 1 }));
+  assert.equal((await c1.syncNow()).action, 'uploaded');
+  assert.equal((await A2.cloud.rev()).rev, 2);
+  assert.equal((await c2.pullNow()).action, 'downloaded'); // idle device 2 gets device 1's pull at once
+  assert.deepEqual(JSON.parse(d2.getItem('pitchside.ut')).club, ['p1', 'p2']);
+  assert.deepEqual(reasons, ['login', 'device']);
+  // device 2 has an edit waiting to upload: a pull uploads it instead of downloading over it
+  d2.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2', 'p3'], coins: 1 }));
+  assert.equal((await c2.pullNow()).action, 'uploaded');
+  assert.equal((await c1.pullNow()).action, 'downloaded');
+  assert.deepEqual(JSON.parse(d1.getItem('pitchside.ut')).club, ['p1', 'p2', 'p3']);
+});
+
 // ------------------------------------------------------------------ 007: owner control panel
 test('owner panel: every player (guests too) with full info; coins beyond 1e9; username; admin give/revoke/revoke-all', async () => {
   const { be, A, B, O, a, b, o } = await world3();

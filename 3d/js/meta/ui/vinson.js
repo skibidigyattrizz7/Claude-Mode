@@ -26,7 +26,10 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   let soundContext = null, battleExperience = null, battleOpening = false, experienceClosed = false;
   const damagedKeys = new Set();
   const controlSelector = 'button, [role="tab"], a, input, select, textarea, .pc-card, .pm-slot';
-  const surfaceSelector = 'img, svg, h1, h2, h3, h4, p, label, span';
+  // Clickable tiles, packs, store items, coin counters and the crest break as one piece (owner, Oct 1: PR16 dropped
+  // them, so the home Squad tile and packs kept working during Doom). Big containers (.pm-panel/.pm-section) stay out.
+  const pieceSelector = '.pm-tile, .pm-storeitem, .pm-packitem, .pm-coins, .pm-crest';
+  const surfaceSelector = `img, svg, h1, h2, h3, h4, p, label, span, ${pieceSelector}`;
   const controlKey = (el) => {
     if (el.dataset.uttab) return `tab:${el.dataset.uttab}`;
     const address = [];
@@ -88,7 +91,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     // The original pull still needs to finish assigning/selling its items and close.
     // Cursed aftermath grids have their own capture handler and cannot award coins.
     if (event.target.closest?.('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback')) return;
-    const target = event.target.closest?.(controlSelector) || event.target.closest?.(surfaceSelector);
+    const target = event.target.closest?.(controlSelector) || event.target.closest?.(pieceSelector) || event.target.closest?.(surfaceSelector);
     if (target && root()?.contains(target)) {
       if (target.matches('[data-uttab="home"], .pm-tile--ut')) return;
       if (target.matches('.pm-back') && app?.stack?.some((view) => view.utHome)) {
