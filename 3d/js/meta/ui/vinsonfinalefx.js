@@ -17,8 +17,23 @@ export function drawDomainClash(ctx,shot,t,reducedMotion,star){
   const border=shot.clashX??640;
   const pulse=shot.mashPulse||0,level=shot.mashThreshold||0;
   for(const [x,color,accent,side] of [[300,'#54bfff','#f2c66d',-1],[980,'#e32249','#120008',1]]){
-    ctx.save();ctx.beginPath();ctx.rect(side<0?0:border,180,side<0?border:1280-border,540);ctx.clip();
-    const glow=ctx.createRadialGradient(x,450,25,x,450,520);glow.addColorStop(0,color+'38');glow.addColorStop(1,color+'00');ctx.globalAlpha=p;ctx.fillStyle=glow;ctx.fillRect(0,180,1280,540);
+    ctx.save();ctx.beginPath();ctx.rect(side<0?0:border,0,side<0?border:1280-border,720);ctx.clip();
+    const glow=ctx.createRadialGradient(x,450,25,x,450,520);glow.addColorStop(0,color+'38');glow.addColorStop(1,color+'00');ctx.globalAlpha=p;ctx.fillStyle=glow;ctx.fillRect(0,0,1280,720);
+    // A curved territorial wall gives each domain volume instead of a flat floor halo.
+    ctx.strokeStyle=color;ctx.lineWidth=3;ctx.globalAlpha=p*.58;
+    for(let j=0;j<3;j++){
+      const radius=430+j*48,lean=reducedMotion?0:Math.sin(t*.7+j)*5;
+      ctx.beginPath();ctx.ellipse(x+lean,490,radius,radius*.84,0,Math.PI,Math.PI*2);ctx.stroke();
+    }
+    ctx.globalAlpha=p*.32;ctx.lineWidth=2;
+    for(let j=0;j<9;j++){
+      const px=x-420+j*105,height=190+80*Math.sin(j*.8),flow=reducedMotion?0:Math.sin(t*1.1+j)*9;
+      if(side<0){
+        ctx.strokeStyle='#d8b76a';ctx.beginPath();ctx.moveTo(px,520);ctx.quadraticCurveTo(px+flow,350,px+flow*.5,520-height);ctx.stroke();
+      }else{
+        ctx.strokeStyle='#ff4051';ctx.beginPath();ctx.moveTo(px,520);ctx.lineTo(px-12+flow,480);ctx.lineTo(px+10+flow,440);ctx.lineTo(px-8,520-height);ctx.stroke();
+      }
+    }
     ctx.restore();ctx.save();ctx.strokeStyle=color;ctx.globalAlpha=p*(.52+level*.1);
     for(let i=0;i<3;i++){
       const r=145+i*72+(reducedMotion?0:Math.sin(t*1.1+i)*6),spin=reducedMotion?0:t*(i%2?-.22:.16);
@@ -37,7 +52,7 @@ export function drawDomainClash(ctx,shot,t,reducedMotion,star){
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='#fff3d0';ctx.shadowColor='#ffdfb4';ctx.shadowBlur=reducedMotion?0:14+10*pulse;ctx.lineWidth=3+level+pulse*3;
   ctx.beginPath();for(let i=0;i<=14;i++){const y=190+i*34,wave=reducedMotion?0:Math.sin(t*4+i*1.7)*(4+level*2);if(i)ctx.lineTo(border+wave,y);else ctx.moveTo(border+wave,y);}ctx.stroke();
   for(let i=0;i<3+level;i++){const y=265+i*85,a=Math.sin(t*2.7+i)*18;ctx.beginPath();ctx.moveTo(border-68,y+a);ctx.lineTo(border-18,y-12);ctx.lineTo(border+42,y+8-a*.3);ctx.stroke();}
-  const sphere=22+(shot.mashProgress||0)*28+pulse*13;const energy=ctx.createRadialGradient(border,337,2,border,337,sphere);energy.addColorStop(0,'#fff');energy.addColorStop(.35,'#fff0b8');energy.addColorStop(1,'rgba(255,80,80,0)');ctx.fillStyle=energy;ctx.beginPath();ctx.arc(border,337,sphere,0,Math.PI*2);ctx.fill();ctx.restore();
+  const sphere=22+(shot.mashProgress||0)*28+pulse*13;const energy=ctx.createRadialGradient(border,337,2,border,337,sphere);energy.addColorStop(0,'rgba(255,225,150,.45)');energy.addColorStop(.35,'rgba(255,180,95,.3)');energy.addColorStop(1,'rgba(255,80,80,0)');ctx.fillStyle=energy;ctx.beginPath();ctx.arc(border,337,sphere,0,Math.PI*2);ctx.fill();ctx.restore();
   ctx.save();ctx.fillStyle='#b7a58a';ctx.globalAlpha=.55;for(let i=0;i<10;i++){const a=t*(reducedMotion?0:.35)+i*2.4,x=border+Math.cos(a)*(42+(i%3)*24),y=455+Math.sin(a*1.3)*55;ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.fillRect(-7,-3,14,6);ctx.restore();}ctx.restore();
 }
 
@@ -68,4 +83,21 @@ export function drawThrownSword(ctx,shot,t,reducedMotion){
   ctx.shadowColor='#def5ff';ctx.shadowBlur=reducedMotion?0:12;ctx.fillStyle='#d2e2e9';
   ctx.beginPath();ctx.moveTo(-7,-90);ctx.lineTo(7,-90);ctx.lineTo(5,-10);ctx.lineTo(0,12);ctx.lineTo(-5,-10);ctx.closePath();ctx.fill();
   ctx.fillStyle='#c4a05c';ctx.fillRect(-23,-98,46,8);ctx.fillStyle='#263647';ctx.fillRect(-5,-130,10,32);ctx.restore();
+}
+
+// Draw AFTER beams and impact rings: opaque outline prevents additive bloom washing out the symbol.
+export function drawClashEmblem(ctx,shot,t,reducedMotion){
+  if(!shot.domainPower||!shot.beams||shot.hero!=='captain')return;
+  const power=clamp(shot.clashPower??shot.beams),pulse=clamp(shot.mashPulse||0);
+  const radius=62+power*38+pulse*7,x=shot.clashX??640;
+  ctx.save();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=Math.min(1,shot.beams*1.2);
+  ctx.translate(x,337);ctx.rotate(reducedMotion?0:Math.sin(t*.55)*.12);
+  ctx.lineJoin='round';ctx.shadowBlur=0;
+  for(const offset of [0,Math.PI]){
+    ctx.beginPath();for(let i=0;i<3;i++){const a=-Math.PI/2+offset+i*Math.PI*2/3;if(i)ctx.lineTo(Math.cos(a)*radius,Math.sin(a)*radius);else ctx.moveTo(Math.cos(a)*radius,Math.sin(a)*radius);}ctx.closePath();
+    ctx.strokeStyle='#071626';ctx.lineWidth=12;ctx.stroke();
+    ctx.strokeStyle='#e7c165';ctx.lineWidth=6;ctx.stroke();
+    ctx.strokeStyle='#d9f6ff';ctx.lineWidth=2;ctx.stroke();
+  }
+  ctx.restore();
 }

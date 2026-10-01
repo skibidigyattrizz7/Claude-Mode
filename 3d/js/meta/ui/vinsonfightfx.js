@@ -122,7 +122,7 @@ export function drawClash(ctx,shot,t,reducedMotion,drawBeam,drawStar,eyePosition
   drawStar(ctx,x,y,25+power*27,reducedMotion?0:t*1.4,shot.beams);
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=shot.beams;ctx.strokeStyle='#ffedd3';ctx.lineWidth=2;
   for(let i=0;i<18;i++){const a=i*2.39996+(reducedMotion?0:t*.75),r=25+((t*140+i*17)%100)*power;ctx.beginPath();ctx.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r);ctx.lineTo(x+Math.cos(a)*(r+12+power*22),y+Math.sin(a)*(r+12+power*22));ctx.stroke();}
-  ctx.fillStyle='#fffbe9';ctx.shadowBlur=32+power*40;ctx.shadowColor='#fff3c7';ctx.beginPath();ctx.arc(x,y,8+power*19,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.fillStyle='#fffbe9';ctx.shadowBlur=shot.domainPower?22:32+power*40;ctx.shadowColor='#fff3c7';ctx.beginPath();ctx.arc(x,y,shot.domainPower?5+power*9:8+power*19,0,Math.PI*2);ctx.fill();ctx.restore();
 }
 export function drawArrival(ctx,shot,t,reducedMotion,drawStar){
   if(!shot.arrival&&!shot.skyBeam&&!shot.arrivalStar)return;

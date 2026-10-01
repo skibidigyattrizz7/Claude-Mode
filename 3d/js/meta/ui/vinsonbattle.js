@@ -1,10 +1,10 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
 import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson28';
 import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=14b';
-import { maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=14';
+import { maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=14c';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=14';
 import {drawPeacefulEnding} from './vinsonendingfx.js?v=14';
-import {drawDomainClash,drawThrownSword,drawClashHUD} from './vinsonfinalefx.js?v=14b';
+import {drawDomainClash,drawThrownSword,drawClashHUD,drawClashEmblem} from './vinsonfinalefx.js?v=14c';
 import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=14';
 import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=14';
 import { load } from '../core/storage.js';
@@ -291,7 +291,6 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
     if(shot.throwSword)drawThrownSword(ctx,shot,t,reducedMotion);
     if (shot.beams > 0) {
       drawClash(ctx,shot,t,reducedMotion,beam,star,battleEyePositions);
-      if(shot.star&&shot.hero==='captain')star(ctx,shot.clashX??640,337,24+shot.star**3*850,reducedMotion?0:t*.85,shot.beams);
     }
     if(shot.impact>0)impactRings(ctx,shot.clashX??640,337,shot.impact,t,reducedMotion,'#ffd0ad');
     if(shot.star>0&&shot.hero==='captain'&&shot.time<11){
@@ -300,6 +299,7 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
       for(let i=0;i<12;i++){const y=215+i*30+(reducedMotion?0:(t*210+i*23)%32);ctx.beginPath();ctx.moveTo(790+i%4*22,y);ctx.lineTo(900+i%4*22,y-5);ctx.stroke();}ctx.restore();
     }
     if(!shot.peace)shieldAndSword(ctx, shot);
+    drawClashEmblem(ctx,shot,t,reducedMotion);
     drawClashHUD(ctx,shot,t,reducedMotion);
   }
   for (const p of particles) {
