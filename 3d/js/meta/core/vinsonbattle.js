@@ -37,7 +37,8 @@ function freshCombat(stage, seed, attempt, totalTime = 0) {
   return {
     phase: 'intro', time: totalTime, phaseTime: 0, stage, attempt,
     hero: { x: 250, y: 425, hp: 100, maxHp: 100, invulnerable: 0, dodgeCooldown: 0, attackCooldown: 0 },
-    boss: { x: 990, y: 425, hp: isFinal ? 1680 : 1050, maxHp: isFinal ? 1680 : 1050, vx: 0, vy: 0 },
+    // Tuned for roughly 30–55 seconds of accurate sustained damage per stage.
+    boss: { x: 990, y: 425, hp: isFinal ? 950 : 880, maxHp: isFinal ? 950 : 880, vx: 0, vy: 0 },
     hazards: [], projectiles: [], events: [],
     attackTimer: 0.8, nextHazardId: 1,
     _rngState: attemptSeed(seed, stage, attempt), _dodgeWasDown: false, _lastAttack: '', _moveSign: 1
@@ -55,31 +56,45 @@ function pointSegmentDistance(px, py, x1, y1, x2, y2) {
 }
 function spawnHazard(state, rng) {
   if (state.hazards.length >= MAX_HAZARDS) return;
-  const types = ['laserline', 'bombcircle', 'painring'];
+  const types = ['laserline', 'bombcircle', 'painring', 'handslam', 'handcatch'];
   let choices = types.filter(type => type !== state._lastAttack);
   if (state.stage === 1 && rng() > 0.4) choices = choices.filter(type => type !== 'painring');
   const type = choices[Math.floor(rng() * choices.length)], h = state.hero, b = state.boss;
-  const telegraph = (state.stage ? 0.72 : 0.88) + rng() * 0.25;
+  const telegraph = (type === 'handslam' || type === 'handcatch' ? 1.02 : (state.stage ? 0.82 : 0.92)) + rng() * 0.24;
   const origins = battleEyePositions(bossKey(state.stage), b.x, b.y);
   const segments = type === 'laserline' ? origins.map(origin => ({
     x1: origin.x, y1: origin.y,
     x2: clamp(h.x + (rng() - 0.5) * 75, ARENA.minX, ARENA.maxX),
     y2: clamp(h.y - 85 + (rng() - 0.5) * 65, ARENA.minY - 90, ARENA.maxY - 85)
   })) : [];
+  const slamX = clamp(h.x + (rng() - 0.5) * 105, ARENA.minX + 72, ARENA.maxX - 72);
+  const slamY = clamp(h.y - 55 + (rng() - 0.5) * 65, ARENA.minY + 72, ARENA.maxY - 72);
+  // The horizontal danger lane is fixed for the warning and impact window. Players
+  // can leave it vertically; its ends remain inside the arena so it is escapable.
+  const laneY = clamp(h.y - 55 + (rng() - 0.5) * 42, ARENA.minY + 72, ARENA.maxY - 72);
+  const corridor = { x1: ARENA.minX - 60, y1: laneY, x2: ARENA.maxX + 60, y2: laneY, width: 54 };
   const hazard = {
     id: state.nextHazardId++, type, elapsed: 0, telegraph,
-    duration: type === 'painring' ? (state.stage ? 0.95 : 1.15) : 0.48, hit: false,
+    duration: type === 'painring' ? (state.stage ? 0.95 : 1.15) : type === 'handslam' ? 0.42 : type === 'handcatch' ? 0.78 : 0.48, hit: false,
     origins, eyeOrigins: origins, segments,
-    x: type === 'bombcircle' ? clamp(h.x + (rng() - 0.5) * 170, ARENA.minX + 65, ARENA.maxX - 65) : b.x,
-    y: type === 'bombcircle' ? clamp(h.y + (rng() - 0.5) * 155, ARENA.minY + 65, ARENA.maxY - 65) : b.y,
-    radius: type === 'bombcircle' ? 68 : 0, ringMax: 235
+    x: type === 'bombcircle' ? clamp(h.x + (rng() - 0.5) * 170, ARENA.minX + 65, ARENA.maxX - 65) : type === 'handslam' ? slamX : b.x,
+    y: type === 'bombcircle' ? clamp(h.y + (rng() - 0.5) * 155, ARENA.minY + 65, ARENA.maxY - 65) : type === 'handslam' ? slamY : b.y,
+    radius: type === 'bombcircle' ? 68 : type === 'handslam' ? 82 : 0, ringMax: 235,
+    ...(type === 'handcatch' ? { corridor } : {})
   };
   state.hazards.push(hazard); state._lastAttack = type;
-  event(state, 'telegraph', { attack: type, hazardId: hazard.id, duration: hazard.telegraph, origins, segments });
+  event(state, 'telegraph', { attack: type, hazardId: hazard.id, duration: hazard.telegraph, origins, segments,
+    ...(type === 'handslam' ? { x: hazard.x, y: hazard.y, radius: hazard.radius } : {}),
+    ...(type === 'handcatch' ? { corridor } : {}) });
 }
 function hazardHitsHero(hazard, hero) {
   if (hazard.type === 'laserline') return hazard.segments.some(s => pointSegmentDistance(hero.x, hero.y - 85, s.x1, s.y1, s.x2, s.y2) <= 19);
   if (hazard.type === 'bombcircle') return Math.hypot(hero.x - hazard.x, hero.y - hazard.y) <= hazard.radius;
+  if (hazard.type === 'handslam') return Math.hypot(hero.x - hazard.x, hero.y - 55 - hazard.y) <= hazard.radius;
+  if (hazard.type === 'handcatch') {
+    const lane = hazard.corridor;
+    return pointSegmentDistance(hero.x, hero.y - 55, lane.x1, lane.y1, lane.x2, lane.y2) <= lane.width / 2 + 17;
+  }
   const distance = Math.hypot(hero.x - hazard.x, hero.y - hazard.y);
   const radius = 32 + (hazard.elapsed - hazard.telegraph) * hazard.ringMax / hazard.duration;
   return Math.abs(distance - radius) <= 22;
@@ -93,7 +108,7 @@ function damagePlayer(state, amount, source) {
 }
 const WEAPONS = {
   star: { cooldown: 0.36, damage: 18, speed: 690, radius: 11, life: 2, color: '#67b9ff' },
-  spinner: { cooldown: 0.18, damage: 7, speed: 760, radius: 8, life: 1.7, color: '#8fffe2' },
+  spinner: { cooldown: 0.24, damage: 3, speed: 760, radius: 8, life: 1.7, color: '#8fffe2' },
   explosive: { cooldown: 0.82, damage: 34, speed: 470, radius: 16, life: 2.4, splash: 78, color: '#ffb45f' },
   eyes: { cooldown: 0.62, damage: 25, speed: 620, radius: 10, life: 2, color: '#ff6280' }
 };
@@ -141,12 +156,12 @@ function updateFight(state, dt, input) {
   if (dodgePressed && hero.dodgeCooldown <= 0) {
     const direction = Math.hypot(move.x, move.y) ? move : { x: -1, y: 0 };
     hero.x = clamp(hero.x + direction.x * 620 * 0.19, ARENA.minX, ARENA.maxX);
-    hero.y = clamp(hero.y + direction.y * 620 * 0.19, ARENA.minY, ARENA.maxY);
+    hero.y = clamp(hero.y + direction.y * 620 * 0.19, state.stage ? 355 : 415, ARENA.maxY);
     hero.invulnerable = 0.38; hero.dodgeCooldown = state.stage ? 0.9 : 0.86; speed = 0;
     event(state, 'dodge', { x: hero.x, y: hero.y });
   }
   hero.x = clamp(hero.x + move.x * speed * dt, ARENA.minX, ARENA.maxX);
-  hero.y = clamp(hero.y + move.y * speed * dt, ARENA.minY, ARENA.maxY);
+  hero.y = clamp(hero.y + move.y * speed * dt, state.stage ? 355 : 415, ARENA.maxY);
   moveBoss(state, dt);
   if (bool(input.attack) && hero.attackCooldown <= 0 && state.projectiles.length < MAX_PROJECTILES - 2) fireWeapon(state, input.weapon);
 
@@ -167,12 +182,12 @@ function updateFight(state, dt, input) {
   state.attackTimer -= dt;
   if (state.attackTimer <= 0) {
     spawnHazard(state, () => nextRandom(state));
-    state.attackTimer = (state.stage ? 0.92 : 1.23) + nextRandom(state) * (state.stage ? 0.3 : 0.38);
+    state.attackTimer = (state.stage ? 1.55 : 1.72) + nextRandom(state) * (state.stage ? 0.35 : 0.42);
   }
   for (let i = state.hazards.length - 1; i >= 0; i--) {
     const hazard = state.hazards[i]; hazard.elapsed += dt;
     if (hazard.elapsed >= hazard.telegraph && !hazard.hit && hazardHitsHero(hazard, hero)) {
-      damagePlayer(state, hazard.type === 'bombcircle' ? 22 : state.stage ? 20 : 17, hazard.type); hazard.hit = true;
+      damagePlayer(state, hazard.type === 'bombcircle' || hazard.type === 'handslam' || hazard.type === 'handcatch' ? 22 : state.stage ? 20 : 17, hazard.type); hazard.hit = true;
     }
     if (state.phase === 'defeat') return;
     if (hazard.elapsed >= hazard.telegraph + hazard.duration) state.hazards.splice(i, 1);
