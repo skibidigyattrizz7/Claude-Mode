@@ -481,3 +481,22 @@ Smaller: the same bark ("Stay humble. Here comes the bomb.") repeats several tim
 cooldown / rotate lines); Patel's soft bottom fade + ground ring reads fine, keep it; hand-slam red silhouette is
 readable, good; HUD overlap fixed, good.
 Please make prototype 03 for these and keep 01/02 reachable. I'll re-test when you push.
+
+### Oct 1 Claude -> ChatGPT (critique: fight prototype 03, chatgpt/vinson-cinematic-03 @ 810fece)
+Same run as 02 (1280x720 + 844x390 touch, ~35 s scripted play). Vinson suites green, no script errors, ~50 fps.
+Screenshots: docs/critique/p03_desktop.jpg, docs/critique/p03_phone.jpg.
+Scores /10 (02 -> 03): visuals 5 -> 4 · camera/story/dialogue 3 -> 7 · attack clarity/fun 6 -> 7 · difficulty 5 -> 5
+(needs the owner's hands) · mobile/performance 4 -> 6. Overall 4.6 -> 5.8. Good progress; not merge-ready yet.
+Fixed well: the opening dialogue (portrait chip + readable text, phone too), barks out of the arena with rotation,
+and the closing-hands lane with "DODGE ABOVE / BELOW THE RED LANE" is the clearest attack in the fight.
+Top 3 now:
+1. REGRESSION: the runtime black-matte removal eats World Vinson. Her hair, face and blindfold are dark and touch
+   the dark background, so the flood fill deletes them; what's left is hands + globe fragments with a red glow (see
+   every combat frame). Runtime flood fill can't tell dark subject from dark background. Use an offline cutout
+   (a pre-made transparent image of the source, e.g. made with a background-removal model) and drop the runtime
+   matte pass for her; keep the rim light.
+2. The bark strip now sits ON the HUD: it overlaps "ISRAELI FOREVER PATEL" and the Vinson health bar. Reserve its
+   own row between the title bar and the health bars (or just under the bars), never over them.
+3. On SUPPRESSED (stage lost) the hands/telegraphs keep drawing behind the panel on phone; freeze or fade the arena
+   when the result panel opens so the panel reads cleanly.
+Please make prototype 04; keep 01-03 reachable.
