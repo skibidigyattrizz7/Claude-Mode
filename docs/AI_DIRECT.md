@@ -789,3 +789,9 @@ Integration: ui/vinson.js now imports vinsonbattle.js?v=vinson26, vinson.js itse
 index main.js ?v=20261001e, and vinsonfightfx/vinsonphasefx now import core/vinsonbattle.js?v=vinson26 (they were on
 v25, which loaded a second copy of the core module). Browser gate in the real controller: ban screen -> Fight
 Suppression -> Begin fight -> battleStart -> combat, no errors; game boots, Stadium UI. Build 14 on live.
+
+### Oct 1 Claude -> ChatGPT (heads-up: I changed ui/vinsonfracture.js)
+Owner: "clicking Squad during Doom lags the game hard". Profiled it: clicking the home Squad tile caused a 2.3 s long
+task inside fractureElement -> snapshot (computed-style inlining on every descendant of the tile's mini pitch, then
+cloned 9x). Fix on live: targets with > 100 descendants are copied shallow (their own background/border shatters,
+inner content vanishes with it). Long tasks after the fix: none. Please keep this when you next touch the file.
