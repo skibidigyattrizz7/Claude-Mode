@@ -16,7 +16,7 @@
 
 const fnv = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0).toString(16); };
 
-export function createCloudSync(online, { storage = globalThis.localStorage, key = 'pitchside.ut', metaKey = 'pitchside.ut.cloud', intervalMs = 60000, watchMs = 3000, minGapMs = 15000, revMs = 15000, now = () => Date.now(), onReplaced = null, beforeSync = null, afterSync = null, log = () => {} } = {}) {
+export function createCloudSync(online, { storage = globalThis.localStorage, key = 'pitchside.ut', metaKey = 'pitchside.ut.cloud', intervalMs = 60000, watchMs = 3000, minGapMs = 15000, revMs = 15000, now = () => Date.now(), onReplaced = null, canPull = null, beforeSync = null, afterSync = null, log = () => {} } = {}) {
   const get = (k) => { try { return storage.getItem(k); } catch { return null; } };
   const set = (k, v) => { try { if (v == null) storage.removeItem(k); else storage.setItem(k, v); return true; } catch { return false; } };
   const readMeta = () => { try { const m = JSON.parse(get(metaKey) || 'null'); return m && typeof m.id === 'string' ? m : null; } catch { return null; } };
@@ -51,6 +51,7 @@ export function createCloudSync(online, { storage = globalThis.localStorage, key
     if (!meta || meta.id !== who.id || meta.fresh || meta.guest || !meta.rev) return run();
     if (local && fnv(local) !== meta.hash) return run(); // local changes first: a conflict downloads the newer copy
     if (typeof online.cloud.rev !== 'function') return { ok: true, action: 'unchanged' };
+    if (canPull && !canPull()) return { ok: true, action: 'deferred' }; // busy player: the next check (<= 15 s) retries
     const r = await online.cloud.rev();
     if (!r.ok || !r.exists || r.rev === meta.rev) return { ok: r.ok !== false, action: 'unchanged' };
     const g = await online.cloud.get();

@@ -1196,8 +1196,8 @@ test('cloud save: fast device switch - an idle device pulls the newer club; pend
   const d1 = memStorage(), d2 = memStorage();
   d1.setItem('pitchside.ut', JSON.stringify({ club: ['p1'], coins: 1 }));
   const A1 = mk3(be, { storage: d1 }), A2 = mk3(be, { storage: d2 });
-  const reasons = [];
-  const c1 = createCloudSync(A1, { storage: d1 }), c2 = createCloudSync(A2, { storage: d2, onReplaced: (r) => reasons.push(r) });
+  const reasons = []; let busy2 = false;
+  const c1 = createCloudSync(A1, { storage: d1 }), c2 = createCloudSync(A2, { storage: d2, onReplaced: (r) => reasons.push(r), canPull: () => !busy2 });
   await A1.account.signup({ username: 'Two Devices', password: 'Pitch-pass1', confirm: 'Pitch-pass1' });
   assert.equal((await c1.syncNow()).action, 'uploaded');
   await A2.account.login({ username: 'two devices', password: 'Pitch-pass1' });
@@ -1206,6 +1206,9 @@ test('cloud save: fast device switch - an idle device pulls the newer club; pend
   d1.setItem('pitchside.ut', JSON.stringify({ club: ['p1', 'p2'], coins: 1 }));
   assert.equal((await c1.syncNow()).action, 'uploaded');
   assert.equal((await A2.cloud.rev()).rev, 2);
+  busy2 = true;
+  assert.equal((await c2.pullNow()).action, 'deferred'); // player busy (match / pack / typing): no swap under them
+  busy2 = false;
   assert.equal((await c2.pullNow()).action, 'downloaded'); // idle device 2 gets device 1's pull at once
   assert.deepEqual(JSON.parse(d2.getItem('pitchside.ut')).club, ['p1', 'p2']);
   assert.deepEqual(reasons, ['login', 'device']);

@@ -1351,12 +1351,22 @@ function startOnlineServices() {
       })().catch((e) => { console.warn('[pitchside] remote sync failed', e && e.message); return null; }).finally(() => { headless = null; });
       return headless;
     };
+    let lastInputAt = 0, lastSyncToast = 0;
+    for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, () => { lastInputAt = Date.now(); }, { capture: true, passive: true });
     const cloud = createCloudSync(online, {
       beforeSync: () => runRemote({ usePresence: false }),
       afterSync: async (res) => { if (online.hasIdentity()) { const remote = await remoteMod(); await remote.flushAcks(online, res); } },
+      // Another device's save arriving must never feel like a page refresh (owner, Oct 1: "the game keeps refreshing"):
+      // it waits until the player is idle and out of matches / pack openings / dialogs, then updates the club in place.
+      canPull: () => !matchState.active && !document.querySelector('.pm-po, .pm-modal, .vb-screen') && Date.now() - lastInputAt > 4000,
       onReplaced: (reason) => {
-        toast(reason === 'device' ? 'Club updated with changes from your other device.' : 'Your Ultimate Team club was loaded from your account.', 'good');
         window.__pitchsideVinson?.reload?.();
+        if (reason === 'device') {
+          if (metaMount && typeof metaMount.reloadUT === 'function') metaMount.reloadUT();
+          if (Date.now() - lastSyncToast > 60000) { lastSyncToast = Date.now(); toast('Club updated with changes from your other device.', 'good'); }
+          return;
+        }
+        toast('Your Ultimate Team club was loaded from your account.', 'good');
         if (metaMount && nav.top && nav.top.name === 'meta') { nav.back(); metaScreen('ut'); }
         else if (metaMount && typeof metaMount.reloadUT === 'function') metaMount.reloadUT();
       },

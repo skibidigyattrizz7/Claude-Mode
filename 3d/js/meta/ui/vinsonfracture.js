@@ -45,10 +45,15 @@ function localIds(root, suffix) {
   }
 }
 
+// A big target (the home Squad tile holds a whole mini pitch of cards) is copied shallow: inlining ~350 computed
+// styles on every descendant and cloning that per shard froze the game for ~2 s (owner, Oct 1: "clicking squad
+// during doom lags hard"). Its own background/border still shatters; the inner content just vanishes with it.
+const HEAVY_NODES = 100;
 function snapshot(target, bounds) {
-  const copy = target.cloneNode(true);
-  const originals = [target, ...target.querySelectorAll('*')];
-  const copies = [copy, ...copy.querySelectorAll('*')];
+  const heavy = target.querySelectorAll('*').length > HEAVY_NODES;
+  const copy = target.cloneNode(!heavy);
+  const originals = heavy ? [target] : [target, ...target.querySelectorAll('*')];
+  const copies = heavy ? [copy] : [copy, ...copy.querySelectorAll('*')];
   originals.forEach((source, i) => {
     const clone = copies[i], css = getComputedStyle(source);
     clone.removeAttribute('autofocus');
