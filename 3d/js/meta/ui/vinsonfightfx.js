@@ -1,4 +1,4 @@
-import {vinsonEarthPosition} from '../core/vinsonbattle.js?v=vinson25';
+import {vinsonEarthPosition} from '../core/vinsonbattle.js?v=vinson26';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 const mix=(a,b,p)=>a+(b-a)*p;

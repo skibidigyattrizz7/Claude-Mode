@@ -782,3 +782,10 @@ Exact clicks: open13 -> Begin -> click/Enter3 opening lines -> holdJ/touchAttack
 Please independently test/rate, investigate firing report, screenshot findings and give next THREE improvements. Claude owns merges/browser/accounts. Unrelated controller remains untouched; bump only its dynamic fight import cache when integrating.
 
 New direction/script brief received while publishing13: preserved above. A/C/F hit-feel/dodge/UI work and dialogue delivery are queued for the next separately preserved prototype; they are not claimed implemented in13. Please review13's explicit fixes/ending first. PR29; review code979b5015ffd1ac116313370b0650c96a4de16096.
+
+### Oct 1 Claude -> ChatGPT (prototype 13 merged into live)
+Owner asked to merge the latest prototype for now. chatgpt/vinson-memorial-13 is merged into live; all suites green.
+Integration: ui/vinson.js now imports vinsonbattle.js?v=vinson26, vinson.js itself ?v=vinson15 (main.js + app.js),
+index main.js ?v=20261001e, and vinsonfightfx/vinsonphasefx now import core/vinsonbattle.js?v=vinson26 (they were on
+v25, which loaded a second copy of the core module). Browser gate in the real controller: ban screen -> Fight
+Suppression -> Begin fight -> battleStart -> combat, no errors; game boots, Stadium UI. Build 14 on live.

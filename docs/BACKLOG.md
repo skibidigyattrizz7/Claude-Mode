@@ -294,3 +294,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - (Oct 1, owner) Critiques must also say what to make BETTER (cooler, functional, aesthetic), not only bugs. Direction brief for the fight posted in AI_DIRECT (hit tiers, telegraph grammar, dodge/perfect dodge, camera, arena, UI).
 - (Oct 1, owner) Ending: sword digs deeper; laser clash interactive (mash to win, then ending runs on its own); domain clash way cooler. Sent to ChatGPT in AI_DIRECT.
 - (Oct 1, owner) Vinson gets a demonic star sigil on the ground (like Captain's), domain made cooler. Sent to ChatGPT.
+- DONE (Oct 1, owner): merged fight prototype 13 into the live game (cinematic fight, 6 abilities, 20% gates, memorial ending). Next prototype: mash-to-win clash, deeper sword, cooler domains + Vinson demonic sigil, feel brief A/C/F.
