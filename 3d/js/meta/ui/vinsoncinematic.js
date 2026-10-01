@@ -3,7 +3,7 @@ const clamp = (n) => Math.max(0, Math.min(1, n));
 const smooth = (n) => { const t = clamp(n); return t * t * (3 - 2 * t); };
 const ramp = (t, a, b) => smooth((t - a) / (b - a));
 export const VINSON_CINEMATIC_DURATION = { transition: 28, finale: 25 };
-export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}) {
+export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash = null } = {}) {
   const t = Math.max(0, Number.isFinite(time) ? time : 0);
   const shot = { time: t, black: 0, white: 0, zoom: 1, focusX: 640, focusY: 425,
     hero: 'patel', villain: 'world', heroAlpha: 1, villainAlpha: 1, beams: 0,
@@ -11,7 +11,8 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}
     // Transition-only choreography: normalized struggle/impact strength, eye-ring world X,
     // whiteout strength, Captain's arrival/beam/star, and smooth star rotation in radians.
     clashProgress: 0, clashPower: 0, clashX: 640, explosion: 0, arrival: 0, skyBeam: 0, arrivalStar: 0, arrivalSpin: 0,
-    domainPower:0,throwSword:0,peace:0,landingAge:0 };
+    domainPower:0,throwSword:0,peace:0,landingAge:0,interactiveClash:false,
+    mashProgress:0,mashPulse:0,mashElapsed:0,mashThreshold:0,mashThresholdAge:99 };
   if (kind === 'transition') {
     // World fades after defeat; Phonk returns through a soft veil rather than a cut.
     shot.villainAlpha = 1 - ramp(t, 0, 2.2);
@@ -54,6 +55,21 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}
     shot.done = t >= 28;
   } else {
     shot.hero = 'captain'; shot.villain = 'phonk';
+    if(clash&&!clash.won&&t>=.35&&t<1.65){
+      if(t<.95){shot.speaker='PHONK MODE VINSON';shot.text='Your shield cannot protect an entire world.';shot.dialogueId='final-domain-threat';}
+      else{shot.speaker='CAPTAIN ISRAEL';shot.text='Then I will give the world everything I have.';shot.dialogueId='final-captain-resolve';}
+    }
+    if(clash && !clash.won && t>=1.65){
+      shot.domainPower=1;shot.beams=1;shot.interactiveClash=true;
+      shot.mashProgress=clamp(clash.progress);shot.mashPulse=clamp(clash.pulse);
+      shot.mashElapsed=Math.max(0,clash.elapsed||0);shot.mashThreshold=clash.threshold||0;shot.mashThresholdAge=Math.max(0,clash.thresholdAge||0);
+      shot.clashX=440+500*shot.mashProgress;
+      shot.clashPower=.55+.35*shot.mashProgress+.1*shot.mashPulse;
+      shot.clashProgress=shot.mashProgress;shot.impact=.35+.35*shot.mashPulse;
+      shot.zoom=reducedMotion?1:1+.07*clamp(shot.mashElapsed/10);
+      shot.focusX=640;shot.focusY=400;
+      return shot;
+    }
     // Two territories push against each other; the beam's midpoint tells the story.
     shot.domainPower=ramp(t,0,1.4)*(1-ramp(t,8.5,9.5));
     shot.beams=ramp(t,.7,1.7)*(1-ramp(t,8.5,9.2));

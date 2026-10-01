@@ -39,17 +39,20 @@ function drawShield(ctx, drawStar) {
   ctx.restore();
 }
 
-function drawSword(ctx, progress) {
+function drawSword(ctx, progress, landingAge, reducedMotion) {
   const p = clamp(progress);
   if (p <= 0) return;
   // Gravity accelerates the descent; clamp at impact so the planted pose stays fixed.
   const landed = p * p;
   const x = 710;
-  const tipY = mix(-122, 568, landed);
+  const impactAge=Number.isFinite(landingAge)?landingAge:99;
+  const wobble=!reducedMotion&&impactAge<.4?Math.sin(impactAge*42)*(1-impactAge/.4)*.018:0;
+  const tipY = mix(-122, 630, landed);
   const angle = mix(-0.035, -0.10, landed);
   ctx.save();
+  ctx.beginPath();ctx.rect(0,0,1280,571);ctx.clip();
   ctx.translate(x, tipY);
-  ctx.rotate(angle);
+  ctx.rotate(angle+wobble);
   // The landing point is the blade tip; blade, guard, grip and pommel rise above it.
   ctx.beginPath(); ctx.moveTo(-10, -128); ctx.lineTo(10, -128); ctx.lineTo(7, -28); ctx.lineTo(0, 0); ctx.lineTo(-7, -28); ctx.closePath();
   ctx.fillStyle = '#bdc4b9'; ctx.fill();
@@ -80,6 +83,9 @@ export function drawPeacefulEnding(ctx, shot, t, reducedMotion, drawStar) {
   halo.addColorStop(0, 'rgba(255,248,211,.88)'); halo.addColorStop(.48, 'rgba(255,231,172,.32)'); halo.addColorStop(1, 'rgba(255,231,172,0)');
   ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(912 + breeze * 0.15, 300, 88, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#fff1bf'; ctx.beginPath(); ctx.arc(912 + breeze * 0.15, 300, 33, 0, Math.PI * 2); ctx.fill();
+  ctx.save();ctx.globalAlpha=.10;ctx.fillStyle='#fff8d5';
+  for(let i=0;i<5;i++){const a=.3+i*.32;ctx.beginPath();ctx.moveTo(912,300);ctx.lineTo(912+Math.cos(a)*480,300+Math.sin(a)*480);ctx.lineTo(912+Math.cos(a+.07)*480,300+Math.sin(a+.07)*480);ctx.closePath();ctx.fill();}
+  ctx.globalAlpha=.15;for(let i=0;i<4;i++){const x=130+i*290+(reducedMotion?0:(time*3+i*17)%80);ctx.beginPath();ctx.ellipse(x,175+i%2*45,100,13,0,0,Math.PI*2);ctx.fill();}ctx.restore();
 
   hill(ctx, [[0, 437], [145, 377], [282, 427], [460, 350], [634, 421], [826, 362], [1015, 417], [1155, 367], [1280, 405]], '#b97864');
   hill(ctx, [[0, 471], [185, 422], [338, 460], [518, 397], [699, 454], [874, 410], [1058, 463], [1191, 416], [1280, 443]], '#7f7954');
@@ -112,7 +118,13 @@ export function drawPeacefulEnding(ctx, shot, t, reducedMotion, drawStar) {
   ctx.beginPath(); ctx.ellipse(710, 560, 41, 9, 0, 0, Math.PI * 2); ctx.fill();
   // The shield and sword are quiet memorial objects; soil partly covers their lower edges.
   drawShield(ctx, drawStar);
-  drawSword(ctx, shot.sword);
+  if(clamp(shot.sword)>.94){
+    const age=Number.isFinite(shot.landingAge)?shot.landingAge:99,impact=clamp(1-age/.5);
+    ctx.fillStyle='rgba(35,35,25,.34)';ctx.beginPath();ctx.ellipse(710,568,48,11,0,0,Math.PI*2);ctx.fill();
+    if(impact>0){ctx.save();ctx.globalAlpha*=impact;ctx.strokeStyle='#b99a62';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(710,568,28+(1-impact)*52,7+(1-impact)*10,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  }
+  drawSword(ctx, shot.sword, shot.landingAge, reducedMotion);
+  if(shot.landingAge>=0&&shot.landingAge<.6){ctx.save();ctx.globalAlpha=(1-shot.landingAge/.6)*.7;ctx.strokeStyle='#fff5cc';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(693,485);ctx.lineTo(714,485);ctx.moveTo(704,473);ctx.lineTo(704,497);ctx.stroke();ctx.restore();}
   ctx.fillStyle = '#394a32'; ctx.beginPath(); ctx.ellipse(590, 571, 54, 11, 0, 0, Math.PI * 2); ctx.fill();
   // A thin foreground lip buries the shield point and the sword tip without hiding either relic.
   ctx.fillStyle = '#33432f'; ctx.beginPath();
