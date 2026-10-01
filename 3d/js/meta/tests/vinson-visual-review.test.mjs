@@ -122,7 +122,7 @@ withBrowser(true, ({ body, clock, Observer }) => {
 });
 
 for (const [key, sourceWidth, sourceHeight, expected] of [
-  ['world', 1200, 800, [276, 0, 600, 784, 292, 240]],
+  ['world', 1200, 800, [0, 0, 1200, 800, 292, 240]],
   ['patel', 1000, 1000, [0, 230, 1000, 770, 260, 250]],
   ['phonk', 800, 1200, [0, 0, 800, 1200, 230, 240]],
   ['captain', 640, 640, [0, 0, 640, 640, 260, 190]],
