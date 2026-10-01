@@ -177,7 +177,7 @@ test('boss holds its eye anchors steady throughout each laser charge and active 
 });
 
 test('weapon inputs create distinct projectile patterns, cooldowns, and impact strengths', () => {
-  const expected = { star: [1, 18], spinner: [3, 7], explosive: [1, 34], eyes: [1, 25] };
+  const expected = { star: [1, 18], spinner: [3, 3], explosive: [1, 34], eyes: [1, 25] };
   for (const [weapon, [count, damage]] of Object.entries(expected)) {
     const battle = start(17); battle.step(0.01, { attack: true, weapon });
     assert.equal(battle.state.projectiles.length, count, weapon);
@@ -203,6 +203,80 @@ test('explosive splash damages a moving boss at its outer radius', () => {
   assert.ok(battle.state.boss.hp < hp, 'blast radius should register splash damage');
 });
 
+function battleWithTelegraphedAttack(type) {
+  for (let seed = 1; seed <= 100; seed++) {
+    const battle = start(seed);
+    battle.state.hero.hp = 1e6;
+    for (let i = 0; i < 500; i++) {
+      battle.step(0.05);
+      const warning = battle.state.events.find(e => e.type === 'telegraph' && e.attack === type);
+      if (warning) {
+        const hazard = battle.state.hazards.find(h => h.id === warning.hazardId);
+        battle.state.hazards = [hazard]; hazard.elapsed = 0; hazard.hit = false;
+        return { battle, hazard, warning };
+      }
+    }
+  }
+  assert.fail(`could not find a seeded ${type} warning`);
+}
+
+test('hand slams and hand catches expose geometry, give full warning, and damage only during impact', () => {
+  for (const type of ['handslam', 'handcatch']) {
+    const { battle, hazard, warning } = battleWithTelegraphedAttack(type);
+    assert.ok(warning.duration >= 1.02, `${type} warning should give at least one second`);
+    if (type === 'handslam') {
+      assert.deepEqual({ x: warning.x, y: warning.y, radius: warning.radius }, { x: hazard.x, y: hazard.y, radius: hazard.radius });
+      assert.ok(hazard.radius >= 80);
+      battle.state.hero.x = hazard.x; battle.state.hero.y = hazard.y + 55;
+    } else {
+      assert.deepEqual(warning.corridor, hazard.corridor);
+      assert.ok(hazard.corridor.width >= 50);
+      battle.state.hero.x = (hazard.corridor.x1 + hazard.corridor.x2) / 2;
+      battle.state.hero.y = hazard.corridor.y1 + 55;
+    }
+    while (hazard.elapsed < hazard.telegraph - 0.06) {
+      battle.step(0.05);
+      assert.equal(battle.state.events.some(e => e.type === 'hit' && e.target === 'hero' && e.source === type), false);
+    }
+    let hit = false;
+    for (let i = 0; i < 8 && !hit; i++) {
+      battle.step(0.02);
+      hit = battle.state.events.some(e => e.type === 'hit' && e.target === 'hero' && e.source === type);
+    }
+    assert.ok(hit, `${type} should damage a stationary hero in its impact area`);
+  }
+});
+
+test('directional dodge escapes both telegraphed hand attacks without damage', () => {
+  for (const type of ['handslam', 'handcatch']) {
+    const { battle, hazard } = battleWithTelegraphedAttack(type);
+    if (type === 'handslam') {
+      battle.state.hero.x = hazard.x; battle.state.hero.y = hazard.y + 55;
+    } else {
+      battle.state.hero.x = (hazard.corridor.x1 + hazard.corridor.x2) / 2;
+      battle.state.hero.y = hazard.corridor.y1 + 55;
+    }
+    while (hazard.elapsed < hazard.telegraph - 0.22) battle.step(0.05);
+    const startY = battle.state.hero.y;
+    const direction=startY<520?1:-1;
+    battle.step(0.01, { y: direction, dodge: true });
+    assert.ok(Math.abs(battle.state.hero.y-startY)>100, `${type} dodge should leave the danger area`);
+    for (let i = 0; i < 12 && battle.state.hazards.includes(hazard); i++) battle.step(0.05, { y: direction });
+    assert.equal(battle.state.events.some(e => e.type === 'hit' && e.target === 'hero' && e.source === type), false);
+  }
+});
+
+test('ideal sustained star attacks finish both stages in a roughly 60–100 second active fight', () => {
+  const battle = start(31); let activeSeconds = 0;
+  battle.state.hero.hp = 1e6;
+  while (battle.state.phase === 'fight') { battle.step(1 / 60, { attack: true, weapon: 'star' }); activeSeconds += 1 / 60; }
+  assert.equal(battle.state.phase, 'transition');
+  battle.next(); battle.step(0, { advance: true }); battle.state.hero.hp = 1e6;
+  while (battle.state.phase === 'fight') { battle.step(1 / 60, { attack: true, weapon: 'star' }); activeSeconds += 1 / 60; }
+  assert.equal(battle.state.phase, 'clash');
+  assert.ok(activeSeconds >= 60 && activeSeconds <= 100, `ideal two-stage fight took ${activeSeconds.toFixed(1)}s`);
+});
+
 test('a telegraph-aware player can beat stage two in a seeded dodge-and-attack smoke run', () => {
   for (const seed of [1, 2, 3]) {
     const battle = start(seed, 1);
@@ -223,3 +297,5 @@ test('a telegraph-aware player can beat stage two in a seeded dodge-and-attack s
 });
 
 console.log(`${count} Vinson battle tests passed`);
+
+for(const stage of [0,1]){const b=createVinsonBattle({stage});b.step(0,{advance:true});b.state.hero.invulnerable=999;for(let i=0;i<200;i++)b.step(.05,{y:-1,dodge:i%20===0});assert.ok(b.state.hero.y>=(stage?355:415),'portrait top remains below HUD while moving/dodging upward');}
