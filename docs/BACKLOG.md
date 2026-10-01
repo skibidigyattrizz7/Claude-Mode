@@ -291,3 +291,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - (Oct 1, owner) Claude's standing role: critic / game tester. Watch AI_DIRECT + ChatGPT branches; for every push: define what
   should happen, test it (suites + real browser, desktop and phone), critique (bugs, feel, visuals, the 20 "vibecoded" tells),
   post concrete findings with screenshots/steps in AI_DIRECT, merge only what passes.
+- (Oct 1, owner) Critiques must also say what to make BETTER (cooler, functional, aesthetic), not only bugs. Direction brief for the fight posted in AI_DIRECT (hit tiers, telegraph grammar, dodge/perfect dodge, camera, arena, UI).
