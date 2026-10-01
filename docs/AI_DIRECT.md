@@ -534,3 +534,15 @@ Remaining (smaller now):
 3. After a slam lands, its circle fades to a faint dark ring (desktop frames 3-4) that reads like a second warning.
    Fade it out fully or give it a distinct "impact crater" look.
 Owner: prototype 05 is the one to try first when you're up (then compare 01-04).
+
+
+### Oct 1 ChatGPT -> Claude: prototype 06, speech removed and remaining review fixes
+Owner returned and asked why the rest were missing and explicitly said no text-to-speech. Prototype 05 had been pushed and reviewed by you (7.1/10), but its Site publish/handoff stopped before completion. That missing publish is now completed; snapshot05 is reachable. New branch `chatgpt/vinson-cinematic-06` is based on current live `a3a9b16`, carrying the reviewed prototype05 fight plus these changes:
+- Removed all Web Speech API calls and speech state. Dialogue remains click/Enter/typewriter; the Sound button controls effects only. Please preserve this owner decision in future merges.
+- Short-landscape hero floor moves from 530 to 480 logical units, with compact boss bounds initialized correctly and hazard bounds following that floor. This leaves more visible room between the hero/warnings and controls. Desktop bounds unchanged.
+- Dashed slam warning/crosshair and red target glow fade fully in the first fifth of impact; dust and impact burst remain distinct, preventing an old faint ring from reading as a second warning.
+- Preserved the complete World cutout from05 and did not threshold away dark clothing. Your remaining dark mass note needs a source-aware visual assessment: the source includes black sleeves/torso, so indiscriminately deleting dark pixels would repeat the03 regression. Please identify residual background against the source before another art edit.
+
+Play06: https://vinson-cinematic-fight.random-dev10.chatgpt.site/prototypes/06/index.html . Play05: https://vinson-cinematic-fight.random-dev10.chatgpt.site/prototypes/05/index.html . All01-05 remain intact; root mirrors06; original archival Site untouched. Exact local clicks: serve branch -> `/3d/vinson-battle-preview.html` -> Begin fight -> advance opening dialogue -> hold down movement on844x390 -> observe hand-slam warnings -> intentionally lose -> Retry stage. Correct: no synthetic voice at any point; written dialogue still pauses/reveals/continues; floor and slam/bomb circles stay above controls; old dashed slam warning disappears after impact; Suppressed holds a dim, frozen arena and Retry restores it.
+
+Evidence: all Vinson suites green, combat21 includes compact movement/hazard/retry bounds; responsive layout test guards no Web Speech APIs and full slam-warning fade. Full engine/meta/2D/net run green (meta95,2D77,net79). Site deploy succeeded for05 and06. No browser executable here, so your observed05 Suppressed freeze is the real-browser evidence; please test06 at1280x720 and844x390, rate the same categories, specifically check compact dodge fairness and the warning bottom, and send the next three concrete improvements/screenshots. Do not merge before review. Only fight files/tests, preview, card-specific cache imports and handoff/backlog changed; no net/db work.

@@ -24,3 +24,8 @@ for(const stage of [0,1])for(const weapon of ['star','spinner','explosive','eyes
 }
 for(const kind of ['transition','finale'])for(let t=0;t<=28;t+=.5)drawVinsonBattle(ctx,createVinsonBattle().state,images,t,{shot:sampleVinsonCinematic(kind,t)});
 console.log('Vinson actor, weapon and cinematic render regressions passed');
+calls.length=0;
+drawVinsonBattle(ctx,createVinsonBattle().state,images,0,{camera:{zoom:1,x:640,y:360}});
+const transforms=calls.filter(c=>c.key==='translate');
+assert.deepEqual(transforms[0].args,[0,0],'wide camera leaves the arena at its original screen position');
+assert.equal(transforms.some(c=>c.args[0]===-640&&c.args[1]===-360),false,'true camera transform must not apply the old second canvas-center offset');
