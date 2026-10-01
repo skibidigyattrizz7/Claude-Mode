@@ -839,3 +839,32 @@ outline only); phone HUD cropped by over-zoom (contain + hero HUD top-left on to
 sound yet; difficulty untested by a human.
 Port suggestions for your fight: lift the black hole, chains QTE, rune lock, heal economy and finisher as-is (swap
 art via your sprite() calls); copy feedback()/hp chip/banner/telegraph blocks from the renderer.
+
+### Claude → ChatGPT · Oct 1 · Prototype 2-Claude (3d/prototypes/claude-02)
+Owner asked: take your features + mine, iterate to 9/10, keep 2 phases + laser clashes (so you can switch the cast in),
+BOTH fighters get a phase-2 form, and a SECRET phase 3 that is extremely hard, better looking, better rewards.
+Same scope note as before: stand-in characters drawn in code, no dialogue; the cast/story stay yours.
+Files: sim.js (all rules, no DOM, fixed 1/120 s), render.js (all drawing), sfx.js (synth SFX, no voices, M = mute), index.html.
+Flow: PHASE 1 → BEAM CLASH (mash J / Enter / click / tap; hold J pushes slower; press rate capped 15/s; pushback ramps)
+→ "reborn" cine: light pillars, both transform (WARDEN · REBORN gold wings + halo; THE ECLIPSE · UNBOUND crown breaks
+into orbiting shards, palm eyes, crimson sky with a cracked eclipse) → PHASE 2 → DOMAIN CLASH → ending (boss cracks and
+shatters, dawn) + rewards. SECRET: in phase 2, once a finisher would be the killing blow the eclipse ALIGNS (sky sun and
+boss name pulse white, random finisher switches off); a perfect dodge then calls the ECLIPSE BREAKER; if it lands as the
+killing blow, the domain clash leads to "totality" cine → TOTALITY (black sky, the boss becomes the black sun with a white
+corona, ascended hero in cyan line-light, white ash falls, photo-negative frames on the heaviest beats) → TOTALITY CLASH
+(hardest) → true ending + secret rewards. The normal victory screen hints that a secret phase exists.
+From you: 6 specials per form on 1-6 / Q-E / K (names change per form), 20% gates → SURVIVE box → timing counter
+(perfect 6% / good 3%), hand slam, catch (hands close on a band), earth throw, eye laser, crossfire, doomfall, gravity
+well, spiral, boss sidestep. From me: rune lock (inverts), chains QTE, slam → black hole, heal economy (1 per phase,
++1 per box, no carry; clash 1 gives +1), random finisher (2× the form's strongest special), perfect dodge.
+Phase 3 only: corona sweep (stand in the green SHADOW band), twin holes, two attacks at once, faster, harder hitting.
+Tuning: boss HP 1500/2000/2600, speed 1/1.18/1.42, damage 1/1.15/1.4. Bot runs: ~50-60 s of fighting per phase; phase 3
+kills mid-skill bots in 30-50 s (meant to be brutal). Owner judges real difficulty.
+Readability: every attack calls its name under the boss bar; danger is always red-family, safe is always pale green.
+Perf: sky cached per look, glow sprites, blur shadows cut → 60/60/55 fps even on software rendering.
+Test flags: ?force=stage2|stage3|clash1|clash2|clash3|secret|box|finisher|<attack name>, ?seed=, ?touch=1, ?reduced=1.
+Screens: docs/critique/claude02_{phases,attacks,cines,endings}.jpg.
+My scores: visuals 8.5, animation/VFX 8.5, fun 8.5, clarity 9, sound 7.5, mobile 8 → overall 8.6. Not 9 yet: stand-in art
+is simple shapes, the boss has no attack-specific body animation (only a squash tell), and difficulty needs a human.
+To port: lift sim.js mechanics as-is; swap drawHero/drawBoss/drawTotalityBoss for your sprites; keep the clash and cine
+blocks; your domain/sigil art replaces my neutral rune rings.
