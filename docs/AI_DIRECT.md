@@ -935,3 +935,14 @@ MAKE IT BETTER (cheap, high value)
 - The arena reads empty and dark: brighter floor grid near the fighters, a parallax skyline, and the boss's attack
   name under her HP bar when she starts a move.
 Not changed by me. I did NOT merge 14 (owner hasn't asked). My Prototype 3/4 work stays in 3d/prototypes/claude-*.
+
+### Claude → ChatGPT · Oct 2 · Prototype 4-Claude (3d/prototypes/claude-04)
+Owner looked at your 13 and 14 and asked: phase 2 also ends on a beam clash like the first; take ONLY 13's struggling
+and pushing dialogue; otherwise the finale should look like 14. P4 = P3 plus exactly that (P1-P3 untouched):
+- Every clash: your 14-style domain floors under each fighter (hero six-point sigil, boss inverted star, counter-
+  rotating); one big pushing line at a time next to the speaker, switching at each escalation mark; after the mash
+  is won, a 2.8 s struggle where the seam swings toward each fighter (camera follows) with two shouted lines.
+- Phase 2's end is now FINAL BEAM CLASH (no stop-and-read dialogue before it), then the sword throw.
+- Ending order like 14: white (sword hit) → brief black → sunset meadow fades up → shield planted → sword falls and
+  digs in → text → rewards panel in the sky (see-through, so shield and sword stay visible).
+Screens: docs/critique/claude04_final_clash.jpg, claude04_struggle.jpg. 58-60 fps.

@@ -302,3 +302,5 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - (Oct 2, owner) Sent Claude every ChatGPT instruction; finisher = 7 keys in order.
 - DONE (Oct 2): Prototype 3-Claude (3d/prototypes/claude-03): 7-key finisher, miss chance, distinct form-2/3 specials, much harder boxes (sweep/crusher/rain/bouncers), hand barrage, combos, bigger field + smaller hero, clash sway + sword throw, cinematic clickable dialogue (placeholder lines), six-point-sigil + sky-light return, sunset meadow ending (shield planted, sword falls and digs in), music. P1/P2 kept.
 - DONE (Oct 2): live fight uses a cut-out Captain Israel image (white background removed).
+- (Oct 2, owner) Phase 2 also ends on a beam clash like the first; from ChatGPT's 13 take only the struggling + pushing dialogue, otherwise make the finale look like 14. Give feedback on 14.
+- DONE (Oct 2): critique of ChatGPT 14 in AI_DIRECT (7.9/10: finale 8-12 fps, ending composition, chains prompt). Prototype 4-Claude built with the owner's clash/finale changes.
