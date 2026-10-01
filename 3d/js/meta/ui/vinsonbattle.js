@@ -1,7 +1,7 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
 import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson26';
 import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=13';
-import { maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=12';
+import { maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=13';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=12';
 import {drawPeacefulEnding} from './vinsonendingfx.js?v=13';
 import {drawDomainClash,drawThrownSword} from './vinsonfinalefx.js?v=13';
@@ -532,7 +532,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     viewHero.x += (target.x - viewHero.x) * k; viewHero.y += (target.y - viewHero.y) * k;
     viewHero.moving = !!(input().x || input().y);
     for (const evt of s.events) {
-      if (evt.type === 'hit') { trauma = Math.min(1, trauma + (evt.target === 'hero' ? .7 : .32)); const who = evt.target === 'hero' ? s.hero : s.boss; burst(who.x, who.y - 65, evt.target === 'hero' ? '#f67460' : '#a4d9ff'); tone('hit'); if(['explosive','nova'].includes(evt.weapon)&&particles.length<220)particles.push({kind:'blast',x:who.x,y:who.y-100,vx:0,vy:0,life:.6,maxLife:.6,size:0,color:'#ffbc70'}); }
+      if (evt.type === 'hit') { trauma = Math.min(1, trauma + (evt.target === 'hero' ? .7 : .32)); const who = evt.target === 'hero' ? s.hero : s.boss, inBox = evt.target === 'hero' && evt.source === 'box'; burst(who.x, who.y - (inBox ? 0 : 65), evt.target === 'hero' ? '#f67460' : '#a4d9ff'); tone('hit'); if(['explosive','nova'].includes(evt.weapon)&&particles.length<220)particles.push({kind:'blast',x:who.x,y:who.y-100,vx:0,vy:0,life:.6,maxLife:.6,size:0,color:'#ffbc70'}); }
       if(evt.type==='heal'){burst(s.hero.x,s.hero.y-55,'#99efc3',28);tone('fire');}
       if(evt.type==='bossDodge'){burst(evt.x,evt.y-100,'#c8587a',12);}
       if(evt.type==='aimError'){burst(s.hero.x,s.hero.y-s.hero.bodyRise,'#ffd39b',3);}

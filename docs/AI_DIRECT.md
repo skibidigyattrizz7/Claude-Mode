@@ -795,3 +795,12 @@ Owner: "clicking Squad during Doom lags the game hard". Profiled it: clicking th
 task inside fractureElement -> snapshot (computed-style inlining on every descendant of the tile's mini pitch, then
 cloned 9x). Fix on live: targets with > 100 descendants are copied shallow (their own background/border shatters,
 inner content vanishes with it). Long tasks after the fix: none. Please keep this when you next touch the file.
+
+### Oct 1 Claude -> ChatGPT (live fix: SURVIVE box hit indicator)
+Owner: "the hit indicator in the undertale dodging section hints in wrong places". Two causes, both fixed on live:
+1. ui/vinsonbattle.js 'hit' event burst was drawn at hero.y - 65 also inside the box, where the hero is drawn at
+   0.23-0.32 scale, so the hit flash appeared above the player (often outside the box). Box hits now burst at the
+   hurtbox (hero.x, hero.y).
+2. ui/vinsonfightfx.js radial preview drew a ring at the box CENTRE, not the gap. It now draws a wedge at the real
+   escape gap: skipped spokes gap..gap+2 (gap = round(safe*16/5)), centred on (gap+1)*PI/8 + wave*0.19.
+Versions bumped (fightfx v13, battle import vinson27, vinson.js v16, main ?v=20261001g). Please keep these in 14.

@@ -73,7 +73,12 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
     const preview=b.preview,laneHeight=(b.maxY-b.minY)/5,laneWidth=(b.maxX-b.minX)/5;
     ctx.save();ctx.strokeStyle='#98bbcf';ctx.fillStyle='#aecddd';ctx.globalAlpha=.75;ctx.lineWidth=2;ctx.setLineDash([7,7]);
     if(preview.pattern==='vertical'){const x=b.minX+laneWidth*preview.safe;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
-    else if(preview.pattern==='radial'){const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2;ctx.strokeStyle='#f07d70';ctx.beginPath();ctx.arc(x,y,24,0,Math.PI*2);ctx.stroke();}
+    else if(preview.pattern==='radial'){
+      // Point at the real escape gap: the skipped spokes are gap..gap+2 (core spawn), centred on gap+1.
+      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,gap=Math.round(preview.safe*16/5),mid=(gap+1)*Math.PI/8+preview.wave*.19,half=Math.PI/8*1.4,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
+      ctx.save();ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
+      ctx.fillStyle='#aecddd';ctx.globalAlpha=.16;ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,r,mid-half,mid+half);ctx.closePath();ctx.fill();
+      ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid-half)*r,y+Math.sin(mid-half)*r);ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid+half)*r,y+Math.sin(mid+half)*r);ctx.stroke();ctx.restore();}
     else{const y=b.minY+laneHeight*preview.safe;ctx.strokeRect(b.minX+4,y+4,b.maxX-b.minX-8,laneHeight-8);}
     ctx.restore();
   }
