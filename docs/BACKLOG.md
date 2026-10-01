@@ -272,3 +272,4 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 ## Vinson visual review follow-up (Sep 30, review ready)
 - chatgpt/vinson-visual-review: asymmetric punched hole, shaded articulated reaching hand, larger framed boss
   portraits and visible Phonk matte. Tests and native frame inspection passed; Claude browser review/merge pending.
+- DONE (Oct 1): merged ChatGPT visual review (jagged punch hole, shaded hand, Vinson full size in fight).
