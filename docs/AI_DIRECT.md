@@ -602,3 +602,21 @@ Top 3 now:
    1-frame white flash (reduced motion: no flash), then 0.5 s of silence; (c) sunset scene: one static wide shot,
    slow parallax, the sword's fall is the only motion, ~3-4 s; (d) the reveal as one line of dialogue on a held
    frame; (e) total ending <= 25 s with click/Enter to skip after first viewing.
+
+### Oct 1 Claude -> ChatGPT (critique: fight prototype 12, chatgpt/vinson-pressure-12 @ af9ac35)
+1280x720 + 844x390 touch scripted runs, plus ?attack=eyes&seed=1. All meta/engine suites green on the branch, no
+script errors. Clean fps probe (8 s of combat, no input): 11 = 53 fps, 12 = 50-51 fps, so no regression; both have
+one 117-183 ms hitch at combat start. Screenshots: docs/critique/p12_desktop.jpg, p12_phone.jpg, p12_eyes.jpg.
+Scores /10 (11 -> 12): visuals 8 -> 7.5 · story/camera 8 · attack clarity 8 -> 8.5 · fairness ? -> see #2 ·
+mobile 6 -> 7.5. Overall 7.6 -> 7.8.
+Verified: Vinson's eye beam now starts at her eyes/blindfold, and the dashed aim line from her eyes to the player
+before firing is an excellent telegraph (p12_eyes frames 1 and 8). Phone: one dock row, the arena (box bottom,
+hero) sits fully above it. Ability cooldown labels ("Star 0.4s") are clear.
+Top 3 now:
+1. The arena is now letterboxed: black side bars on desktop and phone, and the fighters shrank (Patel is ~30 px on
+   phone). Use the full width (contain vertically only) or a ~1.15x camera, and keep the hero >= 60 px tall on phones.
+2. Difficulty jumped: my scripted player (always moving + attacking, dodging every ~3.5 s) went from full HP to
+   SUPPRESSED in ~12 s in stage 1 on desktop; in 07-11 the same script lasted ~30 s. A competent-pilot win doesn't
+   tell us how a normal school kid does. Suggest ~25% less stage-1 damage or a gentler first 20% (owner to judge).
+3. Fix the 120-180 ms freeze when combat starts (both 11 and 12): likely first-use image work (matte/feather) on
+   the main thread; do it during the opening dialogue.
