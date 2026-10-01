@@ -33,8 +33,8 @@ test('transition has a sustained blackout between Vinson forms and continuous ca
     if (lastZoom !== null) assert.ok(Math.abs(shot.zoom - lastZoom) < 0.025, 'zoom should ease continuously');
     lastZoom = shot.zoom;
   }
-  assert.equal(blackouts.length, 2, 'form change and Patel loss each use a separate blackout');
-  assert.ok(blackouts.every(duration => duration >= 1.5 && duration <= 3.5));
+  assert.ok(blackouts.length <= 1, 'form change uses one continuous soft veil');
+  assert.ok(sampleVinsonCinematic('transition', 17).white > 0.8, 'Patel loss becomes a white blast');
   assert.equal(sampleVinsonCinematic('transition', 6).villain, 'phonk');
   assert.equal(sampleVinsonCinematic('transition', 20).hero, 'captain');
 });
@@ -64,14 +64,14 @@ test('reduced motion removes camera zoom and white flash while preserving story 
 test('battle stages feed transition and finale cinematics in order', () => {
   const battle = createVinsonBattle({ seed: 71 });
   battle.step(0, { advance: true });
-  battle.state.boss.hp = 12;
+  battle.state.thresholdIndex = 4; battle.state.boss.hp = 12;
   for (let i = 0; i < 100 && battle.state.phase === 'fight'; i++) battle.step(0.05, { attack: true });
   assert.equal(battle.state.phase, 'transition');
   assert.equal(sampleVinsonCinematic('transition', 0).hero, 'patel');
   assert.equal(sampleVinsonCinematic('transition', 27.99).done, false);
   assert.equal(sampleVinsonCinematic('transition', 28).done, true);
   battle.next(); assert.equal(battle.state.stage, 1); assert.equal(battle.state.phase, 'intro');
-  battle.step(0, { advance: true }); battle.state.boss.hp = 12;
+  battle.step(0, { advance: true }); battle.state.thresholdIndex = 4; battle.state.boss.hp = 12;
   for (let i = 0; i < 100 && battle.state.phase === 'fight'; i++) battle.step(0.05, { attack: true });
   assert.equal(battle.state.phase, 'clash');
   for (let i = 0; i < 70 && battle.state.phase === 'clash'; i++) battle.step(0.05);
