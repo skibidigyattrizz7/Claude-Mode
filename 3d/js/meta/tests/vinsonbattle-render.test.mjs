@@ -17,10 +17,15 @@ for(const stage of [0,1])for(const weapon of ['star','spinner','explosive','eyes
     if(i%15)continue;
     calls.length=0;drawVinsonBattle(ctx,battle.state,images,i/60);
     const actors=calls.filter(c=>c.key==='drawImage');
-    assert.equal(actors.length,2,'both actual character pictures render in combat');
-    assert.deepEqual(actors.map(c=>c.args[0].key),stage?['captain','phonk']:['patel','world']);
+    assert.ok(actors.length>=2,'both actual character pictures render in combat alongside source hand/planet pieces');
+    assert.deepEqual(actors.slice(0,2).map(c=>c.args[0].key),stage?['captain','phonk']:['patel','world']);
     assert.equal(calls.some(c=>c.key==='bezierCurveTo'),false,'heart marker is replaced by the hero picture');
   }
 }
 for(const kind of ['transition','finale'])for(let t=0;t<=28;t+=.5)drawVinsonBattle(ctx,createVinsonBattle().state,images,t,{shot:sampleVinsonCinematic(kind,t)});
 console.log('Vinson actor, weapon and cinematic render regressions passed');
+calls.length=0;
+drawVinsonBattle(ctx,createVinsonBattle().state,images,0,{camera:{zoom:1,x:640,y:360}});
+const transforms=calls.filter(c=>c.key==='translate');
+assert.deepEqual(transforms[0].args,[0,0],'wide camera leaves the arena at its original screen position');
+assert.equal(transforms.some(c=>c.args[0]===-640&&c.args[1]===-360),false,'true camera transform must not apply the old second canvas-center offset');

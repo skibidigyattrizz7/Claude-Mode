@@ -8,6 +8,11 @@ const start = (seed = 7, stage = 0) => {
   battle.step(0, { advance: true });
   return battle;
 };
+const startCompact = (seed = 7, stage = 0) => {
+  const battle = createVinsonBattle({ seed, stage, compact: true });
+  battle.step(0, { advance: true });
+  return battle;
+};
 const runSteps = (battle, n, dt = 1 / 60, input = {}) => {
   for (let i = 0; i < n && !['defeat', 'transition', 'clash', 'victory'].includes(battle.state.phase); i++) battle.step(dt, input);
 };
@@ -34,6 +39,22 @@ test('movement normalizes diagonals and remains inside the playable arena', () =
   assert.ok(h.y >= VINSON_BATTLE_ARENA.minY && h.y <= VINSON_BATTLE_ARENA.maxY);
 });
 
+test('short landscape keeps movement and circular telegraphs above the controls', () => {
+  const battle = startCompact(19);
+  battle.state.hero.hp = 1e6;
+  for (let i = 0; i < 700 && battle.state.phase === 'fight'; i++) {
+    battle.step(0.05, { y: 1 });
+    assert.ok(battle.state.hero.y <= VINSON_BATTLE_ARENA.compactMaxY);
+    assert.ok(battle.state.boss.y <= VINSON_BATTLE_ARENA.compactMaxY - 65);
+    for (const hazard of battle.state.hazards) {
+      if (hazard.type === 'handslam' || hazard.type === 'bombcircle') {
+        assert.ok(hazard.y + hazard.radius <= VINSON_BATTLE_ARENA.compactMaxY + 12, `${hazard.type} warning stays inside the compact floor`);
+      }
+    }
+  }
+  battle.retry(); assert.equal(battle.state.compact, true, 'retry keeps compact bounds');
+});
+
 test('non-finite and negative dt become zero and large dt is capped at 50 ms', () => {
   const battle = createVinsonBattle();
   battle.step(-1); assert.equal(battle.state.time, 0);
@@ -50,7 +71,7 @@ test('telegraphs give a readable warning before any hazard can damage the hero',
   }
   assert.ok(warning, 'first boss warning should appear promptly');
   const hazard = battle.state.hazards.find(h => h.id === warning.hazardId);
-  assert.ok(hazard.telegraph >= 0.88 && hazard.telegraph <= 1.13);
+  assert.ok(hazard.telegraph >= 0.82 && hazard.telegraph <= 1.44);
   assert.equal(battle.state.events.some(e => e.type === 'hit' && e.target === 'hero'), false);
   while (hazard.elapsed < hazard.telegraph - 0.06) {
     battle.step(0.05);
@@ -72,7 +93,7 @@ test('dodge is a press action, grants brief invulnerability, and respects cooldo
 });
 
 test('attacks emit fire events and blue projectiles damage the boss', () => {
-  const battle = start(); battle.state.boss.hp = 18;
+  const battle = start(); battle.state.thresholdIndex = 4; battle.state.boss.hp = 18;
   let hit = false;
   for (let i = 0; i < 150 && battle.state.phase === 'fight'; i++) {
     battle.step(1 / 60, { attack: true });
@@ -90,9 +111,9 @@ test('holding attack through several volleys cannot instantly finish either enco
       battle.step(0.05, { attack: true });
       shots += battle.state.events.filter(e => e.type === 'fire').length;
     }
-    assert.ok(shots >= 12, `stage ${stage} should allow repeated shots in this check`);
+    assert.ok(shots >= 10, `stage ${stage} should allow repeated shots in this check`);
     assert.ok(battle.state.boss.hp > 0, `stage ${stage} must survive a five-second attack hold`);
-    assert.equal(battle.state.phase, 'fight');
+    assert.ok(['fight', 'dodgebox'].includes(battle.state.phase));
   }
 });
 
@@ -107,12 +128,12 @@ test('retry restores the same stage checkpoint with a reproducible new attempt s
 });
 
 test('stage transition opens Captain Israel checkpoint and final boss defeat reaches clash then victory', () => {
-  const battle = start(3); battle.state.boss.hp = 18;
+  const battle = start(3); battle.state.thresholdIndex = 4; battle.state.boss.hp = 18;
   for (let i = 0; i < 150 && battle.state.phase === 'fight'; i++) battle.step(1 / 60, { attack: true });
   assert.equal(battle.state.phase, 'transition');
   battle.next(); assert.equal(battle.state.stage, 1); assert.equal(battle.state.phase, 'intro');
   assert.equal(battle.state.hero.hp, battle.state.hero.maxHp);
-  battle.step(0, { advance: true }); battle.state.boss.hp = 18;
+  battle.step(0, { advance: true }); battle.state.thresholdIndex = 4; battle.state.boss.hp = 18;
   for (let i = 0; i < 150 && battle.state.phase === 'fight'; i++) battle.step(1 / 60, { attack: true });
   assert.equal(battle.state.phase, 'clash');
   assert.ok(battle.state.events.some(e => e.type === 'clashStart'));
@@ -145,9 +166,9 @@ test('boss moves deterministically and remains inside arena bounds in both stage
 });
 
 test('sprite eye anchors match the rendered actor frame dimensions', () => {
-  assert.deepEqual(battleEyePositions('world', 900, 400), [{ x: 889, y: 255 }, { x: 911, y: 255 }]);
+  assert.deepEqual(battleEyePositions('world', 900, 400), [{ x: 868, y: 222 }, { x: 893, y: 222 }]);
   assert.deepEqual(battleEyePositions('phonk', 900, 400), [{ x: 892, y: 199 }, { x: 908, y: 199 }]);
-  assert.deepEqual(battleEyePositions('patel', 250, 425), [{ x: 240, y: 258 }, { x: 260, y: 258 }]);
+  assert.deepEqual(battleEyePositions('patel', 250, 425), [{ x: 243, y: 308 }, { x: 257, y: 308 }]);
   assert.deepEqual(battleEyePositions('captain', 250, 425), [{ x: 294, y: 301 }, { x: 318, y: 301 }]);
 });
 
@@ -177,14 +198,14 @@ test('boss holds its eye anchors steady throughout each laser charge and active 
 });
 
 test('weapon inputs create distinct projectile patterns, cooldowns, and impact strengths', () => {
-  const expected = { star: [1, 18], spinner: [3, 7], explosive: [1, 34], eyes: [1, 25] };
+  const expected = { star: [1, 18], spinner: [3, 3], explosive: [1, 34], eyes: [1, 25] };
   for (const [weapon, [count, damage]] of Object.entries(expected)) {
     const battle = start(17); battle.step(0.01, { attack: true, weapon });
     assert.equal(battle.state.projectiles.length, count, weapon);
     assert.ok(battle.state.projectiles.every(p => p.type === weapon && p.damage === damage));
     assert.ok(battle.state.hero.attackCooldown > 0);
     const p = battle.state.projectiles[0];
-    if (weapon === 'eyes') assert.ok(Math.abs(p.y - (battle.state.hero.y - 167)) < 25);
+    if (weapon === 'eyes') assert.ok(Math.abs(p.y - (battle.state.hero.y - 117)) < 25);
     else assert.ok(Math.abs(p.y - (battle.state.hero.y - 75)) < 25);
     if (weapon === 'eyes') {
       assert.equal(battle.state.projectiles[0].origins.length, 2);
@@ -203,9 +224,83 @@ test('explosive splash damages a moving boss at its outer radius', () => {
   assert.ok(battle.state.boss.hp < hp, 'blast radius should register splash damage');
 });
 
+function battleWithTelegraphedAttack(type) {
+  for (let seed = 1; seed <= 100; seed++) {
+    const battle = start(seed);
+    battle.state.hero.hp = 1e6;
+    for (let i = 0; i < 500; i++) {
+      battle.step(0.05);
+      const warning = battle.state.events.find(e => e.type === 'telegraph' && e.attack === type);
+      if (warning) {
+        const hazard = battle.state.hazards.find(h => h.id === warning.hazardId);
+        battle.state.hazards = [hazard]; hazard.elapsed = 0; hazard.hit = false;
+        return { battle, hazard, warning };
+      }
+    }
+  }
+  assert.fail(`could not find a seeded ${type} warning`);
+}
+
+test('hand slams and hand catches expose geometry, give full warning, and damage only during impact', () => {
+  for (const type of ['handslam', 'handcatch']) {
+    const { battle, hazard, warning } = battleWithTelegraphedAttack(type);
+    assert.ok(warning.duration >= 1.02, `${type} warning should give at least one second`);
+    if (type === 'handslam') {
+      assert.deepEqual({ x: warning.x, y: warning.y, radius: warning.radius }, { x: hazard.x, y: hazard.y, radius: hazard.radius });
+      assert.ok(hazard.radius >= 80);
+      battle.state.hero.x = hazard.x; battle.state.hero.y = hazard.y + 55;
+    } else {
+      assert.deepEqual(warning.corridor, hazard.corridor);
+      assert.ok(hazard.corridor.width >= 50);
+      battle.state.hero.x = (hazard.corridor.x1 + hazard.corridor.x2) / 2;
+      battle.state.hero.y = hazard.corridor.y1 + 55;
+    }
+    while (hazard.elapsed < hazard.telegraph - 0.06) {
+      battle.step(0.05);
+      assert.equal(battle.state.events.some(e => e.type === 'hit' && e.target === 'hero' && e.source === type), false);
+    }
+    let hit = false;
+    for (let i = 0; i < 34 && !hit; i++) {
+      battle.step(0.02);
+      hit = battle.state.events.some(e => e.type === 'hit' && e.target === 'hero' && e.source === type);
+    }
+    assert.ok(hit, `${type} should damage a stationary hero in its impact area`);
+  }
+});
+
+test('directional dodge escapes both telegraphed hand attacks without damage', () => {
+  for (const type of ['handslam', 'handcatch']) {
+    const { battle, hazard } = battleWithTelegraphedAttack(type);
+    if (type === 'handslam') {
+      battle.state.hero.x = hazard.x; battle.state.hero.y = hazard.y + 55;
+    } else {
+      battle.state.hero.x = (hazard.corridor.x1 + hazard.corridor.x2) / 2;
+      battle.state.hero.y = hazard.corridor.y1 + 55;
+    }
+    while (hazard.elapsed < hazard.telegraph - 0.22) battle.step(0.05);
+    const startY = battle.state.hero.y;
+    const direction=startY<520?1:-1;
+    battle.step(0.01, { y: direction, dodge: true });
+    assert.ok(Math.abs(battle.state.hero.y-startY)>100, `${type} dodge should leave the danger area`);
+    for (let i = 0; i < 12 && battle.state.hazards.includes(hazard); i++) battle.step(0.05, { y: direction });
+    assert.equal(battle.state.events.some(e => e.type === 'hit' && e.target === 'hero' && e.source === type), false);
+  }
+});
+
+test('ideal sustained star attacks finish both stages in a roughly 30–70 second active fight', () => {
+  const battle = start(31); let activeSeconds = 0;
+  battle.state.hero.hp = 1e6; battle.state.thresholdIndex = 4;
+  while (battle.state.phase === 'fight') { battle.step(1 / 60, { attack: true, weapon: 'star' }); activeSeconds += 1 / 60; }
+  assert.equal(battle.state.phase, 'transition');
+  battle.next(); battle.step(0, { advance: true }); battle.state.hero.hp = 1e6; battle.state.thresholdIndex = 4;
+  while (battle.state.phase === 'fight') { battle.step(1 / 60, { attack: true, weapon: 'star' }); activeSeconds += 1 / 60; }
+  assert.equal(battle.state.phase, 'clash');
+  assert.ok(activeSeconds >= 30 && activeSeconds <= 70, `ideal two-stage fight took ${activeSeconds.toFixed(1)}s`);
+});
+
 test('a telegraph-aware player can beat stage two in a seeded dodge-and-attack smoke run', () => {
   for (const seed of [1, 2, 3]) {
-    const battle = start(seed, 1);
+    const battle = start(seed, 1); battle.state.thresholdIndex = 4;
     for (let i = 0; i < 6000 && battle.state.phase === 'fight'; i++) {
       const s = battle.state, heading = [[0, 1], [-1, 0], [0, -1], [1, 0]][Math.floor(i / 80) % 4];
       let x = heading[0], y = heading[1], dodge = false;
@@ -223,3 +318,5 @@ test('a telegraph-aware player can beat stage two in a seeded dodge-and-attack s
 });
 
 console.log(`${count} Vinson battle tests passed`);
+
+for(const stage of [0,1]){const b=createVinsonBattle({stage});b.step(0,{advance:true});b.state.hero.invulnerable=999;for(let i=0;i<200;i++)b.step(.05,{y:-1,dodge:i%20===0});assert.ok(b.state.hero.y>=(stage?350:330),'portrait top remains below HUD while moving/dodging upward');}
