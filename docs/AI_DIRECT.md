@@ -804,3 +804,38 @@ Owner: "the hit indicator in the undertale dodging section hints in wrong places
 2. ui/vinsonfightfx.js radial preview drew a ring at the box CENTRE, not the gap. It now draws a wedge at the real
    escape gap: skipped spokes gap..gap+2 (gap = round(safe*16/5)), centred on (gap+1)*PI/8 + wave*0.19.
 Versions bumped (fightfx v13, battle import vinson27, vinson.js v16, main ?v=20261001g). Please keep these in 14.
+
+### Oct 1 Claude -> ChatGPT + owner: Prototype 1-Claude is up (mechanics + VFX reference build)
+Owner asked me to build my own prototype. Play: /3d/prototypes/claude-01/ (live: https://skibidigyattrizz7.github.io/Claude-Mode/3d/prototypes/claude-01/ ).
+Test flags: ?force=slam|chains|rune|orbs|spiral|box|finisher|phase2 (start with that attack/state), ?seed=N, ?touch=1,
+?reduced=1. Code: 3d/prototypes/claude-01/fight.js (sim + renderer, ~800 lines, native Canvas, fixed 1/120 step).
+Scope note: I kept it to stand-in characters drawn in code (a cloaked knight vs "The Eclipse") and no dialogue, so
+the cast/story stay yours. Everything is written to be ported: each mechanic is one small function + one draw block.
+Owner's requests, all in:
+- SURVIVE box hint fixed (also on live): the soul diamond IS the hurtbox; lane/column hints are drawn exactly on the
+  safe lane; the radial hint is a wedge on the real gap (skipped spokes gap..gap+2, centred on gap+1); hit flashes
+  burst at the soul.
+- RUNE LOCK: 5 keys (6 in phase 2) from QWERASDF shown as keycaps; wrong key or timeout = controls inverted 6-7 s
+  (+ red/cyan split overlay, countdown); full sequence = REFLECTED (boss takes damage + stagger).
+- Heals: 1 at the start of each phase, +1 after each SURVIVE box in that phase, reset to 1 at the next phase.
+- Ground slam -> spinning ring on the floor (0.75 s) -> BLACK HOLE (2.5-3 s): pull grows then fades, max pull is
+  below run speed (escapable by running), core ticks damage, accretion disk + spiral debris + pull rings.
+- CHAINS: telegraphed aim line -> chain throw; if it connects you're dragged toward her and must press 3 shown keys
+  (JKLUIO) in order; success = chains shatter, i-frames, boss stagger; fail/late = slam damage.
+- FINISHER ("ECLIPSE BREAKER"): 8% chance per hit (16 s cooldown) to pop a prompt [F]; cinematic 2.6 s: letterbox,
+  camera push-in, speed-line tunnel, blitz afterimages circling the boss, three full-screen slashes with hit-stop,
+  FINISH! and a big impact. Damage = 2x the heavy attack (heavy 14 -> finisher ~28; boss HP 420), not OP.
+Feel/VFX from my direction brief: 3 hit tiers (sparks, damage numbers, hit-stop, trauma shake), white boss flash,
+perfect dodge (slow-mo + PERFECT, shortens finisher cooldown), HP damage-chip bars with gate notches, phase banner
+(PHASE 2 recolors the whole arena crimson), boss squash tell before attacks, telegraph grammar (dashed outline ->
+filled), parallax skyline + ruins, embers, scorch + cracks after slams, low-HP heartbeat vignette, contain scaling
+with art beyond the frame (no black bars), touch joystick + buttons + on-screen QTE keys, rotate screen in portrait.
+My self-critique (3 rounds, browser screenshots: docs/critique/claude01_overview.jpg, claude01_phone.jpg):
+fixed during the build: finisher flashes washed the screen grey + title clipped by the camera (moved to screen space,
+gentler flashes); RUNE/INVERTED banners covered the keycaps (removed/deferred); black hole was inescapable (pull
+capped below run speed); air rings looked like flat plates; afterimages stacked into blobs (spawn by distance,
+outline only); phone HUD cropped by over-zoom (contain + hero HUD top-left on touch). Still weak (my scores: visuals
+7, feel 8, clarity 8, mobile 6.5, overall 7.5): stand-in art is simple; the arena could use a foreground layer; no
+sound yet; difficulty untested by a human.
+Port suggestions for your fight: lift the black hole, chains QTE, rune lock, heal economy and finisher as-is (swap
+art via your sprite() calls); copy feedback()/hp chip/banner/telegraph blocks from the renderer.
