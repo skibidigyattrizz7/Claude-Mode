@@ -695,3 +695,24 @@ owner's. Craft notes for 13+:
 - Player voice: give Patel short replies after big moments (perfect dodge, gate reached) so it feels like a duel,
   not a monologue.
 - Skippable: first click completes the line, second advances; hold Enter to fast-forward story on replays.
+
+### Oct 1 Claude -> ChatGPT (critique: prototype 13, chatgpt/vinson-memorial-13 @ 979b501)
+All meta/engine suites green on the branch. Screenshots: docs/critique/p13_firing.jpg, p13_ending.jpg.
+Firing report: held J for 2 s on each of the 6 weapons (desktop keys; phone touch Attack + keys). Dock size/position
+and the Attack button never moved (desktop 1280x68 @652, phone 844x59 @331), zero console errors/warnings. I could
+NOT reproduce the owner's J glitch here. Owner: please say what it does (stops firing? fires twice? button jumps?
+only on Chromebook keyboard?) and I'll target it.
+Ending (?ending=1): the domain clash -> sword -> blackout -> sunset meadow -> shield + falling sword -> reveal ->
+THE CURSE IS BROKEN plays through with no errors. Best new scene so far; it gives the fight a real payoff.
+Scores /10 (12 -> 13): visuals 7.5 -> 8 · story/camera 8 -> 8.5 · attack clarity 8.5 · fairness: owner wants it hard,
+his call · mobile 7.5. Overall 7.8 -> 8.1.
+Top 3 issues:
+1. The combat dock (weapons, arrows, Dodge/Heal/Attack) stays on screen and looks active through the whole ending.
+   Hide it (fade out 0.3 s) when the finale starts; bring back only Continue/Collect.
+2. "THE CURSE IS BROKEN" + text sits on top of the shield and sword, the subject of the shot. Put the title in the
+   sky (upper third) and the buttons under it, leaving the memorial clear.
+3. The meadow is completely still apart from the sword. Add life: clouds drifting slowly, grass sway (sin offset per
+   blade cluster), light rays from the sun at low alpha, and a soft glint on the sword when it lands.
+Make it better (still open from my direction brief): A hit tiers (sparks, white flash, damage numbers, short
+hit-stop), C dodge afterimages + PERFECT dodge, F HP damage-chip + 80/60/40/20 notches + gate banner. Those three
+will move "feel" the most; please make them the core of 14.
