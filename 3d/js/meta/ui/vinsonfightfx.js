@@ -1,4 +1,4 @@
-import {vinsonEarthPosition} from '../core/vinsonbattle.js?v=vinson26';
+import {vinsonEarthPosition} from '../core/vinsonbattle.js?v=vinson28';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 const mix=(a,b,p)=>a+(b-a)*p;
@@ -75,7 +75,7 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
     if(preview.pattern==='vertical'){const x=b.minX+laneWidth*preview.safe;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
     else if(preview.pattern==='radial'){
       // Point at the real escape gap: the skipped spokes are gap..gap+2 (core spawn), centred on gap+1.
-      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,gap=Math.round(preview.safe*16/5),mid=(gap+1)*Math.PI/8+preview.wave*.19,half=Math.PI/8*1.4,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
+      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,gap=Math.round(preview.safe*16/5),mid=(gap+1)*Math.PI/8+(preview.wave||0)*.19,half=Math.PI/8*1.4,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
       ctx.save();ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
       ctx.fillStyle='#aecddd';ctx.globalAlpha=.16;ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,r,mid-half,mid+half);ctx.closePath();ctx.fill();
       ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid-half)*r,y+Math.sin(mid-half)*r);ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid+half)*r,y+Math.sin(mid+half)*r);ctx.stroke();ctx.restore();}

@@ -6,10 +6,10 @@ const ctx=new Proxy({}, {get(o,k){if(k in o)return o[k];if(/create.*Gradient/.te
 const images=Object.fromEntries(['patel','captain','world','phonk'].map(k=>[k,{complete:true,naturalWidth:1200,naturalHeight:1000}]));
 for(const stage of [0,1])for(const weapon of ['star','spinner','explosive','eyes','constellation','nova']){
  const b=createVinsonBattle({stage,seed:13013});b.step(0,{advance:true});b.state.hero.invulnerable=999;
- for(let i=0;i<600;i++){b.step(1/60,{attack:true,weapon,y:1});if(i%10===0)drawVinsonBattle(ctx,b.state,images,i/60);}
+ for(let i=0;i<600;i++){b.step(1/60,{attack:true,weapon,y:1,sequenceKey:b.state.sequence?.keys[b.state.sequence.index]});if(i%10===0)drawVinsonBattle(ctx,b.state,images,i/60);}
  assert.ok(b.state.hero.y>VINSON_BATTLE_ARENA.maxY-15,'down movement reaches the expanded lower edge during attacks despite gravity pull');
 }
-for(const compact of [false,true]){const b=createVinsonBattle({compact});b.step(0,{advance:true});b.state.hero.invulnerable=999;for(let i=0;i<300;i++)b.step(1/60,{y:1});assert.equal(b.state.hero.y,compact?600:672);}
+for(const compact of [false,true]){const b=createVinsonBattle({compact});b.step(0,{advance:true});b.state.hero.invulnerable=999;for(let i=0;i<300;i++)b.step(1/60,{y:1,sequenceKey:b.state.sequence?.keys[b.state.sequence.index]});assert.equal(b.state.hero.y,compact?600:672);}
 const css=fs.readFileSync(new URL('../../../css/vinsonbattle.css',import.meta.url),'utf8');
 assert.match(css,/\.vb-weapons button:not\(\.vb-cycle\)\{width:78px;min-width:78px;white-space:nowrap/,'cooldown labels cannot reflow desktop arena');
 console.log('Vinson repeated-fire, lower movement and stable dock regressions passed');
