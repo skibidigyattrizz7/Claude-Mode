@@ -111,8 +111,22 @@ export function removeVinsonMatte(pixels,width,height) {
   }
   return pixels;
 }
+function removeDarkMatte(pixels,width,height) {
+  const seen=new Uint8Array(width*height),queue=new Uint32Array(width*height);let read=0,write=0;
+  const add=(i)=>{
+    if(seen[i])return;seen[i]=1;const p=i*4;
+    if(Math.max(pixels[p],pixels[p+1],pixels[p+2])>42)return;
+    queue[write++]=i;
+  };
+  for(let x=0;x<width;x++){add(x);add((height-1)*width+x);}
+  for(let y=0;y<height;y++){add(y*width);add(y*width+width-1);}
+  while(read<write){const i=queue[read++],x=i%width,y=Math.floor(i/width);pixels[i*4+3]=0;
+    if(x)add(i-1);if(x+1<width)add(i+1);if(y)add(i-width);if(y+1<height)add(i+width);
+  }
+  return pixels;
+}
 function battlePortrait(image,key) {
-  if(!['phonk','captain','patel'].includes(key))return image;
+  if(!['world','phonk','captain','patel'].includes(key))return image;
   if(matteCache.has(image))return matteCache.get(image);
   let art=image;
   try {
@@ -121,7 +135,8 @@ function battlePortrait(image,key) {
     const c=canvas.getContext('2d',{willReadFrequently:true});
     c.drawImage(image,0,0,canvas.width,canvas.height);
     const pixels=c.getImageData(0,0,canvas.width,canvas.height);
-    if(key!=='patel')removeVinsonMatte(pixels.data,canvas.width,canvas.height);
+    if(key==='world')removeDarkMatte(pixels.data,canvas.width,canvas.height);
+    else if(key!=='patel')removeVinsonMatte(pixels.data,canvas.width,canvas.height);
     else {for(let y=Math.floor(canvas.height*.84);y<canvas.height;y++){const fade=clamp((canvas.height-y)/(canvas.height*.16),0,1);for(let x=0;x<canvas.width;x++)pixels.data[(y*canvas.width+x)*4+3]*=fade*fade;}}
     c.putImageData(pixels,0,0);art=canvas;
   }catch{/* Readback unsupported: the original remains visible. */}
@@ -139,8 +154,10 @@ function sprite(ctx, image, key, x, y, t, alpha = 1, moving = false) {
   if (image?.complete && image.naturalWidth) {
     const art=battlePortrait(image,key);
     const {sx,sy,sw,sh,dw,dh}=vinsonSpriteFrame(key,art.naturalWidth||art.width,art.naturalHeight||art.height);
-    // Preserve actor colors; screen blends only World's existing black matte.
-    ctx.globalCompositeOperation=key==='world'?'screen':'source-over';
+    ctx.globalCompositeOperation='source-over';
+    if(key==='world'||key==='phonk'){
+      ctx.shadowColor='#ff5148';ctx.shadowBlur=18;
+    }
     if(key==='patel'){
       // Frame the original knight silhouette rather than its rectangular poster background.
       const contour=[[.42,.012],[.50,0],[.565,.03],[.59,.09],[.592,.17],[.577,.23],[.62,.29],[.70,.32],[.79,.40],[.87,.50],[.94,.70],[1,1],[0,1],[.115,.76],[.15,.48],[.29,.31],[.40,.285],[.38,.23],[.35,.13],[.36,.07]];
@@ -287,7 +304,7 @@ export async function registerVinsonBattleAttempt(online) {
 
 export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
   if (document.querySelector('.vb-screen')) return null;
-  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=15', import.meta.url).href; document.head.append(link);
+  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=16', import.meta.url).href; document.head.append(link);
   const screen = node('section', 'vb-screen'); screen.setAttribute('role', 'dialog'); screen.setAttribute('aria-modal', 'true'); screen.setAttribute('aria-label', 'Fight Suppression');
   const stage = node('div', 'vb-stage'), canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
   canvas.setAttribute('aria-label', 'Move to dodge the marked attacks, attack Vinson, and dodge with Space.'); stage.append(canvas);
@@ -329,6 +346,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   let battle = createVinsonBattle({ seed }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
   let mode = '', cinematicKind = '', cinematicTime = 0, trauma = 0, particles = [], nonce = null, victoryBusy = false, victoryConfirmed = false;
   let dialogue=null,lastDialogue=-10,spokenText='',speechOwned=false,speechLine=null;
+  const barkLast=new Map(),barkCount=new Map();
   let blockingDialogue=null,dialogueQueue=[],dialogueComplete=null;
   const acknowledgedDialogue=new Set();
   let camera={zoom:1,x:640,y:360};
@@ -344,7 +362,10 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const line=new SpeechSynthesisUtterance(text);line.volume=volume;line.rate=.92;line.pitch=.82;
     line.onend=line.onerror=()=>{if(speechLine===line){speechOwned=false;speechLine=null;}};speechLine=line;speechOwned=true;window.speechSynthesis.speak(line);
   }
-  function say(speaker,text) {if(blockingDialogue)return;dialogue={speaker,text,until:clock+4.8};lastDialogue=clock;speak(text);}
+  function say(speaker,text,key='generic') {
+    if(blockingDialogue||clock-(barkLast.get(key)??-20)<10)return;
+    barkLast.set(key,clock);dialogue={speaker,text,until:clock+2.6};lastDialogue=clock;speak(text);
+  }
   function showDialogue(lines,onComplete=null){
     dialogueQueue=lines.slice();dialogueComplete=onComplete;dialogue=null;subtitle.replaceChildren();
     held.clear();keys.clear();controls.classList.add('vb-controls-paused');nextDialogue();
@@ -498,9 +519,16 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     for (const evt of s.events) {
       if (evt.type === 'hit') { trauma = Math.min(1, trauma + (evt.target === 'hero' ? .7 : .32)); const who = evt.target === 'hero' ? s.hero : s.boss; burst(who.x, who.y - 65, evt.target === 'hero' ? '#f67460' : '#a4d9ff'); tone('hit'); if(evt.weapon==='explosive')particles.push({kind:'blast',x:who.x,y:who.y-100,vx:0,vy:0,life:.6,maxLife:.6,size:0,color:'#ffbc70'}); }
       if (evt.type === 'fire') { burst(evt.x, evt.y - 20, '#70bfff', 4); tone('fire'); }
-      if(evt.type==='telegraph' && clock-lastDialogue>4) {
-        const lines={laserline:s.stage?'You cannot outrun my eyes.':'Look at me. This ends now.',bombcircle:'Stay humble. Here comes the bomb.',painring:"That's too humble. I'm going to assign pain.",handslam:'Kneel. The weight of my world is coming down.',handcatch:'Run wherever you like. My hands will find you.'};
-        say(names[bossArt(s.stage)].toUpperCase(),lines[evt.attack]||'You were warned.');
+      if(evt.type==='telegraph' && clock-lastDialogue>2.5) {
+        const lines={
+          laserline:s.stage?['You cannot outrun my eyes.','Face the light that ends you.']:['Look at me. This ends now.','My eyes have already found you.'],
+          bombcircle:['Stay humble. Here comes the bomb.','The humble bomb leaves nowhere to hide.'],
+          painring:["That's too humble. I'm going to assign pain.",'Pain has your name now.'],
+          handslam:['Kneel. The weight of my world is coming down.','One hand is enough to end this.'],
+          handcatch:['Run wherever you like. My hands will find you.','You are already in my grasp.']
+        };
+        const pool=lines[evt.attack]||['You were warned.'],count=barkCount.get(evt.attack)||0;
+        barkCount.set(evt.attack,count+1);say(names[bossArt(s.stage)].toUpperCase(),pool[count%pool.length],evt.attack);
       }
       if (evt.type === 'dodge') burst(evt.x, evt.y - 40, '#d3ebff', 18);
     }
@@ -533,7 +561,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     drawVinsonBattle(ctx, battle.state, images, clock, { shot, particles, trauma, reducedMotion, visualHero: viewHero, camera });
     const activeDialogue=dialogue&&clock<dialogue.until&&mode==='fight'?dialogue:null;
     const text = blockingDialogue || shot || mode==='result' ? '' : activeDialogue?.text || '';
-    if (subtitle.dataset.text !== text) { subtitle.dataset.text = text; subtitle.replaceChildren(); if (text) {subtitle.append(node('strong', '', activeDialogue?.speaker||''), node('p', '', text));const dismiss=node('button','vb-taunt-dismiss','Dismiss');dismiss.onclick=()=>{dialogue=null;subtitle.replaceChildren();};subtitle.append(dismiss);} }
+    if (subtitle.dataset.text !== text) { subtitle.dataset.text = text; subtitle.replaceChildren(); if (text) subtitle.append(node('strong', '', activeDialogue?.speaker||''), node('p', '', text)); }
     raf = requestAnimationFrame(frame);
   }
   function close() {
