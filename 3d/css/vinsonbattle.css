@@ -1,7 +1,7 @@
 .vb-screen { position:fixed; inset:0; z-index:25000; background:#050607; color:#f3f1e7; display:flex; flex-direction:column; font-family:system-ui,sans-serif; isolation:isolate; }
 .vb-screen * { box-sizing:border-box; }
 .vb-stage { position:relative; flex:1; min-height:0; overflow:hidden; display:grid; place-items:center; }
-.vb-stage canvas { width:100%; height:100%; object-fit:contain; touch-action:none; }
+.vb-stage > canvas { width:100%; height:100%; object-fit:contain; touch-action:none; }
 .vb-top { position:absolute; z-index:2; top:max(14px,env(safe-area-inset-top)); left:24px; right:24px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .vb-title { font:800 clamp(18px,3vw,28px) 'Barlow Condensed',Impact,sans-serif; letter-spacing:.09em; }
 .vb-top button,.vb-actions button { border:0; color:inherit; background:#222528; cursor:pointer; padding:12px 18px; min-height:44px; font:700 14px system-ui,sans-serif; }
@@ -33,3 +33,48 @@
 .vb-subtitle { bottom:5%; background:#080507bb; padding:10px; box-sizing:border-box; }
 .vb-subtitle:empty { background:none; }
 @media(max-width:600px) { .vb-weapons { width:100%; justify-content:center; } .vb-weapons button { padding:7px 8px; min-height:35px; } .vb-touch {width:100%;justify-content:center;} }
+/* Story conversations hold the fight until the player chooses to continue. */
+.vb-dialogue[hidden] { display:none; }
+.vb-dialogue { position:absolute;z-index:5;bottom:5%;left:50%;transform:translateX(-50%);width:min(850px,calc(100% - 40px));display:grid;grid-template-columns:minmax(72px,120px) minmax(28ch,1fr);align-items:center;gap:20px;min-height:150px;padding:20px 26px 20px 18px;border:1px solid #8a4145;border-left:5px solid #bb474a;background:linear-gradient(110deg,#170c10f5,#08090bf5);box-shadow:0 16px 50px #000a,inset 0 1px #e5959526;color:#fff;text-align:left;cursor:pointer;font-family:system-ui,sans-serif;animation:vb-dialogue-enter .35s ease-out; }
+.vb-dialogue[data-side="hero"] {border-color:#456d91;border-left-color:#81b4e5;background:linear-gradient(110deg,#0b1422f5,#08090bf5);}
+.vb-dialogue:focus-visible {outline:2px solid #fff;outline-offset:4px;}
+.vb-dialogue-portrait {display:block;width:min(120px,32vw);height:min(130px,45vh);max-width:120px;max-height:130px;align-self:center;filter:drop-shadow(0 4px 12px #0008);}
+.vb-dialogue-body {flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+.vb-dialogue-speaker {font-size:14px;letter-spacing:.11em;color:#ef9090;line-height:1.4;}
+.vb-dialogue[data-side="hero"] .vb-dialogue-speaker {color:#a0d0fa;}
+.vb-dialogue-line {font-size:clamp(18px,2.4vw,28px);line-height:1.35;margin:12px 0;min-height:2.7em;}
+.vb-dialogue-continue {font-size:14px;color:#a8aeb8;align-self:flex-end;}
+.vb-controls-paused {opacity:.35;pointer-events:none;}
+.vb-top {flex-wrap:wrap;}
+@keyframes vb-dialogue-enter {from {opacity:0;transform:translate(-50%,12px)} to {opacity:1;transform:translate(-50%,0)}}
+@media(max-width:600px){.vb-dialogue{width:calc(100% - 24px);grid-template-columns:65px minmax(28ch,1fr);gap:12px;padding:14px;bottom:3%;min-height:130px}.vb-dialogue-portrait{width:65px;height:100px}.vb-dialogue-speaker{font-size:12px}.vb-dialogue-line{font-size:18px}.vb-title{width:100%;font-size:18px}}
+@media(max-height:450px){.vb-dialogue{bottom:2%;grid-template-columns:70px minmax(28ch,1fr);padding:10px 16px;min-height:90px}.vb-dialogue-portrait{height:80px;width:70px}.vb-dialogue-line{font-size:16px;margin:6px 0;min-height:1.35em}.vb-top{top:8px}.vb-title{font-size:16px}}
+@media(prefers-reduced-motion:reduce){.vb-dialogue{animation:none}}
+.vb-subtitle:not(:empty){top:clamp(104px,22vh,160px);bottom:auto;left:50%;transform:translateX(-50%);width:min(760px,calc(100% - 32px));min-height:34px;border-left:3px solid #b64949;background:#100b0ed9;padding:7px 14px;text-align:center;box-shadow:0 5px 18px #0007;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vb-subtitle strong{display:inline;color:#ef9090;font-size:13px;line-height:1.3;letter-spacing:.08em;margin:0 10px 0 0;}
+.vb-subtitle p{display:inline;margin:0;font:700 15px/1.3 system-ui,sans-serif;}
+@media(max-height:450px){.vb-subtitle:not(:empty){top:64px;width:calc(100% - 20px);padding:5px 10px}.vb-subtitle strong{font-size:11px}.vb-subtitle p{font-size:13px}}
+.vb-stage-frozen > canvas{filter:brightness(.38) saturate(.38);transition:filter .18s ease-out;}
+@media(prefers-reduced-motion:reduce){.vb-stage-frozen > canvas{transition:none}}
+
+.vb-touch button[data-action="heal"]{width:76px;background:#1d4234;color:#bce6cf;font-size:13px}
+.vb-touch button:disabled,.vb-weapons button:disabled{opacity:.4;cursor:default}
+@media(max-height:450px){.vb-controls{padding:5px 10px;gap:5px}.vb-hint{display:none}.vb-weapons button{min-height:32px;padding:5px 8px}.vb-touch button{height:36px}.vb-touch{gap:4px}}
+@media(max-width:600px){.vb-touch button[data-action="heal"]{width:63px;font-size:11px}.vb-touch button[data-action="attack"]{width:54px}.vb-touch button[data-action="dodge"]{width:54px}}
+
+/* Mobile dock reserves separate rows for weapons and actions. */
+@media(max-width:900px){
+ .vb-controls{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:4px;padding:6px max(10px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));overflow:visible;}
+ .vb-hint{display:none}
+ .vb-weapons,.vb-touch{width:100%;justify-content:center;gap:4px}
+ .vb-weapons button{min-width:0;flex:1;min-height:44px;font-size:12px;padding:5px 6px;white-space:nowrap}
+ .vb-touch{display:grid;grid-template-columns:repeat(4,44px) repeat(3,minmax(58px,72px));}
+ .vb-touch button{width:100%;height:44px;min-width:0;white-space:nowrap;line-height:1;overflow:visible}
+ .vb-touch button[data-action="attack"],.vb-touch button[data-action="dodge"],.vb-touch button[data-action="heal"]{width:100%;font-size:12px}
+}
+.vb-dialogue{max-height:38%;min-height:0;overflow:auto;overscroll-behavior:contain}
+@media(max-height:450px){.vb-dialogue{bottom:2%;max-height:38%;padding:8px 14px}.vb-dialogue-portrait{height:55px;width:55px}.vb-dialogue-line{font-size:15px;line-height:1.25;margin:4px 0}.vb-dialogue-continue{font-size:12px}}
+@media(orientation:portrait){
+ .vb-screen::after{content:"ROTATE YOUR PHONE TO PLAY";position:fixed;z-index:100000;inset:0;display:flex;align-items:center;justify-content:center;padding:32px;background:#050607f5;color:#f3f1e7;text-align:center;font:900 clamp(24px,8vw,42px)/1.1 Impact,sans-serif;letter-spacing:.06em}
+ .vb-screen .vb-controls,.vb-screen .vb-fight-button{visibility:hidden;pointer-events:none}
+}
