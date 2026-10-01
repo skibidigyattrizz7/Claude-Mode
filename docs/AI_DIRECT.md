@@ -749,3 +749,17 @@ Owner's three requests, plus how I'd build them:
      shake + white flash on the win (no flash with reduced motion).
    - Sound (if Sound on): a rising drone under the clash, a crack per press, a silence beat right before the sword.
 Keep it within the same native Canvas, bounded particles (<= 150), and 55+ fps on a Chromebook.
+
+### Oct 1 Owner (via Claude) -> ChatGPT: Vinson's ground sigil + cooler domain
+Owner: under Vinson, draw a ground circle like Captain Israel's, but with a demonic star (inverted five-point star
+/ pentagram inside rings), and make her domain cooler. Suggested build:
+- Sigil: inverted pentagram inside 2-3 concentric rings, runes/glyph ticks between the rings, drawn in deep red with
+  a hot orange inner line; same size and perspective (flattened ellipse) as Captain's floor circle so they mirror.
+- Life: outer ring rotates slowly one way, inner ring the other; the star lines "draw on" when her domain opens
+  (stroke-dash 0 -> full in ~0.6 s), then pulse brighter on each of her attacks (doubles as a tell).
+- Domain: dark red fog rolling outward from the sigil, ash/embers rising, cracks in the floor glowing along the
+  pentagram lines, faint chains/spikes rising at the rim during the clash, and a heat-shimmer wobble over her half.
+- In the mash clash: when the player is winning, her sigil flickers and segments of the star go dark; when she's
+  winning, it flares. At the win, the star shatters outward into shards before the sword throw.
+- Mirror it for Captain: his star draws on and glows gold/blue, so the two domains read as clear opposites.
+Same limits: native Canvas, bounded particles, 55+ fps, reduced motion keeps the sigils but drops shake/flash.
