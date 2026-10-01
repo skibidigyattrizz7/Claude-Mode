@@ -36,22 +36,60 @@ function star(ctx, x, y, radius, angle, alpha = 1) {
   }
   ctx.restore();
 }
+// Frame only unused matte, keeping the full face, hands and planet in the source image.
+export function vinsonSpriteFrame(key, sourceWidth, sourceHeight) {
+  const rect=key==='world'?[.23,0,.50,.98]:key==='patel'?[0,.23,1,.77]:[0,0,1,1];
+  const width=key==='world'?292:key==='phonk'?230:key==='captain'?182:148;
+  const height=key==='world'?240:key==='phonk'?240:key==='captain'?145:196;
+  const [rx,ry,rw,rh]=rect, sw=sourceWidth*rw,sh=sourceHeight*rh;
+  const scale=Math.min(width/sw,height/sh);
+  return {sx:sourceWidth*rx,sy:sourceHeight*ry,sw,sh,dw:sw*scale,dh:sh*scale,width,height};
+}
+const matteCache=new WeakMap();
+// Remove only near-white pixels connected to the outside. White teeth/eye effects stay intact.
+export function removeVinsonMatte(pixels,width,height) {
+  const seen=new Uint8Array(width*height),queue=new Uint32Array(width*height);let read=0,write=0;
+  const add=(i)=>{
+    if(seen[i])return;seen[i]=1;const p=i*4;
+    if(Math.min(pixels[p],pixels[p+1],pixels[p+2])<220)return;
+    queue[write++]=i;
+  };
+  for(let x=0;x<width;x++){add(x);add((height-1)*width+x);}
+  for(let y=0;y<height;y++){add(y*width);add(y*width+width-1);}
+  while(read<write){const i=queue[read++],x=i%width,y=Math.floor(i/width);pixels[i*4+3]=0;
+    if(x)add(i-1);if(x+1<width)add(i+1);if(y)add(i-width);if(y+1<height)add(i+width);
+  }
+  return pixels;
+}
+function battlePortrait(image,key) {
+  if(key!=='phonk')return image;
+  if(matteCache.has(image))return matteCache.get(image);
+  let art=image;
+  try {
+    const canvas=document.createElement('canvas'),scale=Math.min(1,512/image.naturalHeight);
+    canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);
+    const c=canvas.getContext('2d',{willReadFrequently:true});
+    c.drawImage(image,0,0,canvas.width,canvas.height);
+    const pixels=c.getImageData(0,0,canvas.width,canvas.height);
+    removeVinsonMatte(pixels.data,canvas.width,canvas.height);c.putImageData(pixels,0,0);art=canvas;
+  }catch{/* Readback unsupported: the original remains visible. */}
+  matteCache.set(image,art);return art;
+}
 function sprite(ctx, image, key, x, y, t, alpha = 1, moving = false) {
   if (alpha <= 0) return;
-  const width = key === 'captain' ? 182 : 148, height = key === 'captain' ? 145 : 196;
+  const frame=vinsonSpriteFrame(key,image?.naturalWidth||1,image?.naturalHeight||1);
+  const {width,height}=frame;
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.fillStyle = '#020a09'; ctx.beginPath(); ctx.ellipse(x, y + 12, width * .42, 14, 0, 0, Math.PI * 2); ctx.fill();
   const bob = moving ? Math.sin(t * 15) * 4 : Math.sin(t * 2) * 2;
   ctx.translate(x, y + bob); ctx.rotate(moving ? Math.sin(t * 7.5) * .035 : 0);
   if (image?.complete && image.naturalWidth) {
-    // Keep the owner's source intact; the portrait is framed rather than stretched.
-    const cropTop = key === 'patel' ? image.naturalHeight * .23 : 0;
-    const sourceHeight = image.naturalHeight - cropTop;
-    const scale = Math.min(width / image.naturalWidth, height / sourceHeight);
-    const dw = image.naturalWidth * scale, dh = sourceHeight * scale;
-    // Composite the source's plain matte into the field without replacing the owner's art.
-    ctx.globalCompositeOperation = key === 'world' ? 'screen' : key === 'patel' ? 'source-over' : 'multiply';
-    ctx.drawImage(image, 0, cropTop, image.naturalWidth, sourceHeight, -dw / 2, -dh, dw, dh);
+    const art=battlePortrait(image,key);
+    const {sx,sy,sw,sh,dw,dh}=vinsonSpriteFrame(key,art.naturalWidth||art.width,art.naturalHeight||art.height);
+    // Black world matte blends into the arena; white-matte Phonk needs source-over
+    // on the black dodge arena or multiply would erase the entire portrait.
+    ctx.globalCompositeOperation=key==='world'?'screen':key==='phonk'?'source-over':key==='patel'?'source-over':'multiply';
+    ctx.drawImage(art,sx,sy,sw,sh,-dw/2,-dh,dw,dh);
   } else {
     ctx.fillStyle = key === 'world' || key === 'phonk' ? '#871c20' : '#1c567e';
     ctx.fillRect(-width * .25, -height * .7, width * .5, height * .7);

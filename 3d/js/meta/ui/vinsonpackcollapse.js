@@ -1,3 +1,4 @@
+import { createVinsonHand } from './vinsonhand.js';
 import { fractureElement } from './vinsonfracture.js';
 import { load } from '../core/storage.js';
 
@@ -31,14 +32,16 @@ export function vinsonCrackPaths(hit) {
   }
   return paths;
 }
+// Fixed, uneven shard outline: later hits enlarge the SAME wound, without rotating symmetry.
+const SHARD_EDGE = [[1,.05],[.82,-.08],[.90,-.24],[.52,-.35],[.60,-.80],[.41,-.70],[.07,-1],[-.03,-.83],[-.49,-.84],[-.42,-.67],[-.91,-.52],[-.72,-.29],[-1,.09],[-.89,.28],[-.81,.59],[-.52,.54],[-.20,.95],[.01,.78],[.38,.88],[.47,.66],[.76,.54],[.68,.31]];
+export function vinsonHolePoints(hit) {
+  const radius=[0,0,0,0,5,19,47][clamp(hit,0,6)];
+  return SHARD_EDGE.map(([x,y])=>[50+x*radius,48+y*radius*.92]);
+}
 function punchedHole(hit) {
-  const radius=[0,0,0,0,5,17,38][hit],cx=50,cy=48;
-  const points=[];
-  for(let i=0;i<=12;i++) {
-    const j=i%12,a=-i*Math.PI/6,r=radius*(j%3===0?1.17:.88);
-    points.push((cx+Math.cos(a)*r).toFixed(2)+'% '+(cy+Math.sin(a)*r).toFixed(2)+'%');
-  }
-  return 'polygon(evenodd,0% 0%,100% 0%,100% 100%,0% 100%,0% 0%,'+points.join(',')+')';
+  const points=vinsonHolePoints(hit);
+  points.push(points[0]);
+  return 'polygon(evenodd,0% 0%,100% 0%,100% 100%,0% 100%,0% 0%,'+points.map(([x,y])=>x.toFixed(2)+'% '+y.toFixed(2)+'%').join(',')+')';
 }
 function backgroundPane(overlay) {
   const pane=div('vinson-punch-pane'),style=getComputedStyle(overlay);
@@ -56,7 +59,7 @@ function backgroundPane(overlay) {
 /** Runs only AFTER the cursed grid intercepted the first click and broke its buttons. */
 export function playVinsonPackCollapse(stage,{onExit,reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches}={}) {
   if(!document.querySelector('link[data-vinson-pack-collapse]')) {
-    const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('../../../css/vinsonpackcollapse.css',import.meta.url).href;
+    const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('../../../css/vinsonpackcollapse.css?v=2',import.meta.url).href;
     css.dataset.vinsonPackCollapse='1';document.head.append(css);
   }
   const overlay=stage.closest('.pm-po') || stage;
@@ -64,9 +67,7 @@ export function playVinsonPackCollapse(stage,{onExit,reducedMotion=globalThis.ma
   const actor=div('vinson-punch-actor'),portrait=new Image();portrait.src=world;portrait.alt='';actor.append(portrait);
   const pane=backgroundPane(overlay),cracks=svg('svg',{viewBox:'0 0 1000 1000',preserveAspectRatio:'none',class:'vinson-punch-cracks'});
   const blood=svg('g',{class:'vinson-punch-blood'});cracks.append(blood);
-  const hand=svg('svg',{viewBox:'0 0 400 500',class:'vinson-screen-hand'});
-  // An articulated silhouette reaches from the portrait and closes around the viewer.
-  hand.append(svg('path',{d:'M105 500 L98 315 C84 270 57 253 47 218 C42 196 58 183 70 197 L113 248 L109 108 C109 82 133 78 139 105 L150 212 L154 55 C154 29 181 29 187 54 L192 209 L210 78 C214 51 241 59 240 83 L231 218 L252 130 C258 105 281 113 277 141 L263 275 C306 237 331 236 341 254 C350 274 316 290 293 327 L267 387 L282 500 Z'}));
+  const hand=createVinsonHand();
   const black=div('vinson-punch-black');layer.append(actor,pane,cracks,hand,black);document.body.append(layer);
   let closed=false,audio=null;const timers=new Set(),dust=new Set();
   const volume=clamp(Number((load('meta.settings',{})||{}).volume ?? 70)/100,0,1);
@@ -143,7 +144,10 @@ export function playVinsonPackCollapse(stage,{onExit,reducedMotion=globalThis.ma
     else if(b.action==='reach') {
       layer.classList.add('is-reaching');
       if(!reducedMotion)animate(hand,[{transform:'translate(-50%,50%) scale(.3)',opacity:0},{transform:'translate(-50%,4%) scale(.85)',opacity:1,offset:.55},{transform:'translate(-50%,-10%) scale(2.9)',opacity:1}],{duration:1900,fill:'forwards',easing:'cubic-bezier(.25,.2,.3,1)'});
-      else hand.style.opacity='1';
+      else {hand.style.opacity='1';hand.style.transform='translate(-50%,4%) scale(.85)';}
+      if(!reducedMotion)for(const [i,finger] of [...hand.querySelectorAll('.vinson-hand-finger')].entries()) {
+        animate(finger,[{transform:'rotate(0deg)'},{transform:'rotate('+finger.dataset.grip+'deg) scaleY(.84)'}],{delay:650+i*65,duration:1000,fill:'forwards',easing:'cubic-bezier(.5,0,.2,1)'});
+      }
     } else if(b.action==='black')layer.classList.add('is-black');
     else if(b.action==='exit')finish(true);
   }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { VINSON_PACK_BEATS, vinsonCrackPaths } from '../ui/vinsonpackcollapse.js';
+import { VINSON_PACK_BEATS, vinsonCrackPaths, vinsonHolePoints } from '../ui/vinsonpackcollapse.js';
 const punches=VINSON_PACK_BEATS.filter(b=>b.action==='punch');
 assert.deepEqual(punches.map(b=>b.hit),[1,2,3,4,5,6]);
 assert.equal(VINSON_PACK_BEATS[0].action,'surfaces');
@@ -17,5 +17,13 @@ for(let hit=1;hit<=6;hit++){
   assert.ok(paths.every(p=>!(/NaN|Infinity/.test(p))));
   assert.deepEqual(paths,vinsonCrackPaths(hit),'reproducible cracks');
   previous=paths.length;
+}
+let priorArea=0;
+for(const hit of [4,5,6]) {
+  const edge=vinsonHolePoints(hit);
+  assert.ok(edge.every(([x,y])=>x>=0&&x<=100&&y>=0&&y<=100),'hole keeps edge glass');
+  const area=Math.abs(edge.reduce((sum,[x,y],i)=>{const [nx,ny]=edge[(i+1)%edge.length];return sum+x*ny-nx*y;},0))/2;
+  assert.ok(area>priorArea,'each punch enlarges the same opening');priorArea=area;
+  assert.ok(new Set(edge.map(([x,y])=>Math.hypot(x-50,y-48).toFixed(1))).size>10,'uneven break avoids rotational symmetry');
 }
 console.log('Vinson staged cursed-pack collapse timeline regressions passed');
