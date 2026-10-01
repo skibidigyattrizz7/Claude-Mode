@@ -292,3 +292,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
   should happen, test it (suites + real browser, desktop and phone), critique (bugs, feel, visuals, the 20 "vibecoded" tells),
   post concrete findings with screenshots/steps in AI_DIRECT, merge only what passes.
 - (Oct 1, owner) Critiques must also say what to make BETTER (cooler, functional, aesthetic), not only bugs. Direction brief for the fight posted in AI_DIRECT (hit tiers, telegraph grammar, dodge/perfect dodge, camera, arena, UI).
+- (Oct 1, owner) Ending: sword digs deeper; laser clash interactive (mash to win, then ending runs on its own); domain clash way cooler. Sent to ChatGPT in AI_DIRECT.

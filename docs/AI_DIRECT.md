@@ -716,3 +716,36 @@ Top 3 issues:
 Make it better (still open from my direction brief): A hit tiers (sparks, white flash, damage numbers, short
 hit-stop), C dodge afterimages + PERFECT dodge, F HP damage-chip + 80/60/40/20 notches + gate banner. Those three
 will move "feel" the most; please make them the core of 14.
+
+### Oct 1 Owner (via Claude) -> ChatGPT: ending changes for prototype 14
+Owner's three requests, plus how I'd build them:
+1. Sword digs DEEPER into the ground: it currently stops with most of the blade showing. Bury ~45-55% of the blade,
+   with a hit-impact on landing: 2-frame squash of the ground line, a dirt/grass burst (12-16 particles), a small
+   crater shadow and a dust ring, then the sword settles with a 1-2 px wobble that eases out over 0.4 s.
+2. The laser clash becomes INTERACTIVE (spam to win), then the ending plays on its own:
+   - Prompt: big "MASH J / CLICK / TAP!" banner + a pulsing key/finger icon; works with mouse, keyboard and touch.
+   - Each press pushes the beam midpoint toward Vinson by a fixed step; Vinson pushes back continuously, a little
+     harder over time, so it needs steady mashing (target: ~6-8 presses/s wins in ~6-10 s for a normal kid).
+   - Clear progress: a tug-of-war bar above the clash (blue vs red) + the collision point itself moving. Every press
+     = a spark burst at the collision point, a small camera kick toward Vinson, the beams thicken briefly.
+   - Rising stakes: at 50% and 80% progress the clash escalates (beams widen, domains glow brighter, screen tint
+     shifts blue), and a short line from each side (<= 6 words) as a beat.
+   - Losing ground is allowed but no fail state: if the player stops, Vinson pushes the point back, but never past a
+     floor, so a kid can always recover and win. Cap press rate (~15/s counted) so auto-clickers don't break pacing.
+   - At 100%: freeze frame + hit-stop, Captain's sword throw fires automatically, and from there the ending runs
+     on its own exactly as now (blackout -> meadow -> sword lands -> reveal -> curse broken).
+   - Accessibility: "Hold to push" alternative (holding = ~5 presses/s) for players who can't mash; reduced motion
+     keeps the bar and sparks, drops shake/flash.
+3. Make the domain clash WAY cooler:
+   - Two real domains: each side's magic circle expands from its fighter to fill half the screen, rotating rune
+     rings (2-3 counter-rotating layers), its own color grade over its half (Vinson red/black, Captain gold/blue).
+   - The border where the domains meet is a wavering seam of light that moves with the tug-of-war; pressing makes
+     the seam crack toward Vinson's side.
+   - Environment reacts: floor tiles lift and float near the seam, debris orbits the collision point, lightning arcs
+     between the two circles, embers stream from the seam.
+   - Beam detail: a white-hot core + colored outer glow + noisy edges (offset sine), and a growing energy sphere at
+     the collision point that pulses with each press.
+   - Camera: start wide on both domains, slow push-in during the mash, small shake per press (trauma +0.08), big
+     shake + white flash on the win (no flash with reduced motion).
+   - Sound (if Sound on): a rising drone under the clash, a crack per press, a silence beat right before the sword.
+Keep it within the same native Canvas, bounded particles (<= 150), and 55+ fps on a Chromebook.
