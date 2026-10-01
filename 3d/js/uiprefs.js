@@ -16,7 +16,8 @@ function write(patch) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(
 export function uiPrefs() {
   const s = read();
   return {
-    ui: UI_STYLES.some(([k]) => k === s.ui) ? s.ui : 'classic',
+    // Stadium is the default (owner, Oct 1); a saved style counts only once the player picked it
+    ui: s.uiPicked && UI_STYLES.some(([k]) => k === s.ui) ? s.ui : 'stadium',
     accent: s.accent === 'custom' || UI_ACCENTS.some(([k]) => k === s.accent) ? s.accent : 'default',
     accentCustom: HEX.test(s.accentCustom || '') ? s.accentCustom : '#ff6a1f',
   };
@@ -79,7 +80,7 @@ export function uiStylePicker({ onChange = () => {} } = {}) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'pm-chip'; b.textContent = name; b.setAttribute('role', 'radio');
     const set = (on) => { b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); };
     set(key === p.ui);
-    b.addEventListener('click', () => { write({ ui: key }); applyUiPrefs(uiPrefs()); btns.forEach(([k, x]) => x.set(k === key)); onChange({ ui: key }); });
+    b.addEventListener('click', () => { write({ ui: key, uiPicked: true }); applyUiPrefs(uiPrefs()); btns.forEach(([k, x]) => x.set(k === key)); onChange({ ui: key }); });
     b.set = set; row.append(b); return [key, b];
   });
   wrap.append(lbl, row);
