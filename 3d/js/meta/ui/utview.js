@@ -31,7 +31,7 @@ import { PROMO_BY_ID } from '../core/promos.js';
 import * as PM from '../core/pmarket.js';
 import * as SQ from '../core/squads.js';
 import { mountStadium } from '../../ui/stadium.js';
-import { cursedPack, isOwner, enforceLock, hasDoomEffects } from '../core/vinson.js';
+import { cursedPack, isOwner, enforceLock, hasDoomEffects, squadChanged } from '../core/vinson.js';
 import { createVinsonChains } from './vinsonchains.js';
 import { createVinsonPackClaim } from '../core/vinsonpackclaim.js';
 import { HELL_CARD_ID } from '../core/secretcard.js';
@@ -99,6 +99,13 @@ function onboardView() {
 
 // ---------- FC-style section tabs (first row of every UT section) ----------
 const UT_TABS = [['home', 'Home'], ['squad', 'Squad'], ['sbc', 'SBC'], ['objectives', 'Objectives'], ['transfers', 'Transfers'], ['store', 'Store'], ['swaps', 'Swaps'], ['club', 'Club']];
+// Capture listeners are presentation helpers; handlers must also reject Doom navigation.
+export function guardVinsonDoomAction(app,event) {
+  if(!hasDoomEffects(app.ut?.vinson?.phase)||isOwner(app.online))return false;
+  event?.preventDefault?.();event?.stopImmediatePropagation?.();
+  app.vinson?.breakDoomControl?.(event?.currentTarget);
+  return true;
+}
 export function utTabs(app, active) {
   try { mountStadium(app.root.querySelector('.pm-bgfx')); } catch { /* backdrop is decoration only */ }
   const s = app.ut;
@@ -107,10 +114,7 @@ export function utTabs(app, active) {
   return h('nav', { class: 'pm-uttabs', 'aria-label': 'Ultimate Team sections' }, UT_TABS.map(([id, label]) => h('button', {
     class: `pm-uttab ${id === active ? 'on' : ''}`, 'aria-current': id === active ? 'page' : null, 'data-uttab': id,
     onclick: (event) => {
-      if (id !== 'home' && hasDoomEffects(app.ut?.vinson?.phase) && !isOwner(app.online)) {
-        app.vinson?.breakDoomControl?.(event.currentTarget);
-        return;
-      }
+      if (id !== 'home' && guardVinsonDoomAction(app,event)) return;
       if (id === active) return;
       if ((id === 'sbc' || id === 'transfers') && s?.vinson?.phase === 'locked' && !isOwner(app.online)) {
         app.toast('The Vinson curse blocks this section.', 'bad'); return;
@@ -160,11 +164,11 @@ export function utHomeView() {
       const evo = ensureEvo(s);
       const evoReady = evo.active.length;
       // one tile shape: art (the player's own content) + title + one line
-      const hx = (cls, title, sub, onclick, art, badge = null, extra = null) => h('button', { class: `pm-tile pm-hx ${cls}`, onclick },
+      const hx = (cls, title, sub, onclick, art, badge = null, extra = null) => h('button', { class: `pm-tile pm-hx ${cls}`, onclick: (event) => { if (!guardVinsonDoomAction(app,event)) onclick(event); } },
         art ? h('div', { class: 'pm-hx-art', 'aria-hidden': 'true' }, art) : null,
         badge ? h('span', { class: 'pm-badge' }, badge) : null,
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null, extra));
-      const mini = (title, sub, onclick, iconName, badge = null) => h('button', { class: 'pm-tile pm-hx pm-hx--mini', onclick },
+      const mini = (title, sub, onclick, iconName, badge = null) => h('button', { class: 'pm-tile pm-hx pm-hx--mini', onclick: (event) => { if (!guardVinsonDoomAction(app,event)) onclick(event); } },
         tileIcon(iconName), badge ? h('span', { class: 'pm-badge' }, badge) : null,
         h('div', { class: 'pm-tile-body' }, h('h2', null, title), sub ? h('p', null, sub) : null));
 
@@ -564,6 +568,8 @@ export function oddsModal(app, pack) {
 export function openPackFlow(app, packType, onDone, count = 1) {
   if (typeof app.restricted === 'function' && app.restricted('packs')) { app.toast('The owner has restricted packs on your account.', 'warn'); return; }
   const s = app.ut;
+  // Recheck the deadline and restore a chained card before deciding the pack's contents.
+  if (!isOwner(app.online)) { squadChanged(s); enforceLock(s); }
   const pack = UT.PACK_BY_ID[packType];
   // count > 1 (admin "open up to 10 at once", owner Sep 29): every pack is rolled, then shown as one opening with
   // the best card leading; later packs see earlier pulls as owned so duplicates are flagged correctly.

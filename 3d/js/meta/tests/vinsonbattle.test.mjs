@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createVinsonBattle, VINSON_BATTLE_ARENA } from '../core/vinsonbattle.js';
+import { battleEyePositions, createVinsonBattle, VINSON_BATTLE_ARENA } from '../core/vinsonbattle.js';
 
 let count = 0;
 const test = (name, fn) => { fn(); count++; console.log('ok', name); };
@@ -50,7 +50,7 @@ test('telegraphs give a readable warning before any hazard can damage the hero',
   }
   assert.ok(warning, 'first boss warning should appear promptly');
   const hazard = battle.state.hazards.find(h => h.id === warning.hazardId);
-  assert.ok(hazard.telegraph >= 0.48 && hazard.telegraph <= 0.70);
+  assert.ok(hazard.telegraph >= 0.88 && hazard.telegraph <= 1.13);
   assert.equal(battle.state.events.some(e => e.type === 'hit' && e.target === 'hero'), false);
   while (hazard.elapsed < hazard.telegraph - 0.06) {
     battle.step(0.05);
@@ -132,6 +132,94 @@ test('defeat event and retry do not advance the stage; hazard and projectile col
   for (let i = 0; i < 3000 && battle.state.phase === 'fight'; i++) battle.step(0.05, { attack: true });
   assert.ok(battle.state.hazards.length <= 8);
   assert.ok(battle.state.projectiles.length <= 32);
+});
+
+test('boss moves deterministically and remains inside arena bounds in both stages', () => {
+  for (const stage of [0, 1]) {
+    const a = start(901, stage), b = start(901, stage), initial = { x: a.state.boss.x, y: a.state.boss.y };
+    for (let i = 0; i < 30; i++) { a.step(0.05, {}); b.step(0.05, {}); assert.deepEqual(a.state, b.state); }
+    assert.ok(Math.hypot(a.state.boss.x - initial.x, a.state.boss.y - initial.y) > 5, `stage ${stage} boss should move`);
+    assert.ok(a.state.boss.x >= VINSON_BATTLE_ARENA.minX && a.state.boss.x <= VINSON_BATTLE_ARENA.maxX);
+    assert.ok(a.state.boss.y >= VINSON_BATTLE_ARENA.minY && a.state.boss.y <= VINSON_BATTLE_ARENA.maxY);
+  }
+});
+
+test('sprite eye anchors match the rendered actor frame dimensions', () => {
+  assert.deepEqual(battleEyePositions('world', 900, 400), [{ x: 889, y: 255 }, { x: 911, y: 255 }]);
+  assert.deepEqual(battleEyePositions('phonk', 900, 400), [{ x: 892, y: 199 }, { x: 908, y: 199 }]);
+  assert.deepEqual(battleEyePositions('patel', 250, 425), [{ x: 240, y: 258 }, { x: 260, y: 258 }]);
+  assert.deepEqual(battleEyePositions('captain', 250, 425), [{ x: 294, y: 301 }, { x: 318, y: 301 }]);
+});
+
+test('eye hazards start at both boss eyes and aim visible segments toward the hero', () => {
+  const battle = start(29);
+  for (let i = 0; i < 30 && !battle.state.hazards.length; i++) battle.step(0.05);
+  const laser = battle.state.hazards.find(h => h.type === 'laserline');
+  if (!laser) return; // Seed may select another telegraph first.
+  assert.equal(laser.origins.length, 2); assert.equal(laser.segments.length, 2);
+  laser.segments.forEach((segment, i) => {
+    assert.deepEqual({ x: segment.x1, y: segment.y1 }, laser.origins[i]);
+    assert.ok(Math.hypot(segment.x2 - battle.state.hero.x, segment.y2 - (battle.state.hero.y - 85)) < 100);
+  });
+});
+
+test('boss holds its eye anchors steady throughout each laser charge and active window', () => {
+  const battle = start(29);
+  for (let i = 0; i < 30 && !battle.state.hazards.some(h => h.type === 'laserline'); i++) battle.step(0.05);
+  const laser = battle.state.hazards.find(h => h.type === 'laserline');
+  if (!laser) return;
+  const bossAtAim = { x: battle.state.boss.x, y: battle.state.boss.y };
+  for (let i = 0; i < 40 && battle.state.hazards.includes(laser); i++) {
+    battle.step(0.05);
+    assert.deepEqual({ x: battle.state.boss.x, y: battle.state.boss.y }, bossAtAim);
+    assert.deepEqual(laser.origins, battleEyePositions('world', bossAtAim.x, bossAtAim.y));
+  }
+});
+
+test('weapon inputs create distinct projectile patterns, cooldowns, and impact strengths', () => {
+  const expected = { star: [1, 18], spinner: [3, 7], explosive: [1, 34], eyes: [1, 25] };
+  for (const [weapon, [count, damage]] of Object.entries(expected)) {
+    const battle = start(17); battle.step(0.01, { attack: true, weapon });
+    assert.equal(battle.state.projectiles.length, count, weapon);
+    assert.ok(battle.state.projectiles.every(p => p.type === weapon && p.damage === damage));
+    assert.ok(battle.state.hero.attackCooldown > 0);
+    const p = battle.state.projectiles[0];
+    if (weapon === 'eyes') assert.ok(Math.abs(p.y - (battle.state.hero.y - 167)) < 25);
+    else assert.ok(Math.abs(p.y - (battle.state.hero.y - 75)) < 25);
+    if (weapon === 'eyes') {
+      assert.equal(battle.state.projectiles[0].origins.length, 2);
+      assert.equal(battle.state.events.find(e => e.type === 'fire').weapon, 'eyes');
+    }
+  }
+});
+
+test('explosive splash damages a moving boss at its outer radius', () => {
+  const battle = start(4); battle.state.boss.x = battle.state.hero.x + 340; battle.state.boss.y = battle.state.hero.y;
+  battle.step(0.01, { attack: true, weapon: 'explosive' });
+  const shot = battle.state.projectiles[0];
+  shot.x = battle.state.boss.x + 65; shot.y = battle.state.boss.y - 100; shot.vx = 0; shot.vy = 0;
+  const hp = battle.state.boss.hp;
+  battle.step(0, {});
+  assert.ok(battle.state.boss.hp < hp, 'blast radius should register splash damage');
+});
+
+test('a telegraph-aware player can beat stage two in a seeded dodge-and-attack smoke run', () => {
+  for (const seed of [1, 2, 3]) {
+    const battle = start(seed, 1);
+    for (let i = 0; i < 6000 && battle.state.phase === 'fight'; i++) {
+      const s = battle.state, heading = [[0, 1], [-1, 0], [0, -1], [1, 0]][Math.floor(i / 80) % 4];
+      let x = heading[0], y = heading[1], dodge = false;
+      const warning = s.hazards.find(h => h.elapsed < h.telegraph + h.duration);
+      if (warning && warning.elapsed >= warning.telegraph - 0.25) {
+        if (warning.type === 'laserline') { x = warning.segments[0].y2 > s.hero.y - 85 ? -1 : 1; y = x; }
+        else if (warning.type === 'bombcircle') { x = s.hero.x < warning.x ? -1 : 1; y = s.hero.y < warning.y ? -1 : 1; }
+        else { x = s.hero.x < s.boss.x ? -1 : 1; y = s.hero.y < s.boss.y ? -1 : 1; }
+        dodge = i % 20 === 0;
+      }
+      battle.step(1 / 60, { x, y, dodge, attack: true, weapon: 'star' });
+    }
+    assert.equal(battle.state.phase, 'clash', `seed ${seed} should win the finale`);
+  }
 });
 
 console.log(`${count} Vinson battle tests passed`);

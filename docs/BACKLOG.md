@@ -280,3 +280,10 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
 - DONE (Oct 1): Fast device sync: local changes upload within ~3-15 s, other devices of the account get a poke and also check the cloud revision every 15 s / on tab focus (migration 022 pitchside_save_rev), downloading only when changed and nothing local is pending.
 - DONE (Oct 1): Tabs of one browser: another tab's club change reloads the club here; signing in/out in another tab reloads this tab (not during a match). Owner's server club was intact (1920 cards).
 - DONE (Oct 1): owner unban now puts an owned Vinson into the XI so the aftermath (5 s + 10 s warnings, lock, all-Vinson packs, match consequence) always runs. Live test banner shows the build number.
+
+## Vinson video review / boss redesign (Sep 30 night, review ready)
+Owner videos show grouped Doom pack-panel damage and ordinary post-unban pack rewards. On
+chatgpt/vinson-gameplay-review: restore individual targets + explicit locked aftermath, source-picture combat,
+four star/eye attack choices, moving harder boss, gameplay dialogue/optional speech and original story stages.
+Node suites and native rendered frames pass; Claude live desktop/mobile account-flow review/merge pending.
+Supersedes PR18. Existing source photos, server fight/rewards and cross-device sync preserved.

@@ -13,6 +13,8 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}
     shot.black = ramp(t, 2.3, 3.5) * (1 - ramp(t, 5.5, 7));
     if (t >= 5.5) { shot.villain = 'phonk'; shot.villainAlpha = ramp(t, 5.5, 8); }
     if (t >= 7 && t < 10) { shot.speaker = 'PHONK MODE VINSON'; shot.text = 'Your victory was only the beginning.'; }
+    if(t>=9&&t<11){shot.speaker='ISRAELI PATEL';shot.text="Then I'll face you myself.";}
+    if(t>=11&&t<14){shot.speaker='PHONK MODE VINSON';shot.text='Your light ends here.';}
     shot.beams = ramp(t, 10, 11.5) * (1 - ramp(t, 15, 16));
     shot.heroAlpha = 1 - ramp(t, 13.7, 16);
     shot.white = .5 * ramp(t, 13.5, 14) * (1 - ramp(t, 14, 15));
