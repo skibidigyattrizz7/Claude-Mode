@@ -12,7 +12,7 @@ export function isVinsonPortrait(width, height) { return width > 0 && height > w
 export function vinsonDialogueCamera(actor, reducedMotion = false) {
   return { zoom: reducedMotion ? 1 : 1.35, x: ['world', 'phonk'].includes(actor) ? 895 : 365, y: 455 };
 }
-const asset = (name) => new URL(`../../../assets/vinson/${name === 'world' ? 'world-cutout.webp?v=6' : `${name}.webp`}`, import.meta.url).href;
+const asset = (name) => new URL(`../../../assets/vinson/${name === 'world' ? 'world-cutout.webp?v=6' : name === 'captain' ? 'captain-cutout.webp?v=1' : `${name}.webp`}`, import.meta.url).href;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const names = { patel: 'Israeli Forever Patel', captain: 'Captain Israel', world: 'World-Ruler Vinson', phonk: 'Phonk Mode Vinson' };
 const heroArt = (stage) => stage ? 'captain' : 'patel';
