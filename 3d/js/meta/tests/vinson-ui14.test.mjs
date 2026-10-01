@@ -60,14 +60,9 @@ try {
   {
     const battle = launchVinsonBattle({ previewEnding: true, reducedMotion: true, onWin: async () => ({ ok: true, immune: true }) });
     const screen = body.children[0], conversation = find(screen, 'vb-dialogue'), skip = find(screen, 'vb-top').children.find(node => node.textContent === 'Skip ending');
-    step(40);
-    const pausedTime = battle.state.time;
-    assert.equal(conversation.hidden, false, 'preview finale begins with a paused dialogue beat');
-    tap('j'); step(1);
-    assert.equal(conversation.hidden, false, 'J is reserved for the clash and cannot dismiss dialogue');
-    conversation.onclick(); step(40);
-    assert.equal(conversation.hidden, false, 'second intro beat also pauses for acknowledgement');
-    conversation.onclick(); step(45);
+    step(140);
+    const pausedTime=battle.state.time;
+    assert.equal(conversation.hidden,true,'dialogue follows the mash instead of duplicating before it');
     assert.equal(skip.hidden, true);
     step(80);
     assert.equal(skip.hidden, true, 'saved ending still cannot skip an active clash');
@@ -80,15 +75,16 @@ try {
     }
     assert.equal(skip.hidden, false, 'repeated J taps eventually win and resume the finale');
     assert.equal(battle.state.time, pausedTime, 'cinematic clash never advances the arena battle');
-    for (let i = 0; i < 800 && conversation.hidden; i++) step(1);
-    assert.equal(conversation.hidden, false, 'finale resumes to a blocking dialogue after the clash');
-    const frozen = battle.state.time;
-    conversation.onclick();
-    assert.equal(conversation.hidden, true, 'dialogue click advances the paused finale');
-    for (let i = 0; i < 600 && !find(screen, 'vb-panel').children.some(child => child.textContent === 'The curse is broken'); i++) step(1);
-    await Promise.resolve();
-    assert.ok(find(screen, 'vb-panel').children.some(child => child.textContent === 'The curse is broken'), 'finale continues automatically after dialogue');
-    assert.equal(battle.state.time, frozen);
+    const spoken=[];
+    for(let i=0;i<2000&&!find(screen,'vb-panel').children.some(child=>child.textContent==='The curse is broken');i++){
+      step(1);
+      if(!conversation.hidden){const line=find(screen,'vb-dialogue-body').children[1].textContent;spoken.push(line);tap('j');assert.equal(conversation.hidden,false,'J never skips story dialogue');dismissDialogue(conversation);}
+      await Promise.resolve();
+    }
+    assert.ok(spoken.some(line=>line.includes('shield cannot protect')),'original threat survives after the mash');
+    assert.ok(spoken.some(line=>line.includes('everything I have')),'original resolve survives after the mash');
+    assert.ok(spoken.some(line=>line.includes('Grumpy Patel')),'unmasked identity reveal survives');
+    assert.ok(find(screen,'vb-panel').children.some(child=>child.textContent==='The curse is broken'));
     battle.close();
   }
 
@@ -96,9 +92,7 @@ try {
   {
     const battle = launchVinsonBattle({ previewEnding: true, reducedMotion: true, onWin: async () => ({ ok: true, immune: true }) });
     const screen = body.children[0], conversation = find(screen, 'vb-dialogue'), skip = find(screen, 'vb-top').children.find(node => node.textContent === 'Skip ending');
-    step(40); assert.equal(conversation.hidden, false);
-    conversation.onclick(); step(40); assert.equal(conversation.hidden, false);
-    conversation.onclick(); step(80);
+    step(140);assert.equal(conversation.hidden,true);
     down('j'); step(1800); up('j');
     assert.equal(skip.hidden, false, 'holding J wins once story dialogue no longer pauses the clash');
     assert.equal(battle.state.time, 0, 'hold accessibility remains cinematic and does not step combat');

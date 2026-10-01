@@ -1,10 +1,10 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
 import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson28';
-import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=14';
+import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=14b';
 import { maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=14';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=14';
 import {drawPeacefulEnding} from './vinsonendingfx.js?v=14';
-import {drawDomainClash,drawThrownSword,drawClashHUD} from './vinsonfinalefx.js?v=14';
+import {drawDomainClash,drawThrownSword,drawClashHUD} from './vinsonfinalefx.js?v=14b';
 import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=14';
 import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=14';
 import { load } from '../core/storage.js';
@@ -14,9 +14,9 @@ export function isVinsonPortrait(width, height) { return width > 0 && height > w
 export function vinsonDialogueCamera(actor, reducedMotion = false) {
   return { zoom: reducedMotion ? 1 : 1.35, x: ['world', 'phonk'].includes(actor) ? 895 : 365, y: 455 };
 }
-const asset = (name) => new URL(`../../../assets/vinson/${name === 'world' ? 'world-cutout.webp?v=6' : `${name}.webp`}`, import.meta.url).href;
+const asset = (name) => name==='grumpy'?new URL('../../../assets/cards/grumpy-patel.webp',import.meta.url).href:new URL(`../../../assets/vinson/${name === 'world' ? 'world-cutout.webp?v=6' : name === 'captain' ? 'captain-cutout.webp?v=1' : `${name}.webp`}`, import.meta.url).href;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const names = { patel: 'Israeli Forever Patel', captain: 'Captain Israel', world: 'World-Ruler Vinson', phonk: 'Phonk Mode Vinson' };
+const names = { patel: 'Israeli Forever Patel', captain: 'Captain Israel', world: 'World-Ruler Vinson', phonk: 'Phonk Mode Vinson',grumpy:'Grumpy Patel' };
 const heroArt = (stage) => stage ? 'captain' : 'patel';
 const bossArt = (stage) => stage ? 'phonk' : 'world';
 const ATTACK_NAMES = { laserline: 'RED LASER EYES', bombcircle: 'THE HUMBLE BOMB', painring: 'ASSIGNING PAIN' };
@@ -221,6 +221,7 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
   field(ctx, t, shot?.villain==='phonk'?1:state.stage);
   if(shot?.domainPower)drawDomainClash(ctx,shot,t,reducedMotion,star);
   if(shot?.peace)drawPeacefulEnding(ctx,shot,t,reducedMotion,star);
+  if(shot?.revealFace>0&&images.grumpy?.complete&&images.grumpy.naturalWidth){ctx.save();ctx.globalAlpha=shot.revealFace;const img=images.grumpy,scale=Math.min(220/img.naturalWidth,220/img.naturalHeight);ctx.drawImage(img,640-img.naturalWidth*scale/2,170,img.naturalWidth*scale,img.naturalHeight*scale);ctx.restore();}
   if (!shot) {
     for(const trail of feedback?.trails||[])sprite(ctx,images[heroArt(state.stage)],heroArt(state.stage),trail.x,trail.y,t,trail.life*.65,true);
     for (const h of state.hazards) {
@@ -393,7 +394,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   let audio = null, muted = false, viewHero = { x: 250, y: 425 }, oldFocus = document.activeElement;
   const held = new Set(), keys = new Set(), images = {};
   const originalOverflow = document.documentElement.style.overflow; document.documentElement.style.overflow = 'hidden';
-  for (const key of ['patel','captain','world','phonk']) { const img = new Image(); img.src = asset(key); images[key] = img; void img.decode().then(() => { if(!closed && img.naturalWidth) battlePortrait(img,key); }).catch(() => {}); }
+  for (const key of ['patel','captain','world','phonk','grumpy']) { const img = new Image(); img.src = asset(key); images[key] = img; void img.decode().then(() => { if(!closed && img.naturalWidth) battlePortrait(img,key); }).catch(() => {}); }
   const mute = node('button', '', 'Sound on'); mute.onclick = () => { muted = !muted; mute.textContent = muted ? 'Sound off' : 'Sound on'; }; top.insertBefore(mute, closeButton);
   function say(speaker,text,key='generic') {
     if(blockingDialogue||clock-(barkLast.get(key)??-20)<10)return;
@@ -561,13 +562,13 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
         }
       }else if(cinematicKind==='finale'&&finaleWinDelay>0){
         finaleWinDelay=Math.max(0,finaleWinDelay-dt);clashView={...finalClash,won:false,progress:1,pulse:1};
-        if(finaleWinDelay===0)cinematicTime=7;
+        if(finaleWinDelay===0)cinematicTime=1.7;
       }else cinematicTime += dt;
       const shot = sampleVinsonCinematic(cinematicKind, cinematicTime, { reducedMotion, clash:clashView });
       const id=shot.text?`${cinematicKind}:${shot.dialogueId||shot.text}`:null;
       if(id && mode!=='result' && !acknowledgedDialogue.has(id) && shot.black<.8 && shot.white<.8){
         acknowledgedDialogue.add(id);
-        const actor=shot.speaker==='CAPTAIN ISRAEL'?'captain':shot.speaker?.includes('PATEL')?'patel':shot.villain;
+        const actor=shot.dialogueId==='captain-sacrifice'?'grumpy':shot.speaker==='CAPTAIN ISRAEL'?'captain':shot.speaker?.includes('PATEL')?'patel':shot.villain;
         showDialogue([{actor,speaker:shot.speaker||'',text:shot.text}]);return;
       }
       if (shot.done && cinematicKind === 'transition') { battle.next(); cinematicKind = ''; mode = ''; viewHero = { ...battle.state.hero }; }
@@ -635,7 +636,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     for(const key of ['hero','boss']){feedback.chipDelay[key]=Math.max(0,feedback.chipDelay[key]-delta);const hp=battle.state[key].hp;if(hp>feedback.chips[key])feedback.chips[key]=hp;else if(feedback.chipDelay[key]===0)feedback.chips[key]+=(hp-feedback.chips[key])*(1-Math.exp(-6*delta));}
     if(feedback.stop>0){feedback.stop=Math.max(0,feedback.stop-delta);accumulator=0;}
     for (let i = 0; i < 6 && accumulator >= 1 / 60; i++) { animate(1 / 60*(feedback.slow>0?.4:1)); accumulator -= 1 / 60; }
-    const clashView=cinematicKind==='finale'&&finalClash&&(!finalClash.won||finaleWinDelay>0)?(finaleWinDelay>0?{...finalClash,won:false,progress:1,pulse:1}:finalClash):null;
+    const clashView=cinematicKind==='finale'&&finalClash?(finaleWinDelay>0?{...finalClash,won:false,progress:1,pulse:1}:finalClash):null;
     let shot = cinematicKind ? sampleVinsonCinematic(cinematicKind, cinematicTime, { reducedMotion,clash:clashView }) : null;
     if(blockingDialogue){
       // Frame the actor above the dialogue panel.
@@ -645,6 +646,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       shot={...(shot||{}),time:cinematicTime,hero:heroArt(battle.state.stage),villain:bossArt(battle.state.stage),heroAlpha:1,villainAlpha:1,beams:shot?.beams||0,zoom:camera.zoom,focusX:camera.x,focusY:camera.y,black:0,white:0};
       // Preserve the visible characters of the exact story beat during its dialogue hold.
       if(cinematicKind){const source=sampleVinsonCinematic(cinematicKind,cinematicTime,{reducedMotion,clash:clashView});shot.hero=source.hero;shot.villain=source.villain;shot.heroAlpha=source.heroAlpha;shot.villainAlpha=source.villainAlpha;}
+      if(blockingDialogue.actor==='grumpy')shot.revealFace=reducedMotion?1:clamp((clock-blockingDialogue.started)/.7,0,1);
     }else{
       const target={zoom:shot?.zoom||1,x:shot?.focusX||640,y:shot?.focusY||360},k=1-Math.exp(-4.5*delta);
       camera.zoom+=(target.zoom-camera.zoom)*k;camera.x+=(target.x-camera.x)*k;camera.y+=(target.y-camera.y)*k;

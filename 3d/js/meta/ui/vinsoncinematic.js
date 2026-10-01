@@ -55,10 +55,6 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash
     shot.done = t >= 28;
   } else {
     shot.hero = 'captain'; shot.villain = 'phonk';
-    if(clash&&!clash.won&&t>=.35&&t<1.65){
-      if(t<.95){shot.speaker='PHONK MODE VINSON';shot.text='Your shield cannot protect an entire world.';shot.dialogueId='final-domain-threat';}
-      else{shot.speaker='CAPTAIN ISRAEL';shot.text='Then I will give the world everything I have.';shot.dialogueId='final-captain-resolve';}
-    }
     if(clash && !clash.won && t>=1.65){
       shot.domainPower=1;shot.beams=1;shot.interactiveClash=true;
       shot.mashProgress=clamp(clash.progress);shot.mashPulse=clamp(clash.pulse);
@@ -71,6 +67,7 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash
       return shot;
     }
     // Two territories push against each other; the beam's midpoint tells the story.
+    shot.postMashStruggle=!!clash?.won&&t>=1.7&&t<7;
     shot.domainPower=ramp(t,0,1.4)*(1-ramp(t,8.5,9.5));
     shot.beams=ramp(t,.7,1.7)*(1-ramp(t,8.5,9.2));
     const struggle=clamp((t-1.7)/5.8),contested=640+Math.sin((t-1.7)*2.05)*220*struggle;
@@ -92,7 +89,7 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash
     shot.peace=ramp(t,11.7,13);
     shot.shield=shot.peace;shot.sword=clamp((t-13.6)/2.4);shot.landingAge=Math.max(0,t-16);
     if(t>=13){shot.zoom=1;shot.focusX=640;shot.focusY=360;}
-    if(t>=17){shot.text="Captain Israel was Grumpy Patel. His sacrifice saved humanity from eternal doom, marking a new humble beginning.";shot.dialogueId='captain-sacrifice';shot.speaker='CAPTAIN ISRAEL';}
+    if(t>=17){shot.revealFace=ramp(t,17,17.8);shot.text="Captain Israel was Grumpy Patel. His sacrifice saved humanity from eternal doom, marking a new humble beginning.";shot.dialogueId='captain-sacrifice';shot.speaker='CAPTAIN ISRAEL';}
     shot.done=t>=25;
   }
   if (reducedMotion) { shot.zoom = 1; shot.white = 0; shot.explosion = 0; }
