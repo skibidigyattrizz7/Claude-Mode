@@ -974,9 +974,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.fillStyle = secret ? '#5a4a30' : '#4a3424'; ctx.beginPath(); ctx.ellipse(470, 594, 74, 12, 0, 0, TAU); ctx.fill();
     ctx.strokeStyle = secret ? '#b8d888' : '#a8b860'; ctx.lineWidth = 2; for (let i = 0; i < 14; i++) { const x = 400 + i * 10, sw = Math.sin(fx.clock * 1.6 + i) * 3; ctx.beginPath(); ctx.moveTo(x, 600); ctx.quadraticCurveTo(x + sw * .5, 590, x + sw, 578 + (i % 3) * 4); ctx.stroke(); }
     // the sword falls from the sky, then digs in deeper
+    const SWX = 560; // lands right beside the shield (owner: it fell too far away)
     const fk = clamp((k - .3) / .1, 0, 1), dig = clamp((k - .4) / .08, 0, 1), sy = fk < 1 ? lerp(-400, 470, fk * fk) : 470 + easeOut(dig) * 34;
-    if (k > .3) { if (fk < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(797, sy - 260, 6, 220); ctx.globalCompositeOperation = 'source-over'; } drawSword(800, sy, 0, 1.2); }
-    if (dig > 0) { ctx.fillStyle = 'rgba(80,60,40,.6)'; ctx.beginPath(); ctx.ellipse(800, 640, 40 + dig * 40, 8, 0, 0, TAU); ctx.fill(); }
+    if (k > .3) { if (fk < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(SWX - 3, sy - 260, 6, 220); ctx.globalCompositeOperation = 'source-over'; } drawSword(SWX, sy, 0, 1.2); }
+    if (dig > 0) { ctx.fillStyle = 'rgba(80,60,40,.6)'; ctx.beginPath(); ctx.ellipse(SWX, 640, 40 + dig * 40, 8, 0, 0, TAU); ctx.fill(); }
     // front grass covers the buried blade and the shield base; blades sway in the wind
     ctx.strokeStyle = secret ? '#b8d888' : '#a8b860'; ctx.lineWidth = 2;
     for (const g of grass) { if (g.y < 600) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 5; ctx.beginPath(); ctx.moveTo(g.x, g.y + 40); ctx.quadraticCurveTo(g.x + sw * .5, g.y + 20, g.x + sw, g.y + 40 - g.h); ctx.stroke(); }

@@ -304,3 +304,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - DONE (Oct 2): live fight uses a cut-out Captain Israel image (white background removed).
 - (Oct 2, owner) Phase 2 also ends on a beam clash like the first; from ChatGPT's 13 take only the struggling + pushing dialogue, otherwise make the finale look like 14. Give feedback on 14.
 - DONE (Oct 2): critique of ChatGPT 14 in AI_DIRECT (7.9/10: finale 8-12 fps, ending composition, chains prompt). Prototype 4-Claude built with the owner's clash/finale changes.
+- DONE (Oct 2, owner): P4 ending: sword now lands right beside the shield (was ~330 px away).
