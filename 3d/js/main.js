@@ -55,7 +55,7 @@ function lsGet(key, fallback) {
 function lsSet(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } }
 
 const SETTINGS_KEY = 'pitchside.settings';
-const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'classic', lineupCards: 'cards', lineupXI: 'shirts', accent: 'default' };
+const DEFAULT_SETTINGS = { difficulty: 'pro', halfMinutes: 3, camera: 'broadcast', volume: 70, quality: 'med', stadium: 'day', weather: 'clear', ui: 'stadium', lineupCards: 'cards', lineupXI: 'shirts', accent: 'default' };
 const DIFFICULTIES = [['amateur', 'Amateur'], ['pro', 'Pro'], ['world', 'World Class'], ['legendary', 'Legendary']];
 const HALF_LENGTHS = [2, 3, 4, 6, 8];
 const CAMERAS = [['broadcast', 'Broadcast'], ['pro', 'Pro (player lock)']];
@@ -79,7 +79,8 @@ export function loadSettings() {
   s.volume = Math.max(0, Math.min(100, Math.round(s.volume)));
   if (s.stadium !== 'night') s.stadium = 'day';
   if (!WEATHERS.some(([k]) => k === s.weather)) s.weather = DEFAULT_SETTINGS.weather;
-  if (!UI_STYLES.some(([k]) => k === s.ui)) s.ui = DEFAULT_SETTINGS.ui;
+  // Stadium is the default (owner, Oct 1): saves from before that keep Classic only if the player picked it.
+  if (!s.uiPicked || !UI_STYLES.some(([k]) => k === s.ui)) s.ui = DEFAULT_SETTINGS.ui;
   if (!LINEUP_STYLES.some(([k]) => k === s.lineupCards)) s.lineupCards = DEFAULT_SETTINGS.lineupCards;
   if (!LINEUP_XI.some(([k]) => k === s.lineupXI)) s.lineupXI = DEFAULT_SETTINGS.lineupXI;
   if (s.accent !== 'custom' && !UI_ACCENTS.some(([k]) => k === s.accent)) s.accent = DEFAULT_SETTINGS.accent;
@@ -904,7 +905,7 @@ function settingsScreen(tab = 'general') {
     segmented('Weather', WEATHERS, s.weather, upd('weather'), 'set-weather'),
     segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
     segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
-    segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); upd('ui')(v); }, 'set-ui'),
+    segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); s.uiPicked = true; upd('ui')(v); }, 'set-ui'),
     accentPicker({ onChange: (patch) => { Object.assign(s, patch); } }),
     segmented('Online lineup reveal', LINEUP_STYLES, s.lineupCards, upd('lineupCards'), 'set-lineup'),
     segmented('Starting XI at the end', LINEUP_XI, s.lineupXI, upd('lineupXI'), 'set-lineup-xi'),

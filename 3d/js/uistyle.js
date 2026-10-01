@@ -5,7 +5,8 @@
   var root = document.documentElement;
   try {
     var s = JSON.parse(localStorage.getItem('pitchside.settings') || 'null');
-    if (s && s.ui === 'stadium') root.setAttribute('data-ui', 'stadium');
+    // Stadium is the default (owner, Oct 1); Classic only when the player picked it in Settings
+    if (!(s && s.uiPicked && s.ui === 'classic')) root.setAttribute('data-ui', 'stadium');
     // UI colour (Settings > UI colour): applied here too so there's no flash of the default accent
     if (s && typeof s.accent === 'string' && /^[a-z]{2,12}$/.test(s.accent) && s.accent !== 'default') root.setAttribute('data-accent', s.accent);
     // a custom colour (uiprefs.js applyUiPrefs does the same after load, with a nicer highlight)

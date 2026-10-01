@@ -274,3 +274,5 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   portraits and visible Phonk matte. Tests and native frame inspection passed; Claude browser review/merge pending.
 - DONE (Oct 1): merged ChatGPT visual review (jagged punch hole, shaded hand, Vinson full size in fight).
 - DONE (Oct 1) Testing mode in the real game (?livetest=1): logs out to a fresh guest, separate local save (real club untouched), still online so admin commands from the owner account work on it.
+- DONE (Oct 1) Interface style "Stadium" as the default (old saves switch once; Classic stays only if picked in Settings).
+- (Oct 1) Vinson bugs from owner testing: doom no longer breaks packs/coins on packs etc., Squad tab still works during doom; Fight Suppression button does nothing; curse aftermath fully broken (no buttons breaking, packs don't give Vinson). ChatGPT fixing; Claude reviews to find the cause.
