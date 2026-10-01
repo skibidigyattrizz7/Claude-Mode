@@ -17,7 +17,7 @@ const OMENS = ["DON'T DO IT", "IT'S OVER", "YOU'RE DONE", "SHE'S COMING", 'LOOK 
 
 export function startVinsonExperience(online, { initialState = loadUT(), ephemeral = false } = {}) {
   if (globalThis.__pitchsideVinson) return globalThis.__pitchsideVinson;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson10', import.meta.url).href;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('../../../css/vinson.css?v=vinson12', import.meta.url).href;
   document.head.appendChild(css);
   const host = document.createElement('div'); host.id = 'vinson-experience'; document.body.appendChild(host);
   let app = null, localState = initialState, boundId = online?.identityId?.() || null;
@@ -26,7 +26,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   let soundContext = null, battleExperience = null, battleOpening = false, experienceClosed = false;
   const damagedKeys = new Set();
   const controlSelector = 'button, [role="tab"], a, input, select, textarea, .pc-card, .pm-slot';
-  const surfaceSelector = 'img, svg, h1, h2, h3, h4, p, label, span';
+  const surfaceSelector = 'img, svg, canvas, h1, h2, h3, h4, p, label, span, small, strong, b, em, i, .pm-pack, .pm-price, .pm-coin';
   const controlKey = (el) => {
     if (el.dataset.uttab) return `tab:${el.dataset.uttab}`;
     const address = [];
@@ -56,7 +56,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       target.append(group, document.createTextNode(' '));
     });
   };
-  const infected = hasDoomEffects;
+  const infected = (phase) => hasDoomEffects(phase) || phase === 'locked';
   const root = () => app?.root?.isConnected ? app.root : document.querySelector('.pm-root');
   function repairUi() {
     for (const [el, wasInert] of broken) { el.classList.remove('vinson-control-broken', 'vinson-tab-falling'); el.inert = wasInert; }
@@ -108,11 +108,12 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       );
       const packScene = lockedPack && !!target.closest('.pm-po, .pm-po-stage, .pm-po-gridwrap, .pm-po-fallback');
       const matchScene = lockedPack && /^(play|start match|play rivals|play squad battles|kick off)$/i.test(label);
+      const curseRoute = lockedPack && target.matches('.pm-uttab, .pm-hx');
       const squadWarning = ['warn', 'consequence'].includes(state()?.vinson?.phase) && !!target.closest('.pm-sq');
       fractureElement(target, { x: event.clientX, y: event.clientY });
       // Result screens own their coordinated button collapse and exit timer.
       if (!packScene) breakControl(target);
-      if (!packEntry && !packScene && !matchScene && !squadWarning) {
+      if (!packEntry && !packScene && !matchScene && !squadWarning && !curseRoute) {
         event.preventDefault(); event.stopImmediatePropagation();
         // Close blocked dialogs through their normal close callback so pending confirmations resolve false.
         if (dialog) setTimeout(() => dialog.querySelector('.pm-x')?.click(), 1150);
@@ -191,7 +192,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       }
       return;
     }
-    if (phase === 'freed') { host.replaceChildren(); current = phase; cinematic = false; return; }
+    if (phase === 'freed') { if(current!==phase){host.replaceChildren(fightButton(true));current=phase;} cinematic = false; return; }
     if (phase === 'doom' && v.doomUntil - Date.now() <= 10000) {
       const left = Math.max(0, v.doomUntil - Date.now());
       const tabs = [...(root()?.querySelectorAll('.pm-uttab') || [])].filter(tab => tab.dataset.uttab !== 'home');
@@ -225,7 +226,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       return;
     }
     if (phase === 'locked') {
-      if (current !== phase) { host.replaceChildren(); current = phase; }
+      if (current !== phase) { host.replaceChildren(fightButton(true)); current = phase; }
       return;
     }
     if (current !== phase) {
@@ -240,6 +241,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (phase !== 'locked') box.append(make('span', 'vinson-timer'));
       if (phase === 'doom') box.append(glitchSlices());
       host.append(box);
+      if (['warn','consequence'].includes(phase))host.append(fightButton(true));
       if (phase === 'doom') {
         const omens = make('div', 'vinson-omens'); omens.setAttribute('aria-hidden', 'true');
         for (let i = 0; i < 8; i++) omens.append(make('span', `vinson-omen vinson-omen-${i % 4}`, OMENS[i % OMENS.length]));
@@ -263,6 +265,19 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     }
   }
 
+  function fightButton(floating=false) {
+    const fight = make('button', floating ? 'vinson-fight-link vinson-fight-floating' : 'vinson-fight-link', 'Fight Suppression');
+    fight.onclick = async () => {
+      fight.disabled = true; fight.textContent = 'Opening fight…';
+      try {
+        const opened = await controller.openBattle();
+        fight.textContent = opened ? 'Fight Suppression' : 'Fight unavailable. Try again';
+      } catch { fight.textContent = 'Could not load fight. Try again'; }
+      finally { fight.disabled = false; }
+    };
+    return fight;
+  }
+
   function finalScene() {
     host.replaceChildren();
     const screen = make('div', 'vinson-screen vinson-final'); screen.setAttribute('role', 'alertdialog');
@@ -279,15 +294,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
     OMENS.forEach((omen, i) => words.append(make('span', `vinson-final-word vinson-final-word-${i}`, omen)));
     screen.append(words);
     const check = make('button', 'vinson-check', 'ESCAPE THE WRATH OF VINSON'); check.onclick = () => location.reload(); screen.append(check);
-    const fight = make('button', 'vinson-fight-link', 'Fight Suppression');
-    fight.onclick = async () => {
-      fight.disabled = true; fight.textContent = 'Opening fight…';
-      try {
-        const opened = await controller.openBattle();
-        fight.textContent = opened ? 'Fight Suppression' : 'Fight unavailable. Try again';
-      } catch { fight.textContent = 'Could not load fight. Try again'; }
-      finally { fight.disabled = false; }
-    };
+    const fight=fightButton();
     screen.append(fight);
     host.append(screen);
     sound('impact');
@@ -381,10 +388,13 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
 
   async function poll() {
     if (busy || !online?.vinson || isOwner(online)) return;
-    const s = state(); if (!s) return;
+    let s = state(); if (!s) return;
+    const identity=online?.identityId?.();
     busy = true;
     try {
       let remote = await online.vinson.status();
+      if(experienceClosed || online?.identityId?.()!==identity || !state())return;
+      s=state();
       // A pull made while offline still has a local deadline. Register it with the server when connectivity
       // returns; the server then owns the deadline and ban across devices.
       if (remote.ok && !remote.phase && ['doom', 'banned'].includes(s.vinson?.phase)) {
@@ -395,6 +405,8 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
         const locked = await online.vinson.lock();
         if (locked.ok) remote = { ...remote, phase: 'locked' };
       }
+      if(experienceClosed || online?.identityId?.()!==identity || !state())return;
+      s=state();
       if (remote.ok) {
         const old = s.vinson?.phase, before = JSON.stringify(s.vinson);
         reconcileServer(s, remote);
@@ -409,8 +421,9 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
   function tick() {
     const s = state(); if (!s || isOwner(online)) { draw(); return; }
     const old = s.vinson?.phase;
-    squadChanged(s);
+    // Preserve the repair result before squadChanged performs its own lock enforcement.
     const repaired = s.vinson?.phase === 'locked' && enforceLock(s);
+    squadChanged(s);
     if (old !== s.vinson?.phase || repaired) {
       persist(s);
       if (s.vinson?.phase === 'locked') { void online?.vinson?.lock?.(); app?.applyRestrictions?.({ admin: true, codes: true }); }
@@ -431,10 +444,10 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (experienceClosed || battleExperience || battleOpening || isOwner(online)) return false;
       const s = state(), identity = online?.identityId?.();
       const resumeRewards = hasPendingVinsonRewards(s);
-      if (!s || (s.vinson?.phase !== 'banned' && !resumeRewards)) return false;
+      if (!s || (!['banned','freed','warn','consequence','locked'].includes(s.vinson?.phase) && !resumeRewards)) return false;
       battleOpening = true;
       try {
-        const { launchVinsonBattle } = await import('./vinsonbattle.js');
+        const { launchVinsonBattle } = await import('./vinsonbattle.js?v=vinson12');
         if (experienceClosed || battleExperience || online?.identityId?.() !== identity || !state()) return false;
         battleExperience = launchVinsonBattle({ online, resumeRewards,
           seed: `${identity || 'guest'}:${s.vinson.doomUntil || 0}`,

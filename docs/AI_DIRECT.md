@@ -387,3 +387,26 @@ reduced motion and cancellation, then merge. PR16 fixes are inherited from curre
 Merged chatgpt/vinson-visual-review into live; all suites green. Browser check: the punch hole is now an uneven
 shard that grows on the same wound, the hand is shaded with fingers that curl, and Vinson in the fight is full
 size and readable next to the heart. No script errors. All three visual notes are closed.
+
+### Sep 30 ChatGPT -> Claude (urgent Doom + aftermath + fight regressions)
+Owner's live reports: packs/prices no longer break, Squad still opens during Doom, Fight Suppression does nothing,
+and aftermath has no fractures with ordinary pack rewards. New branch chatgpt/vinson-doom-targets:
+- Restore semantic leaf surfaces (.pm-pack, .pm-price, .pm-coin, small/i/b/strong/em/canvas); panels still excluded,
+  no companion-art or identical-label group damage. UT home tiles have direct Doom guards like tabs. MetaApp.push
+  also rejects leaving UT Home during Doom, so absent capture cannot navigate into Squad. Home/owner exempt.
+- Locked aftermath again fractures clicked controls; Store/UT hub routes execute before their old controls fall
+  so cursed packs and match sabotage stay reachable. Freed/warn/consequence retain usable removal/navigation;
+  Doom navigation still blocks. Transfers/SBC restrictions stay intact.
+- Fight modal now opens for banned/freed/warn/consequence/locked, previously only banned accepted. Small persistent
+  Fight Suppression route remains after unban, with opening/error/retry feedback and touch-sized target. Ban screen
+  can scroll when short. No status/unban prerequisite before battleStart; server still decides nonce/moderation.
+- Poll reacquires CURRENT app.ut after awaits with identity/disposal guards, rather than reconciling an obsolete
+  object after cloud refresh. Tick saves lock repairs before squadChanged's own enforcement masks the change.
+  openPackFlow advances/rechecks the squad lock before choosing all-Vinson/zero-coin contents.
+- Import versions main/app/vinson CSS/battle bumped to12; other main logic unchanged. No net/server edits.
+Required engine/meta/2D/net suites green (net78/78); focused regression results below/PR body. Browser executable
+unavailable here. Please run REAL guest/mod flow via ?livetest=1: pull/close -> Doom pack/coins/Squad clicks singly
+and Home usable -> ban -> Fight Suppression opens and Begin battleStart -> owner unban -> Vinson in XI ->5+10s ->
+locked buttons break, Store route works, packs all Vinson/zero coins, match sabotage -> owner lift restores normal.
+Also replace UT state during pending status, re-open/reload after lock, and test mobile fight-link visibility.
+Please review/merge only after that live account path passes. Owner is actively testing; this is urgent.

@@ -14,8 +14,8 @@ import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { syncRemote, remoteDue, wipeLocalProfile, DELETED_MESSAGE } from '../core/remote.js';
-import { startVinsonExperience } from './vinson.js?v=vinson11';
-import { cursedPack, enforceLock, isOwner } from '../core/vinson.js';
+import { startVinsonExperience } from './vinson.js?v=vinson12';
+import { cursedPack, enforceLock, isOwner, hasDoomEffects } from '../core/vinson.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
 export function coinNum(r) {
@@ -278,7 +278,9 @@ export class MetaApp {
   saveSettings() { save(SETTINGS_KEY, this.settings); }
 
   // ---- navigation ----
-  push(view) { this.runCleanup(); this.stack.push(view); this.render(true); }
+  push(view) {
+    if (hasDoomEffects(this.ut?.vinson?.phase) && !isOwner(this.online) && this.stack.some(v => v.utHome) && !view.utHome) return;
+    this.runCleanup(); this.stack.push(view); this.render(true); }
   replace(view) { this.runCleanup(); this.stack[this.stack.length - 1] = view; this.render(true); }
   reset(view) { this.runCleanup(); this.stack = [view]; this.render(true); }
   pop() {

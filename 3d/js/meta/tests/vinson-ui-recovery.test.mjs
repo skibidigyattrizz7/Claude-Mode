@@ -64,6 +64,7 @@ globalThis.document = {
   removeEventListener: (type, fn) => { if (listeners.get(type) === fn) listeners.delete(type); },
 };
 globalThis.matchMedia = () => ({ matches: true });
+globalThis.innerWidth = 1280; globalThis.innerHeight = 720;
 globalThis.window = {};
 globalThis.localStorage = { getItem: () => null };
 globalThis.sessionStorage = { getItem: () => null, setItem() {} };
@@ -87,7 +88,8 @@ const online = {
   },
 };
 const controller = startVinsonExperience(online, { initialState: state, ephemeral: true });
-controller.attach({ ut: state, root, stack: [], refresh() {}, saveUT() {}, applyRestrictions() {} });
+let saves = 0;
+controller.attach({ ut: state, root, stack: [], refresh() {}, saveUT() { saves++; }, applyRestrictions() {} });
 await controller.poll();
 
 // A curse triggered during a pull must not strand the user on its item-assignment screen.
@@ -143,6 +145,18 @@ assert.equal(panel.classList.contains('vinson-control-broken'),false);
 assert.equal(sibling.classList.contains('vinson-control-broken'),false);
 listeners.get('click')({target:panel,preventDefault(){},stopImmediatePropagation(){}});
 assert.equal(panel.classList.contains('vinson-control-broken'),false,'empty panel cannot collapse its children');
+// Restored art and price surfaces fracture independently from their siblings and containers.
+for (const [tag, className, text] of [
+  ['div', 'pm-pack', 'pack art'], ['div', 'pm-price', 'price label'], ['i', 'pm-coin', 'coin icon'], ['small', '', 'small detail'],
+]) {
+  const parent = new Element('div'), target = new Element(tag), sibling = new Element('span');
+  parent.className = 'surface-parent'; target.className = className; target.textContent = text; sibling.textContent = `neighbor of ${text}`;
+  parent.append(target, sibling); root.append(parent);
+  listeners.get('click')({target,preventDefault(){},stopImmediatePropagation(){}});
+  assert.equal(target.classList.contains('vinson-control-broken'), true, `${className || tag} breaks on its own click`);
+  assert.equal(parent.classList.contains('vinson-control-broken'), false, `${className || tag} does not break its parent`);
+  assert.equal(sibling.classList.contains('vinson-control-broken'), false, `${className || tag} leaves its sibling intact`);
+}
 const doomedClick = click();
 assert.equal(doomedClick.prevented, true, 'doom still blocks a normal action');
 assert.equal(button.classList.contains('vinson-control-broken'), true);
@@ -187,9 +201,43 @@ state.vinson.phaseUntil = Date.now() - 1;
 controller.tick();
 assert.equal(state.vinson.phase, 'locked');
 assert.equal(cursedPack(state), true, 'the locked squad still carries its cursed-pack state');
+const savesBeforePinRepair = saves;
+state.squad.slots[9] = null;
+controller.tick();
+assert.equal(state.squad.slots[9], HELL_CARD_ID, 'tick restores Vinson if a refresh removed the pinned squad card');
+assert.equal(saves, savesBeforePinRepair + 1, 'pin repair survives a cloud refresh');
 ordinaryClick = click();
-assert.equal(ordinaryClick.prevented, false, 'locked permits ordinary button actions');
-assert.equal(button.classList.contains('vinson-control-broken'), false);
+assert.equal(ordinaryClick.prevented, true, 'locked state blocks an arbitrary ordinary button action');
+assert.equal(button.classList.contains('vinson-control-broken'), true, 'locked state fractures the clicked ordinary button');
+
+// In locked aftermath, section routes stay available on the first click while the exact control breaks.
+for (const [className, label] of [['pm-uttab', 'Store'], ['pm-hx', 'Store hub']]) {
+  const target = new Element('button'); target.className = className; target.textContent = label; root.append(target);
+  let prevented = false, routeCalls = 0;
+  listeners.get('click')({target,preventDefault(){prevented=true;},stopImmediatePropagation(){}});
+  if (!prevented) routeCalls++;
+  assert.equal(prevented, false, `${className} route is allowed on its first click`);
+  assert.equal(routeCalls, 1, `${className} route handler gets its first click`);
+  assert.equal(target.classList.contains('vinson-control-broken'), true, `${className} itself fractures`);
+}
+
+for (const [parentClass, label] of [['pm-packitem', 'Open'], ['pm-storeitem', 'Buy & Open']]) {
+  const item = new Element('div'), action = new Element('button');
+  item.className = parentClass; action.textContent = label; item.append(action); root.append(item);
+  let prevented = false, ownHandlerCalls = 0;
+  listeners.get('click')({target:action,preventDefault(){prevented=true;},stopImmediatePropagation(){}});
+  if (!prevented) ownHandlerCalls++;
+  assert.equal(prevented, false, `${label} is left to the pack flow handler`);
+  assert.equal(ownHandlerCalls, 1, `${label} own handler receives the click`);
+  assert.equal(action.classList.contains('vinson-control-broken'), true, `${label} button fractures after the click`);
+}
+
+const manager = new Element('section'); manager.className = 'pm-modal'; manager.setAttribute('aria-label', 'Pack manager');
+const cancel = new Element('button'); cancel.className = 'pm-x'; cancel.textContent = 'Cancel'; manager.append(cancel); root.append(manager);
+let cancelPrevented = false;
+listeners.get('click')({target:cancel,preventDefault(){cancelPrevented=true;},stopImmediatePropagation(){}});
+assert.equal(cancelPrevented, false, 'pack manager cancel remains unchanged in locked state');
+assert.equal(cancel.classList.contains('vinson-control-broken'), false, 'pack manager cancel is not fractured');
 
 remotePhase = 'lifted';
 remoteTimer();
@@ -197,6 +245,23 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(state.vinson.phase, 'lifted', 'remote interval observes a later owner lift');
 assert.equal(body.classList.contains('vinson-infected'), false);
 controller.destroy();
+
+// A server response received during an account-state replacement applies to the new Vinson-in-XI state.
+const oldPollState = {club:[],squad:defaultSquad(),vinson:{phase:'banned',doomUntil:Date.now(),phaseUntil:0,pin:null}};
+const latestPollState = {club:[],squad:defaultSquad(),vinson:{phase:'banned',doomUntil:Date.now(),phaseUntil:0,pin:null}};
+latestPollState.squad.slots[9] = HELL_CARD_ID;
+let releaseStatus;
+const pendingStatus = new Promise(resolve => { releaseStatus = resolve; });
+const replacementOnline = {...online,vinson:{status:()=>pendingStatus,pull:async()=>({ok:true,phase:'released'}),lock:async()=>({ok:true,phase:'locked'})}};
+const replacementController = startVinsonExperience(replacementOnline,{initialState:oldPollState,ephemeral:true});
+const replacementApp = {ut:oldPollState,root,stack:[],refresh(){},saveUT(){}};
+replacementController.attach(replacementApp);
+replacementApp.ut = latestPollState;
+releaseStatus({ok:true,phase:'released'});
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(oldPollState.vinson.phase,'banned','pending poll does not mutate the detached account state');
+assert.equal(latestPollState.vinson.phase,'warn','released status warns the replacement state with Vinson in the XI');
+replacementController.destroy();
 
 // Mods have no owner exemption, including when the first pull RPC fails.
 delete state.vinson;
@@ -241,16 +306,51 @@ assert.equal(await closingOpen,false,'destroy during module loading cannot spawn
 // Exercise the real tab handler without the document capture listener.
 globalThis.Node = Element;
 document.getElementById = () => null;
-const {utTabs} = await import('../ui/utview.js');
+const {utTabs, guardVinsonDoomAction} = await import('../ui/utview.js');
 let navigated = 0, shattered = 0;
 const tabState = createUTState(); tabState.vinson = {phase:'doom'};
 const tabApp = {ut:tabState,root,online,vinson:{breakDoomControl(){shattered++;}},popTo(){navigated++;},push(){navigated++;},toast(){}};
+const guardedTarget = new Element('button');
+let guardPrevented = false, guardStopped = false;
+assert.equal(guardVinsonDoomAction(tabApp,{currentTarget:guardedTarget,preventDefault(){guardPrevented=true;},stopImmediatePropagation(){guardStopped=true;}}),true,'direct Doom guard rejects a Squad action');
+assert.equal(guardPrevented,true); assert.equal(guardStopped,true); assert.equal(shattered,1,'direct guard breaks only its requested target');
 const nav = utTabs(tabApp,'home');
 const realSquad = nav.children.find(el=>el.dataset.uttab==='squad');
 realSquad.events.get('click')({currentTarget:realSquad});
 assert.equal(navigated,0,'Squad handler cannot bypass Doom when capture is absent');
-assert.equal(shattered,1,'blocked Squad still requests the fracture animation');
+assert.equal(shattered,2,'blocked Squad still requests the fracture animation');
 const realHome = nav.children.find(el=>el.dataset.uttab==='home');
 realHome.events.get('click')({currentTarget:realHome});
-assert.equal(shattered,1,'Home stays exempt');
+assert.equal(shattered,2,'Home stays exempt');
+const {MetaApp} = await import('../ui/app.js');
+const appStack = [{utHome:true}], appPush = {ut:tabState,online,stack:appStack,runCleanup(){throw Error('blocked Doom navigation must return before cleanup');},render(){throw Error('blocked Doom navigation must return before render');}};
+MetaApp.prototype.push.call(appPush,{utHome:false});
+assert.equal(appStack.length,1,'App.prototype.push cannot navigate away from the home squad tile during Doom');
+
+// Once the player is unbanned, the earned fight remains available while the squad curse advances.
+for (const phase of ['freed','warn','consequence','locked']) {
+  const stateAfterUnban = {club:[],squad:defaultSquad(),vinson:{phase,doomUntil:0,phaseUntil:Date.now()+60_000,pin:null}};
+  const experience = startVinsonExperience(fightOnline,{initialState:stateAfterUnban,ephemeral:true});
+  experience.attach({ut:stateAfterUnban,root,stack:[],refresh(){},saveUT(){}});
+  const host = body.children.find(el=>el.id==='vinson-experience');
+  const fightLink = host?.querySelector('.vinson-fight-link');
+  assert.ok(fightLink, `fight button is rendered in ${phase} after unban`);
+  let openCalls = 0;
+  const openBattle = experience.openBattle.bind(experience);
+  experience.openBattle = (...args) => { openCalls++; return openBattle(...args); };
+  await fightLink.onclick();
+  assert.equal(openCalls,1,`fight button invokes openBattle in ${phase}`);
+  assert.equal(fightLink.textContent,'Fight Suppression',`fight button recovers after a successful ${phase} launch`);
+  experience.destroy();
+}
+for (const [stateAfterUnban, onlineAccount, label] of [
+  [{club:[],squad:defaultSquad(),vinson:{phase:'freed'}},{current:()=>({role:'owner'})},'owner'],
+  [{club:[],squad:defaultSquad(),vinson:{phase:'lifted'}},{current:()=>({role:'player'})},'lifted'],
+  [{club:[],squad:defaultSquad()},{current:()=>({role:'player'})},'no curse'],
+]) {
+  const experience = startVinsonExperience({...fightOnline,account:onlineAccount},{initialState:stateAfterUnban,ephemeral:true});
+  experience.attach({ut:stateAfterUnban,root,stack:[],refresh(){},saveUT(){}});
+  assert.equal(await experience.openBattle(),false,`battle stays unavailable for ${label}`);
+  experience.destroy();
+}
 console.log('Vinson UI release recovery regression passed');

@@ -274,3 +274,9 @@ Queue: PROMO CARDS (docs/PROMO_BRIEF.md: FUT-style card shapes + many promos, ow
   portraits and visible Phonk matte. Tests and native frame inspection passed; Claude browser review/merge pending.
 - DONE (Oct 1): merged ChatGPT visual review (jagged punch hole, shaded hand, Vinson full size in fight).
 - DONE (Oct 1) Testing mode in the real game (?livetest=1): logs out to a fresh guest, separate local save (real club untouched), still online so admin commands from the owner account work on it.
+
+## Vinson Doom/aftermath regression batch (Sep 30 night)
+- Owner reports missing pack/price fractures, Squad bypass, unusable Fight Suppression, and normal packs after
+  unban. Fix on chatgpt/vinson-doom-targets: semantic surfaces restored individually; home tiles and navigation
+  stack guarded during Doom; fight entry kept after release; locked aftermath fracture routing and pack lock
+  recheck restored; status reconciliation follows current cloud-refreshed state. Claude browser review pending.
