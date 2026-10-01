@@ -288,3 +288,6 @@ four star/eye attack choices, moving harder boss, gameplay dialogue/optional spe
 Node suites and native rendered frames pass; Claude live desktop/mobile account-flow review/merge pending.
 Supersedes PR18. Existing source photos, server fight/rewards and cross-device sync preserved.
 - DONE (Oct 1): merged ChatGPT PR19 (Doom hits only the clicked leaf, locked aftermath breaks controls, all-Vinson zero-coin packs, fight rework with 4 attacks); browser-checked.
+- (Oct 1, owner) Claude's standing role: critic / game tester. Watch AI_DIRECT + ChatGPT branches; for every push: define what
+  should happen, test it (suites + real browser, desktop and phone), critique (bugs, feel, visuals, the 20 "vibecoded" tells),
+  post concrete findings with screenshots/steps in AI_DIRECT, merge only what passes.
