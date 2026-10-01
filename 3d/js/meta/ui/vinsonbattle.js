@@ -1,12 +1,12 @@
 // Health, telegraphs, speech/subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions } from '../core/vinsonbattle.js';
+import { createVinsonBattle, battleEyePositions } from '../core/vinsonbattle.js?v=vinson18';
 import { sampleVinsonCinematic } from './vinsoncinematic.js';
 import { load } from '../core/storage.js';
 
 const W = 1280, H = 720;
-const asset = (name) => new URL(`../../../assets/vinson/${name}.webp`, import.meta.url).href;
+const asset = (name) => new URL(`../../../assets/vinson/${name === 'world' ? 'world-cutout.webp' : `${name}.webp`}`, import.meta.url).href;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const names = { patel: 'Israeli Patel', captain: 'Captain Israel', world: 'World-Ruler Vinson', phonk: 'Phonk Mode Vinson' };
+const names = { patel: 'Israeli Forever Patel', captain: 'Captain Israel', world: 'World-Ruler Vinson', phonk: 'Phonk Mode Vinson' };
 const heroArt = (stage) => stage ? 'captain' : 'patel';
 const bossArt = (stage) => stage ? 'phonk' : 'world';
 const ATTACK_NAMES = { laserline: 'RED LASER EYES', bombcircle: 'THE HUMBLE BOMB', painring: 'ASSIGNING PAIN' };
@@ -16,13 +16,13 @@ function node(tag, cls, text) {
   if (text) el.textContent = text;
   return el;
 }
-function beam(ctx, x1, y1, x2, y2, color, width = 5, alpha = 1) {
+function beam(ctx, x1, y1, x2, y2, color, width = 5, alpha = 1, coreColor = '#fff6e8') {
   ctx.save(); ctx.globalAlpha = alpha; ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 22;
   ctx.lineWidth = width * 4; ctx.globalAlpha = alpha * .15;
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
   ctx.globalAlpha = alpha; ctx.lineWidth = width; ctx.stroke();
-  ctx.shadowBlur = 0; ctx.strokeStyle = '#fff6e8'; ctx.lineWidth = Math.max(1, width * .25); ctx.stroke(); ctx.restore();
+  ctx.shadowBlur = 0; ctx.strokeStyle = coreColor; ctx.lineWidth = Math.max(1, width * .25); ctx.stroke(); ctx.restore();
 }
 function star(ctx, x, y, radius, angle, alpha = 1) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.globalAlpha = alpha;
@@ -38,9 +38,57 @@ function star(ctx, x, y, radius, angle, alpha = 1) {
   }
   ctx.restore();
 }
+function impactRings(ctx,x,y,pulse,t,reducedMotion=false,color='#ffc5a0') {
+  if(pulse<=0)return;
+  const p=clamp(pulse,0,1),base=18+p*78;
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=color;ctx.shadowColor=color;ctx.shadowBlur=18;ctx.lineWidth=2+4*p;
+  for(let i=0;i<3;i++){const phase=clamp(pulse*1.35-i*.2,0,1);if(!phase)continue;ctx.globalAlpha=(1-phase)*.72;ctx.beginPath();ctx.ellipse(x,y,base*phase,base*.48*phase,0,0,Math.PI*2);ctx.stroke();}
+  ctx.globalAlpha=.55*p;ctx.lineWidth=1.5;for(let i=0;i<8;i++){const a=i*Math.PI/4+(reducedMotion?0:t*.18),r=base*(.72+(i%3)*.15);ctx.beginPath();ctx.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r);ctx.lineTo(x+Math.cos(a)*(r+12+4*p),y+Math.sin(a)*(r+12+4*p));ctx.stroke();}
+  ctx.restore();
+}
+function spectralClaw(ctx,x,y,scale=1,angle=0,alpha=1) {
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.scale(scale,scale);ctx.globalAlpha=alpha;
+  ctx.fillStyle='#4e080d';ctx.strokeStyle='#ff6255';ctx.lineWidth=3;ctx.shadowColor='#ff251f';ctx.shadowBlur=24;
+  ctx.beginPath();ctx.moveTo(-43,-56);ctx.lineTo(-50,-103);ctx.quadraticCurveTo(-49,-119,-39,-119);ctx.quadraticCurveTo(-29,-119,-28,-103);ctx.lineTo(-25,-70);ctx.lineTo(-20,-128);ctx.quadraticCurveTo(-18,-145,-7,-144);ctx.quadraticCurveTo(4,-143,3,-126);ctx.lineTo(4,-73);ctx.lineTo(12,-123);ctx.quadraticCurveTo(15,-139,26,-136);ctx.quadraticCurveTo(37,-133,33,-117);ctx.lineTo(27,-67);ctx.lineTo(40,-103);ctx.quadraticCurveTo(46,-119,57,-113);ctx.quadraticCurveTo(67,-107,59,-91);ctx.lineTo(47,-48);ctx.quadraticCurveTo(71,-63,82,-51);ctx.quadraticCurveTo(91,-39,77,-28);ctx.lineTo(46,-2);ctx.quadraticCurveTo(40,38,23,57);ctx.lineTo(-27,57);ctx.quadraticCurveTo(-44,34,-43,-2);ctx.lineTo(-67,-30);ctx.quadraticCurveTo(-78,-44,-67,-53);ctx.quadraticCurveTo(-57,-62,-43,-48);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.shadowBlur=0;ctx.globalAlpha*=.7;ctx.strokeStyle='#ff9a7e';ctx.lineWidth=2;for(const fx of [-38,-14,18,43]){ctx.beginPath();ctx.moveTo(fx,-105);ctx.lineTo(fx+2,35);ctx.stroke();}
+  ctx.restore();
+}
+function renderHandSlam(ctx,h,t,reducedMotion) {
+  const phase=clamp(h.elapsed/h.telegraph,0,1),active=clamp((h.elapsed-h.telegraph)/Math.max(.01,h.duration),0,1),radius=h.radius||112;
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.1+.12*(reducedMotion?1:.5+.5*Math.sin(h.elapsed*8));ctx.fillStyle='#ff3328';ctx.beginPath();ctx.ellipse(h.x,h.y,radius*(.9+.15*phase),radius*.4,0,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.save();ctx.strokeStyle='#ff5a50';ctx.globalAlpha=.9;ctx.lineWidth=4;ctx.setLineDash([13,9]);ctx.beginPath();ctx.arc(h.x,h.y,radius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(h.x-radius*.24,h.y);ctx.lineTo(h.x+radius*.24,h.y);ctx.moveTo(h.x,h.y-radius*.24);ctx.lineTo(h.x,h.y+radius*.24);ctx.stroke();ctx.restore();
+  // Huge descending spectral fingers make the target and slam timing readable.
+  const handY=h.y-340+Math.min(1,active*1.55)*240;
+  for(let i=0;i<5;i++){const drift=(i-2)*42;ctx.save();ctx.globalAlpha=.45*(1-phase)+.96*active;ctx.strokeStyle='#ff372e';ctx.lineWidth=2;ctx.globalAlpha=Math.max(.18,1-phase)*.5;ctx.beginPath();ctx.moveTo(h.x+drift,Math.max(0,handY-45-i%2*28));ctx.lineTo(h.x+drift*.65,handY+55);ctx.stroke();ctx.restore();}
+  spectralClaw(ctx,h.x,handY,1.25,Math.PI,Math.max(.2,Math.min(1,.2+phase*.55+active*.6)));
+  if(active>0){const p=clamp(active*2.8,0,1)*(1-clamp((active-.35)*1.8,0,1));impactRings(ctx,h.x,h.y,p,t,reducedMotion,'#ff876d');ctx.save();ctx.globalAlpha=.65*p;ctx.fillStyle='#c95b46';for(let i=0;i<12;i++){const a=i*Math.PI/6+(reducedMotion?0:t*.12),r=radius*(.38+(i%3)*.12);ctx.fillRect(h.x+Math.cos(a)*r,h.y+Math.sin(a)*r,4,4);}ctx.restore();}
+}
+function renderHandCatch(ctx,h,t,reducedMotion) {
+  const c=h.corridor||{x1:h.x1??80,y1:h.y1??420,x2:h.x2??1200,y2:h.y2??420,width:h.width??150};
+  const dx=c.x2-c.x1,dy=c.y2-c.y1,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,cx=(c.x1+c.x2)/2,cy=(c.y1+c.y2)/2;
+  const w=c.width||150,tele=clamp(h.elapsed/h.telegraph,0,1),close=clamp((h.elapsed-h.telegraph)/Math.max(.01,h.duration),0,1);
+  // Mark the dangerous corridor while leaving the perpendicular exits conspicuously open.
+  ctx.save();ctx.globalAlpha=.12+.12*tele;ctx.fillStyle='#ff251e';ctx.beginPath();ctx.moveTo(c.x1-uy*w/2,c.y1+ux*w/2);ctx.lineTo(c.x2-uy*w/2,c.y2+ux*w/2);ctx.lineTo(c.x2+uy*w/2,c.y2-ux*w/2);ctx.lineTo(c.x1+uy*w/2,c.y1-ux*w/2);ctx.closePath();ctx.fill();ctx.restore();
+  ctx.save();ctx.strokeStyle='#ff6458';ctx.lineWidth=3;ctx.setLineDash([14,10]);for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(c.x1-uy*w*.5*side,c.y1+ux*w*.5*side);ctx.lineTo(c.x2-uy*w*.5*side,c.y2+ux*w*.5*side);ctx.stroke();}ctx.restore();
+  const inset=Math.min(len*.42,close*len*.42),left=cx-ux*(len*.5-inset),right=cx+ux*(len*.5-inset),angle=Math.atan2(uy,ux);
+  // Opposing claws close along the danger axis; the way out is above or below this red lane.
+  spectralClaw(ctx,left,cy,1.02,-angle+Math.PI/2,.48+.48*tele);
+  spectralClaw(ctx,right,cy,1.02,-angle-Math.PI/2,.48+.48*tele);
+  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 15px monospace';ctx.textAlign='center';ctx.fillText('DODGE ABOVE / BELOW THE RED LANE',cx,Math.max(170,cy-w*.58));ctx.textAlign='start';ctx.restore();
+  if(close>.65)impactRings(ctx,cx,cy,clamp((close-.65)*2.8,0,1),t,reducedMotion,'#ff715e');
+}
+function laserRay(ctx,ray,t,ready,alpha) {
+  if(!ready){beam(ctx,ray.x1,ray.y1,ray.x2,ray.y2,'#ff725f',3,alpha*.32);ctx.save();ctx.globalAlpha=.85;ctx.strokeStyle='#ffc0a6';ctx.setLineDash([15,12]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(ray.x1,ray.y1);ctx.lineTo(ray.x2,ray.y2);ctx.stroke();ctx.restore();return;}
+  beam(ctx,ray.x1,ray.y1,ray.x2,ray.y2,'#fb291f',8,alpha,'#ff9680');
+  const dx=ray.x2-ray.x1,dy=ray.y2-ray.y1;
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<3;i++){const p=((t*(1.25+i*.22)+i/3)%1),x=ray.x1+dx*p,y=ray.y1+dy*p,r=4+(i%2)*2;ctx.globalAlpha=alpha*(.65-i*.12);ctx.shadowColor='#ff2d22';ctx.shadowBlur=18;ctx.fillStyle='#fff0d8';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=alpha*.8;ctx.strokeStyle='#ffbca4';ctx.lineWidth=2;for(let i=0;i<4;i++){const p=((t*1.7+i*.257)%1),x=ray.x1+dx*p,y=ray.y1+dy*p;ctx.beginPath();ctx.moveTo(x-7,y-3);ctx.lineTo(x+7,y+3);ctx.stroke();}
+  ctx.restore();
+}
 // Frame only unused matte, keeping the full face, hands and planet in the source image.
 export function vinsonSpriteFrame(key, sourceWidth, sourceHeight) {
-  const rect=key==='world'?[.23,0,.50,.98]:key==='patel'?[0,.23,1,.77]:[0,0,1,1];
+  const rect=key==='patel'?[0,.23,1,.77]:[0,0,1,1];
   const width=key==='world'?292:key==='phonk'?230:260;
   const height=key==='world'?240:key==='phonk'?240:key==='captain'?190:250;
   const [rx,ry,rw,rh]=rect, sw=sourceWidth*rw,sh=sourceHeight*rh;
@@ -64,8 +112,11 @@ export function removeVinsonMatte(pixels,width,height) {
   return pixels;
 }
 function battlePortrait(image,key) {
-  if(!['phonk','captain'].includes(key))return image;
+  if(!['world','phonk','captain','patel'].includes(key))return image;
   if(matteCache.has(image))return matteCache.get(image);
+  // World uses an authored transparent cutout. Threshold flood fills erased her
+  // black hair, blindfold and clothing because those details touch the backdrop.
+  if(key==='world'){matteCache.set(image,image);return image;}
   let art=image;
   try {
     const canvas=document.createElement('canvas'),scale=Math.min(1,512/image.naturalHeight);
@@ -73,7 +124,9 @@ function battlePortrait(image,key) {
     const c=canvas.getContext('2d',{willReadFrequently:true});
     c.drawImage(image,0,0,canvas.width,canvas.height);
     const pixels=c.getImageData(0,0,canvas.width,canvas.height);
-    removeVinsonMatte(pixels.data,canvas.width,canvas.height);c.putImageData(pixels,0,0);art=canvas;
+    if(key!=='patel')removeVinsonMatte(pixels.data,canvas.width,canvas.height);
+    else {for(let y=Math.floor(canvas.height*.84);y<canvas.height;y++){const fade=clamp((canvas.height-y)/(canvas.height*.16),0,1);for(let x=0;x<canvas.width;x++)pixels.data[(y*canvas.width+x)*4+3]*=fade*fade;}}
+    c.putImageData(pixels,0,0);art=canvas;
   }catch{/* Readback unsupported: the original remains visible. */}
   matteCache.set(image,art);return art;
 }
@@ -83,13 +136,16 @@ function sprite(ctx, image, key, x, y, t, alpha = 1, moving = false) {
   const {width,height}=frame;
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.fillStyle = '#020a09'; ctx.beginPath(); ctx.ellipse(x, y + 12, width * .42, 14, 0, 0, Math.PI * 2); ctx.fill();
+  if(key==='patel'){ctx.save();ctx.strokeStyle='#4a9ed5';ctx.globalAlpha=.28;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x,y+4,width*.33,10,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
   const bob = moving ? Math.sin(t * 15) * 4 : Math.sin(t * 2) * 2;
   ctx.translate(x, y + bob); ctx.rotate(moving ? Math.sin(t * 7.5) * .035 : 0);
   if (image?.complete && image.naturalWidth) {
     const art=battlePortrait(image,key);
     const {sx,sy,sw,sh,dw,dh}=vinsonSpriteFrame(key,art.naturalWidth||art.width,art.naturalHeight||art.height);
-    // Preserve actor colors; screen blends only World's existing black matte.
-    ctx.globalCompositeOperation=key==='world'?'screen':'source-over';
+    ctx.globalCompositeOperation='source-over';
+    if(key==='world'||key==='phonk'){
+      ctx.shadowColor='#ff5148';ctx.shadowBlur=18;
+    }
     if(key==='patel'){
       // Frame the original knight silhouette rather than its rectangular poster background.
       const contour=[[.42,.012],[.50,0],[.565,.03],[.59,.09],[.592,.17],[.577,.23],[.62,.29],[.70,.32],[.79,.40],[.87,.50],[.94,.70],[1,1],[0,1],[.115,.76],[.15,.48],[.29,.31],[.40,.285],[.38,.23],[.35,.13],[.36,.07]];
@@ -147,23 +203,22 @@ function shieldAndSword(ctx, shot) {
 }
 
 /** Isolated render function for the arena, actors and smooth cinematics. */
-export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles = [], trauma = 0, reducedMotion = false, visualHero = state.hero } = {}) {
+export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = null, particles = [], trauma = 0, reducedMotion = false, visualHero = state.hero } = {}) {
   ctx.save(); ctx.clearRect(0, 0, W, H);
   const shake = reducedMotion ? 0 : trauma * trauma;
-  const zoom = shot?.zoom || 1;
-  ctx.translate(W / 2 + Math.sin(t * 31) * shake * 12, H / 2 + Math.sin(t * 43) * shake * 7);
-  ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
+  const zoom = reducedMotion ? 1 : (camera?.zoom??shot?.zoom??1), focusX=reducedMotion?W/2:(camera?.x??shot?.focusX??W/2),focusY=reducedMotion?H/2:(camera?.y??shot?.focusY??H/2);
+  ctx.translate(W / 2 - focusX*zoom + Math.sin(t * 31) * shake * 12, H / 2 - focusY*zoom + Math.sin(t * 43) * shake * 7);
+  ctx.scale(zoom, zoom);
   field(ctx, t, shot?.villain==='phonk'?1:state.stage);
   if (!shot) {
     for (const h of state.hazards) {
       const ready = h.elapsed >= h.telegraph;
       const alpha = ready ? .95 : .28 + .18 * Math.sin(h.elapsed * 7);
-      if (h.type === 'laserline') {
+      if(h.type==='handslam') { renderHandSlam(ctx,h,t,reducedMotion); }
+      else if(h.type==='handcatch') { renderHandCatch(ctx,h,t,reducedMotion); }
+      else if (h.type === 'laserline') {
         const segments=h.segments||[];
-        for(const ray of segments) {
-          if(ready)beam(ctx,ray.x1,ray.y1,ray.x2,ray.y2,'#f3332d',10,alpha);
-          else {ctx.save();ctx.strokeStyle='#f38271';ctx.setLineDash([15,12]);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(ray.x1,ray.y1);ctx.lineTo(ray.x2,ray.y2);ctx.stroke();ctx.restore();}
-        }
+        for(const ray of segments)laserRay(ctx,ray,t,ready,alpha);
       } else {
         const radius = h.type === 'bombcircle' ? h.radius : ready ? 30 + (h.elapsed - h.telegraph) * h.ringMax / h.duration : 30;
         ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = '#f76b50'; ctx.lineWidth = ready ? 9 : 3;
@@ -176,12 +231,14 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
       state.hero.invulnerable > 0 ? .65 + .25*Math.sin(t*14) : 1, visualHero.moving);
     sprite(ctx, images[bossArt(state.stage)], bossArt(state.stage), state.boss.x, state.boss.y, t,1,true);
     for(const h of state.hazards.filter(h=>h.type==='laserline'))for(const eye of (h.origins||[])) {
-      ctx.save();ctx.shadowColor='#ff1e24';ctx.shadowBlur=18;ctx.fillStyle='#ff8170';ctx.beginPath();ctx.arc(eye.x,eye.y,h.elapsed>=h.telegraph?5:3,0,Math.PI*2);ctx.fill();ctx.restore();
+      const charged=clamp(h.elapsed/h.telegraph,0,1),flicker=reducedMotion?1:.82+.18*Math.sin(t*20+eye.x);
+      ctx.save();ctx.globalCompositeOperation='lighter';ctx.shadowColor='#ff1e24';ctx.shadowBlur=14+charged*26;ctx.strokeStyle='#ff5c4b';ctx.globalAlpha=.3+charged*.5;ctx.lineWidth=2+charged*3;ctx.beginPath();ctx.arc(eye.x,eye.y,7+charged*9,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#ff8170';ctx.globalAlpha=flicker;ctx.beginPath();ctx.arc(eye.x,eye.y,3+charged*3,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#ffb3a0';ctx.globalAlpha=.45+charged*.45;ctx.lineWidth=1.5;for(let i=0;i<4;i++){const a=i*Math.PI/2+(reducedMotion?0:t*.25);ctx.beginPath();ctx.moveTo(eye.x+Math.cos(a)*(10+charged*8),eye.y+Math.sin(a)*(10+charged*8));ctx.lineTo(eye.x+Math.cos(a)*(18+charged*18),eye.y+Math.sin(a)*(18+charged*18));ctx.stroke();}ctx.restore();
     }
     for (const p of state.projectiles) {
       const rotation=p.type==='spinner'?t*10:Math.atan2(p.vy,p.vx)+t*.6;
       if(p.type==='eyes') {
-        for(const eye of battleEyePositions(heroArt(state.stage),visualHero.x,visualHero.y))beam(ctx,eye.x,eye.y,p.x,p.y,'#7fceff',5,.85);
+        for(const eye of battleEyePositions(heroArt(state.stage),visualHero.x,visualHero.y))beam(ctx,eye.x,eye.y,p.x,p.y,'#168cff',3.5,.62,'#a8dcff');
       } else if(p.type==='spinner') {
         for(let i=1;i<=3;i++)star(ctx,p.x-p.vx*.018*i,p.y-p.vy*.018*i,18,rotation-i*.24,.18/i);
       } else if(p.type==='explosive') {
@@ -198,6 +255,18 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, particles
       for(const eye of battleEyePositions(shot.hero,300,470))beam(ctx,eye.x,eye.y,cx,355,'#399dff',8,shot.beams);
       star(ctx,cx,355,22,t*2,shot.beams);
       if (shot.star) star(ctx, cx, 355, 24 + shot.star ** 3 * 850, reducedMotion ? 0 : t * .85, shot.beams);
+      if(shot.beams>.15){
+        // The beams converge on the actor being struck; the impact reads through rings and sparks.
+        const hitX=shot.hero==='patel'?cx:640,hitY=355;
+        impactRings(ctx,hitX,hitY,shot.impact||0,t,reducedMotion,shot.hero==='patel'?'#ff9a77':'#a8e7ff');
+        if(shot.impact>.15){ctx.save();ctx.globalAlpha=shot.impact*.58;ctx.strokeStyle='#ffd8bd';ctx.lineWidth=2;for(let i=0;i<10;i++){const a=i*Math.PI/5+(reducedMotion?0:t*.3);ctx.beginPath();ctx.moveTo(hitX+Math.cos(a)*18,hitY+Math.sin(a)*18);ctx.lineTo(hitX+Math.cos(a)*(28+shot.impact*34),hitY+Math.sin(a)*(28+shot.impact*34));ctx.stroke();}ctx.restore();}
+      }
+    }
+    if(shot.impact>0)impactRings(ctx,shot.hero==='captain'?640:380,355,shot.impact,t,reducedMotion,'#ffd0ad');
+    if(shot.star>0&&shot.hero==='captain'&&shot.time<11){
+      // Fine speed lines make the finishing star feel fast without flashing the whole frame.
+      ctx.save();ctx.globalAlpha=.2+.3*shot.star;ctx.strokeStyle='#ffe0ad';ctx.lineWidth=2;
+      for(let i=0;i<12;i++){const y=215+i*30+(reducedMotion?0:(t*210+i*23)%32);ctx.beginPath();ctx.moveTo(790+i%4*22,y);ctx.lineTo(900+i%4*22,y-5);ctx.stroke();}ctx.restore();
     }
     shieldAndSword(ctx, shot);
   }
@@ -223,20 +292,26 @@ export async function registerVinsonBattleAttempt(online) {
 
 export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
   if (document.querySelector('.vb-screen')) return null;
-  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=14', import.meta.url).href; document.head.append(link);
+  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=17', import.meta.url).href; document.head.append(link);
   const screen = node('section', 'vb-screen'); screen.setAttribute('role', 'dialog'); screen.setAttribute('aria-modal', 'true'); screen.setAttribute('aria-label', 'Fight Suppression');
   const stage = node('div', 'vb-stage'), canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
   canvas.setAttribute('aria-label', 'Move to dodge the marked attacks, attack Vinson, and dodge with Space.'); stage.append(canvas);
   const top = node('div', 'vb-top'); top.append(node('strong', 'vb-title', 'FIGHT SUPPRESSION'));
   const closeButton = node('button', '', 'Return to Pitchside'); closeButton.onclick = close; top.append(closeButton); stage.append(top);
   const panel = node('div', 'vb-panel'), subtitle = node('div', 'vb-subtitle'); stage.append(panel, subtitle);
+  const conversation=node('button','vb-dialogue');conversation.type='button';conversation.hidden=true;
+  conversation.setAttribute('aria-label','Advance dialogue');
+  const portrait=node('canvas','vb-dialogue-portrait');portrait.width=120;portrait.height=130;portrait.setAttribute('aria-hidden','true');
+  const dialogueBody=node('div','vb-dialogue-body'),speakerLabel=node('strong','vb-dialogue-speaker'),lineText=node('p','vb-dialogue-line'),continueHint=node('span','vb-dialogue-continue','Click or press Enter');
+  dialogueBody.append(speakerLabel,lineText,continueHint);conversation.append(portrait,dialogueBody);stage.append(conversation);
+  conversation.onclick=advanceDialogue;
   const controls = node('div', 'vb-controls'); controls.append(node('span', 'vb-hint', 'WASD / arrows: move · J / hold: attack · 1–4: weapon · Space: dodge'));
   let selectedWeapon='star';
   const weapons=node('div','vb-weapons');weapons.setAttribute('aria-label','Attack type');
   const weaponButtons=[];
   for(const [i,type,label] of [[1,'star','Star'],[2,'spinner','Spinning star'],[3,'explosive','Explosive star'],[4,'eyes','Eye lasers']]) {
     const b=node('button',type==='star'?'on':'',label);b.setAttribute('aria-pressed',type==='star'?'true':'false');
-    b.onclick=()=>selectWeapon(type);weaponButtons.push({b,type,i});weapons.append(b);
+    b.onclick=()=>{if(!blockingDialogue)selectWeapon(type)};weaponButtons.push({b,type,i});weapons.append(b);
   }
   function selectWeapon(type){selectedWeapon=type;for(const item of weaponButtons){item.b.className=item.type===type?'on':'';item.b.setAttribute('aria-pressed',item.type===type?'true':'false');}}
   controls.append(weapons);
@@ -244,7 +319,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   const buttons = [['left','←'],['up','↑'],['down','↓'],['right','→'],['dodge','Dodge'],['attack','Attack']];
   for (const [action, label] of buttons) {
     const b = node('button', '', label); b.dataset.action = action; b.setAttribute('aria-label', label);
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); held.add(action); b.setPointerCapture(e.pointerId); });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if(blockingDialogue){advanceDialogue();return;} held.add(action); b.setPointerCapture(e.pointerId); });
     for (const evt of ['pointerup','pointercancel','lostpointercapture']) b.addEventListener(evt, () => held.delete(action));
     touch.append(b);
   }
@@ -256,9 +331,14 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const exit = () => { if (exited) return; exited = true; screen.remove(); link.remove(); onClose?.(); };
     closeButton.onclick = exit; return { close: exit };
   }
-  let battle = createVinsonBattle({ seed }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
+  const compactArena=Number(globalThis.innerHeight)>0&&globalThis.innerHeight<=450;
+  let battle = createVinsonBattle({ seed, compact:compactArena }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
   let mode = '', cinematicKind = '', cinematicTime = 0, trauma = 0, particles = [], nonce = null, victoryBusy = false, victoryConfirmed = false;
   let dialogue=null,lastDialogue=-10,spokenText='',speechOwned=false,speechLine=null;
+  const barkLast=new Map(),barkCount=new Map();
+  let blockingDialogue=null,dialogueQueue=[],dialogueComplete=null;
+  const acknowledgedDialogue=new Set();
+  let camera={zoom:1,x:640,y:360};
   let audio = null, muted = false, viewHero = { x: 250, y: 425 }, oldFocus = document.activeElement;
   const held = new Set(), keys = new Set(), images = {};
   const originalOverflow = document.documentElement.style.overflow; document.documentElement.style.overflow = 'hidden';
@@ -271,7 +351,42 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const line=new SpeechSynthesisUtterance(text);line.volume=volume;line.rate=.92;line.pitch=.82;
     line.onend=line.onerror=()=>{if(speechLine===line){speechOwned=false;speechLine=null;}};speechLine=line;speechOwned=true;window.speechSynthesis.speak(line);
   }
-  function say(speaker,text) {dialogue={speaker,text,until:clock+3.8};lastDialogue=clock;speak(text);}
+  function say(speaker,text,key='generic') {
+    if(blockingDialogue||clock-(barkLast.get(key)??-20)<10)return;
+    barkLast.set(key,clock);dialogue={speaker,text,until:clock+2.6};lastDialogue=clock;speak(text);
+  }
+  function showDialogue(lines,onComplete=null){
+    dialogueQueue=lines.slice();dialogueComplete=onComplete;dialogue=null;subtitle.replaceChildren();
+    held.clear();keys.clear();controls.classList.add('vb-controls-paused');nextDialogue();
+  }
+  function nextDialogue(){
+    const line=dialogueQueue.shift();
+    if(!line){blockingDialogue=null;conversation.hidden=true;controls.classList.remove('vb-controls-paused');const done=dialogueComplete;dialogueComplete=null;done?.();return;}
+    blockingDialogue={...line,started:clock,revealed:reducedMotion};
+    speakerLabel.textContent=line.speaker;portrait.dataset.actor=line.actor;portrait.dataset.painted='';paintDialoguePortrait();
+    conversation.dataset.side=['world','phonk'].includes(line.actor)?'boss':'hero';
+    lineText.textContent=reducedMotion?line.text:'';continueHint.textContent=reducedMotion?'Continue · Enter':'Click to reveal';
+    conversation.hidden=false;conversation.focus();speak(line.text);
+  }
+  function advanceDialogue(){
+    if(!blockingDialogue)return;
+    if(!blockingDialogue.revealed){blockingDialogue.revealed=true;lineText.textContent=blockingDialogue.text;continueHint.textContent='Continue · Enter';return;}
+    if(speechOwned){window.speechSynthesis?.cancel();speechOwned=false;speechLine=null;}
+    nextDialogue();
+  }
+  function paintDialoguePortrait(){
+    const key=portrait.dataset.actor,img=images[key];if(!img?.complete||!img.naturalWidth||portrait.dataset.painted===key)return;
+    const context=portrait.getContext('2d');if(!context)return;
+    const art=battlePortrait(img,key),w=art.naturalWidth||art.width,h=art.naturalHeight||art.height,scale=Math.min(120/w,130/h);
+    context.clearRect(0,0,120,130);context.drawImage(art,(120-w*scale)/2,(130-h*scale)/2,w*scale,h*scale);portrait.dataset.painted=key;
+  }
+  function updateDialogue(){
+    if(!blockingDialogue)return;paintDialoguePortrait();
+    const count=reducedMotion?blockingDialogue.text.length:Math.floor((clock-blockingDialogue.started)*36);
+    if(count>=blockingDialogue.text.length)blockingDialogue.revealed=true;
+    lineText.textContent=blockingDialogue.revealed?blockingDialogue.text:blockingDialogue.text.slice(0,count);
+    continueHint.textContent=blockingDialogue.revealed?'Continue · Enter':'Click to reveal';
+  }
   function tone(kind) {
     if (muted || document.hidden) return;
     try {
@@ -297,6 +412,8 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     weapon: selectedWeapon, attack: keys.has('j') || held.has('attack'), dodge: keys.has(' ') || held.has('dodge') }; }
   function keydown(e) {
     if (e.key === 'Escape') { close(); return; }
+    if(blockingDialogue && ['Enter',' ','j','J'].includes(e.key)){e.preventDefault();if(!e.repeat)advanceDialogue();return;}
+    if(blockingDialogue && e.key!=='Tab'){e.preventDefault();return;}
     const choice=weaponButtons.find(w=>String(w.i)===e.key);if(choice){e.preventDefault();selectWeapon(choice.type);return;}
     if ([' ','w','a','s','d','j','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) { e.preventDefault(); keys.add(e.key.toLowerCase()); }
     if (e.key === 'Tab') { const all = [...screen.querySelectorAll('button')].filter(b => !b.disabled && b.offsetParent !== null); if (!all.length) return; const idx = all.indexOf(document.activeElement); e.preventDefault(); all[(idx + (e.shiftKey ? -1 : 1) + all.length) % all.length].focus(); }
@@ -304,7 +421,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   function keyup(e) { keys.delete(e.key.toLowerCase()); }
   function blur() { keys.clear(); held.clear(); last = 0; accumulator = 0;if(document.hidden&&speechOwned){window.speechSynthesis?.cancel();speechOwned=false;speechLine=null;} }
   document.addEventListener('keydown', keydown); document.addEventListener('keyup', keyup); window.addEventListener('blur', blur); document.addEventListener('visibilitychange', blur);
-  canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); held.add('attack'); canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); if(blockingDialogue){advanceDialogue();return;} held.add('attack'); canvas.setPointerCapture(e.pointerId); });
   for (const type of ['pointerup','pointercancel','lostpointercapture']) canvas.addEventListener(type, () => held.delete('attack'));
   function showPanel(title, description, actions) {
     panel.replaceChildren(node('h2', '', title), node('p', '', description));
@@ -325,7 +442,16 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
         if (!result?.ok) { showPanel('Unable to start', 'Your fight could not start. If the Vinson escape service is still updating, try again shortly.', [['Retry', startFight]]); return; }
         nonce = result.nonce;
       }
-      battle.step(0, { advance: true }); panel.hidden = true; mode = 'fight'; tone('fire');say(names[heroArt(battle.state.stage)].toUpperCase(),battle.state.stage?'Patel, this fight is for you.':"I'll avenge my fallen Israelis once and for all.");
+      panel.hidden=true;mode='conversation';tone('fire');
+      const lines=battle.state.stage?[
+        {actor:'captain',speaker:'CAPTAIN ISRAEL',text:'Patel, this fight is for you.'},
+        {actor:'phonk',speaker:'PHONK MODE VINSON',text:"I'll teach you the ways of mango."}
+      ]:[
+        {actor:'patel',speaker:'ISRAELI FOREVER PATEL',text:"I'll avenge my fallen Israelis once and for all."},
+        {actor:'world',speaker:'WORLD-RULER VINSON',text:"That's too humble. I'm going to assign pain."},
+        {actor:'patel',speaker:'ISRAELI FOREVER PATEL',text:'Then face me. Your reign ends here.'}
+      ];
+      showDialogue(lines,()=>{battle.step(0,{advance:true});mode='fight';held.clear();keys.clear();});
     } catch { showPanel('Connection interrupted', 'Try again when your connection returns.', [['Retry', startFight]]); }
     finally { victoryBusy = false; }
   }
@@ -359,11 +485,21 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     finally { victoryBusy = false; }
   }
   function animate(dt) {
-    clock += dt; trauma = Math.max(0, trauma - dt * 1.8);
+    // A defeated arena is a held result frame. Do not advance animation clocks,
+    // hazards or particles underneath the Suppressed decision panel.
+    if(mode==='defeat')return;
+    clock += dt;updateDialogue(); trauma = Math.max(0, trauma - dt * 1.8);
     particles = particles.filter(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 150 * dt; return p.life > 0; });
+    if(blockingDialogue)return;
     if (cinematicKind) {
       cinematicTime += dt;
       const shot = sampleVinsonCinematic(cinematicKind, cinematicTime, { reducedMotion });
+      const id=shot.text?`${cinematicKind}:${shot.dialogueId||shot.text}`:null;
+      if(id && mode!=='result' && !acknowledgedDialogue.has(id) && shot.black<.8 && shot.white<.8){
+        acknowledgedDialogue.add(id);
+        const actor=shot.speaker==='CAPTAIN ISRAEL'?'captain':shot.speaker?.includes('PATEL')?'patel':shot.villain;
+        showDialogue([{actor,speaker:shot.speaker||'',text:shot.text}]);return;
+      }
       if (shot.done && cinematicKind === 'transition') { battle.next(); cinematicKind = ''; mode = ''; viewHero = { ...battle.state.hero }; }
       else if (shot.done && mode !== 'result') { mode = 'result'; subtitle.replaceChildren(); void confirmVictory(); }
       return;
@@ -375,18 +511,33 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     for (const evt of s.events) {
       if (evt.type === 'hit') { trauma = Math.min(1, trauma + (evt.target === 'hero' ? .7 : .32)); const who = evt.target === 'hero' ? s.hero : s.boss; burst(who.x, who.y - 65, evt.target === 'hero' ? '#f67460' : '#a4d9ff'); tone('hit'); if(evt.weapon==='explosive')particles.push({kind:'blast',x:who.x,y:who.y-100,vx:0,vy:0,life:.6,maxLife:.6,size:0,color:'#ffbc70'}); }
       if (evt.type === 'fire') { burst(evt.x, evt.y - 20, '#70bfff', 4); tone('fire'); }
-      if(evt.type==='telegraph' && clock-lastDialogue>4) {
-        const lines={laserline:s.stage?'You cannot outrun my eyes.':'Look at me. This ends now.',bombcircle:'Stay humble. Here comes the bomb.',painring:"That's too humble. I'm going to assign pain."};
-        say(names[bossArt(s.stage)].toUpperCase(),lines[evt.attack]||'You were warned.');
+      if(evt.type==='telegraph' && clock-lastDialogue>2.5) {
+        const lines={
+          laserline:s.stage?['You cannot outrun my eyes.','Face the light that ends you.']:['Look at me. This ends now.','My eyes have already found you.'],
+          bombcircle:['Stay humble. Here comes the bomb.','The humble bomb leaves nowhere to hide.'],
+          painring:["That's too humble. I'm going to assign pain.",'Pain has your name now.'],
+          handslam:['Kneel. The weight of my world is coming down.','One hand is enough to end this.'],
+          handcatch:['Run wherever you like. My hands will find you.','You are already in my grasp.']
+        };
+        const pool=lines[evt.attack]||['You were warned.'],count=barkCount.get(evt.attack)||0;
+        barkCount.set(evt.attack,count+1);say(names[bossArt(s.stage)].toUpperCase(),pool[count%pool.length],evt.attack);
       }
       if (evt.type === 'dodge') burst(evt.x, evt.y - 40, '#d3ebff', 18);
     }
     if (s.phase === 'transition' || s.phase === 'clash') {
-      cinematicKind = s.phase === 'transition' ? 'transition' : 'finale'; cinematicTime = 0; panel.hidden = true; mode = cinematicKind; held.clear(); keys.clear(); tone('hit');
+      cinematicKind = s.phase === 'transition' ? 'transition' : 'finale'; cinematicTime = 0;dialogue=null;acknowledgedDialogue.clear(); panel.hidden = true; mode = cinematicKind; held.clear(); keys.clear(); tone('hit');
     } else if (s.phase !== mode) {
       mode = s.phase;
-      if (mode === 'intro') showPanel(s.stage ? 'Captain Israel' : 'Fight Suppression', s.stage ? 'Vinson has returned in Phonk Mode. Dodge her attacks and fight back.' : "Israeli Patel: I'll avenge my fallen Israelis once and for all. Vinson: That's too humble. I'm going to assign pain.", [['Begin fight', startFight]]);
-      else if (mode === 'defeat') showPanel('Suppressed', 'Retry this stage. Your curse remains until you win and the victory is confirmed.', [['Retry stage', () => { nonce = null; battle.retry(); viewHero = { ...battle.state.hero }; mode = ''; }], ['Return to Pitchside', close]]);
+      if (mode === 'intro') showPanel(s.stage ? 'Captain Israel' : 'Fight Suppression', s.stage ? 'Captain Israel faces Phonk Mode Vinson.' : 'World-Ruler Vinson awaits. Face her and fight for your freedom.', [['Begin fight', startFight]]);
+      else if (mode === 'defeat') {
+        held.clear(); keys.clear(); particles.length=0; trauma=0; dialogue=null; subtitle.replaceChildren();
+        if(speechOwned)window.speechSynthesis?.cancel();speechOwned=false;speechLine=null;
+        controls.classList.add('vb-controls-paused');stage.classList.add('vb-stage-frozen');
+        showPanel('Suppressed', 'Retry this stage. Your curse remains until you win and the victory is confirmed.', [['Retry stage', () => {
+          nonce = null; battle.retry(); viewHero = { ...battle.state.hero }; mode = '';
+          controls.classList.remove('vb-controls-paused');stage.classList.remove('vb-stage-frozen');panel.hidden=true;
+        }], ['Return to Pitchside', close]]);
+      }
     }
   }
   function frame(now) {
@@ -394,12 +545,23 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if (document.hidden) { last = 0; raf = requestAnimationFrame(frame); return; }
     const delta = last ? Math.min(.1, (now - last) / 1000) : 0; last = now; accumulator += delta;
     for (let i = 0; i < 6 && accumulator >= 1 / 60; i++) { animate(1 / 60); accumulator -= 1 / 60; }
-    const shot = cinematicKind ? sampleVinsonCinematic(cinematicKind, cinematicTime, { reducedMotion }) : null;
-    drawVinsonBattle(ctx, battle.state, images, clock, { shot, particles, trauma, reducedMotion, visualHero: viewHero });
+    let shot = cinematicKind ? sampleVinsonCinematic(cinematicKind, cinematicTime, { reducedMotion }) : null;
+    if(blockingDialogue){
+      const boss=['world','phonk'].includes(blockingDialogue.actor);
+      const noActors=shot&&shot.heroAlpha===0&&shot.villainAlpha===0;
+      const target=noActors?{zoom:1,x:640,y:435}:{zoom:reducedMotion?1:1.65,x:boss?895:365,y:340};
+      const k=1-Math.exp(-3.8*delta);camera.zoom+=(target.zoom-camera.zoom)*k;camera.x+=(target.x-camera.x)*k;camera.y+=(target.y-camera.y)*k;
+      shot={...(shot||{}),time:cinematicTime,hero:heroArt(battle.state.stage),villain:bossArt(battle.state.stage),heroAlpha:1,villainAlpha:1,beams:shot?.beams||0,zoom:camera.zoom,focusX:camera.x,focusY:camera.y,black:0,white:0};
+      // Preserve the visible characters of the exact story beat during its dialogue hold.
+      if(cinematicKind){const source=sampleVinsonCinematic(cinematicKind,cinematicTime,{reducedMotion});shot.hero=source.hero;shot.villain=source.villain;shot.heroAlpha=source.heroAlpha;shot.villainAlpha=source.villainAlpha;}
+    }else{
+      const target={zoom:shot?.zoom||1,x:shot?.focusX||640,y:shot?.focusY||360},k=1-Math.exp(-4.5*delta);
+      camera.zoom+=(target.zoom-camera.zoom)*k;camera.x+=(target.x-camera.x)*k;camera.y+=(target.y-camera.y)*k;
+    }
+    drawVinsonBattle(ctx, battle.state, images, clock, { shot, particles, trauma, reducedMotion, visualHero: viewHero, camera });
     const activeDialogue=dialogue&&clock<dialogue.until&&mode==='fight'?dialogue:null;
-    const text = shot?.black > .8 || shot?.white > .8 || mode === 'result' ? '' : shot?.text || activeDialogue?.text || '';
-    if(shot?.text && shot.text!==spokenText){spokenText=shot.text;speak(shot.text);}
-    if (subtitle.dataset.text !== text) { subtitle.dataset.text = text; subtitle.replaceChildren(); if (text) subtitle.append(node('strong', '', shot?.speaker||activeDialogue?.speaker||''), node('p', '', text)); }
+    const text = blockingDialogue || shot || mode==='result' ? '' : activeDialogue?.text || '';
+    if (subtitle.dataset.text !== text) { subtitle.dataset.text = text; subtitle.replaceChildren(); if (text) subtitle.append(node('strong', '', activeDialogue?.speaker||''), node('p', '', text)); }
     raf = requestAnimationFrame(frame);
   }
   function close() {
