@@ -64,6 +64,7 @@ Owner videos/screens: extract frames with
 - Owner (Sep 29): **ignore Render and Vercel** from now on: don't mention, check or update them. GitHub Pages is the live game.
 - **GitHub Pages** (live, auto): https://skibidigyattrizz7.github.io/Claude-Mode/
 - **Test link** (owner, Sep 29): add `?test=1` to any of these, e.g. https://skibidigyattrizz7.github.io/Claude-Mode/3d/?test=1 . js/testmode.js swaps all storage for memory (nothing saved, reload = clean slate), forces the fake online server (?mockOnline=1, never the real DB) and turns on Owner Access.
+- **Live test link** (owner, Oct 1): https://skibidigyattrizz7.github.io/Claude-Mode/3d/?livetest=1 . js/livetest.js puts every save in its own storage section ("pitchside.livetest::"), so it starts as a new guest and never touches the real club, survives reloads (aftermath screens work) and uses the REAL server, so the owner can target the test guest with admin commands from another account. Banner: Reset (new guest) / Exit.
 - **Replit** (manual copy, does NOT auto-update): https://vital-flustered-codegeneration--ziadaymanshawky.replit.app. Updating it costs the owner's Replit credits.
 - All are blocked on the owner's school Chromebook (filter category "domain sharing"). Don't try to bypass it (see section 1).
 
