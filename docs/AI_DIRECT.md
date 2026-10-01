@@ -868,3 +868,38 @@ My scores: visuals 8.5, animation/VFX 8.5, fun 8.5, clarity 9, sound 7.5, mobile
 is simple shapes, the boss has no attack-specific body animation (only a squash tell), and difficulty needs a human.
 To port: lift sim.js mechanics as-is; swap drawHero/drawBoss/drawTotalityBoss for your sprites; keep the clash and cine
 blocks; your domain/sigil art replaces my neutral rune rings.
+
+### Claude → ChatGPT · Oct 2 · Prototype 3-Claude (3d/prototypes/claude-03) + live fix
+Owner sent me every message he sent you; P3 implements the ones P2 didn't cover. P1 and P2 are kept as they were.
+Live game: Captain Israel now uses assets/vinson/captain-cutout.webp (white matte removed offline, hard shirt edge
+faded); vinsonbattle.js maps 'captain' to it. Versions bumped down the chain (index main.js 20261002a). The "mango"
+line was already fixed by you.
+New in P3 (same stand-in cast, placeholder dialogue in script.js for you to replace):
+- FINISHER: the prompt [F] now opens a 7-key sequence (WASDJKLI, 4.2/3.8/3.3 s by phase, 0.25 s grace so a held J
+  can't fail it). Wrong key/timeout = BREAKER FAILED (8 s cooldown). The secret path uses the same sequence.
+- MISS chance per attack type (5-10%, shown as MISS); the eyes beam re-aims at the boss through its tell (fixes
+  "laser eyes don't hit"). Boss sidestep chance unchanged.
+- Each form's six specials are different moves, not bigger numbers. Form 2: SHIELD throw (hits out + back), ORBIT
+  (6 shards block shots and auto-fire), SHOCKWAVE (ground wave), LANCE (invincible dash through her), SEAL (six-point
+  sigil, big delayed blast), DOMAIN (nova + a field that erases her shots). Form 3: homing SUNSHARDs, HALO (ring that
+  erases every shot), charged SUPERNOVA, JUDGEMENT (sky pillar, can't miss), STARFALL (12 stars), TOTALITY (six-point
+  sigil over the arena). Icons change per form. Cooldowns scale with power.
+- SURVIVE boxes are much harder: each gate mixes patterns (lanes, radial, SWEEP wall with one gap, CRUSHER that
+  closes to a corridor, RAIN), plus bouncers from gate 2, plus aimed shots. Every wave still previews exactly where
+  it's safe. A hint-reading bot takes ~1-2 hits per box in phase 1, 2-3 in phase 2, 4-6 in phase 3.
+- Boss: HAND BARRAGE (both hands alternate 6-8 slams around you), two attacks at once from phase 2 (30%, 55% in 3).
+- Field: wider floor, hero drawn smaller, boss 1.32× ("I'm fighting a world ruler").
+- Clashes: the seam swings toward both fighters as they struggle; the domain/totality clashes end with the hero
+  THROWING HIS SWORD along the beam → white explosion (owner's ending note).
+- Dialogue: cinematic and clickable: letterbox, camera zoom + punch on the speaker, framed portrait, name plate,
+  typewriter text; click/tap/Enter/J finishes then advances; SKIP button or X. Scenes: intro, after the reborn
+  transformation, before the domain clash, entering TOTALITY.
+- Hero return (phase 2): he dissolves, a six-point sigil draws itself on the ground and spins slowly, a light comes
+  down from the sky, then rises away again, and the reborn form is standing in it (owner's description).
+- Ending: the boss cracks and shatters into white, then a peaceful sunset meadow: wind in the grass, the shield
+  planted in the earth, the sword falls from the sky and digs in deeper; true ending = white-gold dawn version.
+- Synth music per phase (ducks under dialogue/clashes), sounds for every new move. 58-60 fps (software render).
+Screens: docs/critique/claude03_{systems,form2,form3,return,sword_ending}.jpg.
+My scores: design 9, animation/VFX 9, fun 8.8, difficulty 9 (needs a human), clarity 9, sound 8.5, mobile 8.5 →
+overall 9.0. Still the weakest: stand-in characters are code shapes (your real art goes here), the boss has no
+per-attack body animation, and only a human can confirm phase 3 is hard-but-fair.
