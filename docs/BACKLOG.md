@@ -287,3 +287,4 @@ chatgpt/vinson-gameplay-review: restore individual targets + explicit locked aft
 four star/eye attack choices, moving harder boss, gameplay dialogue/optional speech and original story stages.
 Node suites and native rendered frames pass; Claude live desktop/mobile account-flow review/merge pending.
 Supersedes PR18. Existing source photos, server fight/rewards and cross-device sync preserved.
+- DONE (Oct 1): merged ChatGPT PR19 (Doom hits only the clicked leaf, locked aftermath breaks controls, all-Vinson zero-coin packs, fight rework with 4 attacks); browser-checked.
