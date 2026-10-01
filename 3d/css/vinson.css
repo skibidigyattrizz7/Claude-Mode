@@ -349,3 +349,7 @@ body.vinson-critical .pm-root.vinson-ui-falling { animation: vinson-ui-collapse 
   .vinson-match-blood::after {animation:none;transform:none;}
   .vinson-match-message {animation:none;opacity:1;}
 }
+
+.vinson-fight-link { min-height:44px; flex:0 0 auto; touch-action:manipulation; }
+.vinson-fight-floating { position:absolute; bottom:max(18px,env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); margin:0; background:#170605; white-space:nowrap; }
+.vinson-final { overflow-y:auto; }

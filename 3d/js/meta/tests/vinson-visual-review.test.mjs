@@ -123,9 +123,9 @@ withBrowser(true, ({ body, clock, Observer }) => {
 
 for (const [key, sourceWidth, sourceHeight, expected] of [
   ['world', 1200, 800, [276, 0, 600, 784, 292, 240]],
-  ['patel', 1000, 1000, [0, 230, 1000, 770, 148, 196]],
+  ['patel', 1000, 1000, [0, 230, 1000, 770, 260, 250]],
   ['phonk', 800, 1200, [0, 0, 800, 1200, 230, 240]],
-  ['captain', 640, 640, [0, 0, 640, 640, 182, 145]],
+  ['captain', 640, 640, [0, 0, 640, 640, 260, 190]],
 ]) {
   const frame = vinsonSpriteFrame(key, sourceWidth, sourceHeight);
   assert.deepEqual([frame.sx, frame.sy, frame.sw, frame.sh, frame.width, frame.height], expected, `${key} crop uses expected source bounds and destination frame`);

@@ -101,6 +101,23 @@ assert.equal(packEvent.prevented, false, 'initial doom allows pack assignment an
 assert.equal(packClose.classList.contains('vinson-control-broken'), false);
 packGrid.remove();
 
+// Clicked price, artwork and coin surfaces fracture separately instead of taking their pack container with them.
+for (const [tag, className, label] of [
+  ['div', 'pm-price', 'price'], ['div', 'pm-pack', 'art'], ['i', 'pm-coin', 'coin'], ['small', '', 'detail'],
+]) {
+  const item = new Element('div'), target = new Element(tag), sibling = new Element('span');
+  item.className = 'pm-storeitem'; target.className = className; target.textContent = label; sibling.textContent = `other ${label}`;
+  item.append(target, sibling); root.append(item);
+  listeners.get('click')({target,preventDefault(){},stopImmediatePropagation(){}});
+  assert.equal(target.classList.contains('vinson-control-broken'), true, `${className || tag} breaks individually during Doom`);
+  assert.equal(item.classList.contains('vinson-control-broken'), false, `${className || tag} does not break its store item parent`);
+  assert.equal(sibling.classList.contains('vinson-control-broken'), false, `${className || tag} leaves its sibling intact`);
+}
+const blankItem = new Element('div'); blankItem.className = 'pm-packitem';
+const blankArt = new Element('div'); blankArt.className = 'pm-pack'; blankItem.append(blankArt); root.append(blankItem);
+listeners.get('click')({target:blankItem,preventDefault(){},stopImmediatePropagation(){}});
+assert.equal(blankItem.classList.contains('vinson-control-broken'), false, 'clicking a populated pack container does not fracture its contents as one group');
+
 const click = () => {
   const event = { target: button, clientX: 10, clientY: 10, prevented: false, stopped: false,
     preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
@@ -158,6 +175,21 @@ assert.equal(button.classList.contains('vinson-tab-falling'), false, 'release re
 assert.equal(button.inert, false, 'release restores ordinary control interaction');
 assert.equal(root.classList.contains('vinson-ui-falling'), false);
 assert.equal(body.classList.contains('vinson-infected'), false, 'freed UI is no longer marked infected');
+const host = body.children.find(el=>el.id==='vinson-experience');
+const fightLink = host?.querySelector('.vinson-fight-link');
+assert.ok(fightLink, 'Fight Suppression is visible after unban');
+let fightButtonCalls = 0;
+controller.openBattle = async () => { fightButtonCalls++; return true; };
+await fightLink.onclick();
+assert.equal(fightButtonCalls, 1, 'the post-unban fight button invokes the battle controller');
+assert.equal(fightLink.textContent, 'Fight Suppression', 'fight link resets after a successful open');
+const pressFight = async (phase) => {
+  const fight = host?.querySelector('.vinson-fight-link');
+  assert.ok(fight, `Fight Suppression remains available in ${phase}`);
+  await fight.onclick();
+  assert.equal(fightButtonCalls, phase === 'warn' ? 2 : phase === 'consequence' ? 3 : 4, `fight button opens from ${phase}`);
+  assert.equal(fight.textContent, 'Fight Suppression');
+};
 let ordinaryClick = click();
 assert.equal(ordinaryClick.prevented, false, 'freed state permits ordinary button actions');
 assert.equal(button.classList.contains('vinson-control-broken'), false);
@@ -173,6 +205,7 @@ state.squad.slots[9] = HELL_CARD_ID;
 controller.onSquadChange();
 assert.equal(state.vinson.phase, 'warn', 'a freed but still cursed squad starts its warning');
 assert.match(document.querySelectorAll('.vinson-timer')[0]?.textContent || '', /05 seconds/);
+await pressFight('warn');
 ordinaryClick = click();
 assert.equal(ordinaryClick.prevented, false, 'warning permits ordinary button actions');
 assert.equal(button.classList.contains('vinson-control-broken'), false);
@@ -180,6 +213,7 @@ assert.equal(button.classList.contains('vinson-control-broken'), false);
 state.vinson.phaseUntil = Date.now() - 1;
 controller.tick();
 assert.equal(state.vinson.phase, 'consequence');
+await pressFight('consequence');
 ordinaryClick = click();
 assert.equal(ordinaryClick.prevented, false, 'consequence permits ordinary button actions');
 
@@ -187,9 +221,34 @@ state.vinson.phaseUntil = Date.now() - 1;
 controller.tick();
 assert.equal(state.vinson.phase, 'locked');
 assert.equal(cursedPack(state), true, 'the locked squad still carries its cursed-pack state');
+await pressFight('locked');
 ordinaryClick = click();
-assert.equal(ordinaryClick.prevented, false, 'locked permits ordinary button actions');
-assert.equal(button.classList.contains('vinson-control-broken'), false);
+assert.equal(ordinaryClick.prevented, true, 'locked state breaks and blocks ordinary controls after the warnings');
+assert.equal(button.classList.contains('vinson-control-broken'), true, 'locked control shatters on first click');
+const lockedRoutes = [['pm-uttab', 'Store'], ['pm-hx', 'Store hub']];
+for (const [className, label] of lockedRoutes) {
+  const target = new Element('button'); target.className = className; target.textContent = label; root.append(target);
+  let prevented = false;
+  listeners.get('click')({target,preventDefault(){prevented=true;},stopImmediatePropagation(){}});
+  assert.equal(prevented, false, `${className} route remains available while the locked store is cursed`);
+  assert.equal(target.classList.contains('vinson-control-broken'), true, `${className} itself breaks after the route click`);
+}
+for (const [containerClass, label] of [['pm-packitem', 'Open'], ['pm-storeitem', 'Buy & Open']]) {
+  const container = new Element('div'), action = new Element('button');
+  container.className = containerClass; action.textContent = label; container.append(action); root.append(container);
+  let prevented = false, ownerHandlerCalls = 0;
+  listeners.get('click')({target:action,preventDefault(){prevented=true;},stopImmediatePropagation(){}});
+  if (!prevented) ownerHandlerCalls++;
+  assert.equal(prevented, false, `${label} is delegated to its pack flow handler`);
+  assert.equal(ownerHandlerCalls, 1, `${label} handler receives its click`);
+  assert.equal(action.classList.contains('vinson-control-broken'), true, `${label} action fractures after the click`);
+}
+const packModal = new Element('section'); packModal.className='pm-modal'; packModal.setAttribute('aria-label','Pack manager');
+const cancel = new Element('button'); cancel.className='pm-x'; cancel.textContent='Cancel'; packModal.append(cancel); root.append(packModal);
+let cancelPrevented=false;
+listeners.get('click')({target:cancel,preventDefault(){cancelPrevented=true;},stopImmediatePropagation(){}});
+assert.equal(cancelPrevented,false,'pack manager Cancel remains usable during locked aftermath');
+assert.equal(cancel.classList.contains('vinson-control-broken'),false,'pack manager Cancel stays intact');
 
 remotePhase = 'lifted';
 remoteTimer();
@@ -241,16 +300,19 @@ assert.equal(await closingOpen,false,'destroy during module loading cannot spawn
 // Exercise the real tab handler without the document capture listener.
 globalThis.Node = Element;
 document.getElementById = () => null;
-const {utTabs} = await import('../ui/utview.js');
+const {utTabs, guardVinsonDoomAction} = await import('../ui/utview.js');
 let navigated = 0, shattered = 0;
 const tabState = createUTState(); tabState.vinson = {phase:'doom'};
 const tabApp = {ut:tabState,root,online,vinson:{breakDoomControl(){shattered++;}},popTo(){navigated++;},push(){navigated++;},toast(){}};
+let directPrevented=false, directStopped=false;
+assert.equal(guardVinsonDoomAction(tabApp,{currentTarget:new Element('button'),preventDefault(){directPrevented=true;},stopImmediatePropagation(){directStopped=true;}}),true,'direct helper blocks a Squad route');
+assert.equal(directPrevented,true); assert.equal(directStopped,true); assert.equal(shattered,1);
 const nav = utTabs(tabApp,'home');
 const realSquad = nav.children.find(el=>el.dataset.uttab==='squad');
 realSquad.events.get('click')({currentTarget:realSquad});
 assert.equal(navigated,0,'Squad handler cannot bypass Doom when capture is absent');
-assert.equal(shattered,1,'blocked Squad still requests the fracture animation');
+assert.equal(shattered,2,'blocked Squad still requests the fracture animation');
 const realHome = nav.children.find(el=>el.dataset.uttab==='home');
 realHome.events.get('click')({currentTarget:realHome});
-assert.equal(shattered,1,'Home stays exempt');
+assert.equal(shattered,2,'Home stays exempt');
 console.log('Vinson UI release recovery regression passed');

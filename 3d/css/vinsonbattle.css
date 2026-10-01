@@ -25,3 +25,11 @@
 .vb-reward img { width:100%; height:155px; object-fit:contain; background:#14181b; }
 .vb-fight-button { pointer-events:auto; position:absolute; left:50%; bottom:max(26px,env(safe-area-inset-bottom)); transform:translateX(-50%); cursor:pointer; border:0; padding:16px 26px; color:#ffe9df; background:#581512; font:900 24px 'Barlow Condensed',Impact,sans-serif; letter-spacing:.06em; box-shadow:0 5px 0 #240605; }
 @media(max-width:600px) { .vb-top { left:12px; right:12px; }.vb-hint { display:none; }.vb-panel { bottom:5%; }.vb-panel p { font-size:14px; }.vb-controls { padding:6px; }.vb-touch { gap:3px; }.vb-touch button { width:35px; }.vb-touch button[data-action="attack"] { width:64px; }.vb-touch button[data-action="dodge"] { width:60px; }.vb-rewards { gap:8px; }.vb-reward { width:90px; }.vb-reward img { height:105px; } }
+.vb-weapons { display:flex; gap:5px; flex-wrap:wrap; }
+.vb-weapons button { border:1px solid #4f4845; color:#d9d2c7; background:#171619; padding:8px 10px; min-height:40px; font:700 12px system-ui; cursor:pointer; }
+.vb-weapons button.on { background:#ddd4bc; color:#15120f; border-color:#ddd4bc; }
+.vb-weapons button:focus-visible {outline:2px solid #fff;outline-offset:2px;}
+.vb-controls { flex-wrap:wrap; }
+.vb-subtitle { bottom:5%; background:#080507bb; padding:10px; box-sizing:border-box; }
+.vb-subtitle:empty { background:none; }
+@media(max-width:600px) { .vb-weapons { width:100%; justify-content:center; } .vb-weapons button { padding:7px 8px; min-height:35px; } .vb-touch {width:100%;justify-content:center;} }

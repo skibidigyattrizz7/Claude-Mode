@@ -1401,7 +1401,7 @@ function startOnlineServices() {
       setTimeout(() => { try { maybeShowAccountGate(online, { toast }); } catch { /* ignore */ } }, 300);
     });
     // The VINSON deadline and ban screen continue across menus and page reloads.
-    import('./meta/ui/vinson.js?v=vinson12').then(({ startVinsonExperience }) => startVinsonExperience(online))
+    import('./meta/ui/vinson.js?v=vinson14').then(({ startVinsonExperience }) => startVinsonExperience(online))
       .catch((e) => console.warn('[vinson] event UI unavailable', e));
     // Accounts are optional but prominent: first visit shows Create account / Log in / Continue as guest.
     const webdriver = typeof navigator !== 'undefined' && navigator.webdriver;
