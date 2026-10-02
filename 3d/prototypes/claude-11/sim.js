@@ -67,7 +67,7 @@ export const REWARDS = {
   secret: ['TOTALITY CARD · SECRET', 'ASCENDED WARDEN CARD', 'TITLE: ECLIPSE BREAKER', '5,000 COINS'],
 };
 
-export function createFight({ seed = 7, force = null, mode = 'normal' } = {}) {
+export function createFight({ seed = 7, force = null, mode = 'normal', start = 1 } = {}) {
   const s = {
     M: MODES[mode] || MODES.normal,
     t: 0, phase: 'intro', phaseT: 0, stage: 1, R: rng(seed), events: [], force, forceUsed: false,
@@ -77,6 +77,10 @@ export function createFight({ seed = 7, force = null, mode = 'normal' } = {}) {
     finisher: { prompt: 0, cd: 6, cine: null }, finName: SCRIPT.finisherName || 'STAR OF DAVID STRIKE', fq: null, talk: null, noTalk: !!force, banner: null, hitstop: 0, slowmo: 0, secret: false, result: null, stats: { perfects: 0, finishers: 0, heals: 0 },
   };
   setupStage(s, 1, true);
+  if (start >= 2 && !force) { // P11 owner: "make it save phases": begin at a saved phase checkpoint
+    setupStage(s, start, true); s.hero.heals = 2; s.checkpoint = start; if (start === 3) s.secret = true;
+    s.phase = 'fight'; banner(s, start === 3 ? 'TOTALITY' : 'PHASE 2', 'CHECKPOINT', start === 3 ? '#ffffff' : '#ff8a6b'); s.boss.attackCd = 2.5;
+  }
   if (force === 'stage2') { setupStage(s, 2, true); }
   if (force === 'stage3') { setupStage(s, 3, true); }
   if (force === 'clash1' || force === 'clash2' || force === 'clash3') { const k = Number(force.slice(-1)); if (k > 1) setupStage(s, k, true); s.boss.hp = 0; s.pendingClash = k; s.secret = k === 2 && false; }

@@ -106,6 +106,7 @@
   </div>
   <div class="touchkeys">Left stick moves. ATTACK slashes, CAST fires the selected special, tap a special to pick it. DODGE just before a hit for a PERFECT. In a clash tap PUSH fast, then tap the keys shown.</div>
   <div class="row modes"><button class="big" id="start" type="button" data-mode="normal">FIGHT · NORMAL</button><button class="big hard" id="startHard" type="button" data-mode="hard">FIGHT · HARD</button></div>
+  <div class="row cont" id="contRow" hidden><button class="ghost" id="cont" type="button">CONTINUE</button></div>
   <div class="modeinfo"><b>NORMAL</b> the full fight, fair and readable. <b class="hardtxt">HARD</b> faster, hits harder, more boxes, 5-key clash moments and she pushes far harder.</div>
 </div>
 <div class="screen" id="paused" hidden><h1>PAUSED</h1><div class="sub">P / ESC TO RESUME</div><div class="row"><button class="big" id="resume" type="button">RESUME</button><button class="ghost" id="restart1" type="button">RESTART</button><button class="ghost" id="muteBtn2" type="button">SOUND ON</button></div></div>
@@ -114,7 +115,7 @@
   <ul class="rewards" id="rewards"></ul>
   <div class="stats" id="stats"></div>
   <div class="hint" id="secretHint" hidden></div>
-  <div class="row"><button class="big" id="again" type="button">FIGHT AGAIN</button><button class="ghost" id="swapMode" type="button">TRY HARD</button></div>
+  <div class="row"><button class="big" id="retry" type="button" hidden>RETRY PHASE 2</button><button class="big" id="again" type="button">FIGHT AGAIN</button><button class="ghost" id="swapMode" type="button">TRY HARD</button></div>
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
@@ -199,10 +200,20 @@ function input() {
 const empty = { skip: false, mx: 0, my: 0, attack: false, attack0: false, cast: false, next: false, prev: false, dodge: false, heal: false, finisher: false, confirm: false, taps: 0, keysPressed: [] };
 let mode = q.get('mode') === 'hard' ? 'hard' : 'normal';
 try { if (!q.get('mode') && localStorage.getItem('p11mode') === 'hard') mode = 'hard'; } catch {}
-function start() {
+// phase checkpoints (owner: "make it save phases"): the furthest phase reached is saved per mode; a loss can retry
+// from it and the title offers CONTINUE. Clearing the fight clears the save.
+const CK = 'p11checkpoint';
+const ckLoad = () => { try { return JSON.parse(localStorage.getItem(CK) || '{}'); } catch { return {}; } };
+const ckSave = (m, st) => { try { const c = ckLoad(); if (st > 1) c[m] = Math.max(c[m] || 1, st); else delete c[m]; localStorage.setItem(CK, JSON.stringify(c)); } catch {} };
+const phaseName = (st) => st === 3 ? 'TOTALITY' : 'PHASE ' + st;
+function refreshContinue() {
+  const c = ckLoad(), m = c.hard ? 'hard' : c.normal ? 'normal' : null;
+  $('contRow').hidden = !m; if (m) { $('cont').textContent = `CONTINUE · ${phaseName(c[m])} · ${m.toUpperCase()}`; $('cont').onclick = () => { mode = m; start(c[m]); }; }
+}
+function start(from = 1) {
   document.body.classList.add('playing');
   try { localStorage.setItem('p11mode', mode); } catch {}
-  fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode });
+  fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1 });
   if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   if (q.get('act')) fight.forceAct = q.get('act');
   window.__fight = fight; ended = false; running = true; paused = false;
@@ -212,7 +223,7 @@ function start() {
 function togglePause() { if (!running || ended) return; paused = !paused; $('paused').hidden = !paused; last = performance.now(); }
 function toggleMute() { const m = sfx.toggle(); $('muteBtn').textContent = $('muteBtn2').textContent = m ? 'SOUND OFF' : 'SOUND ON'; }
 $('muteBtn').onclick = toggleMute; $('skipBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); edges.add('Skip'); }); $('muteBtn2').onclick = toggleMute;
-$('start').onclick = () => { mode = 'normal'; start(); }; $('startHard').onclick = () => { mode = 'hard'; start(); }; $('again').onclick = start;
+$('start').onclick = () => { mode = 'normal'; start(); }; $('retry').onclick = () => start(fight.retryFrom || 1); refreshContinue(); $('startHard').onclick = () => { mode = 'hard'; start(); }; $('again').onclick = start;
 $('swapMode').onclick = () => { mode = mode === 'hard' ? 'normal' : 'hard'; start(); }; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
 function showEnd() {
   ended = true;
@@ -225,6 +236,10 @@ function showEnd() {
   const secs = Math.round(fight.t), clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
   $('stats').textContent = `${fight.M.name}  ·  TIME ${clock}  ·  PERFECT DODGES ${st.perfects}  ·  FINISHERS ${st.finishers}  ·  HEALS USED ${st.heals}`;
   $('swapMode').textContent = mode === 'hard' ? 'PLAY NORMAL' : 'TRY HARD';
+  if (win) ckSave(mode, 1); // cleared: the save is done with
+  fight.retryFrom = !win && fight.stage > 1 ? fight.stage : 1;
+  $('retry').hidden = fight.retryFrom < 2; $('retry').textContent = `RETRY ${phaseName(fight.retryFrom)}`; $('again').textContent = fight.retryFrom > 1 ? 'START OVER' : 'FIGHT AGAIN';
+  refreshContinue();
   // the secret phase is hinted only after a normal clear
   $('secretHint').hidden = !(win && !secret);
   $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, LAND A PERFECT DODGE, THEN LAND THE FINISHER.';
@@ -239,6 +254,7 @@ function frame(now) {
     let inp = acc >= 1 / 120 ? input() : null; // no step this frame (high refresh): keep the presses for the next one
     while (acc >= 1 / 120) { step(fight, 1 / 120, inp); acc -= 1 / 120; inp = { ...empty, mx: inp.mx, my: inp.my, attack: inp.attack, jump: inp.jump }; }
     syncTouchUi(); sfx.update(fight); $('skipBtn').hidden = fight.phase !== 'talk';
+    if (!fight.force && fight.stage > (fight.savedStage || 1)) { fight.savedStage = fight.stage; ckSave(mode, fight.stage); } // a new phase reached: save it
     if ((fight.phase === 'victory' && fight.phaseT > 1.6) || (fight.phase === 'defeat' && fight.phaseT > 1.4)) showEnd();
   } else if (fight && (paused || rotating)) input();
   if (fight) renderer.render(fight, (paused || rotating) ? 0 : dt, view);

@@ -1244,3 +1244,6 @@ spears). Hits taken inside the box no longer tint the whole screen red. Screens:
 5. Hard mode outside the box "isn't chaotic enough, she doesn't start spamming". P11 Hard: about 2x the attacks per
    minute (66-74 vs 33-40), two-attack combos most of the time, three at once sometimes, and a constant aimed spray
    from her hands on top.
+Also (owner: "make it save phases"): P11 now saves the furthest phase reached per mode in localStorage. After a loss
+the end screen offers RETRY PHASE 2 / RETRY TOTALITY, the title offers CONTINUE, and clearing the fight wipes the
+save. The live game should get the same.
