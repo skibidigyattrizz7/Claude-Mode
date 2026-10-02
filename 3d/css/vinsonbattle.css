@@ -127,3 +127,8 @@
 @media(hover:hover) and (pointer:fine){.vb-touch{display:none!important}}
 @media(hover:none),(pointer:coarse){.vb-hint{display:none}}
 @media(max-height:450px){.vb-weapons button{min-height:36px;font-size:14px}.vb-top button{min-height:36px;padding:7px 12px}}
+
+.vb-difficulty{display:flex;justify-content:center;gap:12px;margin:18px 0 8px}.vb-difficulty button{min-width:120px;min-height:48px;border:0;background:#182a35;color:#edf3f5;font:800 17px system-ui;cursor:pointer}.vb-difficulty button[aria-pressed="true"]{background:#e2edf2;color:#102431;box-shadow:inset 0 -4px #76bced}.vb-difficulty-help{font:16px/1.4 system-ui!important;max-width:520px;margin:8px auto!important;color:#e0e6e8!important}.vb-difficulty button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+/* Keep small labels readable in both desktop and landscape layouts. */
+.vb-screen .vb-hint,.vb-screen .vb-subtitle strong,.vb-screen .vb-subtitle p,.vb-screen .vb-reward,.vb-screen .vb-dialogue-speaker,.vb-screen .vb-dialogue-continue,.vb-screen .vb-weapons button,.vb-screen .vb-touch button{font-size:14px}

@@ -1,11 +1,11 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson33';
+import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson34';
 import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15g';
-import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15g';
+import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15h';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15g';
 import {drawPeacefulEnding} from './vinsonendingfx.js?v=15g';
-import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15g';
-import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=15c';
+import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15h';
+import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=15h';
 import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=15g';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 import { load } from '../core/storage.js';
@@ -74,7 +74,7 @@ function renderHandCatch(ctx,h,t,reducedMotion) {
   // Mark the dangerous corridor while leaving the perpendicular exits conspicuously open.
   ctx.save();ctx.globalAlpha=.12+.12*tele;ctx.fillStyle='#ff251e';ctx.beginPath();ctx.moveTo(c.x1-uy*w/2,c.y1+ux*w/2);ctx.lineTo(c.x2-uy*w/2,c.y2+ux*w/2);ctx.lineTo(c.x2+uy*w/2,c.y2-ux*w/2);ctx.lineTo(c.x1+uy*w/2,c.y1-ux*w/2);ctx.closePath();ctx.fill();ctx.restore();
   ctx.save();ctx.strokeStyle='#ff6458';ctx.lineWidth=3;ctx.setLineDash([14,10]);for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(c.x1-uy*w*.5*side,c.y1+ux*w*.5*side);ctx.lineTo(c.x2-uy*w*.5*side,c.y2+ux*w*.5*side);ctx.stroke();}ctx.restore();
-  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 15px monospace';ctx.textAlign='center';ctx.fillText('HAND SWEEP · DODGE ABOVE / BELOW THE RED LANE',640,230);ctx.textAlign='start';ctx.restore();
+  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 24px system-ui';ctx.textAlign='center';ctx.fillText('HAND SWEEP · DODGE ABOVE / BELOW THE RED LANE',640,230);ctx.textAlign='start';ctx.restore();
   if(close>.65)impactRings(ctx,cx,cy,clamp((close-.65)*2.8,0,1),t,reducedMotion,'#ff715e');
 }
 function laserRay(ctx,ray,t,ready,alpha) {
@@ -176,8 +176,8 @@ function field(ctx,t,stage=0) {
     ctx.beginPath();ctx.moveTo(x,420);ctx.lineTo(x,420-h);ctx.lineTo(x+29,420-h-12);ctx.lineTo(x+37,420-h+28);ctx.lineTo(x+64,420-h+18);ctx.lineTo(x+69,420);ctx.closePath();ctx.fill();
     ctx.fillStyle='#40313a';ctx.fillRect(x+8,420-h+40,3,h-40);
   }
-  ctx.fillStyle='#0a090d';ctx.beginPath();ctx.moveTo(0,250);ctx.lineTo(W,250);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='#44323a';ctx.lineWidth=1;
+  ctx.fillStyle=stage?'#24151c':'#26313a';ctx.beginPath();ctx.moveTo(0,250);ctx.lineTo(W,250);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=stage?'#76505a':'#61717b';ctx.lineWidth=1;
   for(let i=-6;i<14;i++){ctx.beginPath();ctx.moveTo(640+i*80,250);ctx.lineTo(640+i*200,H);ctx.stroke();}
   for(let i=0;i<7;i++){const y=250+Math.pow(i/6,1.7)*470;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   // Smouldering seams and slow airborne embers give depth without covering attack warnings.
@@ -194,7 +194,7 @@ function health(ctx,s,feedback){
   ctx.fillStyle='#28323a';ctx.fillRect(x+12,96,356,20);
   ctx.fillStyle='#f0ddbd';ctx.fillRect(x+12,96,356*(feedback?.chips?.[actor===s.hero?'hero':'boss']??actor.hp)/actor.maxHp,20);
   ctx.fillStyle=color;ctx.fillRect(x+12,96,356*actor.hp/actor.maxHp,20);
-  if(actor===s.boss){ctx.fillStyle='#0b1016';for(const gate of [.2,.4,.6,.8])ctx.fillRect(x+12+356*gate-2,93,4,26);}
+  if(actor===s.boss){ctx.fillStyle='#0b1016';for(const gate of s.gates||[.2,.4,.6,.8])ctx.fillRect(x+12+356*gate-2,93,4,26);}
  };bar(60,s.hero,names[heroArt(s.stage)],'#75bbe6');bar(840,s.boss,names[bossArt(s.stage)],'#d74843');
 }
 
@@ -336,9 +336,9 @@ export async function registerVinsonBattleAttempt(online) {
   return online.vinson.battleStart();
 }
 
-export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, previewAttack = null, previewBox = 'lanes', previewEnding = false, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
+export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, previewAttack = null, previewBox = 'lanes', difficulty = 'normal', previewEnding = false, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
   if (document.querySelector('.vb-screen')) return null;
-  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=33', import.meta.url).href; document.head.append(link);
+  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=34', import.meta.url).href; document.head.append(link);
   const screen = node('section', 'vb-screen'); screen.setAttribute('role', 'dialog'); screen.setAttribute('aria-modal', 'true'); screen.setAttribute('aria-label', 'Fight Suppression');
   const stage = node('div', 'vb-stage'), canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
   canvas.setAttribute('aria-label', 'Move to dodge the marked attacks, attack Vinson, and dodge with Space.'); stage.append(canvas);
@@ -390,8 +390,9 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const exit = () => { if (exited) return; exited = true; screen.remove(); link.remove(); onClose?.(); };
     closeButton.onclick = exit; return { close: exit };
   }
+  let selectedDifficulty=difficulty==='hard'?'hard':'normal';
   const compactArena=Number(globalThis.innerHeight)>0&&globalThis.innerHeight<=450;
-  let battle = createVinsonBattle({ seed, compact:compactArena, openingAttack:previewAttack,boxPattern:previewBox }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
+  let battle = createVinsonBattle({ seed, compact:compactArena, openingAttack:previewAttack,boxPattern:previewBox,difficulty:selectedDifficulty }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
   let mode = '', cinematicKind = '', cinematicTime = 0, trauma = 0, particles = [], nonce = null, victoryBusy = false, victoryConfirmed = false;
   let finalClash=null,clashInputs=[],finaleWinDelay=0;
   const clashDock=node('div','vb-clash-keys');clashDock.hidden=true;stage.append(clashDock);
@@ -503,6 +504,20 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     for (const [label, action] of actions) { const b = node('button', '', label); b.onclick = action; row.append(b); }
     panel.append(row); panel.hidden = false;
   }
+  function showIntro(stageIndex){
+    showPanel(stageIndex?'Captain Israel':'Fight Suppression',stageIndex?'Captain Israel faces Phonk Mode Vinson.':'Choose your challenge. Break free from Vinson.',[['Begin fight',startFight]]);
+    if(stageIndex)return;
+    const picker=node('div','vb-difficulty');picker.setAttribute('aria-label','Fight difficulty');
+    const help=node('p','vb-difficulty-help','');
+    const buttons=[];
+    for(const [value,label] of [['normal','Normal'],['hard','Hard']]){
+      const button=node('button','',label);button.dataset.difficulty=value;
+      button.onclick=()=>{selectedDifficulty=value;battle=createVinsonBattle({seed,compact:compactArena,openingAttack:previewAttack,boxPattern:previewBox,difficulty:value});viewHero={...battle.state.hero};feedback.chips={hero:battle.state.hero.hp,boss:battle.state.boss.hp};refresh();};
+      buttons.push(button);picker.append(button);
+    }
+    function refresh(){for(const button of buttons){button.setAttribute('aria-pressed',String(button.dataset.difficulty===selectedDifficulty));}help.textContent=selectedDifficulty==='hard'?'Hard: stronger boss, six health-gate boxes, faster attacks and a tougher clash.':'Normal: the current fight, clear blue safe areas and simpler dodge boxes.';}
+    refresh();panel.insertBefore(picker,panel.lastChild);panel.insertBefore(help,panel.lastChild);
+  }
   async function startFight() {
     if (victoryBusy || closed) return;
     victoryBusy = true;
@@ -575,7 +590,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
         if(finalClash.phase!==previousClashPhase||['warning','stunned'].includes(finalClash.phase))clashInputs.length=0;
         if(finalClash.lost){
           mode='defeat';held.clear();keys.clear();clashDock.hidden=true;particles.length=0;
-          showPanel('Clash lost', 'Vinson overpowered you. Losing all ground or running out of time ends the clash. Mistakes only stun you.', [['Retry clash',()=>{finalClash=createVinsonClash({seed});clashInputs=[];cinematicTime=0;mode='finale';panel.hidden=true;}],['Return to Pitchside',close]]);return;
+          showPanel('Clash lost', 'Vinson overpowered you. Losing all ground or running out of time ends the clash. Mistakes only stun you.', [['Retry clash',()=>{finalClash=createVinsonClash({seed,difficulty:selectedDifficulty});clashInputs=[];cinematicTime=0;mode='finale';panel.hidden=true;}],['Return to Pitchside',close]]);return;
         }
         for(const evt of finalClash.events){
           if(evt.type==='push'){const x=vinsonClashX(finalClash.progress);burst(x,337,'#fff0b5',Math.min(12,evt.count*5));trauma=Math.min(1,trauma+(reducedMotion?0:.08*evt.count));tone('fire');}
@@ -642,10 +657,10 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       if(evt.type==='perfectDodge'){hitFeedback(0,evt.x,evt.y-50,'PERFECT','boss');if(!reducedMotion)feedback.slow=.3;}
     }
     if (s.phase === 'transition' || s.phase === 'clash') {
-      cinematicKind = s.phase === 'transition' ? 'transition' : 'finale'; cinematicTime = 0;dialogue=null;acknowledgedDialogue.clear(); panel.hidden = true; mode = cinematicKind; held.clear(); keys.clear();if(cinematicKind==='finale'){finalClash=createVinsonClash({seed});clashInputs=[];finaleWinDelay=0;} tone('hit');
+      cinematicKind = s.phase === 'transition' ? 'transition' : 'finale'; cinematicTime = 0;dialogue=null;acknowledgedDialogue.clear(); panel.hidden = true; mode = cinematicKind; held.clear(); keys.clear();if(cinematicKind==='finale'){finalClash=createVinsonClash({seed,difficulty:selectedDifficulty});clashInputs=[];finaleWinDelay=0;} tone('hit');
     } else if (s.phase !== mode) {
       mode = s.phase;
-      if (mode === 'intro') showPanel(s.stage ? 'Captain Israel' : 'Fight Suppression', s.stage ? 'Captain Israel faces Phonk Mode Vinson.' : 'World-Ruler Vinson awaits. Face her and fight for your freedom.', [['Begin fight', startFight]]);
+      if (mode === 'intro') showIntro(s.stage);
       else if (mode === 'defeat') {
         held.clear(); keys.clear(); particles.length=0; trauma=0; dialogue=null; subtitle.replaceChildren();
         controls.classList.add('vb-controls-paused');stage.classList.add('vb-stage-frozen');
@@ -686,7 +701,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if(!clashDock.hidden){clashDock.dataset.phase=finalClash.phase;clashDock.dataset.next=finalClash.keys[finalClash.index]||'';clashDock.dataset.ready=['push','sequence'].includes(finalClash.phase)?'1':'0';for(const b of clashDock.children){const isPush=b===pushButton;b.hidden=isPush?finalClash.phase!=='push':finalClash.phase!=='sequence';b.disabled=!['push','sequence'].includes(finalClash.phase);}}
     skipEnding.hidden=!(endingSeen&&cinematicKind==='finale'&&finalClash?.won&&mode!=='result');
     const activeDialogue=dialogue&&clock<dialogue.until&&mode==='fight'?dialogue:null;
-    const text = blockingDialogue || shot || mode==='result' ? '' : activeDialogue?.text || '';
+    const text = blockingDialogue || shot || mode==='result' || battle.state.sequence || battle.state.hazards.some(h=>h.type==='handcatch') ? '' : activeDialogue?.text || '';
     if (subtitle.dataset.text !== text) { subtitle.dataset.text = text; subtitle.replaceChildren(); if (text) subtitle.append(node('strong', '', activeDialogue?.speaker||''), node('p', '', text)); }
     raf = requestAnimationFrame(frame);
   }
@@ -698,7 +713,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   if (resumeRewards) {
     mode = 'result'; victoryConfirmed = true; cinematicKind = 'finale'; cinematicTime = VINSON_CINEMATIC_DURATION.finale;
     showPanel('The curse is broken', 'Your victory is saved. Collect your three exclusive reward cards.', [['Collect rewards', claimRewards], ['Return to Pitchside', close]]);
-  } else if(previewEnding&&!online){cinematicKind='finale';cinematicTime=0;finalClash=createVinsonClash({seed});mode='finale';panel.hidden=true;} else animate(0);
+  } else if(previewEnding&&!online){cinematicKind='finale';cinematicTime=0;finalClash=createVinsonClash({seed,difficulty:selectedDifficulty});mode='finale';panel.hidden=true;} else animate(0);
   closeButton.focus(); raf = requestAnimationFrame(frame);
   return { close, get state() { return battle.state; } };
 }

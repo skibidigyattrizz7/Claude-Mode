@@ -5,7 +5,7 @@ import { drawDodgeBox } from '../ui/vinsonfightfx.js';
 
 const tick = (battle, input = {}) => battle.step(0.05, input);
 const startBox = (seed, compact = false) => {
-  const battle = createVinsonBattle({ seed, compact });
+  const battle = createVinsonBattle({ seed, compact,difficulty:'hard' });
   battle.step(0, { advance: true });
   battle.state.hero.hp = 100000;
   battle.state.boss.hp = battle.state.boss.maxHp * .8 + 1;
