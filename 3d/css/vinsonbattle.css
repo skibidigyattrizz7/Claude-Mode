@@ -1,0 +1,164 @@
+.vb-screen { position:fixed; inset:0; z-index:25000; background:#050607; color:#f3f1e7; display:flex; flex-direction:column; font-family:system-ui,sans-serif; isolation:isolate; }
+.vb-screen * { box-sizing:border-box; }
+.vb-sequence-keys{display:flex;gap:6px}.vb-sequence-keys[hidden],.vb-combo-button[hidden]{display:none}
+.vb-sequence-keys button,.vb-combo-button{min-height:52px;min-width:52px;border:1px solid #b88e67;background:#221922;color:#f8e5c5;font:900 16px system-ui;cursor:pointer}
+.vb-combo-button{position:absolute;z-index:3;top:clamp(100px,18%,142px);left:50%;transform:translateX(-50%);width:min(340px,calc(100% - 32px));min-height:64px;padding:10px 16px;background:#e7f4f8;color:#08151c;border:0;box-shadow:0 5px 0 #396377;font:800 16px/1.5 system-ui,sans-serif;white-space:pre-line;text-align:center;letter-spacing:.035em}
+.vb-combo-button[data-beat="slash"],.vb-combo-button[data-beat="finish"]{background:#fff5ce;color:#231a0d;box-shadow:0 5px 0 #947644}
+.vb-combo-button:disabled{background:#1b2c35;color:#e5f4fc;box-shadow:none;cursor:default}
+@media(max-height:450px){.vb-combo-button{top:68px;min-height:48px;padding:5px 12px;font-size:14px}}
+@media(prefers-reduced-motion:no-preference){.vb-combo-button[data-beat="ready"]{animation:vb-combo-call 1s ease-out 2}@keyframes vb-combo-call{0%,100%{transform:translateX(-50%) scale(1)}35%{transform:translateX(-50%) scale(1.04)}}}
+.vb-controls{position:relative}
+.vb-controls.vb-has-sequence .vb-weapons{display:none}
+.vb-sequence-keys{order:-1;width:200px;justify-content:center}
+.vb-controls.vb-ending{opacity:0;pointer-events:none;position:absolute;bottom:0;transition:opacity .3s}
+.vb-panel.vb-memorial-panel{top:5%;bottom:auto;transform:translate(-50%,0);background:transparent}
+.vb-panel.vb-memorial-panel h2{white-space:nowrap;font-size:clamp(22px,4.5vw,52px);line-height:1;margin-bottom:8px;text-shadow:0 2px 8px #28180f}
+@media(prefers-reduced-motion:reduce){.vb-controls.vb-ending{transition:none}}
+.vb-stage { position:relative; flex:1; min-height:0; overflow:hidden; display:grid; place-items:center; }
+.vb-stage > canvas { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:contain; touch-action:none; }
+.vb-top { position:absolute; z-index:2; top:max(14px,env(safe-area-inset-top)); left:24px; right:24px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.vb-title { font:800 clamp(18px,3vw,28px) 'Barlow Condensed',Impact,sans-serif; letter-spacing:.09em; }
+.vb-top button,.vb-actions button { border:0; color:inherit; background:#222528; cursor:pointer; padding:12px 18px; min-height:44px; font:700 14px system-ui,sans-serif; }
+.vb-top button:focus-visible,.vb-actions button:focus-visible { outline:2px solid #f3f1e7; outline-offset:3px; }
+.vb-panel { position:absolute; z-index:3; bottom:9%; left:50%; transform:translateX(-50%); width:min(700px,calc(100% - 40px)); text-align:center; }
+.vb-panel h2 { font:900 clamp(30px,6vw,68px)/.94 'Barlow Condensed',Impact,sans-serif; margin:0 0 14px; text-transform:uppercase; }
+.vb-panel p { font-size:16px; line-height:1.45; margin:10px auto; max-width:560px; color:#eee7da; }
+.vb-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.vb-actions button:first-child { background:#efede4; color:#0b0d10; }
+.vb-subtitle { position:absolute; bottom:10%; left:8%; width:84%; text-align:center; pointer-events:none; text-shadow:0 2px 8px #000; }
+.vb-subtitle strong { display:block; color:#bfc7c8; letter-spacing:.14em; font-size:12px; margin-bottom:10px; }
+.vb-subtitle p { margin:0; font:800 clamp(22px,3vw,40px)/1.1 'Barlow Condensed',Impact,sans-serif; }
+.vb-controls { display:flex; flex:none; justify-content:space-between; align-items:center; padding:10px max(16px,env(safe-area-inset-right)) 12px; gap:12px; background:#101315; border-top:1px solid #303538; }
+.vb-hint { color:#bfc4c5; font-size:13px; }
+.vb-touch { display:flex; gap:6px; touch-action:none; }
+.vb-touch button { width:48px; height:44px; background:#23282c; color:#fff; border:0; font:700 16px system-ui; touch-action:none; }
+.vb-touch button[data-action="attack"] { width:78px; background:#b52821; }
+.vb-touch button[data-action="dodge"] { width:74px; }
+.vb-rewards { display:flex; justify-content:center; gap:16px; margin:20px 0; }
+.vb-reward { display:flex; flex-direction:column; align-items:center; width:145px; gap:8px; font-size:12px; font-weight:700; text-transform:uppercase; }
+.vb-reward img { width:100%; height:155px; object-fit:contain; background:transparent; }
+.vb-fight-button { pointer-events:auto; position:absolute; left:50%; bottom:max(26px,env(safe-area-inset-bottom)); transform:translateX(-50%); cursor:pointer; border:0; padding:16px 26px; color:#ffe9df; background:#581512; font:900 24px 'Barlow Condensed',Impact,sans-serif; letter-spacing:.06em; box-shadow:0 5px 0 #240605; }
+@media(max-width:600px) { .vb-top { left:12px; right:12px; }.vb-hint { display:none; }.vb-panel { bottom:5%; }.vb-panel p { font-size:14px; }.vb-controls { padding:6px; }.vb-touch { gap:3px; }.vb-touch button { width:35px; }.vb-touch button[data-action="attack"] { width:64px; }.vb-touch button[data-action="dodge"] { width:60px; }.vb-rewards { gap:8px; }.vb-reward { width:90px; }.vb-reward img { height:105px; }.vb-panel.vb-memorial-panel h2{font-size:clamp(20px,6vw,30px)} }
+.vb-weapons { display:flex; gap:5px; flex-wrap:wrap; }
+.vb-weapons button { border:1px solid #4f4845; color:#d9d2c7; background:#171619; padding:8px 10px; min-height:40px; font:700 12px system-ui; cursor:pointer; }
+.vb-weapons button.on { background:#ddd4bc; color:#15120f; border-color:#ddd4bc; }
+.vb-weapons button{position:relative;overflow:hidden}
+.vb-weapons button::after{content:'';position:absolute;left:0;bottom:0;width:100%;height:3px;background:#d9c9a5;transform:scaleX(var(--recharge,0));transform-origin:left;pointer-events:none}
+.vb-weapons button:focus-visible {outline:2px solid #fff;outline-offset:2px;}
+.vb-weapons .vb-cycle{display:none}
+.vb-controls { flex-wrap:wrap; }
+.vb-subtitle { bottom:5%; background:#080507bb; padding:10px; box-sizing:border-box; }
+.vb-subtitle:empty { background:none; }
+@media(max-width:600px) { .vb-weapons { width:100%; justify-content:center; } .vb-weapons button { padding:7px 8px; min-height:35px; } .vb-touch {width:100%;justify-content:center;} }
+/* Story conversations hold the fight until the player chooses to continue. */
+.vb-dialogue[hidden] { display:none; }
+.vb-dialogue { position:absolute;z-index:5;bottom:5%;left:50%;transform:translateX(-50%);width:min(850px,calc(100% - 40px));display:grid;grid-template-columns:minmax(72px,120px) minmax(28ch,1fr);align-items:center;gap:20px;min-height:150px;padding:20px 26px 20px 18px;border:1px solid #8a4145;border-left:5px solid #bb474a;background:linear-gradient(110deg,#170c10f5,#08090bf5);box-shadow:0 16px 50px #000a,inset 0 1px #e5959526;color:#fff;text-align:left;cursor:pointer;font-family:system-ui,sans-serif;animation:vb-dialogue-enter .35s ease-out; }
+.vb-dialogue[data-side="hero"] {border-color:#456d91;border-left-color:#81b4e5;background:linear-gradient(110deg,#0b1422f5,#08090bf5);}
+.vb-dialogue:focus-visible {outline:2px solid #fff;outline-offset:4px;}
+.vb-dialogue-portrait {display:block;width:min(120px,32vw);height:min(130px,45vh);max-width:120px;max-height:130px;align-self:center;filter:drop-shadow(0 4px 12px #0008);}
+.vb-dialogue-body {flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+.vb-dialogue-speaker {font-size:14px;letter-spacing:.11em;color:#ef9090;line-height:1.4;}
+.vb-dialogue[data-side="hero"] .vb-dialogue-speaker {color:#a0d0fa;}
+.vb-dialogue-line {font-size:clamp(18px,2.4vw,28px);line-height:1.35;margin:12px 0;min-height:2.7em;}
+.vb-dialogue-continue {font-size:14px;color:#a8aeb8;align-self:flex-end;}
+.vb-controls-paused {opacity:.35;pointer-events:none;}
+.vb-top {flex-wrap:wrap;}
+@keyframes vb-dialogue-enter {from {opacity:0;transform:translate(-50%,12px)} to {opacity:1;transform:translate(-50%,0)}}
+@media(max-width:600px){.vb-dialogue{width:calc(100% - 24px);grid-template-columns:65px minmax(28ch,1fr);gap:12px;padding:14px;bottom:3%;min-height:130px}.vb-dialogue-portrait{width:65px;height:100px}.vb-dialogue-speaker{font-size:12px}.vb-dialogue-line{font-size:18px}.vb-title{width:100%;font-size:18px}}
+@media(max-height:450px){.vb-dialogue{bottom:2%;grid-template-columns:70px minmax(28ch,1fr);padding:10px 16px;min-height:90px}.vb-dialogue-portrait{height:80px;width:70px}.vb-dialogue-line{font-size:16px;margin:6px 0;min-height:1.35em}.vb-top{top:8px}.vb-title{font-size:16px}}
+@media(prefers-reduced-motion:reduce){.vb-dialogue{animation:none}}
+.vb-subtitle:not(:empty){top:clamp(104px,22vh,160px);bottom:auto;left:50%;transform:translateX(-50%);width:min(760px,calc(100% - 32px));min-height:34px;border-left:3px solid #b64949;background:#100b0ed9;padding:7px 14px;text-align:center;box-shadow:0 5px 18px #0007;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vb-subtitle strong{display:inline;color:#ef9090;font-size:13px;line-height:1.3;letter-spacing:.08em;margin:0 10px 0 0;}
+.vb-subtitle p{display:inline;margin:0;font:700 15px/1.3 system-ui,sans-serif;}
+@media(max-height:450px){.vb-subtitle:not(:empty){top:64px;width:calc(100% - 20px);padding:5px 10px}.vb-subtitle strong{font-size:11px}.vb-subtitle p{font-size:13px}}
+.vb-stage-frozen > canvas{filter:brightness(.38) saturate(.38);transition:filter .18s ease-out;}
+@media(prefers-reduced-motion:reduce){.vb-stage-frozen > canvas{transition:none}}
+
+.vb-touch button[data-action="heal"]{width:76px;background:#1d4234;color:#bce6cf;font-size:13px}
+.vb-touch button:disabled,.vb-weapons button:disabled{opacity:.4;cursor:default}
+@media(max-height:450px){.vb-controls{padding:5px 10px;gap:5px}.vb-hint{display:none}.vb-weapons button{min-height:32px;padding:5px 8px}.vb-touch button{height:36px}.vb-touch{gap:4px}}
+@media(max-width:600px){.vb-touch button[data-action="heal"]{width:63px;font-size:11px}.vb-touch button[data-action="attack"]{width:54px}.vb-touch button[data-action="dodge"]{width:54px}}
+
+/* Mobile dock reserves separate rows for weapons and actions. */
+@media(max-width:900px){
+ .vb-controls{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:4px;padding:6px max(10px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));overflow:visible;}
+ .vb-hint{display:none}
+ .vb-weapons,.vb-touch{width:100%;justify-content:center;gap:4px}
+ .vb-weapons{display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+ .vb-weapons button{min-width:0;flex:1;min-height:44px;font-size:12px;padding:5px 6px;white-space:nowrap}
+ .vb-touch{display:grid;grid-template-columns:repeat(4,44px) repeat(3,minmax(58px,72px));}
+ .vb-touch button{width:100%;height:44px;min-width:0;white-space:nowrap;line-height:1;overflow:visible}
+ .vb-touch button[data-action="attack"],.vb-touch button[data-action="dodge"],.vb-touch button[data-action="heal"]{width:100%;font-size:12px}
+}
+.vb-dialogue{max-height:38%;min-height:0;overflow:auto;overscroll-behavior:contain}
+@media(max-height:450px){.vb-dialogue{bottom:2%;max-height:38%;padding:8px 14px}.vb-dialogue-portrait{height:55px;width:55px}.vb-dialogue-line{font-size:15px;line-height:1.25;margin:4px 0}.vb-dialogue-continue{font-size:12px}}
+@media(orientation:portrait){
+ .vb-screen::after{content:"ROTATE YOUR PHONE TO PLAY";position:fixed;z-index:100000;inset:0;display:flex;align-items:center;justify-content:center;padding:32px;background:#050607f5;color:#f3f1e7;text-align:center;font:900 clamp(24px,8vw,42px)/1.1 Impact,sans-serif;letter-spacing:.06em}
+ .vb-screen .vb-controls,.vb-screen .vb-fight-button{visibility:hidden;pointer-events:none}
+}
+/* Short landscape uses one 44px dock row; the selected ability stays visible. */
+@media(max-height:450px) and (min-width:700px){
+ .vb-controls{display:grid;grid-template-columns:200px minmax(0,1fr);align-items:center;gap:8px}
+ .vb-weapons{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:4px}
+ .vb-weapons button{display:none}
+ .vb-weapons button.on{display:block;order:2;font-size:11px}
+ .vb-weapons .vb-cycle{display:block;min-height:44px;font-size:16px}
+ .vb-weapons .vb-cycle-prev{order:1}
+ .vb-weapons .vb-cycle-next{order:3}
+}
+
+/* Cooldown text must not resize the dock and move the arena while firing. */
+@media(min-width:901px){.vb-weapons{flex-wrap:nowrap}.vb-weapons button:not(.vb-cycle){width:78px;min-width:78px;white-space:nowrap;padding:8px 4px}.vb-hint{max-width:160px}}
+@media(min-width:901px) and (max-width:1200px){.vb-hint{display:none}}
+
+.vb-clash-keys{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);display:flex;gap:10px;z-index:8}.vb-clash-keys[hidden]{display:none}.vb-clash-keys button{width:56px;height:56px;background:#132837;border:2px solid #8daec2;color:#effaff;font:900 24px monospace;cursor:pointer}.vb-clash-keys button:disabled{opacity:.4;cursor:default}
+@media(max-height:450px){.vb-clash-keys{bottom:2%;gap:8px}.vb-clash-keys button{width:52px;height:52px}}
+
+.vb-weapons button.on{transform:translateY(-3px);box-shadow:0 3px 0 #050709}
+.vb-weapons button:not(.vb-cycle)::after{left:auto;right:3px;bottom:3px;width:14px;height:14px;transform:none;border-radius:50%;background:conic-gradient(#94c6de calc(var(--recharge,0)*1turn),#24313a 0)}
+
+/* Fight HUD: scene controls live behind Pause; touch navigation is device-specific. */
+.vb-top{justify-content:flex-end;pointer-events:none}.vb-top button{pointer-events:auto;font-size:14px;min-height:44px;padding:10px 15px;background:#15242e;color:#edf4f6;border:0}
+.vb-pause[hidden]{display:none}.vb-pause{position:absolute;inset:0;z-index:20;background:#05080bf5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.vb-pause h2{font:900 44px Impact,system-ui;letter-spacing:.08em;margin:0 0 20px}.vb-pause button{width:240px;min-height:52px;border:0;background:#182a36;color:#f7f3e8;font:800 17px system-ui;cursor:pointer}.vb-pause button:first-of-type{background:#e6f1f5;color:#0b1720}
+.vb-hint{font-size:14px;line-height:1.5}.vb-subtitle strong,.vb-reward{font-size:14px}.vb-weapons button{font-size:14px;min-height:48px;background:#11212d;color:#e8f1f5;border:0;padding:8px 13px}.vb-weapons button.on{background:#dcebf0;color:#071724;box-shadow:inset 0 -4px #77bce7}
+.vb-weapons button:nth-child(1)::before{content:'✡ '}.vb-weapons button:nth-child(2)::before{content:'↻ '}.vb-weapons button:nth-child(3)::before{content:'✹ '}.vb-weapons button:nth-child(4)::before{content:'↗ '}.vb-weapons button:nth-child(5)::before{content:'⋆ '}.vb-weapons button:nth-child(6)::before{content:'◎ '}
+.vb-clash-keys button[data-action="push"]{width:150px!important;white-space:nowrap;font:800 19px system-ui;padding:0 12px}.vb-panel.vb-memorial-panel{color:#fff5e4}.vb-panel.vb-memorial-panel p{color:#fff5e4;text-shadow:0 2px 3px #302516}
+@media(hover:hover) and (pointer:fine){.vb-touch{display:none!important}}
+@media(hover:none),(pointer:coarse){.vb-hint{display:none}}
+@media(max-height:450px){.vb-weapons button{min-height:36px;font-size:14px}.vb-top button{min-height:36px;padding:7px 12px}}
+
+.vb-difficulty{display:flex;justify-content:center;gap:12px;margin:18px 0 8px}.vb-difficulty button{min-width:120px;min-height:48px;border:0;background:#182a35;color:#edf3f5;font:800 17px system-ui;cursor:pointer}.vb-difficulty button[aria-pressed="true"]{background:#e2edf2;color:#102431;box-shadow:inset 0 -4px #76bced}.vb-difficulty-help{font:16px/1.4 system-ui!important;max-width:520px;margin:8px auto!important;color:#e0e6e8!important}.vb-difficulty button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+/* Keep small labels readable in both desktop and landscape layouts. */
+.vb-screen .vb-hint,.vb-screen .vb-subtitle strong,.vb-screen .vb-subtitle p,.vb-screen .vb-reward,.vb-screen .vb-dialogue-speaker,.vb-screen .vb-dialogue-continue,.vb-screen .vb-weapons button,.vb-screen .vb-touch button{font-size:14px}
+
+/* Ability dock: opaque field controls, with a stable six-slot desktop row. */
+.vb-controls{background:#071827;border-top:2px solid #24435b;color:#f4f7f8;padding:8px max(16px,env(safe-area-inset-right,0px)) calc(9px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));gap:10px}
+.vb-weapons{flex:1;min-width:0;display:flex;flex-wrap:nowrap;justify-content:center;gap:6px}
+.vb-weapons button:not(.vb-cycle){position:relative;isolation:isolate;overflow:hidden;display:grid;grid-template-columns:28px minmax(0,1fr) 32px;align-items:center;gap:7px;width:clamp(112px,12vw,156px);min-width:0;min-height:52px;padding:6px 9px;border:1px solid #42627a;border-bottom:3px solid #18354a;background:#0c2233;color:#e5edf1;font:700 14px/1.15 system-ui,sans-serif;text-align:left;white-space:nowrap}
+.vb-weapons button:not(.vb-cycle)::before{display:none}
+.vb-weapons .vb-ability-icon{display:grid;place-items:center;width:28px;height:28px;color:#9ed0f0;font-size:22px;line-height:1}
+.vb-weapons .vb-ability-name{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.vb-weapons .vb-ability-cooldown{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle,#0c2233 56%,transparent 59%),conic-gradient(#70b9e8 var(--cooldown,0deg),#20394a 0);color:#fff;font:700 14px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.vb-weapons button.cooling .vb-ability-cooldown{box-shadow:inset 0 0 0 3px #0c2233}
+.vb-weapons button.on{z-index:1;transform:translateY(-2px);border-color:#8ecaf0;border-bottom-color:#8ecaf0;background:#163954;color:#fff;box-shadow:inset 0 0 0 1px #8ecaf0,0 3px 0 #04111c}
+.vb-weapons button.on .vb-ability-icon{color:#d6efff}
+.vb-weapons button:not(.vb-cycle):after{content:none}
+.vb-weapons button:focus-visible{outline:3px solid #fff;outline-offset:3px;z-index:2}
+.vb-weapons button:disabled{opacity:.58}
+@media(min-width:901px){.vb-weapons .vb-cycle{display:none}.vb-weapons button:not(.vb-cycle){flex:1 1 0;max-width:156px}}
+@media(max-width:900px){
+ .vb-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));}
+ .vb-weapons{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;width:min(100%,420px);gap:6px}
+ .vb-weapons button:not(.vb-cycle){display:none}
+ .vb-weapons button.on{display:grid;grid-column:2;grid-row:1;width:100%;max-width:none;min-height:48px;transform:none}
+ .vb-weapons .vb-cycle{display:block;grid-row:1;width:44px;min-width:44px;min-height:48px;padding:4px;border:1px solid #42627a;background:#0c2233;color:#fff;font-size:18px}
+ .vb-weapons .vb-cycle-prev{grid-column:1}.vb-weapons .vb-cycle-next{grid-column:3}
+ .vb-touch button{min-height:44px}
+}
+@media(max-width:420px){.vb-weapons button.on{grid-template-columns:26px minmax(0,1fr) 32px;padding:5px 7px}.vb-weapons .vb-ability-name{font-size:14px}}
+
+/* P16: readable numerical cooldowns and a full-width fixed ability row. */
+@media(min-width:901px){.vb-controls{display:grid;grid-template-columns:minmax(0,1fr)}.vb-hint{max-width:none;text-align:center;font-size:14px}.vb-weapons{width:100%}}
+.vb-weapons button:not(.vb-cycle){grid-template-columns:24px minmax(0,1fr) 38px;gap:5px}.vb-weapons .vb-ability-cooldown{width:38px;height:38px;font-size:14px}.vb-weapons .vb-ability-cooldown[data-ready="true"]{font-size:18px}

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Content-Security-Policy: scripts only from this site (+ the PeerJS CDN fallbacks), no inline scripts. connect-src stays open to https:/wss: because the online screen lets players pick their own PeerJS server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://baxzjrueelirgcstjbdc.supabase.co wss://baxzjrueelirgcstjbdc.supabase.co https://0.peerjs.com wss://0.peerjs.com https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0d10">
+<meta name="description" content="Claude-Mode Football: two free browser football games: Pitchside 3D and Touchline 2D.">
+<title>Claude-Mode Football</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%230b0d10'/%3E%3Ccircle cx='32' cy='32' r='20' fill='%23cdfb3c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="3d/css/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--txt); }
+  body { font: 15px/1.5 var(--font-body); min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
+  /* blurred procedural stadium (3d/js/ui/stadium.js) + legibility shade */
+  .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: var(--bg); }
+  .bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .9; }
+  .bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,13,16,.5) 0%, rgba(11,13,16,.7) 40%, rgba(11,13,16,.92) 80%, var(--bg) 100%); }
+
+  .bar { display: flex; align-items: center; gap: 20px; width: 100%; max-width: 1400px; margin: 0 auto; min-height: 64px; padding: 0 24px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .brand { font: 700 24px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+  .brand span { color: var(--mut); font-weight: 500; }
+  .bar nav { display: flex; align-self: stretch; margin-left: 12px; }
+  .bar nav a { position: relative; display: flex; align-items: center; padding: 0 14px; color: var(--mut); text-decoration: none; font: 600 17px/1 var(--font-display); letter-spacing: .05em; text-transform: uppercase; }
+  .bar nav a:hover { color: var(--txt); }
+  .bar nav a[aria-current] { color: var(--txt); }
+  .bar nav a[aria-current]::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 3px; background: var(--acc); }
+
+  main { flex: 1; width: 100%; max-width: 1400px; margin: 0 auto; padding: 20px 24px; display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: minmax(420px, 1fr); }
+
+  .game { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,.09); background: #15181d; color: var(--txt); text-decoration: none; box-shadow: var(--shadow-md);
+    transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-fast); }
+  .game:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.28); }
+  .game:focus-visible { outline: none; border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+  .art { position: absolute; inset: 0; transition: transform var(--dur-slow) var(--ease-out); }
+  .game:hover .art, .game:focus-visible .art { transform: scale(1.03); }
+  .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(11,13,16,.6) 62%, rgba(11,13,16,.95) 100%); }
+  .body { position: relative; padding: 24px 26px; }
+  .game h2 { margin: 0; font: 700 clamp(44px, 5.4vw, 76px)/.95 var(--font-display); text-transform: uppercase; letter-spacing: .01em; }
+  .g2d h2 { font-size: clamp(36px, 3.6vw, 52px); }
+  .game p { margin: 10px 0 0; max-width: 52ch; color: #c4cad4; font-size: 15px; }
+  .modes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding: 0; list-style: none; }
+  .modes li { padding: 5px 10px; border-radius: var(--radius-sm); background: rgba(255,255,255,.08); font: 600 15px/1 var(--font-display); letter-spacing: .05em; text-transform: uppercase; }
+  .cta { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 10px 18px; border-radius: var(--radius-sm); background: var(--acc); color: var(--acc-ink); font: 700 18px/1 var(--font-display); letter-spacing: .06em; text-transform: uppercase; }
+  .g2d .cta { background: var(--txt); color: var(--bg); }
+  .cta svg { width: 16px; height: 16px; transition: transform var(--dur-base) var(--ease-out); }
+  .game:hover .cta svg { transform: translateX(3px); }
+
+  /* Pitchside 3D: broadcast view of a floodlit pitch with two kits */
+  .g3d .art { background:
+      radial-gradient(60% 50% at 50% 30%, rgba(255,255,255,.14), transparent 70%),
+      linear-gradient(90deg, transparent calc(50% - 1px), rgba(255,255,255,.35) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+      radial-gradient(closest-side, transparent calc(100% - 2px), rgba(255,255,255,.3) calc(100% - 2px) 100%, transparent 100%) 50% 36% / 26% 44% no-repeat,
+      repeating-linear-gradient(90deg, #1f5130 0 7%, #1a4629 7% 14%); }
+  .kits { position: absolute; left: 0; right: 0; top: 9%; display: flex; justify-content: center; align-items: flex-start; gap: clamp(20px, 6vw, 90px); }
+  .kits svg { width: clamp(110px, 13vw, 190px); height: auto; filter: drop-shadow(0 18px 20px rgba(0,0,0,.55)); }
+  .kits b { align-self: center; margin-top: -24px; font: 600 28px/1 var(--font-display); text-transform: uppercase; color: rgba(255,255,255,.75); }
+
+  /* Touchline 2D: top-down pitch with dots for players */
+  .g2d .art { background:
+      radial-gradient(circle at 50% 36%, transparent 40px, rgba(255,255,255,.3) 41px 43px, transparent 44px),
+      linear-gradient(transparent calc(36% - 1px), rgba(255,255,255,.3) calc(36% - 1px) calc(36% + 1px), transparent calc(36% + 1px)),
+      repeating-linear-gradient(180deg, #226b35 0 10%, #1d5e2e 10% 20%); }
+  .dots { position: absolute; inset: 0 0 30% 0; }
+  .dots i { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,.35); box-shadow: 0 3px 6px rgba(0,0,0,.4); }
+  .dots i.h { background: #e9edf2; } .dots i.a { background: #d23b3b; }
+  .dots i.ball { width: 9px; height: 9px; background: #fff; border: 0; }
+
+  .hints { display: flex; gap: 22px; width: 100%; max-width: 1400px; margin: 0 auto; padding: 4px 24px calc(14px + env(safe-area-inset-bottom)); color: var(--mut); font-size: 13px; }
+  .hints span:last-child { margin-left: auto; color: var(--dim); }
+  kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-right: 4px; border-radius: var(--radius-xs); border: 1px solid var(--line2); border-bottom-width: 2px; background: var(--panel2); font: 600 12px/1 var(--font-display); }
+
+  @media (max-width: 860px) {
+    .bar nav { display: none; }
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(360px, auto); padding: 16px; }
+    .g2d { min-height: 300px; }
+    .hints span:not(:last-child) { display: none; }
+  }
+  @media (max-width: 480px) {
+    .bar { padding: 0 16px; }
+    .body { padding: 18px; }
+    .kits svg { width: 96px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+<header class="bar">
+  <div class="brand">Claude-Mode <span>Football</span></div>
+  <nav aria-label="Games"><a href="#" aria-current="page">Games</a><a href="3d/index.html">Pitchside 3D</a><a href="2d/index.html">Touchline 2D</a></nav>
+</header>
+<main>
+  <a class="game g3d" href="3d/index.html">
+    <div class="art" aria-hidden="true">
+      <div class="kits">
+        <svg viewBox="0 0 100 100"><path d="M8 28 L30 10 L40 10 L60 10 L70 10 L92 28 L82 44 L72 38 L72 92 L28 92 L28 38 L18 44 Z" fill="#e9edf2" stroke="rgba(0,0,0,.35)" stroke-width="2" stroke-linejoin="round"/><path d="M8 28 L30 10 L28 38 L18 44 Z M92 28 L70 10 L72 38 L82 44 Z" fill="#1b2a4a"/><path d="M40 10 Q50 22 60 10" fill="none" stroke="#1b2a4a" stroke-width="5"/><text x="50" y="66" text-anchor="middle" font-size="30" font-weight="900" fill="#1b2a4a" font-family="system-ui,sans-serif">10</text></svg>
+        <b>v</b>
+        <svg viewBox="0 0 100 100"><path d="M8 28 L30 10 L40 10 L60 10 L70 10 L92 28 L82 44 L72 38 L72 92 L28 92 L28 38 L18 44 Z" fill="#c8102e" stroke="rgba(0,0,0,.35)" stroke-width="2" stroke-linejoin="round"/><path d="M8 28 L30 10 L28 38 L18 44 Z M92 28 L70 10 L72 38 L82 44 Z" fill="#f4f4f4"/><path d="M40 10 Q50 22 60 10" fill="none" stroke="#f4f4f4" stroke-width="5"/><text x="50" y="66" text-anchor="middle" font-size="30" font-weight="900" fill="#f4f4f4" font-family="system-ui,sans-serif">9</text></svg>
+      </div>
+    </div>
+    <div class="body">
+      <h2>Pitchside 3D</h2>
+      <p>Full 3D matches with a broadcast camera.</p>
+      <ul class="modes"><li>Kick-Off</li><li>Ultimate Team</li><li>Career</li><li>Online</li><li>Local 2-Player</li></ul>
+      <span class="cta">Play <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+    </div>
+  </a>
+  <a class="game g2d" href="2d/index.html">
+    <div class="art" aria-hidden="true">
+      <div class="dots">
+        <i class="h" style="left:22%;top:20%"></i><i class="h" style="left:44%;top:30%"></i><i class="h" style="left:30%;top:52%"></i><i class="h" style="left:60%;top:58%"></i>
+        <i class="a" style="left:68%;top:22%"></i><i class="a" style="left:52%;top:44%"></i><i class="a" style="left:78%;top:46%"></i><i class="a" style="left:40%;top:70%"></i>
+        <i class="ball" style="left:49%;top:35%"></i>
+      </div>
+    </div>
+    <div class="body">
+      <h2>Touchline 2D</h2>
+      <p>Fast top-down football.</p>
+      <ul class="modes"><li>Quick Match</li><li>World Cup</li><li>Online</li></ul>
+      <span class="cta">Play <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+    </div>
+  </a>
+</main>
+<footer class="hints">
+  <span><kbd>Tab</kbd>Move</span><span><kbd>Enter</kbd>Play</span>
+  <span>All teams and players are fictional.</span>
+</footer>
+<script type="module" src="3d/js/ui/landing.js"></script>
+</body>
+</html>

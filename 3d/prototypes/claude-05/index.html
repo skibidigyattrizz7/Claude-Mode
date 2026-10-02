@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Prototype 5-Claude</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+  :root { --ink: #f2ede2; --muted: #9aa6b0; --gold: #ffd7a1; --bg: #050708; --hero: #9ff8ff; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; touch-action: none;
+    font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; -webkit-user-select: none; user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .screen { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; background: rgba(5,7,8,.9); z-index: 5; padding: 24px; overflow: auto; }
+  .screen[hidden] { display: none; }
+  /* victory sits in the sky so the meadow (shield, sword) stays visible underneath */
+  #end { background: linear-gradient(rgba(5,7,8,.62), rgba(5,7,8,.25) 62%, rgba(5,7,8,0)); place-content: start center; padding-top: max(4vh, 16px); }
+  #end .rewards li { background: rgba(14,20,24,.72); }
+  #end h1 { text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+  #end .stats, #end .hint, #end .sub { color: #fff4e4; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+  h1 { font-size: clamp(40px, 7vw, 76px); margin: 0; letter-spacing: .04em; color: var(--gold); line-height: 1; }
+  .sub { color: var(--muted); font-size: 18px; margin: 10px 0 22px; letter-spacing: .08em; }
+  .keys { display: grid; grid-template-columns: auto auto; gap: 5px 22px; justify-content: center; margin: 0 auto 24px; font-size: 18px; text-align: left; }
+  .keys b { color: var(--ink); } .keys span { color: var(--muted); }
+  button.big { font: 700 24px 'Barlow Condensed', sans-serif; letter-spacing: .08em; color: #0b1014; background: var(--gold); border: 0; padding: 14px 40px; cursor: pointer; }
+  button.big:focus-visible, button.ghost:focus-visible, .tbtn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  button.ghost { font: 700 20px 'Barlow Condensed', sans-serif; color: var(--ink); background: #1e262c; border: 0; padding: 12px 28px; cursor: pointer; }
+  .rewards { list-style: none; padding: 0; margin: 0 auto 18px; display: grid; gap: 8px; min-width: min(420px, 80vw); }
+  .rewards li { background: #0e1418; border: 1px solid #2a333b; padding: 10px 16px; font-size: 22px; font-weight: 700; letter-spacing: .05em; }
+  .rewards li.secret { border-color: #f2ede2; color: #fff; }
+  .stats { color: var(--muted); font-size: 17px; margin-bottom: 18px; letter-spacing: .06em; }
+  .hint { color: #c8d0d6; font-size: 17px; margin: -4px 0 20px; }
+  #touch { position: fixed; inset: 0; z-index: 4; pointer-events: none; display: none; }
+  body.touch #touch { display: block; }
+  .stick { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); width: 120px; height: 120px; opacity: .85; border-radius: 50%;
+    background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.18); pointer-events: auto; }
+  .nub { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,237,226,.55); }
+  .pad { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 56px); gap: 8px; pointer-events: auto; opacity: .88; }
+  .tbtn { width: 56px; height: 56px; border-radius: 50%; border: 0; font: 700 13px 'Barlow Condensed', sans-serif; color: #0b1014; background: var(--ink); }
+  .tbtn.atk { background: #bff4ff; } .tbtn.cast { background: #ffd27a; } .tbtn.heal { background: #9ff0c4; } .tbtn.dodge { background: #e8f1ff; } .tbtn.swap { background: #c8d0d6; }
+  .tbtn.fin { background: #ffe08a; grid-column: span 3; width: 100%; border-radius: 10px; height: 52px; font-size: 20px; }
+  .qte { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 8px; pointer-events: auto; }
+  .qte .tbtn { border-radius: 10px; width: 52px; height: 52px; font-size: 22px; background: #2a333b; color: var(--ink); }
+  #push { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(420px, 70vw); height: 72px; border-radius: 12px;
+    font-size: 30px; pointer-events: auto; background: #ffffff; letter-spacing: .1em; }
+  #rotate { z-index: 9; }
+  #skipBtn { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 4; font: 700 18px 'Barlow Condensed', sans-serif;
+    background: rgba(11,16,20,.85); color: var(--ink); border: 1px solid #3a4650; padding: 10px 18px; cursor: pointer; letter-spacing: .08em; }
+  #muteBtn { position: fixed; top: max(10px, env(safe-area-inset-top)); right: calc(max(10px, env(safe-area-inset-right)) + 84px); z-index: 4; font: 700 15px 'Barlow Condensed', sans-serif;
+    background: rgba(11,16,20,.8); color: var(--ink); border: 1px solid #2a333b; padding: 8px 14px; cursor: pointer; }
+  body.touch #muteBtn { display: none; }
+  #pauseBtn { position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); z-index: 4; font: 700 15px 'Barlow Condensed', sans-serif;
+    background: rgba(11,16,20,.8); color: var(--ink); border: 1px solid #2a333b; padding: 8px 14px; cursor: pointer; }
+  .tag { position: fixed; left: max(10px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top)); z-index: 4; font-size: 14px; color: var(--muted); letter-spacing: .08em; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="tag">PROTOTYPE 5-CLAUDE</div>
+<button id="pauseBtn" type="button" aria-label="Pause">PAUSE</button>
+<button id="muteBtn" type="button" aria-label="Mute sound">SOUND ON</button>
+<div id="touch">
+  <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+  <div class="pad" id="pad">
+    <button class="tbtn fin" data-key="F" id="finBtn" hidden>FINISHER</button>
+    <button class="tbtn heal" data-key="H">HEAL</button>
+    <button class="tbtn swap" data-key="E">SWAP</button>
+    <button class="tbtn cast" data-key="K">CAST</button>
+    <button class="tbtn dodge" data-key=" ">DODGE</button>
+    <span></span>
+    <button class="tbtn atk" data-key="J" data-hold="1">ATTACK</button>
+  </div>
+  <div class="qte" id="qte"></div>
+  <button class="tbtn" id="push" type="button" hidden>PUSH!</button>
+</div>
+<button id="skipBtn" type="button" hidden>SKIP ▸</button>
+<div class="screen" id="title">
+  <h1>THE ECLIPSE</h1>
+  <div class="sub">PROTOTYPE 5-CLAUDE · BEAM CLASH EACH PHASE · STRUGGLE + PUSHING LINES · SECRET THIRD</div>
+  <div class="keys">
+    <b>WASD / ARROWS</b><span>Move</span>
+    <b>J (hold)</b><span>Slash · also the counter and the clash mash</span>
+    <b>K</b><span>Cast the selected special</span>
+    <b>1 – 6 · Q / E</b><span>Pick a special (six per form)</span>
+    <b>SPACE</b><span>Dodge · just before a hit = PERFECT</span>
+    <b>H</b><span>Heal · 1 per phase, +1 per SURVIVE</span>
+    <b>F</b><span>ECLIPSE BREAKER when it pops up, then type its 7 keys</span>
+    <b>CLICK · ENTER · J</b><span>Next dialogue line · X skips</span>
+    <b>ON SCREEN KEYS</b><span>Rune Lock and chain escapes</span>
+    <b>M · P</b><span>Sound on/off · pause</span>
+  </div>
+  <div class="row"><button class="big" id="start" type="button">FIGHT</button></div>
+</div>
+<div class="screen" id="paused" hidden><h1>PAUSED</h1><div class="sub">P / ESC TO RESUME</div><div class="row"><button class="big" id="resume" type="button">RESUME</button><button class="ghost" id="restart1" type="button">RESTART</button><button class="ghost" id="muteBtn2" type="button">SOUND ON</button></div></div>
+<div class="screen" id="end" hidden>
+  <h1 id="endTitle">VICTORY</h1><div class="sub" id="endSub"></div>
+  <ul class="rewards" id="rewards"></ul>
+  <div class="stats" id="stats"></div>
+  <div class="hint" id="secretHint" hidden></div>
+  <div class="row"><button class="big" id="again" type="button">FIGHT AGAIN</button></div>
+</div>
+<div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
+<script type="module">
+import { createFight, step, W, H } from './sim.js?v=5b';
+import { createRenderer } from './render.js?v=5b';
+import { createSfx } from './sfx.js?v=5';
+const q = new URLSearchParams(location.search);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
+const canvas = document.getElementById('c');
+const sfx = createSfx();
+const renderer = createRenderer(canvas, { reducedMotion: reduced, onEvent: sfx.play });
+let fight = null, running = false, paused = false, last = 0, acc = 0, ended = false, taps = 0;
+const held = new Set(), edges = new Set(), letters = [];
+const view = { width: 0, height: 0, scale: 1, ox: 0, oy: 0, dpr: 1 };
+const $ = (id) => document.getElementById(id);
+function resize() {
+  const dpr = Math.min(2, devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  // contain: the whole 1280x720 play area and HUD stay visible; the arena art runs past it so no black bars
+  const sx = Math.min(w / W, h / H) * dpr;
+  Object.assign(view, { width: canvas.width, height: canvas.height, scale: sx, ox: (canvas.width - W * sx) / 2, oy: (canvas.height - H * sx) / 2, dpr });
+  $('rotate').hidden = !(h > w && matchMedia('(pointer: coarse)').matches);
+}
+addEventListener('resize', resize); resize();
+const isTouch = matchMedia('(pointer: coarse)').matches || q.get('touch') === '1';
+if (isTouch) document.body.classList.add('touch');
+view.touch = isTouch;
+const keyName = (e) => e.key === ' ' ? ' ' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+addEventListener('keydown', (e) => {
+  const k = keyName(e);
+  if (k === 'Escape' || k === 'P') { togglePause(); e.preventDefault(); return; }
+  if (k === 'M') { toggleMute(); return; }
+  if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
+  if (!e.repeat) { edges.add(k); if (/^[A-Z0-9]$/.test(k)) letters.push(k); }
+  held.add(k);
+});
+addEventListener('keyup', (e) => held.delete(keyName(e)));
+addEventListener('blur', () => held.clear());
+// canvas taps / clicks: clash mash, cine skip, and the touch ability dock
+canvas.addEventListener('pointerdown', (e) => {
+  if (!fight) return;
+  const x = (e.clientX * view.dpr - view.ox) / view.scale, y = (e.clientY * view.dpr - view.oy) / view.scale;
+  const slot = isTouch && fight.phase === 'fight' && renderer.dock.find((r) => x >= r.x - 6 && x <= r.x + r.w + 6 && y >= r.y - 10 && y <= r.y + r.h + 24);
+  if (slot) { letters.push(slot.key); return; }
+  if (fight.phase === 'clash') taps++;
+  if (['cine', 'timing', 'talk'].includes(fight.phase)) edges.add('Enter');
+});
+const stick = { x: 0, y: 0, id: null };
+const stickEl = $('stick'), nub = $('nub');
+stickEl.addEventListener('pointerdown', (e) => { stick.id = e.pointerId; stickEl.setPointerCapture(e.pointerId); moveStick(e); });
+stickEl.addEventListener('pointermove', (e) => { if (e.pointerId === stick.id) moveStick(e); });
+const endStick = () => { stick.id = null; stick.x = stick.y = 0; nub.style.transform = ''; };
+stickEl.addEventListener('pointerup', endStick); stickEl.addEventListener('pointercancel', endStick);
+function moveStick(e) { const r = stickEl.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), l = Math.hypot(dx, dy), m = Math.min(1, l / 50); stick.x = l ? dx / l * m : 0; stick.y = l ? dy / l * m : 0; nub.style.transform = `translate(${stick.x * 40}px,${stick.y * 40}px)`; }
+function bindTouch(btn) {
+  const k = btn.dataset.key;
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); edges.add(k); if (/^[A-Z0-9]$/.test(k)) letters.push(k); if (btn.dataset.hold) held.add(k); });
+  const up = () => held.delete(k); btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('pointerleave', up);
+}
+document.querySelectorAll('#pad .tbtn').forEach(bindTouch);
+$('push').addEventListener('pointerdown', (e) => { e.preventDefault(); taps++; });
+const qte = $('qte'); let qteSet = '';
+function syncTouchUi() {
+  if (!fight || !isTouch) return;
+  $('finBtn').hidden = !(fight.phase === 'fight' && fight.finisher.prompt > 0);
+  const want = fight.phase === 'rune' ? 'QWERASDF' : fight.phase === 'chained' ? 'JKLUIO' : fight.phase === 'finisherQte' ? 'WASDJKLI' : '';
+  if (want !== qteSet) { qteSet = want; qte.replaceChildren(...[...want].map((k) => { const b = document.createElement('button'); b.className = 'tbtn'; b.dataset.key = k; b.textContent = k; bindTouch(b); return b; })); }
+  const clash = fight.phase === 'clash';
+  $('push').hidden = !clash;
+  $('pad').style.visibility = want || clash || ['cine', 'talk'].includes(fight.phase) ? 'hidden' : 'visible';
+  $('stick').style.visibility = clash || ['cine', 'talk', 'finisherQte'].includes(fight.phase) ? 'hidden' : 'visible';
+}
+function input() {
+  const mx = (held.has('D') || held.has('ArrowRight') ? 1 : 0) - (held.has('A') || held.has('ArrowLeft') ? 1 : 0) + stick.x;
+  const my = (held.has('S') || held.has('ArrowDown') ? 1 : 0) - (held.has('W') || held.has('ArrowUp') ? 1 : 0) + stick.y;
+  const inp = { mx: Math.max(-1, Math.min(1, mx)), my: Math.max(-1, Math.min(1, my)), attack: held.has('J'), attack0: edges.has('J'), cast: edges.has('K'),
+    next: edges.has('E'), prev: edges.has('Q'), dodge: edges.has(' ') || edges.has('Shift'), heal: edges.has('H'), finisher: edges.has('F'), confirm: edges.has('Enter'), skip: edges.has('X') || edges.has('Skip'),
+    taps, keysPressed: letters.splice(0) };
+  edges.clear(); taps = 0;
+  return inp;
+}
+const empty = { skip: false, mx: 0, my: 0, attack: false, attack0: false, cast: false, next: false, prev: false, dodge: false, heal: false, finisher: false, confirm: false, taps: 0, keysPressed: [] };
+function start() {
+  fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force') });
+  if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
+  window.__fight = fight; ended = false; running = true; paused = false;
+  for (const id of ['title', 'end', 'paused']) $(id).hidden = true;
+  last = performance.now();
+}
+function togglePause() { if (!running || ended) return; paused = !paused; $('paused').hidden = !paused; last = performance.now(); }
+function toggleMute() { const m = sfx.toggle(); $('muteBtn').textContent = $('muteBtn2').textContent = m ? 'SOUND OFF' : 'SOUND ON'; }
+$('muteBtn').onclick = toggleMute; $('skipBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); edges.add('Skip'); }); $('muteBtn2').onclick = toggleMute;
+$('start').onclick = start; $('again').onclick = start; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
+function showEnd() {
+  ended = true;
+  const win = fight.phase === 'victory', secret = win && fight.result.tier === 'secret';
+  $('endTitle').textContent = secret ? 'TRUE VICTORY' : win ? 'VICTORY' : 'DEFEATED';
+  $('endTitle').style.color = secret ? '#ffffff' : '';
+  $('endSub').textContent = secret ? 'TOTALITY IS OVER' : win ? 'THE ECLIPSE IS BROKEN' : fight.stage === 3 ? 'TOTALITY ENDURES' : 'THE ECLIPSE ENDURES';
+  $('rewards').replaceChildren(...(win ? fight.result.rewards : []).map((r) => { const li = document.createElement('li'); li.textContent = r; if (secret) li.className = 'secret'; return li; }));
+  const st = fight.stats;
+  $('stats').textContent = `PERFECT DODGES ${st.perfects}  ·  FINISHERS ${st.finishers}  ·  HEALS USED ${st.heals}`;
+  // the secret phase is hinted only after a normal clear
+  $('secretHint').hidden = !(win && !secret);
+  $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, LAND A PERFECT DODGE, THEN FINISH WITH THE ECLIPSE BREAKER.';
+  $('end').hidden = false;
+}
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
+  const rotating = !$('rotate').hidden;
+  if (fight && running && !paused && !rotating && !ended) {
+    acc += dt;
+    // held state (move, J held) applies to every sub-step; presses only to the first
+    let inp = acc >= 1 / 120 ? input() : null; // no step this frame (high refresh): keep the presses for the next one
+    while (acc >= 1 / 120) { step(fight, 1 / 120, inp); acc -= 1 / 120; inp = { ...empty, mx: inp.mx, my: inp.my, attack: inp.attack }; }
+    syncTouchUi(); sfx.update(fight); $('skipBtn').hidden = fight.phase !== 'talk';
+    if ((fight.phase === 'victory' && fight.phaseT > 1.6) || (fight.phase === 'defeat' && fight.phaseT > 1.4)) showEnd();
+  } else if (fight && (paused || rotating)) input();
+  if (fight) renderer.render(fight, (paused || rotating) ? 0 : dt, view);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
