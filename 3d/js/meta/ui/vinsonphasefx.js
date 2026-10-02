@@ -1,4 +1,4 @@
-import {vinsonGravityRadius} from '../core/vinsonbattle.js?v=vinson33';
+import {vinsonGravityRadius} from '../core/vinsonbattle.js?v=vinson34';
 const clamp=n=>Math.max(0,Math.min(1,n));
 // All danger geometry is taken from the seeded simulation, never random render data.
 export function drawPhonkHazard(ctx,h,t,reducedMotion,beam){
@@ -22,15 +22,15 @@ export function drawPhonkHazard(ctx,h,t,reducedMotion,beam){
   ctx.restore();
 }
 export function drawStarAbility(ctx,p,t,reducedMotion,star,beam){
-  const spin=reducedMotion?0:t*(p.effect==='starLattice'?4:1.5);
+  const spin=reducedMotion?0:t*(p.effect==='starLattice'?.65:.45);
   if(p.effect==='constellation'||p.effect==='starLattice'){
     beam(ctx,p.x-p.vx*.04,p.y-p.vy*.04,p.x,p.y,'#9ae9ff',2,.4);
-    star(ctx,p.x,p.y,p.effect==='starLattice'?19:14,spin);
+    star(ctx,p.x,p.y,p.effect==='starLattice'?23:20,spin);
     if(p.charge>0){ctx.save();ctx.strokeStyle='#aaf3ff';ctx.globalAlpha=.4;ctx.lineWidth=1;ctx.beginPath();ctx.arc(p.x,p.y,25,0,Math.PI*2);ctx.stroke();ctx.restore();}
   }else{
-    const domain=p.effect==='domainStar',radius=(domain?42:32)*(p.charge>0?clamp(1-p.charge/.5):1);
+    const domain=p.effect==='domainStar',radius=(domain?48:38)*(p.charge>0?clamp(1-p.charge/.5):1);
     star(ctx,p.x,p.y,radius,spin);star(ctx,p.x,p.y,radius*.65,-spin,.6);
-    ctx.save();ctx.strokeStyle=domain?'#d8f9ff':'#ffe3a1';ctx.lineWidth=2;ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(p.x,p.y,radius+12,0,Math.PI*2);ctx.stroke();ctx.restore();
-    if(p.charge<=0)beam(ctx,p.x-p.vx*.12,p.y-p.vy*.12,p.x,p.y,domain?'#aaeaff':'#ffe0a1',8,.35);
+    ctx.save();ctx.strokeStyle=domain?'#d8f9ff':'#7599ed';ctx.lineWidth=2;ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(p.x,p.y,radius+12,0,Math.PI*2);ctx.stroke();ctx.restore();
+    if(p.charge<=0)beam(ctx,p.x-p.vx*.12,p.y-p.vy*.12,p.x,p.y,domain?'#aaeaff':'#0038b8',8,.35);
   }
 }

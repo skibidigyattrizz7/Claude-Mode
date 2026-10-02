@@ -1,12 +1,13 @@
+import {drawFlagStar,drawStarImpact} from './vinsonweaponart16.js?v=16';
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson33';
-import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15g';
-import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15g';
-import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15g';
-import {drawPeacefulEnding} from './vinsonendingfx.js?v=15g';
-import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15g';
-import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=15c';
-import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=15g';
+import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=16';
+import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=16';
+import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=16';
+import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=16';
+import {drawPeacefulEnding} from './vinsonendingfx.js?v=16';
+import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=16';
+import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=16';
+import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=16';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 import { load } from '../core/storage.js';
 
@@ -74,7 +75,7 @@ function renderHandCatch(ctx,h,t,reducedMotion) {
   // Mark the dangerous corridor while leaving the perpendicular exits conspicuously open.
   ctx.save();ctx.globalAlpha=.12+.12*tele;ctx.fillStyle='#ff251e';ctx.beginPath();ctx.moveTo(c.x1-uy*w/2,c.y1+ux*w/2);ctx.lineTo(c.x2-uy*w/2,c.y2+ux*w/2);ctx.lineTo(c.x2+uy*w/2,c.y2-ux*w/2);ctx.lineTo(c.x1+uy*w/2,c.y1-ux*w/2);ctx.closePath();ctx.fill();ctx.restore();
   ctx.save();ctx.strokeStyle='#ff6458';ctx.lineWidth=3;ctx.setLineDash([14,10]);for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(c.x1-uy*w*.5*side,c.y1+ux*w*.5*side);ctx.lineTo(c.x2-uy*w*.5*side,c.y2+ux*w*.5*side);ctx.stroke();}ctx.restore();
-  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 15px monospace';ctx.textAlign='center';ctx.fillText('HAND SWEEP · DODGE ABOVE / BELOW THE RED LANE',640,230);ctx.textAlign='start';ctx.restore();
+  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 24px system-ui';ctx.textAlign='center';ctx.fillText('HAND SWEEP · DODGE ABOVE / BELOW THE RED LANE',640,230);ctx.textAlign='start';ctx.restore();
   if(close>.65)impactRings(ctx,cx,cy,clamp((close-.65)*2.8,0,1),t,reducedMotion,'#ff715e');
 }
 function laserRay(ctx,ray,t,ready,alpha) {
@@ -176,10 +177,21 @@ function field(ctx,t,stage=0) {
     ctx.beginPath();ctx.moveTo(x,420);ctx.lineTo(x,420-h);ctx.lineTo(x+29,420-h-12);ctx.lineTo(x+37,420-h+28);ctx.lineTo(x+64,420-h+18);ctx.lineTo(x+69,420);ctx.closePath();ctx.fill();
     ctx.fillStyle='#40313a';ctx.fillRect(x+8,420-h+40,3,h-40);
   }
-  ctx.fillStyle='#0a090d';ctx.beginPath();ctx.moveTo(0,250);ctx.lineTo(W,250);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='#44323a';ctx.lineWidth=1;
-  for(let i=-6;i<14;i++){ctx.beginPath();ctx.moveTo(640+i*80,250);ctx.lineTo(640+i*200,H);ctx.stroke();}
-  for(let i=0;i<7;i++){const y=250+Math.pow(i/6,1.7)*470;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const floor=ctx.createLinearGradient(0,210,0,H);floor.addColorStop(0,stage?'#49353a':'#506271');floor.addColorStop(1,stage?'#231d25':'#273944');ctx.fillStyle=floor;ctx.beginPath();ctx.moveTo(0,210);ctx.lineTo(W,210);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+  // Borrow Claude07's lit ruins and horizon framing without covering movement lanes.
+  ctx.strokeStyle=stage?'#be6570':'#98b4c2';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,210);ctx.lineTo(W,210);ctx.stroke();
+  ctx.fillStyle=stage?'#ff9b6244':'#ecd19b44';
+  for(let i=0;i<9;i+=2){const x=i*165-28,h=180+(i*97%130);for(let r=0;r<3;r++){const wy=420-h+36+r*24;if(wy<199)ctx.fillRect(x+12,wy,8,10);};}
+  // Irregular stone courses converge toward the horizon; broad seams stay quieter than warnings.
+  ctx.lineWidth=1;ctx.strokeStyle=stage?'#78606638':'#9eaeb52e';
+  for(let row=0;row<7;row++){const y=210+Math.pow(row/7,1.6)*510,next=210+Math.pow((row+1)/7,1.6)*510,tile=90+row*45;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    for(let col=-1;col<15;col++){const x=col*tile+(row%2)*tile*.5;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(x-640)*.04,next);ctx.stroke();}}
+  // A few broken seams, rather than a wireframe floor.
+  for(let i=0;i<8;i++){const x=80+i*157,y=335+(i*83)%285;ctx.strokeStyle=stage?'#160e1780':'#14263266';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+21,y+8);ctx.lineTo(x+12,y+17);ctx.lineTo(x+39,y+25);ctx.stroke();}
+  ctx.save();
+  const haze=ctx.createLinearGradient(0,200,0,300);haze.addColorStop(0,stage?'#d6766340':'#cad9df50');haze.addColorStop(1,'#879bab00');ctx.fillStyle=haze;ctx.fillRect(0,210,W,90);
+  for(let i=0;i<16;i++){const x=(i*197+37)%W,y=615+(i*29)%100,r=8+i%4*3;ctx.fillStyle=stage?'#261f25':'#26323b';ctx.beginPath();ctx.moveTo(x-r,y);ctx.lineTo(x-r*.6,y-r*.6);ctx.lineTo(x+r*.5,y-r);ctx.lineTo(x+r,y);ctx.closePath();ctx.fill();ctx.strokeStyle=stage?'#7c5958':'#7b8f98';ctx.lineWidth=1;ctx.stroke();}
+  ctx.restore();
   // Smouldering seams and slow airborne embers give depth without covering attack warnings.
   for(let i=0;i<24;i++){
     const x=(i*137+t*(4+i%3))%W,y=120+(i*71+t*(2+i%4))%520;
@@ -194,7 +206,7 @@ function health(ctx,s,feedback){
   ctx.fillStyle='#28323a';ctx.fillRect(x+12,96,356,20);
   ctx.fillStyle='#f0ddbd';ctx.fillRect(x+12,96,356*(feedback?.chips?.[actor===s.hero?'hero':'boss']??actor.hp)/actor.maxHp,20);
   ctx.fillStyle=color;ctx.fillRect(x+12,96,356*actor.hp/actor.maxHp,20);
-  if(actor===s.boss){ctx.fillStyle='#0b1016';for(const gate of [.2,.4,.6,.8])ctx.fillRect(x+12+356*gate-2,93,4,26);}
+  if(actor===s.boss){ctx.fillStyle='#0b1016';for(const gate of s.gates||[.2,.4,.6,.8])ctx.fillRect(x+12+356*gate-2,93,4,26);}
  };bar(60,s.hero,names[heroArt(s.stage)],'#75bbe6');bar(840,s.boss,names[bossArt(s.stage)],'#d74843');
 }
 
@@ -223,7 +235,7 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
   field(ctx, t, shot?.villain==='phonk'?1:state.stage);
   if(shot?.domainPower)drawDomainClash(ctx,shot,t,reducedMotion,star);
   if(shot?.peace)drawPeacefulEnding(ctx,shot,t,reducedMotion,star);
-  if(shot?.revealFace>0&&images.grumpy?.complete&&images.grumpy.naturalWidth){ctx.save();ctx.globalAlpha=shot.revealFace;const img=images.grumpy,scale=Math.min(180/img.naturalWidth,180/img.naturalHeight);ctx.fillStyle='#121b22';ctx.fillRect(542,222,196,196);ctx.strokeStyle='#b8c6ce';ctx.lineWidth=2;ctx.strokeRect(542,222,196,196);ctx.drawImage(img,640-img.naturalWidth*scale/2,230,img.naturalWidth*scale,img.naturalHeight*scale);ctx.restore();}
+  if(shot?.revealFace>0&&images.grumpy?.complete&&images.grumpy.naturalWidth){ctx.save();ctx.globalAlpha=shot.revealFace;const img=images.grumpy,scale=Math.max(168/img.naturalWidth,190/img.naturalHeight);ctx.beginPath();ctx.ellipse(640,327,84,95,0,0,Math.PI*2);ctx.fillStyle='#18252c';ctx.fill();ctx.clip();ctx.drawImage(img,640-img.naturalWidth*scale/2,327-img.naturalHeight*scale/2,img.naturalWidth*scale,img.naturalHeight*scale);ctx.restore();}
   if (!shot) {
     for(const trail of feedback?.trails||[])sprite(ctx,images[heroArt(state.stage)],heroArt(state.stage),trail.x,trail.y,t,trail.life*.65,true);
     for (const h of state.hazards) {
@@ -263,29 +275,29 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
     }
     if(state.sequence?.kind==='chains')sprite(ctx,images[heroArt(state.stage)],heroArt(state.stage),actor.x,actor.y,t,1,visualHero.moving);
     for (const p of state.projectiles) {
-      if(['constellation','starLattice','starNova','domainStar'].includes(p.effect)){drawStarAbility(ctx,p,t,reducedMotion,star,beam);continue;}
+      if(['constellation','starLattice','starNova','domainStar'].includes(p.effect)){drawStarAbility(ctx,p,t,reducedMotion,drawFlagStar,beam);continue;}
       if(p.effect==='returningShield'){
-        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(t*8);ctx.scale(1,.65);
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(reducedMotion?0:t*.65);ctx.scale(1,.65);
         ctx.fillStyle='#18374e';ctx.strokeStyle='#c1e8ff';ctx.lineWidth=3;ctx.shadowColor='#70caff';ctx.shadowBlur=0;
         ctx.beginPath();ctx.arc(0,0,27,0,Math.PI*2);ctx.fill();ctx.stroke();
-        ctx.strokeStyle='#718faa';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,20,0,Math.PI*2);ctx.stroke();star(ctx,0,0,16,0);ctx.restore();
+        ctx.strokeStyle='#718faa';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,20,0,Math.PI*2);ctx.stroke();drawFlagStar(ctx,0,0,18,0);ctx.restore();
         beam(ctx,p.x-p.vx*.05,p.y-p.vy*.05,p.x,p.y,'#4dbdff',3,.45);continue;
       }
       if(p.effect==='groundShockwave'){
         const r=p.waveRadius||p.radius||30;ctx.save();ctx.strokeStyle='#a9dfff';ctx.lineWidth=5;ctx.shadowColor='#438fff';ctx.shadowBlur=0;ctx.globalAlpha=.8;
         ctx.beginPath();ctx.ellipse(p.x,p.y,r,r*.55,0,0,Math.PI*2);ctx.stroke();
-        for(let i=0;i<12;i++){const a=i*Math.PI/6;ctx.beginPath();ctx.moveTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r*.55);ctx.lineTo(p.x+Math.cos(a)*(r+12),p.y+Math.sin(a)*(r+12)*.55);ctx.stroke();}ctx.restore();continue;
+        for(let i=0;i<12;i++){const a=i*Math.PI/6;ctx.beginPath();ctx.moveTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r*.55);ctx.lineTo(p.x+Math.cos(a)*(r+12),p.y+Math.sin(a)*(r+12)*.55);ctx.stroke();}drawFlagStar(ctx,p.x,p.y,Math.min(38,r*.7),reducedMotion?0:t*.45);ctx.restore();continue;
       }
-      const rotation=p.type==='spinner'?t*10:Math.atan2(p.vy,p.vx)+t*.6;
+      const rotation=reducedMotion?0:t*(p.type==='spinner'?.8:.45);
       if(p.type==='eyes') {
         if(p.effect==='chargedEyeLance'){ctx.save();ctx.globalAlpha=.45;ctx.strokeStyle='#a0d8ff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.x,p.y,22+Math.sin(t*10)*4,0,Math.PI*2);ctx.stroke();ctx.restore();}
         for(const eye of battleEyePositions(heroArt(state.stage),visualHero.x,visualHero.y))beam(ctx,eye.x,eye.y,p.x,p.y,'#168cff',p.effect==='chargedEyeLance'?8:3.5,.82,'#a8dcff');
       } else if(p.type==='spinner') {
-        for(let i=1;i<=3;i++)star(ctx,p.x-p.vx*.018*i,p.y-p.vy*.018*i,18,rotation-i*.24,.18/i);
+        for(let i=1;i<=2;i++)drawFlagStar(ctx,p.x-p.vx*.025*i,p.y-p.vy*.025*i,14,rotation-i*.24,.3/i);
       } else if(p.type==='explosive') {
-        ctx.save();ctx.fillStyle='#f7bf3820';ctx.beginPath();ctx.arc(p.x,p.y,28+Math.sin(t*12)*4,0,Math.PI*2);ctx.fill();ctx.restore();
+        ctx.save();ctx.fillStyle='#0038b82e';ctx.beginPath();ctx.arc(p.x,p.y,28+Math.sin(t*12)*4,0,Math.PI*2);ctx.fill();ctx.restore();
       }
-      star(ctx,p.x,p.y,p.type==='explosive'?23:p.type==='spinner'?20:16,rotation);
+      drawFlagStar(ctx,p.x,p.y,p.type==='explosive'?29:p.type==='spinner'?20:18,rotation);
     }
   } else {
     sprite(ctx, images[shot.hero], shot.hero, 300, 470, t, shot.heroAlpha);
@@ -310,6 +322,7 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
     if(p.kind==='blast'){ctx.strokeStyle='#ffc171';ctx.lineWidth=5*p.life/p.maxLife;ctx.beginPath();ctx.arc(p.x,p.y,(1-p.life/p.maxLife)*100,0,Math.PI*2);ctx.stroke();star(ctx,p.x,p.y,20+(1-p.life/p.maxLife)*60,t*2,p.life/p.maxLife);}
     else ctx.fillRect(p.x, p.y, p.size, p.size);
   }
+  for(const impact of feedback?.impacts||[])drawStarImpact(ctx,impact,t,reducedMotion);
   for(const pop of feedback?.pops||[]){ctx.save();ctx.globalAlpha=Math.min(1,pop.life*3);ctx.fillStyle=pop.color;ctx.font='900 18px monospace';ctx.textAlign='center';ctx.fillText(pop.text,pop.x,pop.y-(1-pop.life/.6)*18);ctx.restore();}
   ctx.globalAlpha=1;
   if(!shot){drawVinsonCombo(ctx,state,t,reducedMotion);drawVinsonSequence(ctx,state,t,reducedMotion);
@@ -336,9 +349,9 @@ export async function registerVinsonBattleAttempt(online) {
   return online.vinson.battleStart();
 }
 
-export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, previewAttack = null, previewBox = 'lanes', previewEnding = false, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
+export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, previewAttack = null, previewBox = 'lanes', difficulty = 'normal', previewEnding = false, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
   if (document.querySelector('.vb-screen')) return null;
-  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=33', import.meta.url).href; document.head.append(link);
+  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=16', import.meta.url).href; document.head.append(link);
   const screen = node('section', 'vb-screen'); screen.setAttribute('role', 'dialog'); screen.setAttribute('aria-modal', 'true'); screen.setAttribute('aria-label', 'Fight Suppression');
   const stage = node('div', 'vb-stage'), canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
   canvas.setAttribute('aria-label', 'Move to dodge the marked attacks, attack Vinson, and dodge with Space.'); stage.append(canvas);
@@ -364,8 +377,8 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   const weapons=node('div','vb-weapons');weapons.setAttribute('aria-label','Attack type');
   const weaponButtons=[];
   for(const [i,type,label] of [[1,'star','Star'],[2,'spinner','Spin'],[3,'explosive','Burst'],[4,'eyes','Eyes'],[5,'constellation','Sixfold'],[6,'nova','Nova']]) {
-    const b=node('button',type==='star'?'on':'',label);b.setAttribute('aria-pressed',type==='star'?'true':'false');
-    b.onclick=()=>{if(!blockingDialogue)selectWeapon(type)};weaponButtons.push({b,type,i});weapons.append(b);
+    const b=node('button',type==='star'?'on':'');b.dataset.weapon=type;const icon=node('span','vb-ability-icon','✡'),name=node('span','vb-ability-name',label),cooldown=node('span','vb-ability-cooldown','READY');b.append(icon,name,cooldown);b.setAttribute('aria-pressed',type==='star'?'true':'false');
+    b.onclick=()=>{if(!blockingDialogue)selectWeapon(type)};weaponButtons.push({b,type,i,name,cooldown});weapons.append(b);
   }
   function selectWeapon(type){selectedWeapon=type;for(const item of weaponButtons){item.b.className=item.type===type?'on':'';item.b.setAttribute('aria-pressed',item.type===type?'true':'false');}}
   for(const [offset,label,cls] of [[-1,'◀','prev'],[1,'▶','next']]){const b=node('button',`vb-cycle vb-cycle-${cls}`,label);b.setAttribute('aria-label',offset<0?'Previous ability':'Next ability');b.onclick=()=>{if(blockingDialogue)return;const index=weaponButtons.findIndex(w=>w.type===selectedWeapon);selectWeapon(weaponButtons[(index+offset+weaponButtons.length)%weaponButtons.length].type);};weapons.append(b);}
@@ -390,14 +403,15 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const exit = () => { if (exited) return; exited = true; screen.remove(); link.remove(); onClose?.(); };
     closeButton.onclick = exit; return { close: exit };
   }
+  let selectedDifficulty=difficulty==='hard'?'hard':'normal';
   const compactArena=Number(globalThis.innerHeight)>0&&globalThis.innerHeight<=450;
-  let battle = createVinsonBattle({ seed, compact:compactArena, openingAttack:previewAttack,boxPattern:previewBox }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
+  let battle = createVinsonBattle({ seed, compact:compactArena, openingAttack:previewAttack,boxPattern:previewBox,difficulty:selectedDifficulty }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
   let mode = '', cinematicKind = '', cinematicTime = 0, trauma = 0, particles = [], nonce = null, victoryBusy = false, victoryConfirmed = false;
   let finalClash=null,clashInputs=[],finaleWinDelay=0;
   const clashDock=node('div','vb-clash-keys');clashDock.hidden=true;stage.append(clashDock);
   const pushButton=node('button','','Push · J');pushButton.dataset.action='push';pushButton.style.width='120px';pushButton.addEventListener('pointerdown',e=>{e.preventDefault();clashInputs.push('j');held.add('attack');pushButton.setPointerCapture(e.pointerId);});for(const evt of ['pointerup','pointercancel','lostpointercapture'])pushButton.addEventListener(evt,()=>held.delete('attack'));clashDock.append(pushButton);
   for(const key of ['q','e','r','f']){const b=node('button','',key.toUpperCase());b.setAttribute('aria-label','Clash key '+key.toUpperCase());b.onclick=()=>{if(finalClash&&!finalClash.won&&!finalClash.lost)clashInputs.push(key);};clashDock.append(b);}
-  const feedback={pops:[],trails:[],chips:{hero:battle.state.hero.hp,boss:battle.state.boss.hp},chipDelay:{hero:0,boss:0},hurt:0,flash:0,bossFlash:0,banner:0,stop:0,slow:0};
+  const feedback={impacts:[],impactLock:0,pops:[],trails:[],chips:{hero:battle.state.hero.hp,boss:battle.state.boss.hp},chipDelay:{hero:0,boss:0},hurt:0,flash:0,bossFlash:0,banner:0,stop:0,slow:0};
   let dialogue=null,lastDialogue=-10;
   const barkLast=new Map(),barkCount=new Map();
   let blockingDialogue=null,dialogueQueue=[],dialogueComplete=null;
@@ -464,13 +478,14 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40, life: .6 + i % 5 * .12, maxLife: 1.1, color, size: 2 + i % 3 });
     }
   }
-  function hitFeedback(tier,x,y,text='',target='boss'){
+  function hitFeedback(tier,x,y,text='',target='boss',weapon='star'){
+    if(target==='boss'&&text){if(feedback.impacts.length>=12)feedback.impacts.shift();feedback.impacts.push({x,y,age:0,life:tier===2?.65:.38,tier:tier+1,weapon,stage:battle.state.stage});}
     const count=[3,10,30][tier];burst(x,y,target==='hero'?'#ff9579':'#d7edff',count);
     if(text){if(feedback.pops.length>=12)feedback.pops.shift();feedback.pops.push({x,y,text,life:.6,color:target==='hero'?'#ffb1a1':'#eefaff'});}
     feedback.chipDelay[target]=.4;
     if(target==='boss'&&!reducedMotion)feedback.bossFlash=.02;
-    if(target==='hero')feedback.hurt=.25;
-    if(tier>0){trauma=Math.min(1,trauma+[0,.35,.8][tier]);if(!reducedMotion){feedback.stop=tier===2?.12:.05;feedback.slow=tier===2?.5:0;feedback.flash=tier===2?.06:0;}tone('hit');}
+    if(target==='hero')feedback.hurt=battle.state.phase==='dodgebox'?0:.2;
+    if(tier>0&&feedback.impactLock<=0){feedback.impactLock=.14;trauma=Math.min(1,trauma+[0,.35,.8][tier]);if(!reducedMotion){feedback.stop=tier===2?.12:.05;feedback.slow=tier===2?.5:0;feedback.flash=tier===2?.06:0;}tone('hit');}
   }
   function input() { return { x: Number(keys.has('d') || keys.has('arrowright') || held.has('right')) - Number(keys.has('a') || keys.has('arrowleft') || held.has('left')),
     y: Number(keys.has('s') || keys.has('arrowdown') || held.has('down')) - Number(keys.has('w') || keys.has('arrowup') || held.has('up')),
@@ -502,6 +517,20 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const row = node('div', 'vb-actions');
     for (const [label, action] of actions) { const b = node('button', '', label); b.onclick = action; row.append(b); }
     panel.append(row); panel.hidden = false;
+  }
+  function showIntro(stageIndex){
+    showPanel(stageIndex?'Captain Israel':'Fight Suppression',stageIndex?'Captain Israel faces Phonk Mode Vinson.':'Choose your challenge. Break free from Vinson.',[['Begin fight',startFight]]);
+    if(stageIndex)return;
+    const picker=node('div','vb-difficulty');picker.setAttribute('aria-label','Fight difficulty');
+    const help=node('p','vb-difficulty-help','');
+    const buttons=[];
+    for(const [value,label] of [['normal','Normal'],['hard','Hard']]){
+      const button=node('button','',label);button.dataset.difficulty=value;
+      button.onclick=()=>{selectedDifficulty=value;battle=createVinsonBattle({seed,compact:compactArena,openingAttack:previewAttack,boxPattern:previewBox,difficulty:value});viewHero={...battle.state.hero};feedback.chips={hero:battle.state.hero.hp,boss:battle.state.boss.hp};refresh();};
+      buttons.push(button);picker.append(button);
+    }
+    function refresh(){for(const button of buttons){button.setAttribute('aria-pressed',String(button.dataset.difficulty===selectedDifficulty));}help.textContent=selectedDifficulty==='hard'?'Hard: stronger boss, six health-gate boxes, faster attacks and a tougher clash.':'Normal: the current fight, one blue main-wave gap marker and prototype13 dodge patterns.';}
+    refresh();panel.insertBefore(picker,panel.lastChild);panel.insertBefore(help,panel.lastChild);
   }
   async function startFight() {
     if (victoryBusy || closed) return;
@@ -575,7 +604,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
         if(finalClash.phase!==previousClashPhase||['warning','stunned'].includes(finalClash.phase))clashInputs.length=0;
         if(finalClash.lost){
           mode='defeat';held.clear();keys.clear();clashDock.hidden=true;particles.length=0;
-          showPanel('Clash lost', 'Vinson overpowered you. Losing all ground or running out of time ends the clash. Mistakes only stun you.', [['Retry clash',()=>{finalClash=createVinsonClash({seed});clashInputs=[];cinematicTime=0;mode='finale';panel.hidden=true;}],['Return to Pitchside',close]]);return;
+          showPanel('Clash lost', 'Vinson overpowered you. Losing all ground or running out of time ends the clash. Mistakes only stun you.', [['Retry clash',()=>{finalClash=createVinsonClash({seed,difficulty:selectedDifficulty});clashInputs=[];cinematicTime=0;mode='finale';panel.hidden=true;}],['Return to Pitchside',close]]);return;
         }
         for(const evt of finalClash.events){
           if(evt.type==='push'){const x=vinsonClashX(finalClash.progress);burst(x,337,'#fff0b5',Math.min(12,evt.count*5));trauma=Math.min(1,trauma+(reducedMotion?0:.08*evt.count));tone('fire');}
@@ -609,12 +638,12 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if(!s.sequence)sequenceInputs.length=0;
     const attackButton=[...touch.children].find(b=>b.dataset.action==='attack');if(attackButton){attackButton.disabled=s.phase==='dodgebox';attackButton.textContent=s.phase==='timing'?'Strike':'Attack';}
     const healButton=[...touch.children].find(b=>b.dataset.action==='heal');if(healButton){healButton.textContent=`Heal ${s.hero.heals}`;healButton.disabled=s.hero.heals===0||s.phase==='timing';}
-    for(const item of weaponButtons){const labels=s.stage?{star:'Shield',spinner:'Orbit',explosive:'Rupture',eyes:'Lance',constellation:'Lattice',nova:'Domain'}:{star:'Star',spinner:'Spin',explosive:'Burst',eyes:'Eyes',constellation:'Sixfold',nova:'Nova'},stats=vinsonAbilityStats(s.stage)[item.type],remaining=s.hero.cooldowns[item.type]||0;item.b.textContent=labels[item.type]+(remaining>0?` ${remaining.toFixed(1)}s`:'');item.b.title=`${Math.round(stats.damage*.85)}–${Math.round(stats.damage*1.15)} damage per projectile · ${stats.cooldown}s cooldown`;item.b.style.setProperty?.('--recharge',String(remaining/stats.cooldown));item.b.disabled=['dodgebox','timing'].includes(s.phase);}
+    for(const item of weaponButtons){const labels=s.stage?{star:'Shield',spinner:'Orbit',explosive:'Rupture',eyes:'Lance',constellation:'Lattice',nova:'Domain'}:{star:'Star',spinner:'Spin',explosive:'Burst',eyes:'Eyes',constellation:'Sixfold',nova:'Nova'},stats=vinsonAbilityStats(s.stage)[item.type],remaining=s.hero.cooldowns[item.type]||0;item.name.textContent=labels[item.type];item.cooldown.textContent=remaining>0?remaining.toFixed(1):'✓';item.cooldown.dataset.ready=remaining>0?'false':'true';item.b.classList[remaining>0?'add':'remove']('cooling');item.b.setAttribute('aria-label',`${labels[item.type]}, ${remaining>0?remaining.toFixed(1)+' seconds cooldown':'ready'}`);item.b.style.setProperty?.('--cooldown',`${Math.min(1,remaining/stats.cooldown)*360}deg`);item.b.title=`${Math.round(stats.damage*.85)}–${Math.round(stats.damage*1.15)} damage per projectile · ${stats.cooldown}s cooldown`;item.b.style.setProperty?.('--recharge',String(remaining/stats.cooldown));item.b.disabled=['dodgebox','timing'].includes(s.phase);}
     const target = s.hero; const k = 1 - Math.exp(-22 * dt);
     viewHero.x += (target.x - viewHero.x) * k; viewHero.y += (target.y - viewHero.y) * k;
     viewHero.moving = !!(input().x || input().y);
     for (const evt of s.events) {
-      if(evt.type==='hit'){const who=evt.target==='hero'?s.hero:s.boss,tier=evt.target==='hero'||['explosive','eyes','nova','combo','timing'].includes(evt.weapon)?1:0;hitFeedback(tier,evt.x??who.x,evt.y??who.y-65,'-'+Math.round(evt.amount||0),evt.target);}
+      if(evt.type==='hit'){const who=evt.target==='hero'?s.hero:s.boss,tier=evt.target==='hero'?1:['nova','combo'].includes(evt.weapon)?2:['explosive','eyes','timing'].includes(evt.weapon)?1:0;hitFeedback(tier,evt.x??who.x,evt.y??who.y-65,'-'+Math.round(evt.amount||0),evt.target,evt.weapon);}
       if(evt.type==='comboStart'){trauma=reducedMotion?0:.35;tone('hit');}
       if(evt.type==='heal'){burst(s.hero.x,s.hero.y-55,'#99efc3',28);tone('fire');}
       if(evt.type==='bossDodge'){burst(evt.x,evt.y-100,'#c8587a',12);}
@@ -642,10 +671,10 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       if(evt.type==='perfectDodge'){hitFeedback(0,evt.x,evt.y-50,'PERFECT','boss');if(!reducedMotion)feedback.slow=.3;}
     }
     if (s.phase === 'transition' || s.phase === 'clash') {
-      cinematicKind = s.phase === 'transition' ? 'transition' : 'finale'; cinematicTime = 0;dialogue=null;acknowledgedDialogue.clear(); panel.hidden = true; mode = cinematicKind; held.clear(); keys.clear();if(cinematicKind==='finale'){finalClash=createVinsonClash({seed});clashInputs=[];finaleWinDelay=0;} tone('hit');
+      cinematicKind = s.phase === 'transition' ? 'transition' : 'finale'; cinematicTime = 0;dialogue=null;acknowledgedDialogue.clear(); panel.hidden = true; mode = cinematicKind; held.clear(); keys.clear();if(cinematicKind==='finale'){finalClash=createVinsonClash({seed,difficulty:selectedDifficulty});clashInputs=[];finaleWinDelay=0;} tone('hit');
     } else if (s.phase !== mode) {
       mode = s.phase;
-      if (mode === 'intro') showPanel(s.stage ? 'Captain Israel' : 'Fight Suppression', s.stage ? 'Captain Israel faces Phonk Mode Vinson.' : 'World-Ruler Vinson awaits. Face her and fight for your freedom.', [['Begin fight', startFight]]);
+      if (mode === 'intro') showIntro(s.stage);
       else if (mode === 'defeat') {
         held.clear(); keys.clear(); particles.length=0; trauma=0; dialogue=null; subtitle.replaceChildren();
         controls.classList.add('vb-controls-paused');stage.classList.add('vb-stage-frozen');
@@ -660,7 +689,8 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if (closed) return;
     if (document.hidden || isVinsonPortrait(Number(globalThis.innerWidth), Number(globalThis.innerHeight))) { held.clear(); keys.clear(); last = 0; accumulator = 0; raf = requestAnimationFrame(frame); return; }
     const delta = last ? Math.min(.1, (now - last) / 1000) : 0; last = now; accumulator += delta;
-    for(const key of ['hurt','flash','bossFlash','banner','slow'])feedback[key]=Math.max(0,feedback[key]-delta);
+    for(const key of ['hurt','flash','bossFlash','banner','slow','impactLock'])feedback[key]=Math.max(0,feedback[key]-delta);
+    for(let i=feedback.impacts.length-1;i>=0;i--){feedback.impacts[i].age+=delta;if(feedback.impacts[i].age>=feedback.impacts[i].life)feedback.impacts.splice(i,1);}
     for(const arr of [feedback.pops,feedback.trails])for(let i=arr.length-1;i>=0;i--){arr[i].life-=delta;if(arr[i].life<=0)arr.splice(i,1);}
     for(const key of ['hero','boss']){feedback.chipDelay[key]=Math.max(0,feedback.chipDelay[key]-delta);const hp=battle.state[key].hp;if(hp>feedback.chips[key])feedback.chips[key]=hp;else if(feedback.chipDelay[key]===0)feedback.chips[key]+=(hp-feedback.chips[key])*(1-Math.exp(-6*delta));}
     if(feedback.stop>0){feedback.stop=Math.max(0,feedback.stop-delta);accumulator=0;}
@@ -686,7 +716,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if(!clashDock.hidden){clashDock.dataset.phase=finalClash.phase;clashDock.dataset.next=finalClash.keys[finalClash.index]||'';clashDock.dataset.ready=['push','sequence'].includes(finalClash.phase)?'1':'0';for(const b of clashDock.children){const isPush=b===pushButton;b.hidden=isPush?finalClash.phase!=='push':finalClash.phase!=='sequence';b.disabled=!['push','sequence'].includes(finalClash.phase);}}
     skipEnding.hidden=!(endingSeen&&cinematicKind==='finale'&&finalClash?.won&&mode!=='result');
     const activeDialogue=dialogue&&clock<dialogue.until&&mode==='fight'?dialogue:null;
-    const text = blockingDialogue || shot || mode==='result' ? '' : activeDialogue?.text || '';
+    const text = blockingDialogue || shot || mode==='result' || battle.state.sequence || battle.state.hazards.some(h=>h.type==='handcatch') ? '' : activeDialogue?.text || '';
     if (subtitle.dataset.text !== text) { subtitle.dataset.text = text; subtitle.replaceChildren(); if (text) subtitle.append(node('strong', '', activeDialogue?.speaker||''), node('p', '', text)); }
     raf = requestAnimationFrame(frame);
   }
@@ -698,7 +728,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   if (resumeRewards) {
     mode = 'result'; victoryConfirmed = true; cinematicKind = 'finale'; cinematicTime = VINSON_CINEMATIC_DURATION.finale;
     showPanel('The curse is broken', 'Your victory is saved. Collect your three exclusive reward cards.', [['Collect rewards', claimRewards], ['Return to Pitchside', close]]);
-  } else if(previewEnding&&!online){cinematicKind='finale';cinematicTime=0;finalClash=createVinsonClash({seed});mode='finale';panel.hidden=true;} else animate(0);
+  } else if(previewEnding&&!online){cinematicKind='finale';cinematicTime=0;finalClash=createVinsonClash({seed,difficulty:selectedDifficulty});mode='finale';panel.hidden=true;} else animate(0);
   closeButton.focus(); raf = requestAnimationFrame(frame);
   return { close, get state() { return battle.state; } };
 }

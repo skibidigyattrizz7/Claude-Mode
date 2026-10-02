@@ -5,7 +5,7 @@ import { drawDodgeBox } from '../ui/vinsonfightfx.js';
 
 const tick = (battle, input = {}) => battle.step(0.05, input);
 const startBox = (seed, compact = false) => {
-  const battle = createVinsonBattle({ seed, compact });
+  const battle = createVinsonBattle({ seed, compact,difficulty:'hard' });
   battle.step(0, { advance: true });
   battle.state.hero.hp = 100000;
   battle.state.boss.hp = battle.state.boss.maxHp * .8 + 1;
@@ -49,7 +49,7 @@ const startBox = (seed, compact = false) => {
 
 // Arena floor and Patel's reduced frame / eye anchors stay aligned with the 120 px fighter.
 {
-  assert.equal(VINSON_BATTLE_ARENA.minY, 280);
+  assert.equal(VINSON_BATTLE_ARENA.minY, 230);
   const frame = vinsonSpriteFrame('patel', 1000, 1000);
   assert.equal(frame.height, 120);
   assert.equal(frame.width, 126);

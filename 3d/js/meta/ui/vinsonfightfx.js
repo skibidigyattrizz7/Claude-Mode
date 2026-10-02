@@ -1,4 +1,4 @@
-import {vinsonEarthPosition,vinsonBoxThreatPath} from '../core/vinsonbattle.js?v=vinson33';
+import {vinsonEarthPosition,vinsonBoxMarkerWave,vinsonBoxGap} from '../core/vinsonbattle.js?v=16';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
@@ -71,36 +71,41 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
   ctx.strokeStyle='#9c282b';ctx.lineWidth=1;ctx.strokeRect(b.minX-8,b.minY-8,b.maxX-b.minX+16,b.maxY-b.minY+16);
   ctx.fillStyle='#f5e9dc';ctx.font='bold 23px monospace';ctx.textAlign='center';ctx.fillText(`SURVIVE  ${Math.max(0,Math.ceil(b.duration-b.elapsed))}`,640,b.minY-20);
   ctx.font='14px monospace';ctx.fillStyle='#b5c5d0';ctx.fillText('MOVE / DODGE · NO ATTACKS IN THE BOX',640,b.maxY+28);
-  // Warn from actual emitted trajectories, never a guessed safe lane while waves overlap.
-  ctx.font='14px monospace';ctx.fillStyle='#edb6a2';ctx.fillText('MARKED PATHS ARE DANGER · YOUR HIT POINT IS THE SMALL CROSS',640,b.maxY+47);
+  const marker=vinsonBoxMarkerWave(b);
+  if(marker){
+    const preview=marker,laneHeight=(b.maxY-b.minY)/5,laneWidth=(b.maxX-b.minX)/5;
+    ctx.save();ctx.strokeStyle='#98bbcf';ctx.fillStyle='#aecddd';ctx.globalAlpha=.75;ctx.lineWidth=2;ctx.setLineDash([7,7]);
+    if(preview.pattern==='vertical'){const x=b.minX+laneWidth*preview.safe;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
+    else if(preview.pattern==='radial'){const {x,y}=vinsonBoxGap(b,preview);ctx.strokeStyle='#f07d70';ctx.beginPath();ctx.arc(x,y,24,0,Math.PI*2);ctx.stroke();}
+    else{const y=b.minY+laneHeight*preview.safe;ctx.strokeRect(b.minX+4,y+4,b.maxX-b.minX-8,laneHeight-8);}
+    ctx.restore();
+  }
   ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
   for(const p of b.bullets){
     const ready=(p.age||0)>=(p.telegraph||0);
     if(!ready){
-      const route=vinsonBoxThreatPath(b,p);if(!route)continue;
-      ctx.save();ctx.strokeStyle=p.kind==='aimed'?'#ffc58d':'#ff6560';ctx.globalAlpha=.13;ctx.lineWidth=(p.radius||7)*2;
-      ctx.beginPath();ctx.moveTo(route.x1,route.y1);ctx.lineTo(route.x2,route.y2);ctx.stroke();
-      ctx.globalAlpha=.7;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
-      ctx.beginPath();ctx.arc(route.x1,route.y1,p.radius||7,0,Math.PI*2);ctx.stroke();ctx.restore();continue;
+      // Thin fixed aim guides, never a moving hitbox during the warning.
+      const speed=Math.hypot(p.vx,p.vy)||1, length=p.kind==='aimed'?110:55;
+      ctx.save();ctx.globalAlpha=.4;ctx.strokeStyle='#efb2a0';ctx.lineWidth=1.5;ctx.setLineDash([5,7]);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+p.vx/speed*length,p.y+p.vy/speed*length);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#f8d7bb';ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();ctx.restore();continue;
     }
     if(p.kind==='beam'){
       drawBeam(ctx,p.x-(p.vx||0)*.065,p.y-(p.vy||0)*.065,p.x,p.y,'#ff514b',p.radius*1.6,.75);
     }else if(p.type==='laser'||p.type==='lane'){
       const ray=p.segment||p;drawBeam(ctx,ray.x1??p.x,ray.y1??b.minY,ray.x2??p.x,ray.y2??b.maxY,ready?'#ff3436':'#ba7976',ready?8:2,ready?.85:.35);
-    }else{ctx.globalAlpha=1;ctx.fillStyle='#ffb4a0';ctx.beginPath();ctx.arc(p.x,p.y,p.radius||7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f7372e';ctx.globalAlpha=.2;ctx.beginPath();ctx.arc(p.x,p.y,(p.radius||7)*1.55,0,Math.PI*2);ctx.fill();}
+    }else{ctx.globalAlpha=1;ctx.fillStyle='#ffb4a0';ctx.shadowColor='#f7372e';ctx.shadowBlur=9;ctx.beginPath();ctx.arc(p.x,p.y,p.radius||7,0,Math.PI*2);ctx.fill();}
   }
   ctx.shadowBlur=0;
   // Same source character at a smaller box scale, with a precise visible hurtbox.
   ctx.save();ctx.translate(state.hero.x,state.hero.y);ctx.scale(state.stage?.23:.32,state.stage?.23:.32);drawSprite(ctx,images[state.stage?'captain':'patel'],state.stage?'captain':'patel',0,0,t,state.hero.invulnerable>0?.55:1,true);ctx.restore();
   // Precise foot-level hurtbox: no blue ring or glowing disc over the actor.
-  ctx.shadowBlur=0;ctx.strokeStyle='#f1e6ce';ctx.lineWidth=1.5;ctx.beginPath();const hr=b.heroRadius||7;ctx.moveTo(state.hero.x-hr,state.hero.y);ctx.lineTo(state.hero.x+hr,state.hero.y);ctx.moveTo(state.hero.x,state.hero.y-hr);ctx.lineTo(state.hero.x,state.hero.y+hr);ctx.stroke();ctx.fillStyle='#fff3dc';ctx.fillRect(state.hero.x-1,state.hero.y-1,2,2);ctx.restore();
+  ctx.shadowBlur=0;ctx.strokeStyle='#f1e6ce';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(state.hero.x-4,state.hero.y);ctx.lineTo(state.hero.x+4,state.hero.y);ctx.moveTo(state.hero.x,state.hero.y-4);ctx.lineTo(state.hero.x,state.hero.y+4);ctx.stroke();ctx.restore();
 }
 export function drawTimingStrike(ctx,state,t){
   const m=state.timing;if(!m)return;
   const x=270,y=state.compact?380:500,w=740,marker=clamp(m.marker);
   ctx.save();ctx.fillStyle='#02050be6';ctx.fillRect(220,y-115,840,205);
   ctx.fillStyle='#edf0e8';ctx.font='bold 31px monospace';ctx.textAlign='center';ctx.fillText(m.resolved?(m.result||'STRIKE').toUpperCase():'TIME YOUR COUNTER',640,y-82);
-  ctx.fillStyle='#b8c3c9';ctx.font='17px monospace';ctx.fillText(m.resolved?'The fight resumes…':'PRESS J / ENTER / ATTACK AT THE CENTER',640,y-45);
+  ctx.fillStyle='#b8c3c9';ctx.font=(state.compact?'28':'20')+'px system-ui';ctx.fillText(m.resolved?'The fight resumes…':'PRESS J / ENTER / ATTACK AT THE CENTER',640,y-45);
   ctx.fillStyle='#111923';ctx.fillRect(x,y,w,40);ctx.strokeStyle='#d6d8ce';ctx.lineWidth=2;ctx.strokeRect(x,y,w,40);
   ctx.fillStyle='#ae4e34';ctx.fillRect(x+w*.36,y,w*.28,40);ctx.fillStyle='#f1d980';ctx.fillRect(x+w*.455,y,w*.09,40);
   ctx.fillStyle='#f4f5e7';ctx.fillRect(x+w*.49,y,w*.02,40);ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x+w*marker,y-15);ctx.lineTo(x+w*marker,y+55);ctx.stroke();

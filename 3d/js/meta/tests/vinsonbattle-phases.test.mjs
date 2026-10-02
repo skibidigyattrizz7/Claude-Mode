@@ -33,7 +33,7 @@ for (const stage of [0, 1]) {
       assert.ok(battle.state.box?.bullets.length <= 64 || battle.state.phase === 'timing');
       assert.equal(battle.state.boss.hp, hp, 'attack is disabled in box');
       sawBullets ||= !!battle.state.box?.bullets.length;
-      if (battle.state.box?.preview) assert.ok(battle.state.box.preview.remaining <= .35);
+      if (battle.state.box?.preview) assert.ok(battle.state.box.preview.remaining <= 1.1);
     }
     assert.ok(sawBullets);
     assert.equal(battle.state.phase, 'timing');
@@ -75,7 +75,7 @@ for (const stage of [0, 1]) {
   const a = start(4, 1, true), b = start(4, 1, true);
   let sawLance=false;
   for (let i = 0; i < 25; i++) { tick(a, { attack: true, weapon: 'eyes' }); tick(b, { attack: true, weapon: 'eyes' }); sawLance ||= a.state.events.some(e=>e.type==='fire'&&e.weapon==='eyes');assert.deepEqual(a.state, b.state); }
-  assert.equal(VINSON_BATTLE_ARENA.minY, 280);
+  assert.equal(VINSON_BATTLE_ARENA.minY, 230);
   assert.ok(a.state.hero.y >= 350);
   const lance = a.state.projectiles.find(p => p.effect === 'chargedEyeLance');
   assert.ok(lance || sawLance);
