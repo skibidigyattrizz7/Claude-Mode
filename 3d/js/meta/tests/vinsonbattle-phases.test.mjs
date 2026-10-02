@@ -33,7 +33,7 @@ for (const stage of [0, 1]) {
       assert.ok(battle.state.box?.bullets.length <= 64 || battle.state.phase === 'timing');
       assert.equal(battle.state.boss.hp, hp, 'attack is disabled in box');
       sawBullets ||= !!battle.state.box?.bullets.length;
-      if (battle.state.box?.preview) assert.ok(battle.state.box.preview.remaining <= .35);
+      if (battle.state.box?.preview) assert.ok(battle.state.box.preview.remaining <= 1.1);
     }
     assert.ok(sawBullets);
     assert.equal(battle.state.phase, 'timing');

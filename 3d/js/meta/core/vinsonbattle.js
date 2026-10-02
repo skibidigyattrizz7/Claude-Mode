@@ -40,12 +40,13 @@ export function vinsonBossYBounds(compact = false) {
   // beneath the dedicated bark row at both desktop and short-landscape scales.
   return compact ? { min: 490, max: 520 } : { min: 470, max: 575 };
 }
-function freshCombat(stage, seed, attempt, totalTime = 0, compact = false) {
+function freshCombat(stage, seed, attempt, totalTime = 0, compact = false, difficulty = 'normal') {
   const isFinal = stage === 1;
   return {
+    difficulty, gates:difficulty==='hard'?[.85,.7,.55,.4,.25,.1]:Array.from({length:4},(_,i)=>1-(i+1)*.2),boxClock:0,boxRounds:0,
     phase: 'intro', time: totalTime, phaseTime: 0, stage, attempt, compact: !!compact,
     hero: { x: 250, y: 425, bodyRise: isFinal ? 55 : 40, hp: 100, maxHp: 100, invulnerable: 0, dodgeCooldown: 0, attackCooldown: 0, cooldowns: {}, heals: 1, healCooldown: 0, invertedTime:0 },
-    boss: { x: 990, y: compact ? 490 : 470, hp: isFinal ? 7200 : 4800, maxHp: isFinal ? 7200 : 4800, vx: 0, vy: 0, dodgeCooldown: 0, dodgeTime: 0 },
+    boss: { x: 990, y: compact ? 490 : 470, hp: (isFinal ? 7200 : 4800)*(difficulty==='hard'?1.35:1), maxHp: (isFinal ? 7200 : 4800)*(difficulty==='hard'?1.35:1), vx: 0, vy: 0, dodgeCooldown: 0, dodgeTime: 0 },
     hazards: [], projectiles: [], events: [], box: null, timing: null, thresholdIndex: 0,
     sequence:null,sequenceCooldown:0,comboOffer:0,comboTimer:12,combo:null,
     attackTimer: 0.8, nextHazardId: 1, handQueue: [], _lastHand: 'right',
@@ -89,7 +90,7 @@ function spawnHazard(state, rng, forcedType = null, forcedHand = null) {
     if (forcedType) return;
     type = 'bombcircle';
   }
-  const telegraph = (type === 'handslam' || type === 'handcatch' ? 1.2 : (state.stage ? 0.82 : 0.92)) + rng() * 0.24;
+  const telegraph = (type === 'handslam' || type === 'handcatch' ? 1.2 : (state.difficulty==='hard'?(state.stage?.74:.82):(state.stage ? 0.82 : 0.92))) + rng() * 0.24;
   const origins = battleEyePositions(bossKey(state.stage), b.x, b.y);
   const handSources = [{ x: b.x - 65, y: b.y - 100 }, { x: b.x + 65, y: b.y - 100 }];
   const segments = type === 'eclipsecross' ? [-1,1].map(sign=>({x1:clamp(h.x-sign*420,ARENA.minX,ARENA.maxX),y1:ARENA.minY-25,x2:clamp(h.x+sign*420,ARENA.minX,ARENA.maxX),y2:maxY})) : type === 'laserline' ? origins.map(origin => ({
@@ -164,6 +165,7 @@ function hazardHitsHero(hazard, hero) {
 export function vinsonGravityRadius(hazard){return 150-115*clamp((hazard.elapsed-hazard.telegraph)/hazard.duration,0,1);}
 function damagePlayer(state, amount, source, position=null) {
   const hero = state.hero;
+  if(state.difficulty==='hard')amount=Math.round(amount*1.2);
   if (hero.invulnerable > 0) return;
   hero.hp = Math.max(0, hero.hp - amount); hero.invulnerable = 0.62;
   event(state, 'hit', { target: 'hero', source, amount, hp: hero.hp,
@@ -295,21 +297,29 @@ export function vinsonBoxGap(box,preview){
  }
  return {kind:'horizontal',x:(box.minX+box.maxX)/2,y:box.minY+(box.maxY-box.minY)*(safe+.5)/5,height:(box.maxY-box.minY)/5};
 }
-function beginBox(state) {
+/** Normal uses one wave at a time, so its blue rectangle stays genuinely safe. */
+export function vinsonBoxSafeRect(box){
+ const wave=box.safeWave&&box.bullets.some(p=>p.wave===box.safeWave.wave&&p.kind!=='aimed')?box.safeWave:box.preview;
+ if(!wave)return null;const gap=vinsonBoxGap(box,wave);
+ if(gap.kind==='horizontal')return {x:box.minX+10,y:gap.y-gap.height/2+12,w:box.maxX-box.minX-20,h:gap.height-24};
+ if(gap.kind==='vertical')return {x:gap.x-gap.width/2+18,y:box.minY+10,w:gap.width-36,h:box.maxY-box.minY-20};
+ return {x:gap.x-12,y:gap.y-9,w:24,h:18};
+}
+function beginBox(state,{bonus=false}={}) {
   state.sequence=null;state.comboOffer=0;
-  const maxY = state.compact ? 470 : 580;
-  state.box = { minX: 320, maxX: 960, minY: state.compact ? 300 : 320,
-    maxY, heroRadius: 7, pattern: ['lanes', 'vertical', 'radial', 'beams'][state.thresholdIndex],
-    elapsed: 0, duration: 9 + nextRandom(state) * 2, wave: 0, bullets: [], spawnTimer: 0.65,
+  const maxY = state.compact ? 485 : 600;state.boxClock=0;state.boxRounds++;
+  state.box = { minX: 260, maxX: 1020, minY: state.compact ? 270 : 300,
+    maxY, heroRadius: 7, bonus, pattern: ['lanes', 'vertical', 'radial', 'beams'][bonus?(state.boxRounds-1)%4:state.thresholdIndex%4],
+    elapsed: 0, duration: (state.difficulty==='hard'?11:9) + nextRandom(state) * 2, wave: 0, bullets: [], spawnTimer: state.difficulty==='hard'?.85:1.15,
     pressureTimer: 1.25, pressureWave: 0, preview: null };
-  state.projectiles = []; state.hazards = []; state.handQueue = []; state.hero.x = clamp(state.hero.x, 350, 930);
+  state.projectiles = []; state.hazards = []; state.handQueue = []; state.hero.x = clamp(state.hero.x, 290, 990);
   state.hero.y = clamp(state.hero.y, state.box.minY + 44, maxY - 18);
   setPhase(state, 'dodgebox');
-  event(state, 'boxStart', { threshold: state.thresholdIndex + 1, duration: state.box.duration });
+  event(state, 'boxStart', { threshold: state.thresholdIndex + 1, bonus, duration: state.box.duration });
 }
 function beginTiming(state, input) {
-  state.box = null;
-  state.timing = { elapsed: 0, duration: 3, marker: 0, score: null, result: null, resolved: false, resolvedAt: null };
+  const bonus=!!state.box?.bonus;state.box = null;
+  state.timing = {bonus, elapsed: 0, duration: 3, marker: 0, score: null, result: null, resolved: false, resolvedAt: null };
   state._timingWasDown = bool(input.attack) || bool(input.advance); setPhase(state, 'timing');
   event(state, 'timingStart', { threshold: state.thresholdIndex + 1, duration: state.timing.duration });
 }
@@ -317,7 +327,7 @@ function updateBox(state, dt, input) {
   const box = state.box;
   moveHero(state, dt, input, box);
   box.elapsed += dt; box.spawnTimer -= dt;
-  if (box.spawnTimer < 0.35 && !box.preview) {
+  if (box.spawnTimer < (state.difficulty==='hard'?.55:1.1) && !box.preview) {
     const safe = Math.floor(nextRandom(state) * 5);
     box.preview = { wave: box.wave, safe, remaining: Math.max(0, box.spawnTimer), pattern: box.pattern };
   }
@@ -325,15 +335,15 @@ function updateBox(state, dt, input) {
   if (box.spawnTimer <= 0 && box.elapsed < box.duration - 0.8) {
     const lanes = 5, laneHeight = (box.maxY - box.minY) / lanes;
     const safe = box.preview?.safe ?? Math.floor(nextRandom(state) * lanes);
-    const fromRight = box.wave % 2 === 0;
+    const fromRight = box.wave % 2 === 0;box.safeWave={safe,wave:box.wave,pattern:box.pattern};
     if (box.pattern === 'radial') {
       const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
       for (let lane = 0; lane < 16 && box.bullets.length < 64; lane++) {
         const gap=vinsonBoxGap(box,{safe,wave:box.wave,pattern:box.pattern}).gap;
         if ((lane-gap+16)%16<=2) continue;
-        const angle = lane * Math.PI / 8 + box.wave*.19, speed = 170 + state.thresholdIndex*18;
+        const angle = lane * Math.PI / 8 + box.wave*.19, speed = 170 + state.thresholdIndex*18+(state.difficulty==='hard'?25:0);
         box.bullets.push({ x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-          radius: 8, wave: box.wave, kind: 'radial', age:0, telegraph:.65 });
+          radius: 8, wave: box.wave, kind: 'radial', age:0, telegraph:state.difficulty==='hard'?.65:1.1 });
       }
     } else {
       for (let lane = 0; lane < lanes && box.bullets.length < 64; lane++) {
@@ -343,18 +353,18 @@ function updateBox(state, dt, input) {
         box.bullets.push({ x: vertical ? box.minX + (box.maxX - box.minX) * (lane + .5) / lanes :
             fromRight ? box.maxX + 18 : box.minX - 18,
           y: vertical ? (fromRight ? box.minY - 18 : box.maxY + 18) : box.minY + laneHeight * (lane + .5),
-          vx: vertical ? 0 : fromRight ? -(beam ? 440 : 400) : beam ? 440 : 400,
-          vy: vertical ? (fromRight ? 250 : -250) : 0,
-          radius: beam ? 13 : vertical ? 10 : 11, wave: box.wave, age:0, telegraph:.55,
+          vx: vertical ? 0 : (fromRight?-1:1)*(beam ? 440 : 400)*(state.difficulty==='hard'?1.12:1),
+          vy: vertical ? (fromRight ? 250 : -250)*(state.difficulty==='hard'?1.12:1) : 0,
+          radius: beam ? 13 : vertical ? 10 : 11, wave: box.wave, age:0, telegraph:state.difficulty==='hard'?.6:1.1,
           kind: beam ? 'beam' : vertical ? 'vertical' : 'lane' });
       }
     }
-    box.wave++; box.preview = null; box.spawnTimer += box.pattern === 'radial' ? .95 : .85;
+    box.wave++; box.preview = null;box.spawnTimer += state.difficulty==='hard'?(box.pattern==='radial'?.95:.85):1.1+(box.pattern==='radial'?Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/170:box.pattern==='vertical'?(box.maxY-box.minY+45)/250:(box.maxX-box.minX+45)/400)+.15;
   }
   // A second, independent layer targets a snapshot of the player's position.
   // Its warning is visible before motion; the fan never homes after launch.
   box.pressureTimer -= dt;
-  if (box.pressureTimer <= 0 && box.elapsed < box.duration - 1.2) {
+  if (state.difficulty==='hard' && box.pressureTimer <= 0 && box.elapsed < box.duration - 1.2) {
     const fromTop = box.pressureWave % 2 === 0;
     const x = clamp(state.hero.x + (nextRandom(state)-.5)*240, box.minX+28,box.maxX-28);
     const y = fromTop ? box.minY+12 : box.maxY-12;
@@ -379,7 +389,7 @@ function updateBox(state, dt, input) {
       bullet.y < box.minY - 25 || bullet.y > box.maxY + 25) box.bullets.splice(i, 1);
   }
   if (state.phase === 'defeat') return;
-  if (box.elapsed >= box.duration) {state.hero.heals++;event(state,'healCharge',{charges:state.hero.heals});beginTiming(state, input);}
+  if (box.elapsed >= box.duration) {state.hero.heals=Math.min(state.difficulty==='hard'?4:6,state.hero.heals+1);event(state,'healCharge',{charges:state.hero.heals});beginTiming(state, input);}
 }
 export function startVinsonSequence(state,kind,{warning=0}={}){
   if(state.sequence||state.phase!=='fight')return false;
@@ -431,10 +441,10 @@ function updateCombo(state,dt,input){
   if(c.beat==='crosswind'&&c.beatTime>=.35){c.beat='finish';c.beatTime=0;event(state,'comboBeat',{beat:'finish'});return;}
   if(c.beat!=='impact'||c.beatTime<.65)return;
   c.damage=Math.round(c.damage*(.35+c.quality*.325));
-  const gate=state.thresholdIndex<4?state.boss.maxHp*(1-(state.thresholdIndex+1)*.2):0;
+  const gate=state.boss.maxHp*(state.gates[state.thresholdIndex]??0);
   const amount=Math.min(c.damage,Math.max(0,state.boss.hp-gate));state.boss.hp=Math.max(gate,state.boss.hp-c.damage);
   event(state,'hit',{target:'boss',weapon:'combo',amount,hp:state.boss.hp,x:c.target.x,y:c.target.y});state.combo=null;
-  if(state.thresholdIndex<4&&state.boss.hp<=gate+1e-8){beginBox(state);return;}
+  if(state.thresholdIndex<state.gates.length&&state.boss.hp<=gate+1e-8){beginBox(state);return;}
   if(state.boss.hp<=0){setPhase(state,state.stage?'clash':'transition');event(state,'bossDefeat',{stage:state.stage});}
 }
 function updateTiming(state, dt, input) {
@@ -452,8 +462,8 @@ function updateTiming(state, dt, input) {
   const down = bool(input.attack) || bool(input.advance);
   const pressed = down && !state._timingWasDown; state._timingWasDown = down;
   if (!pressed && timing.elapsed < timing.duration) return;
-  timing.score = pressed ? (Math.abs(timing.marker - 0.5) <= 0.07 ? 'perfect' :
-    Math.abs(timing.marker - 0.5) <= 0.18 ? 'good' : 'miss') : 'timeout';
+  timing.score = pressed ? (Math.abs(timing.marker - 0.5) <= (state.difficulty==='hard'?.055:.07) ? 'perfect' :
+    Math.abs(timing.marker - 0.5) <= (state.difficulty==='hard'?.14:.18) ? 'good' : 'miss') : 'timeout';
   const chance = { perfect: 0.04, good: 0.13, miss: 0.43, timeout: 1 }[timing.score];
   timing.result = nextRandom(state) < chance ? 'dodged' : 'hit'; timing.resolved = true;
   timing.resolvedAt = timing.elapsed;
@@ -463,7 +473,7 @@ function updateTiming(state, dt, input) {
     event(state, 'hit', { target: 'boss', weapon: 'timing', amount, hp: state.boss.hp });
   }
   event(state, 'timingResult', { score: timing.score, result: timing.result, threshold: state.thresholdIndex + 1 });
-  state.thresholdIndex++;
+  if(!timing.bonus)state.thresholdIndex++;
 }
 function updateFight(state, dt, input) {
   const hero = state.hero, boss = state.boss;
@@ -483,6 +493,7 @@ function updateFight(state, dt, input) {
     if(distance<reach){const direction=normVector(h.x-hero.x,h.y+hero.bodyRise-hero.y),force=(h.type==='painring'?245:185)*(1-distance/(reach*1.5)),pull=Math.min(force*dt,Math.max(0,distance-12));hero.x=clamp(hero.x+direction.x*pull,ARENA.minX,ARENA.maxX);hero.y=clamp(hero.y+direction.y*pull,state.stage?350:ARENA.minY,maxY);}
   }
   moveBoss(state, dt);
+  state.boxClock+=dt;if(state.boxClock>=(state.difficulty==='hard'?20:35)&&!state.sequence&&state.thresholdIndex<state.gates.length){beginBox(state,{bonus:true});return;}
   if (bool(input.attack) && hero.attackCooldown <= 0 && (hero.cooldowns[input.weapon||'star']||0)<=0 && state.projectiles.length < MAX_PROJECTILES - 6) fireWeapon(state, input.weapon);
 
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
@@ -530,7 +541,7 @@ function updateFight(state, dt, input) {
     if(!p.dodgeChecked&&distanceToBoss<p.radius+105){
       p.dodgeChecked=true;
       const aimLocked=state.hazards.some(h=>['laserline','handslam','handcatch','earththrow'].includes(h.type));
-      if(!aimLocked&&boss.dodgeCooldown<=0&&nextRandom(state)<(state.stage?.2:.1)){
+      if(!aimLocked&&boss.dodgeCooldown<=0&&nextRandom(state)<((state.stage?.2:.1)+(state.difficulty==='hard'?.08:0))){
         boss.dodgeTime=.28;boss.dodgeCooldown=3.2;
         boss.dodgeX=clamp(boss.x+(nextRandom(state)<.5?-90:90),790,ARENA.maxX-55);
         event(state,'bossDodge',{x:boss.x,y:boss.y,targetX:boss.dodgeX});
@@ -539,7 +550,7 @@ function updateFight(state, dt, input) {
     if(boss.dodgeTime>0)continue;
     if (!p.returning && (distanceToBoss <= p.radius + 39 || (p.splash && distanceToBoss <= p.splash))) {
       const damage = p.damage * (distanceToBoss <= p.radius + 39 ? 1 : 0.68);
-      const gate = state.thresholdIndex < 4 ? boss.maxHp * (1 - (state.thresholdIndex + 1) * 0.2) : 0;
+      const gate = boss.maxHp * (state.gates[state.thresholdIndex]??0);
       const applied = Math.min(damage, Math.max(0, boss.hp - gate));
       boss.hp = Math.max(gate, boss.hp - damage);
       event(state, 'hit', { target: 'boss', weapon: p.type, amount: applied, hp: boss.hp });
@@ -549,7 +560,7 @@ function updateFight(state, dt, input) {
         p.waveRadius = 10; p.life = 0.3; p.hitOnce = true;
         event(state, 'shockwave', { x: p.x, y: p.y, radius: p.splash, damage });
       } else state.projectiles.splice(i, 1);
-      if (state.thresholdIndex < 4 && boss.hp <= gate + 1e-8) { beginBox(state); return; }
+      if (state.thresholdIndex < state.gates.length && boss.hp <= gate + 1e-8) { beginBox(state); return; }
       if (boss.hp <= 0) {
         state.phase = state.stage === 0 ? 'transition' : 'clash'; state.phaseTime = 0;
         event(state, 'bossDefeat', { stage: state.stage }); if (state.phase === 'clash') event(state, 'clashStart'); return;
@@ -559,7 +570,7 @@ function updateFight(state, dt, input) {
   state.attackTimer -= dt;
   if (state.attackTimer <= 0 && boss.dodgeTime<=0) {
     spawnHazard(state, () => nextRandom(state), state._openingAttack||null);state._openingAttack=null;
-    state.attackTimer = (state.stage ? .95 : 1.1) + nextRandom(state) * .22;
+    state.attackTimer = (state.difficulty==='hard'?(state.stage?.7:.82):(state.stage ? .95 : 1.1)) + nextRandom(state) * .22;
   }
   for (let i=state.handQueue.length-1;i>=0;i--) {
     const next=state.handQueue[i];next.delay-=dt;
@@ -577,8 +588,9 @@ function updateFight(state, dt, input) {
 function setPhase(state, phase) { state.phase = phase; state.phaseTime = 0; }
 
 /** Create a deterministic, renderer-independent playable boss encounter. */
-export function createVinsonBattle({ seed = 1, stage = 0, compact = false, openingAttack = null, boxPattern = 'lanes' } = {}) {
-  const initialSeed = seedNumber(seed); let state = freshCombat(stage === 1 ? 1 : 0, initialSeed, 0, 0, compact);
+export function createVinsonBattle({ seed = 1, stage = 0, compact = false, openingAttack = null, boxPattern = 'lanes', difficulty = 'normal' } = {}) {
+  difficulty=difficulty==='hard'?'hard':'normal';
+  const initialSeed = seedNumber(seed); let state = freshCombat(stage === 1 ? 1 : 0, initialSeed, 0, 0, compact,difficulty);
   state._openingAttack=['laserline','painring','handslam','handcatch','earththrow','eclipsecross','gravitywell','chains','inversion'].includes(openingAttack)?openingAttack:null;
   function step(dt, input = {}) {
     const delta = Math.min(0.05, Math.max(0, finite(dt)));
@@ -592,8 +604,8 @@ export function createVinsonBattle({ seed = 1, stage = 0, compact = false, openi
     else if (state.phase === 'clash' && state.phaseTime >= 3.2) { setPhase(state, 'victory'); event(state, 'victory'); }
     return state;
   }
-  function retry() { const stageNow = state.stage, attempt = state.attempt + 1, totalTime = state.time, compactNow = state.compact; state = freshCombat(stageNow, initialSeed, attempt, totalTime, compactNow); return state; }
-  function next() { if (state.phase !== 'transition' || state.stage !== 0) return state; state = freshCombat(1, initialSeed, 0, state.time, state.compact); return state; }
+  function retry() { const stageNow = state.stage, attempt = state.attempt + 1, totalTime = state.time, compactNow = state.compact; state = freshCombat(stageNow, initialSeed, attempt, totalTime, compactNow,difficulty); return state; }
+  function next() { if (state.phase !== 'transition' || state.stage !== 0) return state; state = freshCombat(1, initialSeed, 0, state.time, state.compact,difficulty); return state; }
   return { get state() { return state; }, step, retry, next };
 }
 export const VINSON_BATTLE_ARENA = Object.freeze({ width: WIDTH, height: HEIGHT, compactMaxY: COMPACT_MAX_Y, ...ARENA });

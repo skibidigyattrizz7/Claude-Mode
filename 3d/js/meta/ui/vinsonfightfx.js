@@ -1,4 +1,4 @@
-import {vinsonEarthPosition,vinsonBoxThreatPath} from '../core/vinsonbattle.js?v=vinson33';
+import {vinsonEarthPosition,vinsonBoxThreatPath,vinsonBoxSafeRect} from '../core/vinsonbattle.js?v=vinson34';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
@@ -70,19 +70,15 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
   ctx.strokeStyle='#ece8db';ctx.lineWidth=4;ctx.strokeRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
   ctx.strokeStyle='#9c282b';ctx.lineWidth=1;ctx.strokeRect(b.minX-8,b.minY-8,b.maxX-b.minX+16,b.maxY-b.minY+16);
   ctx.fillStyle='#f5e9dc';ctx.font='bold 23px monospace';ctx.textAlign='center';ctx.fillText(`SURVIVE  ${Math.max(0,Math.ceil(b.duration-b.elapsed))}`,640,b.minY-20);
-  ctx.font='14px monospace';ctx.fillStyle='#b5c5d0';ctx.fillText('MOVE / DODGE · NO ATTACKS IN THE BOX',640,b.maxY+28);
-  // Warn from actual emitted trajectories, never a guessed safe lane while waves overlap.
-  ctx.font='14px monospace';ctx.fillStyle='#edb6a2';ctx.fillText('MARKED PATHS ARE DANGER · YOUR HIT POINT IS THE SMALL CROSS',640,b.maxY+47);
+  ctx.font=(state.compact?'30':'18')+'px system-ui';ctx.fillStyle='#b5c5d0';ctx.fillText(state.compact?'MOVE · DODGE':'MOVE / DODGE · NO ATTACKS IN THE BOX',640,b.maxY+28);
+  // A single marker belongs to the main wave; extra shots have no route overlays.
+  ctx.font=(state.compact?'30':'20')+'px system-ui';ctx.fillStyle='#cdefff';ctx.fillText(state.difficulty==='hard'?'BLUE = MAIN WAVE GAP · DODGE EXTRA SHOTS':'MOVE TO THE BLUE SPOT',640,b.maxY+52);
+  const safe=vinsonBoxSafeRect(b);
+  if(safe){const width=Math.min(48,safe.w),height=Math.min(28,safe.h),x=safe.x+(safe.w-width)/2,y=safe.y+(safe.h-height)/2;ctx.fillStyle='#388acb88';ctx.fillRect(x,y,width,height);ctx.strokeStyle='#a5dcff';ctx.lineWidth=2;ctx.strokeRect(x,y,width,height);}
   ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
   for(const p of b.bullets){
     const ready=(p.age||0)>=(p.telegraph||0);
-    if(!ready){
-      const route=vinsonBoxThreatPath(b,p);if(!route)continue;
-      ctx.save();ctx.strokeStyle=p.kind==='aimed'?'#ffc58d':'#ff6560';ctx.globalAlpha=.13;ctx.lineWidth=(p.radius||7)*2;
-      ctx.beginPath();ctx.moveTo(route.x1,route.y1);ctx.lineTo(route.x2,route.y2);ctx.stroke();
-      ctx.globalAlpha=.7;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
-      ctx.beginPath();ctx.arc(route.x1,route.y1,p.radius||7,0,Math.PI*2);ctx.stroke();ctx.restore();continue;
-    }
+    if(!ready)continue;
     if(p.kind==='beam'){
       drawBeam(ctx,p.x-(p.vx||0)*.065,p.y-(p.vy||0)*.065,p.x,p.y,'#ff514b',p.radius*1.6,.75);
     }else if(p.type==='laser'||p.type==='lane'){
@@ -100,7 +96,7 @@ export function drawTimingStrike(ctx,state,t){
   const x=270,y=state.compact?380:500,w=740,marker=clamp(m.marker);
   ctx.save();ctx.fillStyle='#02050be6';ctx.fillRect(220,y-115,840,205);
   ctx.fillStyle='#edf0e8';ctx.font='bold 31px monospace';ctx.textAlign='center';ctx.fillText(m.resolved?(m.result||'STRIKE').toUpperCase():'TIME YOUR COUNTER',640,y-82);
-  ctx.fillStyle='#b8c3c9';ctx.font='17px monospace';ctx.fillText(m.resolved?'The fight resumes…':'PRESS J / ENTER / ATTACK AT THE CENTER',640,y-45);
+  ctx.fillStyle='#b8c3c9';ctx.font=(state.compact?'28':'20')+'px system-ui';ctx.fillText(m.resolved?'The fight resumes…':'PRESS J / ENTER / ATTACK AT THE CENTER',640,y-45);
   ctx.fillStyle='#111923';ctx.fillRect(x,y,w,40);ctx.strokeStyle='#d6d8ce';ctx.lineWidth=2;ctx.strokeRect(x,y,w,40);
   ctx.fillStyle='#ae4e34';ctx.fillRect(x+w*.36,y,w*.28,40);ctx.fillStyle='#f1d980';ctx.fillRect(x+w*.455,y,w*.09,40);
   ctx.fillStyle='#f4f5e7';ctx.fillRect(x+w*.49,y,w*.02,40);ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x+w*marker,y-15);ctx.lineTo(x+w*marker,y+55);ctx.stroke();
