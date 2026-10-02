@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13n';
+import { SCRIPT } from './script.js?v=13o';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -720,7 +720,7 @@ function updateBox(s, dt, inp) {
   let mx = inp.mx, my = inp.my; if (h.invert > 0) { mx = -mx; my = -my; }
   const up = my < -.5 || inp.jump || inp.dodge, len = Math.max(1, Math.hypot(mx, my));
   if (b.mode === 'blue') { // gravity; hold to jump higher
-    so.vx = mx * 270; so.x += so.vx * dt;
+    so.vx = mx * 325; so.x += so.vx * dt;
     if (so.ground && up) { so.vy = -610; so.ground = false; ev(s, 'soulJump'); }
     if (!up && so.vy < -230) so.vy = -230;
     so.vy += 1550 * dt; so.y += so.vy * dt;
@@ -733,10 +733,10 @@ function updateBox(s, dt, inp) {
   } else if (b.mode === 'purple') { // three strings; W / S hop between them
     if (my < -.5 && b.prevMy >= -.5) so.si = Math.max(0, so.si - 1);
     if (my > .5 && b.prevMy <= .5) so.si = Math.min(2, so.si + 1);
-    so.x += mx * 290 * dt; so.y = lerp(so.y, stringY(so.si), 1 - Math.exp(-dt * 30));
+    so.x += mx * 350 * dt; so.y = lerp(so.y, stringY(so.si), 1 - Math.exp(-dt * 30));
     b.moving = Math.abs(mx) > .15 || Math.abs(so.y - stringY(so.si)) > 3;
   } else {
-    so.x += mx / len * 300 * dt; so.y += my / len * 300 * dt;
+    so.x += mx / len * 360 * dt; so.y += my / len * 360 * dt; /* P13 owner: a bit faster (was 300) */
     b.moving = Math.abs(mx) + Math.abs(my) > .15;
   }
   b.prevMy = my;
