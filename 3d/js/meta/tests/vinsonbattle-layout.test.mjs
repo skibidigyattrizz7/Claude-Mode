@@ -16,7 +16,7 @@ assert.doesNotMatch(ui,/removeDarkMatte/,'World Vinson must not use destructive 
 assert.match(ui,/if\(mode==='defeat'\)return;/,'suppressed result freezes the presentation clock');
 assert.match(ui,/particles\.length=0; trauma=0; dialogue=null;/,'suppressed result clears active combat effects');
 assert.match(ui,/innerHeight\)>0&&globalThis\.innerHeight<=450/,'short landscape selects compact arena bounds');
-assert.match(ui,/createVinsonBattle\(\{ seed, compact:compactArena, openingAttack:previewAttack \}\)/,'renderer passes compact bounds and preview opener into deterministic combat');
+assert.match(ui,/createVinsonBattle\(\{ seed, compact:compactArena, openingAttack:previewAttack(?:,boxPattern:previewBox)?\s*\}\)/,'renderer passes compact bounds and preview opener into deterministic combat');
 assert.match(ui,/until:clock\+2\.6/,'combat barks clear quickly');
 assert.match(ui,/barkLast\.get\(key\)[^<]*<10/,'each attack bark has a repeat cooldown');
 console.log('Vinson responsive dialogue and nonblocking bark layout tests passed');

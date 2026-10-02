@@ -99,7 +99,7 @@ for (const [stage, damage] of [[0, 210], [1, 330]]) {
   assert.equal(triggerVinsonCombo(battle.state), false, 'offer is consumed and only one finisher can run');
   battle.state.thresholdIndex = 4;
   const hp = battle.state.boss.hp;
-  for (let i = 0; i < 23 && battle.state.combo; i++) battle.step(.05, {});
+  for (let i = 0; i < 120 && battle.state.combo; i++) battle.step(.05, {combo:['slash','finish'].includes(battle.state.combo.beat)});
   assert.equal(battle.state.boss.hp, hp - damage);
   assert.ok(battle.state.events.some(event => event.type === 'hit' && event.weapon === 'combo' && event.amount === damage));
 }

@@ -10,10 +10,12 @@ function glow(ctx,x,y,r,color,alpha){
 }
 function cachedFloor(ctx,x,side,t,p,level,pulse,reducedMotion){
   const color=side<0?'#54bfff':'#e32249';
-  const tiles=[0,1,2].map(i=>surface('floor'+side+':'+i,640,g=>{const r=145+i*72;g.translate(320,320);g.strokeStyle=color;g.lineWidth=i===1?3:2;g.beginPath();g.arc(0,0,r,0,Math.PI*2);g.stroke();for(let k=0;k<12;k++){const a=k*Math.PI/6,ri=r-9-(k%2)*5;g.beginPath();g.moveTo(Math.cos(a)*ri,Math.sin(a)*ri);g.lineTo(Math.cos(a)*(r+7),Math.sin(a)*(r+7));g.stroke();}}));
-  if(tiles.some(tile=>!tile))return false;
-  ctx.save();ctx.translate(x,490);ctx.scale(1,.48);ctx.globalAlpha=p*(.52+level*.1+pulse*.12);
-  for(let i=0;i<3;i++){ctx.save();ctx.rotate(reducedMotion?0:t*(i%2?-.22:.16));ctx.drawImage(tiles[i],-320,-320);ctx.restore();}ctx.restore();return true;
+  // One compact atlas per side instead of six large transparent rotating surfaces.
+  const tile=surface('floor-atlas'+side,384,g=>{g.translate(192,192);g.scale(.6,.6);g.strokeStyle=color;
+    for(let i=0;i<3;i++){const r=145+i*72;g.lineWidth=i===1?3:2;g.beginPath();g.arc(0,0,r,0,Math.PI*2);g.stroke();
+      for(let k=0;k<12;k++){const a=k*Math.PI/6,ri=r-9-(k%2)*5;g.beginPath();g.moveTo(Math.cos(a)*ri,Math.sin(a)*ri);g.lineTo(Math.cos(a)*(r+7),Math.sin(a)*(r+7));g.stroke();}}});
+  if(!tile)return false;
+  ctx.save();ctx.translate(x,490);ctx.scale(1,.48);ctx.globalAlpha=p*(.52+level*.1+pulse*.12);ctx.rotate(reducedMotion?0:t*.16*side);ctx.drawImage(tile,-320,-320,640,640);ctx.restore();return true;
 }
 export function vinsonDomainWallX(y,shot,t,reducedMotion=false){
   const border=shot.clashX??640,pressure=((shot.mashProgress??.5)-.5)*72;

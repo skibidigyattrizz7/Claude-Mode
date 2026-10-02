@@ -47,8 +47,8 @@ const down = key => listeners.keydown({ key, repeat: false, preventDefault() {} 
 const up = key => listeners.keyup({ key });
 const tap = key => { down(key); up(key); };
 const dismissDialogue = conversation => { let guard = 0; while (!conversation.hidden && guard++ < 8) conversation.onclick(); assert.ok(conversation.hidden, 'dialogue can be dismissed by click'); };
-const bootFight = async () => {
-  const battle = launchVinsonBattle({ reducedMotion: true });
+const bootFight = async (options={}) => {
+  const battle = launchVinsonBattle({ reducedMotion: true,...options });
   const screen = body.children[0], panel = find(screen, 'vb-panel'), conversation = find(screen, 'vb-dialogue');
   await panel.lastChild.children[0].onclick();
   dismissDialogue(conversation);
@@ -103,6 +103,7 @@ try {
   // Ordered keyboard sequence tokens are consumed only on keydown; touch buttons feed the same queue.
   {
     const { battle, screen } = await bootFight();
+    const pause=find(screen,'vb-pause');down('Escape');up('Escape');assert.equal(pause.hidden,false);const pauseTime=battle.state.time;step(60);assert.equal(battle.state.time,pauseTime,'pause freezes combat');down('Escape');up('Escape');assert.equal(pause.hidden,true);step(2);assert.ok(battle.state.time>pauseTime,'resume continues combat');
     startVinsonSequence(battle.state, 'inversion');
     battle.state.sequence.keys = ['q', 'e', 'r'];
     step(1);
@@ -123,10 +124,11 @@ try {
     const hp = battle.state.boss.hp;
     down('c'); step(1); up('c');
     assert.ok(battle.state.combo, 'C starts the offered combo');
-    for (let i = 0; i < 80 && battle.state.combo; i++) step(1);
+    for (let i = 0; i < 240 && battle.state.combo; i++){if(['slash','finish'].includes(battle.state.combo.beat)){down('c');step(1);up('c');}else step(1);}
     assert.equal(battle.state.boss.hp, hp - 210);
     battle.close();
   }
+  for(const pattern of ['lanes','vertical','radial','beams']){const {battle}=await bootFight({previewAttack:'box',previewBox:pattern});assert.equal(battle.state.phase,'dodgebox');assert.equal(battle.state.box.pattern,pattern);battle.close();}
   console.log('Vinson UI14 ending, clash, ordered sequence and combo regressions passed');
 } finally {
   for (const [key, value] of Object.entries(saved)) {

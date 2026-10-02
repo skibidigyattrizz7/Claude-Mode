@@ -2,7 +2,11 @@
 .vb-screen * { box-sizing:border-box; }
 .vb-sequence-keys{display:flex;gap:6px}.vb-sequence-keys[hidden],.vb-combo-button[hidden]{display:none}
 .vb-sequence-keys button,.vb-combo-button{min-height:52px;min-width:52px;border:1px solid #b88e67;background:#221922;color:#f8e5c5;font:900 16px system-ui;cursor:pointer}
-.vb-combo-button{padding:8px 12px;position:absolute;bottom:calc(100% + 8px);left:12px}
+.vb-combo-button{position:absolute;z-index:3;top:clamp(100px,18%,142px);left:50%;transform:translateX(-50%);width:min(340px,calc(100% - 32px));min-height:64px;padding:10px 16px;background:#e7f4f8;color:#08151c;border:0;box-shadow:0 5px 0 #396377;font:800 16px/1.5 system-ui,sans-serif;white-space:pre-line;text-align:center;letter-spacing:.035em}
+.vb-combo-button[data-beat="slash"],.vb-combo-button[data-beat="finish"]{background:#fff5ce;color:#231a0d;box-shadow:0 5px 0 #947644}
+.vb-combo-button:disabled{background:#1b2c35;color:#e5f4fc;box-shadow:none;cursor:default}
+@media(max-height:450px){.vb-combo-button{top:68px;min-height:48px;padding:5px 12px;font-size:14px}}
+@media(prefers-reduced-motion:no-preference){.vb-combo-button[data-beat="ready"]{animation:vb-combo-call 1s ease-out 2}@keyframes vb-combo-call{0%,100%{transform:translateX(-50%) scale(1)}35%{transform:translateX(-50%) scale(1.04)}}}
 .vb-controls{position:relative}
 .vb-controls.vb-has-sequence .vb-weapons{display:none}
 .vb-sequence-keys{order:-1;width:200px;justify-content:center}
@@ -112,3 +116,14 @@
 
 .vb-weapons button.on{transform:translateY(-3px);box-shadow:0 3px 0 #050709}
 .vb-weapons button:not(.vb-cycle)::after{left:auto;right:3px;bottom:3px;width:14px;height:14px;transform:none;border-radius:50%;background:conic-gradient(#94c6de calc(var(--recharge,0)*1turn),#24313a 0)}
+
+/* Fight HUD: scene controls live behind Pause; touch navigation is device-specific. */
+.vb-top{justify-content:flex-end;pointer-events:none}.vb-top button{pointer-events:auto;font-size:14px;min-height:44px;padding:10px 15px;background:#15242e;color:#edf4f6;border:0}
+.vb-pause[hidden]{display:none}.vb-pause{position:absolute;inset:0;z-index:20;background:#05080bf5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.vb-pause h2{font:900 44px Impact,system-ui;letter-spacing:.08em;margin:0 0 20px}.vb-pause button{width:240px;min-height:52px;border:0;background:#182a36;color:#f7f3e8;font:800 17px system-ui;cursor:pointer}.vb-pause button:first-of-type{background:#e6f1f5;color:#0b1720}
+.vb-hint{font-size:14px;line-height:1.5}.vb-subtitle strong,.vb-reward{font-size:14px}.vb-weapons button{font-size:14px;min-height:48px;background:#11212d;color:#e8f1f5;border:0;padding:8px 13px}.vb-weapons button.on{background:#dcebf0;color:#071724;box-shadow:inset 0 -4px #77bce7}
+.vb-weapons button:nth-child(1)::before{content:'✡ '}.vb-weapons button:nth-child(2)::before{content:'↻ '}.vb-weapons button:nth-child(3)::before{content:'✹ '}.vb-weapons button:nth-child(4)::before{content:'↗ '}.vb-weapons button:nth-child(5)::before{content:'⋆ '}.vb-weapons button:nth-child(6)::before{content:'◎ '}
+.vb-clash-keys button[data-action="push"]{width:150px!important;white-space:nowrap;font:800 19px system-ui;padding:0 12px}.vb-panel.vb-memorial-panel{color:#fff5e4}.vb-panel.vb-memorial-panel p{color:#fff5e4;text-shadow:0 2px 3px #302516}
+@media(hover:hover) and (pointer:fine){.vb-touch{display:none!important}}
+@media(hover:none),(pointer:coarse){.vb-hint{display:none}}
+@media(max-height:450px){.vb-weapons button{min-height:36px;font-size:14px}.vb-top button{min-height:36px;padding:7px 12px}}

@@ -50,7 +50,7 @@ function freshCombat(stage, seed, attempt, totalTime = 0, compact = false) {
     sequence:null,sequenceCooldown:0,comboOffer:0,comboTimer:12,combo:null,
     attackTimer: 0.8, nextHazardId: 1, handQueue: [], _lastHand: 'right',
     _rngState: attemptSeed(seed, stage, attempt), _dodgeWasDown: false, _healWasDown: false,
-    _timingWasDown: false, _lastAttack: '', _moveSign: 1
+    _timingWasDown: false, _comboWasDown:false, _lastAttack: '', _attackDeck: [], _moveSign: 1
   };
 }
 function event(state, type, extra = {}) { state.events.push({ type, time: state.time, ...extra }); }
@@ -67,16 +67,24 @@ function spawnHazard(state, rng, forcedType = null, forcedHand = null) {
   if (state.hazards.length >= MAX_HAZARDS) return;
   const maxY = arenaMaxY(state);
   const types = ['laserline', 'bombcircle', 'painring', 'handslam', 'handcatch', 'earththrow', ...(state.phaseTime>=20&&state.sequenceCooldown<=0&&!state.sequence?['inversion','chains']:[]), ...(state.stage?['eclipsecross','doomfall','gravitywell']:[])];
-  let choices = types.filter(type => type !== state._lastAttack);
-  if (state.stage === 1 && rng() > 0.4) choices = choices.filter(type => type !== 'painring');
-  let type = forcedType || choices[Math.floor(rng() * choices.length)];
+  const handKey = forcedHand || (state._lastHand === 'left' ? 'right' : 'left');
+  const handBusy = key => state.hazards.some(a => a.type === 'handcatch' || (a.type === 'handslam' && (a.handKey || 'left') === key));
+  // A seeded shuffled cycle guarantees coverage; cooldown-limited prompts wait their turn.
+  state._attackDeck=(state._attackDeck||[]).filter(type=>types.includes(type));
+  if(!state._attackDeck.length){
+    state._attackDeck=types.slice();
+    for(let i=state._attackDeck.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[state._attackDeck[i],state._attackDeck[j]]=[state._attackDeck[j],state._attackDeck[i]];}
+    if(state._attackDeck[0]===state._lastAttack&&state._attackDeck.length>1)[state._attackDeck[0],state._attackDeck[1]]=[state._attackDeck[1],state._attackDeck[0]];
+  }
+  const pick=state._attackDeck.findIndex(type=>!(type==='handslam'&&handBusy(handKey))&&!(type==='handcatch'&&(handBusy('left')||handBusy('right'))));
+  if(!forcedType&&pick<0)return;
+  let type = forcedType || state._attackDeck.splice(pick,1)[0];
+  if(!forcedType)event(state,'rotationPick',{attack:type});
   if(type==='inversion'||type==='chains'){
     if(!state.sequence&&state.sequenceCooldown<=0){startVinsonSequence(state,type,{warning:1.5});state._lastAttack=type;}
     return;
   }
   const h = state.hero, b = state.boss;
-  const handKey = forcedHand || (state._lastHand === 'left' ? 'right' : 'left');
-  const handBusy = key => state.hazards.some(a => a.type === 'handcatch' || (a.type === 'handslam' && (a.handKey || 'left') === key));
   if ((type === 'handslam' && handBusy(handKey)) || (type === 'handcatch' && (handBusy('left') || handBusy('right')))) {
     if (forcedType) return;
     type = 'bombcircle';
@@ -101,10 +109,10 @@ function spawnHazard(state, rng, forcedType = null, forcedHand = null) {
     y: clamp(h.y - h.bodyRise + (rng() - 0.5) * 85, ARENA.minY + 35, maxY - 35) };
   const hazard = {
     id: state.nextHazardId++, type, handKey, elapsed: 0, telegraph,
-    duration: type==='doomfall'?1.8:type==='gravitywell'?2.1:type==='eclipsecross'?1.1:type === 'painring' ? (state.stage ? 0.95 : 1.15) : type === 'handslam' || type === 'handcatch' ? 1.1 : type === 'earththrow' ? 0.7 : 0.48, hit: false,
+    duration: type==='doomfall'?1.8:type==='gravitywell'?2.1:type==='eclipsecross'?1.1:type === 'painring' ? 2.4 : type === 'handslam' || type === 'handcatch' ? 1.1 : type === 'earththrow' ? 0.7 : 0.48, hit: false,
     origins, eyeOrigins: origins, handSources, source: earthSource, target: earthTarget, segments,
-    x: type==='gravitywell'?clamp(h.x,ARENA.minX+120,ARENA.maxX-120):type === 'bombcircle' ? clamp(h.x + (rng() - 0.5) * 170, ARENA.minX + 65, ARENA.maxX - 65) : type === 'handslam' ? slamX : b.x,
-    y: type==='gravitywell'?clamp(h.y-h.bodyRise,ARENA.minY+65,maxY-65):type === 'bombcircle' ? clamp(h.y + (rng() - 0.5) * 155, ARENA.minY + 65, maxY - 65) : type === 'handslam' ? slamY : b.y,
+    x: type==='painring'?clamp(h.x,ARENA.minX+65,ARENA.maxX-65):type==='gravitywell'?clamp(h.x,ARENA.minX+120,ARENA.maxX-120):type === 'bombcircle' ? clamp(h.x + (rng() - 0.5) * 170, ARENA.minX + 65, ARENA.maxX - 65) : type === 'handslam' ? slamX : b.x,
+    y: type==='painring'?clamp(h.y-h.bodyRise,ARENA.minY-40,maxY-h.bodyRise):type==='gravitywell'?clamp(h.y-h.bodyRise,ARENA.minY+65,maxY-65):type === 'bombcircle' ? clamp(h.y + (rng() - 0.5) * 155, ARENA.minY + 65, maxY - 65) : type === 'handslam' ? slamY : b.y,
     radius: type === 'bombcircle' ? 68 : type === 'handslam' ? 82 : type === 'earththrow' ? 49 : 0, ringMax: 235,
     ...(type === 'handcatch' ? { corridor } : {})
   };
@@ -149,7 +157,7 @@ function hazardHitsHero(hazard, hero) {
     const lane = hazard.corridor;
     return pointSegmentDistance(hero.x, bodyY, lane.x1, lane.y1, lane.x2, lane.y2) <= lane.width / 2 + 14;
   }
-  const distance = Math.hypot(hero.x - hazard.x, hero.y - hazard.y);
+  const distance = Math.hypot(hero.x - hazard.x, bodyY - hazard.y);
   const radius = 32 + (hazard.elapsed - hazard.telegraph) * hazard.ringMax / hazard.duration;
   return distance<=22 || Math.abs(distance - radius) <= 22;
 }
@@ -265,6 +273,16 @@ function moveHero(state, dt, input, bounds = ARENA) {
   hero.y = clamp(hero.y + move.y * speed * dt, minY, movementMaxY);
 }
 // Shared main-wave gap geometry. Aimed attacks are separate; this is not an invulnerability zone.
+/** Clip a real bullet trajectory to the box, for collision-aligned danger warnings. */
+export function vinsonBoxThreatPath(box,p){
+ let enter=0,exit=Infinity;
+ for(const [origin,velocity,lo,hi] of [[p.x,p.vx||0,box.minX,box.maxX],[p.y,p.vy||0,box.minY,box.maxY]]){
+  if(Math.abs(velocity)<1e-9){if(origin<lo||origin>hi)return null;continue;}
+  const a=(lo-origin)/velocity,b=(hi-origin)/velocity;enter=Math.max(enter,Math.min(a,b));exit=Math.min(exit,Math.max(a,b));
+ }
+ if(exit<enter||!Number.isFinite(exit))return null;
+ return {x1:p.x+(p.vx||0)*enter,y1:p.y+(p.vy||0)*enter,x2:p.x+(p.vx||0)*exit,y2:p.y+(p.vy||0)*exit,radius:p.radius||7};
+}
 export function vinsonBoxGap(box,preview){
  const safe=preview.safe,pattern=preview.pattern;
  if(pattern==='vertical')return {kind:'vertical',x:box.minX+(box.maxX-box.minX)*(safe+.5)/5,y:(box.minY+box.maxY)/2,width:(box.maxX-box.minX)/5};
@@ -391,20 +409,28 @@ function updateSequence(state,dt,input){
   if(s.kind==='chains'){
     const d=normVector(s.origin.x-state.hero.x,s.origin.y+state.hero.bodyRise-state.hero.y);
     const distance=Math.hypot(s.origin.x-state.hero.x,s.origin.y+state.hero.bodyRise-state.hero.y);
-    const pull=Math.min(145*dt,Math.max(0,distance-125));
+    const pull=Math.min(145*dt,Math.max(0,distance-205));
     state.hero.x=clamp(state.hero.x+d.x*pull,ARENA.minX,ARENA.maxX);
     state.hero.y=clamp(state.hero.y+d.y*pull,state.stage?350:ARENA.minY,arenaMaxY(state));
   }
 }
 export function triggerVinsonCombo(state){
   if(state.phase!=='fight'||state.comboOffer<=0||state.combo)return false;
-  state.comboOffer=0;state.combo={elapsed:0,duration:1.15,damage:state.stage?330:210,
+  state.comboOffer=0;state.combo={elapsed:0,duration:4,beat:'windup',beatTime:0,presses:1,quality:0,damage:state.stage?330:210,
     from:{x:state.hero.x,y:state.hero.y},target:{x:state.boss.x,y:state.boss.y-100}};
-  state.hero.invulnerable=1.4;event(state,'comboStart',{});return true;
+  state.hero.invulnerable=4.2;event(state,'comboStart',{});return true;
 }
-function updateCombo(state,dt){
-  const c=state.combo;c.elapsed+=dt;
-  if(c.elapsed<c.duration)return;
+function updateCombo(state,dt,input){
+  const c=state.combo;c.elapsed+=dt;c.beatTime+=dt;
+  if(c.beat==='windup'&&c.beatTime>=.45){c.beat='slash';c.beatTime=0;event(state,'comboBeat',{beat:'slash'});return;}
+  if(c.beat==='slash'||c.beat==='finish'){
+    if(bool(input.combo)){c.presses++;c.quality++;c.beat=c.beat==='slash'?'crosswind':'impact';c.beatTime=0;event(state,'comboBeat',{beat:c.beat});}
+    else if(c.beatTime>=1.5){c.beat='impact';c.beatTime=0;event(state,'comboMiss',{});}
+    return;
+  }
+  if(c.beat==='crosswind'&&c.beatTime>=.35){c.beat='finish';c.beatTime=0;event(state,'comboBeat',{beat:'finish'});return;}
+  if(c.beat!=='impact'||c.beatTime<.65)return;
+  c.damage=Math.round(c.damage*(.35+c.quality*.325));
   const gate=state.thresholdIndex<4?state.boss.maxHp*(1-(state.thresholdIndex+1)*.2):0;
   const amount=Math.min(c.damage,Math.max(0,state.boss.hp-gate));state.boss.hp=Math.max(gate,state.boss.hp-c.damage);
   event(state,'hit',{target:'boss',weapon:'combo',amount,hp:state.boss.hp,x:c.target.x,y:c.target.y});state.combo=null;
@@ -442,17 +468,20 @@ function updateTiming(state, dt, input) {
 function updateFight(state, dt, input) {
   const hero = state.hero, boss = state.boss;
   const maxY = arenaMaxY(state);
-  if(state.combo){updateCombo(state,dt);return;}
+  if(state.combo){updateCombo(state,dt,input);return;}
   state.comboOffer=Math.max(0,state.comboOffer-dt);state.comboTimer-=dt;
   if(state.comboTimer<=0){state.comboTimer=12+nextRandom(state)*6;if(nextRandom(state)<.35){state.comboOffer=5;event(state,'comboOffer',{duration:5});}}
-  if(bool(input.combo)&&triggerVinsonCombo(state)){updateCombo(state,dt);return;}
+  if(bool(input.combo)&&triggerVinsonCombo(state)){updateCombo(state,dt,{});return;}
   updateSequence(state,dt,input);if(state.phase==='defeat')return;
   moveHero(state, dt, input);
   if(state.sequence?.kind==='chains' && !(state.sequence.warning>0)){
     const origin=state.sequence.origin,dx=hero.x-origin.x,dy=hero.y-hero.bodyRise-origin.y,distance=Math.hypot(dx,dy);
-    if(distance<125){const d=normVector(dx||-1,dy);hero.x=clamp(origin.x+d.x*125,ARENA.minX,ARENA.maxX);hero.y=clamp(origin.y+hero.bodyRise+d.y*125,ARENA.minY,maxY);}
+    if(distance<205){const d=normVector(dx||-1,dy);hero.x=clamp(origin.x+d.x*205,ARENA.minX,ARENA.maxX);hero.y=clamp(origin.y+hero.bodyRise+d.y*205,ARENA.minY,maxY);}
   }
-  for(const h of state.hazards)if(['gravitywell','painring'].includes(h.type)&&h.elapsed>=h.telegraph){const direction=normVector(h.x-hero.x,h.y+(h.type==='painring'?0:hero.bodyRise)-hero.y);const force=h.type==='painring'?110:72;hero.x=clamp(hero.x+direction.x*force*dt,ARENA.minX,ARENA.maxX);hero.y=clamp(hero.y+direction.y*force*dt,state.stage?350:ARENA.minY,maxY);}
+  for(const h of state.hazards)if(['gravitywell','painring'].includes(h.type)&&h.elapsed>=h.telegraph&&h.elapsed<h.telegraph+h.duration){
+    const distance=Math.hypot(h.x-hero.x,h.y+hero.bodyRise-hero.y),reach=h.type==='painring'?280:210;
+    if(distance<reach){const direction=normVector(h.x-hero.x,h.y+hero.bodyRise-hero.y),force=(h.type==='painring'?245:185)*(1-distance/(reach*1.5)),pull=Math.min(force*dt,Math.max(0,distance-12));hero.x=clamp(hero.x+direction.x*pull,ARENA.minX,ARENA.maxX);hero.y=clamp(hero.y+direction.y*pull,state.stage?350:ARENA.minY,maxY);}
+  }
   moveBoss(state, dt);
   if (bool(input.attack) && hero.attackCooldown <= 0 && (hero.cooldowns[input.weapon||'star']||0)<=0 && state.projectiles.length < MAX_PROJECTILES - 6) fireWeapon(state, input.weapon);
 
@@ -548,14 +577,15 @@ function updateFight(state, dt, input) {
 function setPhase(state, phase) { state.phase = phase; state.phaseTime = 0; }
 
 /** Create a deterministic, renderer-independent playable boss encounter. */
-export function createVinsonBattle({ seed = 1, stage = 0, compact = false, openingAttack = null } = {}) {
+export function createVinsonBattle({ seed = 1, stage = 0, compact = false, openingAttack = null, boxPattern = 'lanes' } = {}) {
   const initialSeed = seedNumber(seed); let state = freshCombat(stage === 1 ? 1 : 0, initialSeed, 0, 0, compact);
-  state._openingAttack=['laserline','painring','chains','inversion'].includes(openingAttack)?openingAttack:null;
+  state._openingAttack=['laserline','painring','handslam','handcatch','earththrow','eclipsecross','gravitywell','chains','inversion'].includes(openingAttack)?openingAttack:null;
   function step(dt, input = {}) {
     const delta = Math.min(0.05, Math.max(0, finite(dt)));
     if (state.phase === 'defeat' || state.phase === 'victory' || state.phase === 'transition') return state;
+    const comboDown=bool(input.combo);input={...input,combo:comboDown&&!state._comboWasDown};state._comboWasDown=comboDown;
     state.events = []; state.time += delta; state.phaseTime += delta;
-    if (state.phase === 'intro') { if (bool(input.advance)) setPhase(state, 'fight'); }
+    if (state.phase === 'intro') { if (bool(input.advance)){setPhase(state, 'fight');if(openingAttack==='box'){beginBox(state);state.box.pattern=['lanes','vertical','radial','beams'].includes(boxPattern)?boxPattern:'lanes';}if(openingAttack==='combo')state.comboOffer=8;} }
     else if (state.phase === 'fight') updateFight(state, delta, input || {});
     else if (state.phase === 'dodgebox') updateBox(state, delta, input || {});
     else if (state.phase === 'timing') updateTiming(state, delta, input || {});
