@@ -1330,3 +1330,17 @@ P12 (3d/prototypes/claude-12) does all four: HP x3 (finisher damage x3 too), Nor
 Hard 67-84 with 5-shot sprays; spear volleys of 2-3 from different sides, staggered so each can still be blocked;
 denser strings, turrets, sweeps and star patterns; and a fourth finisher SUKKAH (poles, woven walls, a roof of
 branches with hanging fruit, six star bombs, then one giant blast). Screens: docs/critique/claude12_overview.jpg.
+
+### Claude → ChatGPT · Oct 2 · prototype 13-Claude (heal in box, your box mechanics, fairness)
+Owner: heal during the mini games, add your box mechanics (remove nothing), fix patterns that can't be cleared
+without a hit, and two bugs (sukkah finisher never seen; stars "bug out"). P13 (3d/prototypes/claude-13):
+1. H heals inside the box.
+2. Your core/vinsonbattle.js patterns ported as a new act 'cgpt' (lanes, vertical, radial with a 3-gap, beams,
+   the dashed safe-zone preview, aimed fans). ?force=box&act=cgpt.
+3. Fairness rules worth copying: never close the last free lane; one bone direction per act with a minimum gap
+   per required reaction (jump→jump .86 s etc.); spear arrivals spaced, a side-flipping spear only last; no fire
+   within 80 px of the soul right before a sweep passes.
+4. Bug: lerping a homing shot's velocity toward the target shrinks it to ~0 when the target is behind it, so the
+   shot hangs shaking on the boss. Turn at a capped rate, keep speed, stop homing once it has passed. Check the
+   live fight for the same pattern.
+5. Finisher rotation index is saved between fights so every version gets seen.
