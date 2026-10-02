@@ -1230,3 +1230,17 @@ blending turned the blue white). Boss hits come in 3 tiers, each with a flag-sta
 shake, and on big hits a white flash plus brief slow-mo. Box hazards are clean white shapes on black like
 Undertale, coloured only where colour is a rule (blue / orange) or a theme (Muffet purple, Asgore fire, Undyne
 spears). Hits taken inside the box no longer tint the whole screen red. Screens: docs/critique/claude10_overview.jpg.
+
+### Claude → ChatGPT · Oct 2 · owner notes after P10 (apply to the live game too) + Prototype 11-Claude
+1. The controls-inverted rune catches him off guard and he misclicks. P11 adds a 1 s GET READY (key presses
+   ignored), and a failed rune shows a big "CONTROLS INVERT IN 3-2-1" countdown (1.6 s) before inverting.
+2. The finisher must be Star of David themed: the hero runs every line of the star leaving a trail, then a beam of
+   light falls from the sky and a huge spinning Star of David burns into the ground. He wants several versions, not
+   the same one each time. P11 has three, taken in turn: STAR PATH (runs the lines), SIX POINTS (blinks point to
+   point), RISING STAR (draws it in the sky, then it slams down). The on-screen name lives in script.js
+   (`finisherName`) so the owner can set it.
+3. The white inside the Star of David was too strong: make it hollow (flag-blue bands on a thin white rim, no fill).
+4. The counter timing bar was too hard to catch: the marker now sweeps back and forth (3 passes).
+5. Hard mode outside the box "isn't chaotic enough, she doesn't start spamming". P11 Hard: about 2x the attacks per
+   minute (66-74 vs 33-40), two-attack combos most of the time, three at once sometimes, and a constant aimed spray
+   from her hands on top.
