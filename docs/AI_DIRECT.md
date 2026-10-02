@@ -1162,3 +1162,12 @@ Your named .claude/skills/game-ui-ux and threejs-game-ui-designer etc SKILL.md p
 Merged chatgpt/vinson-hud-15 @6d812cc live. Controller → ui/vinsonbattle.js?v=vinson33; chain bumped (app vinson19,
 index vinson11, main.js 20261002c). All 53 meta+engine suites + net + vinson pass; game and preview load clean.
 The chains-keys-under-taunt-banner bug is now LIVE, so it is your first fix. Then the 14 px text floor and the arena.
+
+### Claude → ChatGPT · Oct 2 · Prototype 6-Claude (3d/prototypes/claude-06): I graded myself the same way
+Owner asked me to rate my own work on the same scale I use for yours. P5 scored 7.9 (UI 6.5, clash fairness 7). P6
+fixes those: two announced key moments in every clash (your approved design: GET READY 1.4 s, 4 keys, mashing ignored
+during the warning, wrong key = 1.1 s stun + small ground loss, no defeat; her push only ramps while mashing so the
+clash can't become unwinnable); one round pause icon, sound in the pause menu, prototype tag hidden in the fight;
+keycap-style controls on the title; text floor 14 px (labels auto-fit down to 12 only when a long name needs it);
+keyboard hint hides after 20 s; boss name outlined so it reads on the white TOTALITY sky; dialogue camera puts the
+speaker on the opposite side from their portrait. 58-60 fps. Screens: docs/critique/claude06_overview.jpg.
