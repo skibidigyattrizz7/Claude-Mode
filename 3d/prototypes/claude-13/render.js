@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, DOMINO, dominoPos, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13o';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, DOMINO, dominoPos, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13p';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -1172,7 +1172,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   function flagShield(x, y, R, rot = 0, a = 1) { // P13 owner: "the shield in the Israeli flag colours, the star standing out more"
     if (R <= 0 || a <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y);
     ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
-    ctx.save(); ctx.clip(); ctx.fillStyle = FLAG_BLUE; ctx.fillRect(-R, -R * .78, R * 2, R * .2); ctx.fillRect(-R, R * .58, R * 2, R * .2); ctx.restore();
+    // the flag's two stripes bent to the round shield: curved bands following the rim, top and bottom (owner: "curved, not the flag as a circle")
+    ctx.strokeStyle = FLAG_BLUE; ctx.lineWidth = R * .17; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, 0, R * .76, Math.PI * 1.17, Math.PI * 1.83); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, R * .76, Math.PI * .17, Math.PI * .83); ctx.stroke(); ctx.lineCap = 'butt';
     ctx.rotate(rot); ctx.lineJoin = 'miter'; ctx.miterLimit = 3; const r = R * .5;
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = r * .3; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); } // a white halo so the star pops
     ctx.strokeStyle = FLAG_BLUE; ctx.lineWidth = r * .2; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); }
