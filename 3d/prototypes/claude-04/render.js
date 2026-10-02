@@ -969,20 +969,39 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.fillStyle = secret ? '#6a7a5a' : '#4a3a4a'; ctx.beginPath(); ctx.moveTo(-500, 420); for (let x = -500; x <= W + 500; x += 40) ctx.lineTo(x, 400 - Math.sin(x * .006) * 24 - Math.sin(x * .017) * 8); ctx.lineTo(W + 500, 720); ctx.lineTo(-500, 720); ctx.fill();
     const field = ctx.createLinearGradient(0, 410, 0, 720); field.addColorStop(0, secret ? '#9ab86a' : '#7a8a3a'); field.addColorStop(1, secret ? '#3a5a2a' : '#2a3a1a');
     ctx.fillStyle = field; ctx.fillRect(-500, 418, W + 1000, 400);
-    // the shield, planted in the earth
-    ctx.save(); ctx.beginPath(); ctx.rect(-500, -300, W + 1000, 592 + 300); ctx.clip(); drawShield(470, 566, 56, -.3); ctx.restore(); // buried below y 592
-    ctx.fillStyle = secret ? '#5a4a30' : '#4a3424'; ctx.beginPath(); ctx.ellipse(470, 594, 74, 12, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = secret ? '#b8d888' : '#a8b860'; ctx.lineWidth = 2; for (let i = 0; i < 14; i++) { const x = 400 + i * 10, sw = Math.sin(fx.clock * 1.6 + i) * 3; ctx.beginPath(); ctx.moveTo(x, 600); ctx.quadraticCurveTo(x + sw * .5, 590, x + sw, 578 + (i % 3) * 4); ctx.stroke(); }
-    // the sword falls from the sky, then digs in deeper
-    const SWX = 560; // lands right beside the shield (owner: it fell too far away)
-    const fk = clamp((k - .3) / .1, 0, 1), dig = clamp((k - .4) / .08, 0, 1), sy = fk < 1 ? lerp(-400, 470, fk * fk) : 470 + easeOut(dig) * 34;
-    if (k > .3) { if (fk < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(SWX - 3, sy - 260, 6, 220); ctx.globalCompositeOperation = 'source-over'; } drawSword(SWX, sy, 0, 1.2); }
-    if (dig > 0) { ctx.fillStyle = 'rgba(80,60,40,.6)'; ctx.beginPath(); ctx.ellipse(SWX, 640, 40 + dig * 40, 8, 0, 0, TAU); ctx.fill(); }
-    // front grass covers the buried blade and the shield base; blades sway in the wind
-    ctx.strokeStyle = secret ? '#b8d888' : '#a8b860'; ctx.lineWidth = 2;
-    for (const g of grass) { if (g.y < 600) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 5; ctx.beginPath(); ctx.moveTo(g.x, g.y + 40); ctx.quadraticCurveTo(g.x + sw * .5, g.y + 20, g.x + sw, g.y + 40 - g.h); ctx.stroke(); }
+    // grass behind the keepsakes first, so no blade ever draws over the shield (owner)
+    for (const g of grass) { if (g.y >= 600) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 4; ctx.strokeStyle = `rgba(${secret ? '200,230,150' : '190,200,110'},${.4 + (g.y - 420) / 500})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.quadraticCurveTo(g.x + sw * .5, g.y - g.h * .5, g.x + sw, g.y - g.h); ctx.stroke(); }
     ctx.fillStyle = secret ? '#2f4a22' : '#223014'; ctx.fillRect(-500, 632, W + 1000, 200);
-    for (const g of grass) { if (g.y >= 600) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 4; ctx.strokeStyle = `rgba(${secret ? '200,230,150' : '190,200,110'},${.4 + (g.y - 420) / 500})`; ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.quadraticCurveTo(g.x + sw * .5, g.y - g.h * .5, g.x + sw, g.y - g.h); ctx.stroke(); }
+    ctx.strokeStyle = secret ? '#b8d888' : '#a8b860'; ctx.lineWidth = 2;
+    for (const g of grass) { if (g.y < 600 || (g.x > 500 && g.x < 790)) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 5; ctx.beginPath(); ctx.moveTo(g.x, g.y + 40); ctx.quadraticCurveTo(g.x + sw * .5, g.y + 20, g.x + sw, g.y + 40 - g.h); ctx.stroke(); }
+    // keepsakes, placed like ChatGPT's 14: shield standing, the sword planted just to its right on the same soil
+    const GY = 606, SHX = 590, SWX = 704, sec = s.cine ? s.cine.len : 9, age = s.cine ? s.cine.t - .4 * sec : 99;
+    ctx.fillStyle = 'rgba(36,45,31,.28)'; ctx.beginPath(); ctx.ellipse(SHX, GY + 4, 78, 15, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(SWX, GY + 6, 42, 9, 0, 0, TAU); ctx.fill();
+    drawShield(SHX, GY - 52, 60, -.035);
+    // the sword: gravity fall, a slight lean that settles, lands tip-first, half the blade buried, a short wobble
+    const fall = clamp((k - .3) / .1, 0, 1), landed = fall * fall;
+    if (fall > 0) {
+      if (fall >= 1) { ctx.fillStyle = 'rgba(35,35,25,.36)'; ctx.beginPath(); ctx.ellipse(SWX, GY + 4, 48, 11, 0, 0, TAU); ctx.fill();
+        if (age < .5) { const im = 1 - age / .5; ctx.save(); ctx.globalAlpha *= im; ctx.strokeStyle = '#b99a62'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(SWX, GY + 4, 28 + (1 - im) * 52, 7 + (1 - im) * 10, 0, 0, TAU); ctx.stroke(); ctx.restore(); } }
+      const tipY = lerp(-122, GY + 84, landed), wob = !reducedMotion && age >= 0 && age < .4 ? Math.sin(age * 42) * (1 - age / .4) * .018 : 0;
+      ctx.save(); ctx.beginPath(); ctx.rect(-500, -300, W + 1000, GY + 300); ctx.clip();
+      if (fall < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(SWX - 3, tipY - 420, 6, 220); ctx.globalCompositeOperation = 'source-over'; }
+      ctx.translate(SWX, tipY); ctx.rotate(lerp(-.035, -.1, landed) + wob); drawSword(0, -138 * 1.2, 0, 1.2);
+      ctx.restore();
+      if (age >= 0 && age < .6) { ctx.save(); ctx.globalAlpha *= (1 - age / .6) * .8; ctx.strokeStyle = '#fff5cc'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(SWX - 12, GY - 96); ctx.lineTo(SWX + 12, GY - 96); ctx.moveTo(SWX, GY - 108); ctx.lineTo(SWX, GY - 84); ctx.stroke(); ctx.restore(); }
+    }
+    // a thin dark lip of soil buries the shield's rim and the sword's entry point
+    ctx.fillStyle = secret ? '#3a3a24' : '#33432f'; ctx.beginPath();
+    ctx.moveTo(SHX - 70, GY - 2); ctx.quadraticCurveTo(SHX - 34, GY - 9, SHX - 6, GY + 2); ctx.quadraticCurveTo(SHX + 8, GY + 10, SHX + 22, GY - 1);
+    ctx.lineTo(SHX + 52, GY + 3); ctx.quadraticCurveTo(SWX - 32, GY - 2, SWX - 12, GY + 2); ctx.quadraticCurveTo(SWX, GY + 10, SWX + 14, GY);
+    ctx.lineTo(SWX + 50, GY - 2); ctx.quadraticCurveTo(SWX + 20, GY + 22, SWX - 14, GY + 15); ctx.quadraticCurveTo(SHX + 60, GY + 20, SHX + 24, GY + 14);
+    ctx.quadraticCurveTo(SHX - 12, GY + 26, SHX - 46, GY + 16); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#85714b'; for (const [x, y, r] of [[-44, 9, 2.4], [-20, 14, 1.8], [36, 12, 2.1], [52, 6, 1.6], [-80, 15, 1.8], [-6, 16, 2]]) { ctx.beginPath(); ctx.arc(SWX + x, GY + y, r, 0, TAU); ctx.fill(); }
+    if (age >= 0 && age < .42) { // soil kicked up by the landing
+      const kick = 1 - age / .42; ctx.save(); ctx.globalAlpha *= kick; ctx.fillStyle = '#96784d';
+      for (const [dx, dy, r] of [[-19, -5, 2], [-11, -11, 1.5], [-3, -8, 1.8], [8, -12, 1.5], [17, -6, 2], [-24, -1, 1.3], [23, -1, 1.4], [-7, -15, 1.1], [13, -16, 1.2], [-16, -14, 1.2], [4, -4, 1.1], [27, -10, 1.1]]) { ctx.beginPath(); ctx.arc(SWX + dx * 1.3, GY + 4 + dy * 1.3 - kick * (6 + r * 2), r * 1.3, 0, TAU); ctx.fill(); }
+      ctx.restore();
+    }
     // drifting light motes
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 26; i++) { const x = (i * 97 + fx.clock * 12) % 1300, y = 300 + ((i * 61) % 300) + Math.sin(fx.clock + i) * 10; ctx.globalAlpha = a * (.3 + .3 * Math.sin(fx.clock * 2 + i)); ctx.fillStyle = '#fff2c8'; ctx.fillRect(x, y, 2, 2); }
