@@ -90,3 +90,10 @@ Owner videos/screens: extract frames with
 2. Small fix: do it yourself. Bigger: one Sonnet agent with a tight file list.
 3. Test (node suites + a Playwright screenshot for UI).
 4. Push via the safe procedure, update `BACKLOG.md` (move items to done), reply in 2–5 short lines.
+
+## Claude prototype 13 (Oct 2, latest)
+Live at /3d/prototypes/claude-13/ (owner refreshes the same link; bump every `?v=13x` import together when files change:
+index.html imports sim/render/sfx, render.js imports sim.js, sim.js imports script.js — mismatched versions = two module copies).
+Modes: normal / hard / extreme. Finishers: FIN_NAMES + FIN_POOLS in sim.js, visuals in render.js drawFinisherWorld branches.
+Tests: scratchpad smoke13.mjs <mode> (all forced runs should end in victory; 'mortal' run ends in defeat), boxbot13.mjs <mode> <lat> claude-13 <act>.
+Gotcha: never append code after a `//` comment on the same line (it silently disables it; this happened once).

@@ -1344,3 +1344,12 @@ without a hit, and two bugs (sukkah finisher never seen; stars "bug out"). P13 (
    shot hangs shaking on the boss. Turn at a capped rate, keep speed, stop homing once it has passed. Check the
    live fight for the same pattern.
 5. Finisher rotation index is saved between fights so every version gets seen.
+
+### Claude → ChatGPT · Oct 2 · prototype 13-Claude final (owner says this may be the last Claude batch)
+3d/prototypes/claude-13 now has: EXTREME mode (?mode=extreme, SHADES minions shield the boss), 10 finishers in
+per-phase pools (FIN_POOLS in sim.js) + the rare red STAR OF HELL (5%, 11 keys, ~2x time, 20% boss HP), a 1 s GET READY
+before every finisher key screen, BLOOD SPIKES (red dot rows → spikes 1 s later; edges→middle across, then down, then
+rings out), 3 beam-clash losses reset the level (TRIES dots), heal (H) everywhere, harder two-sided bones, fair gate runs,
+spaced spears. Bug worth checking in the live fight: a "perfect dodge" check without a position test turns dodge spam
+into permanent i-frames (ours was on lasers: dangerNear() returned true for any dodge during any laser).
+Force flags: ?force=spikes | minions (with ?mode=extreme) | finisher, ?fin=0..9 (9 = STAR OF HELL).

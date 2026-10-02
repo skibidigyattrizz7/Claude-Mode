@@ -1,11 +1,11 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, FIN_NAMES, finNext, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13e';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13h';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
 const font = (px, wt = 700) => `${wt} ${px}px 'Barlow Condensed', 'Arial Narrow', sans-serif`;
-const ATTACK_NAMES = { barrage: 'HAND BARRAGE', orbs: 'VOLLEY', slam: 'HAND SLAM', chains: 'CHAINS', rune: 'RUNE LOCK', catch: 'CATCH', earth: 'EARTH THROW', laser: 'EYE LASER',
+const ATTACK_NAMES = { barrage: 'HAND BARRAGE', orbs: 'VOLLEY', slam: 'HAND SLAM', chains: 'CHAINS', rune: 'RUNE LOCK', catch: 'CATCH', earth: 'EARTH THROW', laser: 'EYE LASER', spikes: 'BLOOD SPIKES', minions: 'SUMMON',
   cross: 'CROSSFIRE', doom: 'DOOMFALL', gravity: 'GRAVITY WELL', spiral: 'SPIRAL', corona: 'CORONA SWEEP', twin: 'TWIN HOLES' };
 // palettes: danger is always red-family, safe is always pale green, the hero colour is always the player's
 const P = {
@@ -104,7 +104,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'qteBad': shake(0.2); break;
         case 'runeWin': flash('#ffe7b0', 0.3); shake(0.5); part(640, 220, 40, '#ffd27a', 520, 0.9, 3.5); break;
         case 'runeFail': flash('#ff4b3a', 0.3); shake(0.6); fx.chroma = 0.6; break;
-        case 'finisherReady': num(s.hero.x, s.hero.y - 130, 'FINISHER!', '#ffe08a', true); break;
+        case 'finisherReady': num(s.hero.x, s.hero.y - 130, e.hell ? 'STAR OF HELL!' : 'FINISHER!', e.hell ? '#ff3b3b' : '#ffe08a', true); if (e.hell) { flash('#ff2a1a', .3); shake(.4); } break;
         case 'sukkahBuilt': shake(.3); flash('#fff1c8', .18); part(e.x, e.y - 120, 24, '#ffe7a8', 300, .8, 3, -60); break;
         case 'starLaunch': part(e.x, e.y, 10, '#ffffff', 260, .4, 3); shake(.08); break;
         case 'starBomb': blast('bomb', e.x, e.y, 120); shake(.6); flash('#ffffff', .25); part(e.x, e.y - 40, 26, '#ffd9a0', 620, .9, 4, -80); addScar(e.x, e.y); break;
@@ -124,6 +124,28 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'scLock': shake(.8); flash('#ffffff', .5); ring(e.x, e.y, '#ffffff', 280, 420, .4, 8); part(e.x, e.y, 40, '#cfe0ff', 600, .6, 4); break;
         case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
         case 'scShatter': blast('burst', e.x, e.y, 320); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 40, 950, 1, 12); part(e.x, e.y, 70, '#cfe0ff', 1000, 1.1, 5); break;
+        case 'spikeUp': shake(.12); break;
+        case 'sbShot': if (e.i % 3 === 0) shake(.08); break;
+        case 'sbImpact': blast('hit', e.x, e.y, 34); part(e.x, e.y, 4, '#ffffff', 300, .3, 2); break;
+        case 'sbCharge': flash('#cfe0ff', .15); break;
+        case 'sbFinal': blast('burst', e.x, e.y, 260); shake(1); flash('#ffffff', .8); negative(.08); ring(e.x, e.y, '#ffffff', 30, 800, .9, 12); part(e.x, e.y, 70, '#ffffff', 900, 1, 4); break;
+        case 'dbGrow': flash('#cfe0ff', .2); part(e.x, e.y, 20, '#ffffff', 300, .6, 3, -100); break;
+        case 'dbCut': shake(.7); flash('#ffffff', .3); fx.slashes.push({ y: 360, a: e.n === 1 ? Math.PI / 2 - .08 : .06, t: 0 }); part(e.x, e.y, 30, '#ffffff', 700, .5, 3); break;
+        case 'dbSheathe': shake(.15); break;
+        case 'dbSplit': shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1, 14); part(e.x, e.y, 90, '#cfe0ff', 1100, 1.2, 5); break;
+        case 'stRise': shake(.3); break;
+        case 'stCollapse': shake(.6); flash('#cfe0ff', .3); break;
+        case 'stBurst': blast('nova', e.x, e.y, 300); shake(1); flash('#ffffff', .85); negative(.08); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 30, 950, 1, 12); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); break;
+        case 'hellStar': flash('#ff2a1a', .35); shake(.4); break;
+        case 'hellFire': flash('#ff5020', .3); shake(.5); break;
+        case 'hellBoom': shake(1); flash(e.big ? '#fff0e0' : '#ff6030', e.big ? 1 : .6); negative(e.big ? .12 : .06); fx.chroma = e.big ? .8 : .4; ring(e.x, e.y, '#ff5030', 30, e.big ? 1200 : 700, 1, e.big ? 16 : 10); part(e.x, e.y, e.big ? 120 : 60, '#ff9a50', e.big ? 1300 : 800, 1.2, 5); if (e.big) addScar(s.boss.x, s.boss.y + 30); break;
+        case 'hellAlgol': shake(.6); flash('#ff3020', .3); break;
+        case 'hellVert': shake(.9); flash('#ffd0b0', .5); part(e.x, e.y, 50, '#ff7a40', 800, .8, 4); break;
+        case 'hellSpin': shake(.2); break;
+        case 'minions': shake(.5); flash('#ff5a46', .2); ring(e.x, e.y, '#ff6a5a', 20, 300, .5, 6); part(e.x, e.y, 30, '#ff9a5a', 500, .7, 4); break;
+        case 'minionHit': part(e.x, e.y, 6, '#ffd7a1', 240, .3, 3); break;
+        case 'minionDie': shake(e.last ? .6 : .3); blast('hit', e.x, e.y, 70); part(e.x, e.y, 24, '#ff9a5a', 500, .6, 4); if (e.last) flash('#7fe0b0', .25); break;
+        case 'shielded': num(e.x, e.y, 'SHIELDED', '#ff6a5a'); break;
         case 'starBombBig': blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
         case 'finisherStar': shake(.9); flash('#ffffff', .5); negative(.07); ring(e.x, e.y - 100, '#ffffff', 20, 520, .7, 10); part(e.x, e.y - 100, 50, '#ffffff', 700, 1, 4); fx.finStarT = 0; break;
         case 'finisherBeam': shake(1); flash('#ffffff', .6); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); break;
@@ -598,6 +620,19 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     for (const z of s.hazards) {
       if (FRONT.has(z.kind) !== front) continue;
       switch (z.kind) {
+        case 'spikes': { // red dots, then spikes a second later where each row's dots are
+          for (const r of z.rows) {
+            if (r.t < 0 || r.t > 1.35) continue;
+            const pts = r.pts || (r.pts = spikeDots(r));
+            if (r.t < 1) { const k = r.t, rad = 3 + k * 3 + (k > .7 ? Math.sin(fx.clock * 40) * 1.2 : 0);
+              ctx.fillStyle = `rgba(255,${Math.round(70 - k * 50)},${Math.round(60 - k * 40)},${(.55 + k * .45).toFixed(2)})`;
+              for (const [x, y] of pts) { ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fill(); } }
+            else { const e = (r.t - 1) / .35, up = e < .25 ? easeOut(e / .25) : 1 - (e - .25) / .75 * .6, hgt = 46 * up;
+              ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,60,50,.35)'; for (const [x, y] of pts) { ctx.beginPath(); ctx.ellipse(x, y, 16, 6, 0, 0, TAU); ctx.fill(); } ctx.restore();
+              for (const [x, y] of pts) { ctx.fillStyle = '#f2ede2'; ctx.beginPath(); ctx.moveTo(x - 8, y); ctx.lineTo(x, y - hgt); ctx.lineTo(x + 8, y); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ff4a3a'; ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x, y - hgt * .45); ctx.lineTo(x + 3, y); ctx.closePath(); ctx.fill(); } }
+          }
+          break;
+        }
         case 'slam': case 'meteor': {
           if (z.hit || z.t < 0) break;
           const k = clamp(z.t / z.tele, 0, 1), pulse = 0.5 + 0.5 * Math.sin(fx.clock * 14);
@@ -758,6 +793,25 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     }
     ctx.fillStyle = '#e8ecf2'; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - Math.cos(a - 0.5) * 18, y2 - Math.sin(a - 0.5) * 18); ctx.lineTo(x2 - Math.cos(a + 0.5) * 18, y2 - Math.sin(a + 0.5) * 18); ctx.fill();
     ctx.restore();
+  }
+  function drawMinions(s) { // EXTREME shades: small eclipses with eyes, a tether to her, an HP bar; her shield while they live
+    if (!s.minions || !s.minions.length) return;
+    const b = s.boss;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,90,70,.6)'; ctx.lineWidth = 4 + Math.sin(fx.clock * 6) * 1.5; ctx.beginPath(); ctx.ellipse(b.x, b.y - 110, 210, 250, 0, 0, TAU); ctx.stroke();
+    glow(b.x, b.y - 110, 260, 'rgba(255,60,50,.12)');
+    for (const m of s.minions) { ctx.strokeStyle = 'rgba(255,90,70,.35)'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(b.x, b.y - 160); ctx.lineTo(m.x, m.y); ctx.stroke(); } ctx.setLineDash([]);
+    ctx.restore();
+    for (const m of s.minions) {
+      const bob = Math.sin(fx.clock * 5 + m.x * .01) * 4;
+      ctx.save(); ctx.translate(m.x, m.y + bob);
+      ctx.globalCompositeOperation = 'lighter'; glow(0, 0, 60, 'rgba(255,120,60,.35)'); ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = m.hurt > 0 ? '#ffffff' : '#07090b'; ctx.beginPath(); ctx.arc(0, 0, m.r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#ff9a5a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, m.r, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#ffd7a1'; ctx.fillRect(-12, -6, 8, 3); ctx.fillRect(4, -6, 8, 3);
+      for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i - 2) * .32; ctx.fillStyle = '#e0a860'; ctx.beginPath(); ctx.moveTo(Math.cos(a - .1) * m.r, Math.sin(a - .1) * m.r); ctx.lineTo(Math.cos(a) * (m.r + 14), Math.sin(a) * (m.r + 14)); ctx.lineTo(Math.cos(a + .1) * m.r, Math.sin(a + .1) * m.r); ctx.fill(); }
+      ctx.fillStyle = '#23303a'; ctx.fillRect(-26, m.r + 8, 52, 5); ctx.fillStyle = '#ff6a5a'; ctx.fillRect(-26, m.r + 8, 52 * clamp(m.hp / m.max, 0, 1), 5);
+      ctx.restore();
+    }
   }
   function drawShots(s) {
     const f = form(s), pal = P[f];
@@ -990,13 +1044,15 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   }
   function drawFinisherQte(s) {
     const q = s.fq; if (!q) return;
-    const cx = 640, cy = 250, n = q.keys.length, gap = 64, x0 = cx - (n - 1) * gap / 2, k = clamp(q.t / .25, 0, 1);
+    const cx = 640, cy = 250, n = q.keys.length, gap = 64, x0 = cx - (n - 1) * gap / 2, k = clamp((q.t + 1 - Math.max(0, q.ready ?? 0)) / .25, 0, 1);
     ctx.save(); ctx.fillStyle = `rgba(0,0,0,${.55 * k})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
-    ctx.globalCompositeOperation = 'lighter'; hexagram(cx, cy, 230, fx.clock * .4, k, 'rgba(255,224,138,.6)', 2); ctx.globalCompositeOperation = 'source-over';
-    text(FIN_NAMES[finNext(s)], cx, cy - 92, 46, '#ffffff');
-    text(q.done === 'win' ? 'UNLEASHED' : q.done === 'fail' ? 'BROKEN' : 'TYPE ALL 7 KEYS IN ORDER', cx, cy - 52, 22, q.done === 'fail' ? '#ff8a6b' : '#ffffff', 'center', true, 600);
-    q.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, q.done === 'fail' && i === q.wrong ? 'bad' : i < q.i ? 'done' : i === q.i && !q.done ? 'now' : 'todo', 50));
-    const left = clamp(1 - q.t / q.limit, 0, 1); ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 220, cy + 46, 440, 8); ctx.fillStyle = left < .3 ? '#ff5a46' : '#ffe08a'; ctx.fillRect(cx - 220, cy + 46, 440 * left, 8);
+    const hell = q.hell, ready = q.ready > 0 && !q.done; // P13: a 1 s GET READY first; STAR OF HELL is all red
+    if (hell) { ctx.fillStyle = `rgba(90,0,0,${(.35 * k).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600); }
+    ctx.globalCompositeOperation = 'lighter'; hexagram(cx, cy, 230, fx.clock * (hell ? 1.2 : .4), k, hell ? 'rgba(255,50,30,.8)' : 'rgba(255,224,138,.6)', 2); ctx.globalCompositeOperation = 'source-over';
+    text(FIN_NAMES[finNext(s)], cx, cy - 92, 46, hell ? '#ff3b3b' : '#ffffff');
+    text(q.done === 'win' ? 'UNLEASHED' : q.done === 'fail' ? 'BROKEN' : ready ? `GET READY · ${q.ready.toFixed(1)}` : `TYPE ALL ${n} KEYS IN ORDER`, cx, cy - 52, 22, q.done === 'fail' ? '#ff8a6b' : hell ? '#ffb0a0' : '#ffffff', 'center', true, 600);
+    q.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, ready ? 'todo' : q.done === 'fail' && i === q.wrong ? 'bad' : i < q.i ? 'done' : i === q.i && !q.done ? 'now' : 'todo', 50));
+    const left = ready ? 1 : clamp(1 - q.t / q.limit, 0, 1); ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 220, cy + 46, 440, 8); ctx.fillStyle = ready ? '#5a6670' : left < .3 ? '#ff5a46' : hell ? '#ff3b3b' : '#ffe08a'; ctx.fillRect(cx - 220, cy + 46, 440 * left, 8);
     ctx.restore();
   }
   function drawFinisherWorld(s) {
@@ -1005,7 +1061,11 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     const k = c.t / c.len, b = s.boss, dark = clamp(k * 6, 0, 1) * .4;
     ctx.save(); ctx.fillStyle = `rgba(0,4,16,${dark.toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
     if (c.v === 3) { drawSukkahFront(s, c, k); ctx.restore(); drawHero(s, s.hero.x, s.hero.y); return; }
-    if (c.v >= 4) { drawDavidLaser(s, c, k); ctx.restore(); return; }
+    if (c.v === 4 || c.v === 5) { drawDavidLaser(s, c, k); ctx.restore(); return; }
+    if (c.v === 6) { drawBarrage(s, c, k); ctx.restore(); return; }
+    if (c.v === 7) { drawBlade(s, c, k); ctx.restore(); return; }
+    if (c.v === 8) { drawTornado(s, c, k); ctx.restore(); return; }
+    if (c.v === HELL) { drawHell(s, c, k); ctx.restore(); return; }
     if (c.v === 1) { drawMagen(s, c, k); ctx.restore(); return; }
     if (c.v === 2) { drawCage(s, c, k); ctx.restore(); return; }
     // 1) the trace: every line of the Star of David drawn behind him as he runs it (flag blue on a white core)
@@ -1041,6 +1101,86 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     }
     ctx.restore();
     for (const tr of s.hero.trail) drawHero(s, tr.x, tr.y, tr.life * 2.4, tr.face, true); drawHero(s, s.hero.x, s.hero.y); // he stays on top of his own star
+  }
+  const ku = (k, a, b) => clamp((k - a) / (b - a), 0, 1);
+  const dim = (k, a = .35) => { ctx.fillStyle = `rgba(0,4,20,${(a * ku(k, 0, .1)).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600); };
+  // STAR BARRAGE: thirty small stars stream from his hand into her, then a big charged one
+  function drawBarrage(s, c, k) {
+    const B = BARRAGE, h = s.hero, b = s.boss, col = P[form(s)].hero, hx = h.x + 50, hy = h.y - 80; dim(k);
+    for (let i = 0; i < B.n; i++) { const t0 = B.shots[0] + i * B.gap, f = ku(k, t0, t0 + B.fly); if (k < t0 || f >= 1) continue;
+      const tx = b.x - 40 + ((i * 37) % 60 - 30), ty = b.y - 120 + ((i * 53) % 90 - 45), x = lerp(hx, tx, f), y = lerp(hy, ty, f);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(160,200,255,.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(lerp(hx, tx, Math.max(0, f - .5)), lerp(hy, ty, Math.max(0, f - .5))); ctx.stroke(); ctx.restore();
+      davidStar(x, y, 15, k * 40 + i, col, 1, 0); }
+    if (k > B.shots[0] && k < B.shots[1] + .03) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(hx, hy, 50 + Math.sin(fx.clock * 50) * 8, 'rgba(200,220,255,.8)'); ctx.restore(); } // the muzzle
+    const n = Math.min(B.n, Math.floor(ku(k, B.shots[0] + B.fly, B.shots[1] + B.fly) * B.n)); if (n > 0 && k < B.final + .05) text('x' + n, b.x + 150, b.y - 260, 34 + Math.min(20, n), '#ffffff');
+    if (k >= B.charge && k < B.final) { const g = ku(k, B.charge, B.final); ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(hx, hy, 60 + g * 120, 'rgba(255,255,255,.85)'); ctx.restore(); davidStar(hx + 30, hy, 20 + g * 70, k * 30, col, 1, 0); }
+    if (k >= B.final && k < B.final + B.fly * 2) { const f = ku(k, B.final, B.final + B.fly * 2); davidStar(lerp(hx + 30, b.x - 40, f), lerp(hy, b.y - 120, f), 90, k * 30, col, 1, 0, 'rgba(255,255,255,.6)'); }
+    if (k > B.final + B.fly) { const e = ku(k, B.final + B.fly, 1), o = easeOut(e); davidStar(b.x - 40, b.y - 120, 90 + o * 400, o * 2, col, 1 - e, 0); ctx.save(); ctx.globalCompositeOperation = 'lighter'; hexagram(b.x, b.y + 30, 80 + o * 520, o, 1, '#ffffff', 5, .3, 1 - e); ctx.restore(); }
+    drawHero(s, h.x, h.y);
+  }
+  // DAVID'S BLADE: the sword becomes a giant blade with a Star of David at the hilt, two cuts, sheathe, then the split
+  function drawBlade(s, c, k) {
+    const D = BLADE, h = s.hero, b = s.boss, col = P[form(s)].hero; dim(k, .4);
+    const blade = (x, y, ang, len, a = 1) => { ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = a;
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(140,190,255,.35)'; ctx.fillRect(0, -22, len, 44); ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#e8f4ff'; ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(len - 40, -10); ctx.lineTo(len, 0); ctx.lineTo(len - 40, 10); ctx.lineTo(0, 10); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = FLAG_BLUE; ctx.fillRect(0, -2, len - 50, 4); ctx.restore(); davidStar(x, y, 26, ang, col, a, 0); };
+    const gl = ku(k, D.grow, D.cut1 - .06) * (1 - ku(k, D.sheathe, D.sheathe + .06)), len = 40 + easeOut(gl) * 560;
+    // the cuts left hanging in the air: one down through her, one across
+    const cutA = (n, t0) => { if (k < t0) return; const f = ku(k, t0, t0 + .05), fade = k < D.split ? 1 : 1 - ku(k, D.split, D.split + .08), w = k < D.split ? 6 : 6 + ku(k, D.split, D.split + .08) * 60;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath();
+      if (n === 1) { ctx.moveTo(b.x + 40, b.y - 420); ctx.lineTo(b.x - 40 + 0, lerp(b.y - 420, b.y + 120, f)); } else { ctx.moveTo(b.x - 330, b.y - 140); ctx.lineTo(lerp(b.x - 330, b.x + 330, f), b.y - 100); }
+      ctx.stroke(); ctx.strokeStyle = 'rgba(120,170,255,.6)'; ctx.lineWidth = w * 3; ctx.stroke(); ctx.restore(); };
+    cutA(1, D.cut1); cutA(2, D.cut2);
+    if (k < D.cut1 - .04) blade(h.x + 20, h.y - 80, -Math.PI / 2 + .15, len);                                              // raised high
+    else if (k < D.sheathe) { const sw = k < D.cut2 ? ku(k, D.cut1 - .04, D.cut1 + .02) : ku(k, D.cut2 - .04, D.cut2 + .02), ang = k < D.cut2 ? lerp(-Math.PI / 2 - .3, Math.PI / 2 - .4, easeOut(sw)) : lerp(-.9, .5, easeOut(sw)); blade(h.x + 20, h.y - 80, ang, len); }
+    else if (k < D.split) blade(h.x + 20, h.y - 40, Math.PI / 2 - .2, len, 1 - ku(k, D.sheathe, D.sheathe + .06));         // sheathing
+    if (k >= D.split) { const e = ku(k, D.split, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 120, 700 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.restore(); davidStar(b.x, b.y - 120, 120 + o * 420, o * 1.5, col, 1 - e, 0); }
+    drawHero(s, h.x, h.y);
+  }
+  // STAR TORNADO: a whirlwind of stars round her, tightening and speeding up, then it collapses into her and bursts
+  function drawTornado(s, c, k) {
+    const T = TORNADO, b = s.boss, col = P[form(s)].hero, rise = easeOut(ku(k, 0, .2)), col2 = ku(k, T.collapse - .1, T.collapse), N = 70, base = b.y + 30; dim(k, .4);
+    const spin = c.t * (3 + c.t * 2.5);
+    if (k < T.burst) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(160,200,255,.25)'; ctx.lineWidth = 2; // the funnel
+      for (let j = 0; j < 8; j++) { ctx.beginPath(); for (let y = 0; y <= 1.001; y += .05) { const r = (70 + y * 260) * (1 - col2 * .8), a = spin * 1.3 + j / 8 * TAU + y * 3, x = b.x + Math.cos(a) * r, yy = base - y * 560 * rise + Math.sin(a) * r * .22; y ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); } ctx.stroke(); }
+      glow(b.x, base - 280 * rise, 200 + col2 * 200, `rgba(150,190,255,${(.15 + col2 * .5).toFixed(2)})`); ctx.restore();
+      for (let i = 0; i < N; i++) { const y = i / N, r = (70 + y * 260) * (1 - col2 * .85), a = spin * (1.6 - y * .6) + i * 2.399, x = b.x + Math.cos(a) * r, yy = base - y * 560 * rise + Math.sin(a) * r * .22;
+        davidStar(x, yy, 10 + (i % 4) * 4, a * 2, i % 5 ? col : '#ffffff', .4 + .6 * (Math.sin(a) * .5 + .5), 0); }
+    } else { const e = ku(k, T.burst, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 150, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.restore();
+      for (let i = 0; i < 40; i++) { const a = i * 2.399, d = o * (250 + (i * 71) % 520); davidStar(b.x + Math.cos(a) * d, b.y - 150 + Math.sin(a) * d * .7 + e * e * 200, 16 + (i % 3) * 6, o * 9 + i, i % 4 ? col : '#ffffff', 1 - e, 0); } }
+    drawHero(s, s.hero.x, s.hero.y);
+  }
+  // STAR OF HELL (Algol, the demon star): everything red. The red star and fire from the sky, a blast, a star-shaped
+  // laser cage, a vertical laser, then a second star that spins up exponentially, overcharges and explodes.
+  function hellStar(x, y, r, rot, a = 1) {
+    if (a <= 0 || r <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(rot); ctx.lineJoin = 'miter'; ctx.miterLimit = 3;
+    ctx.globalCompositeOperation = 'lighter'; glow(0, 0, r * 2.2, 'rgba(255,40,20,.5)'); ctx.globalCompositeOperation = 'source-over';
+    const band = Math.max(3, r * .2); ctx.strokeStyle = '#ffb070'; ctx.lineWidth = band + Math.max(2.5, r * .08); for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); }
+    ctx.strokeStyle = '#b8000f'; ctx.lineWidth = band; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); } ctx.restore();
+  }
+  function redBeam(x0, y0, x1, y1, w, a = 1) { if (w <= 0 || a <= 0) return; ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,40,20,.45)'; ctx.lineWidth = w * 3; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.strokeStyle = '#ff3a20'; ctx.lineWidth = w; ctx.stroke(); ctx.strokeStyle = '#fff0e0'; ctx.lineWidth = Math.max(1.5, w * .35); ctx.stroke(); ctx.restore(); }
+  function drawHell(s, c, k) {
+    const L = HELLT, b = s.boss, cx = b.x, cy = b.y - 120, u = (a, b2) => ku(k, a, b2);
+    ctx.fillStyle = `rgba(40,0,0,${(.55 * u(0, .08)).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
+    // 1) the red star above her, spinning, and the fire from the sky, then the first blast
+    if (k < L.boom1 + .02) { const sx = cx, sy = b.y - 330; hellStar(sx, sy, 40 + easeOut(u(0, .08)) * 70, c.t * 4, 1);
+      if (k > L.fire) { const f = u(L.fire, L.boom1), w = 40 + f * 90; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createLinearGradient(cx - w, 0, cx + w, 0); g.addColorStop(0, 'rgba(120,0,0,0)'); g.addColorStop(.3, 'rgba(255,60,20,.6)'); g.addColorStop(.5, 'rgba(255,220,160,.95)'); g.addColorStop(.7, 'rgba(255,60,20,.6)'); g.addColorStop(1, 'rgba(120,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(cx - w, -300, w * 2, b.y + 330); glow(cx, b.y + 20, w * 2.4, 'rgba(255,90,30,.8)'); ctx.restore();
+        if (!reducedMotion) fx.particles.push({ x: cx + (Math.random() - .5) * w * 1.5, y: b.y + 20, vx: (Math.random() - .5) * 300, vy: -400 - Math.random() * 400, life: .5, max: .5, size: 4, color: Math.random() < .5 ? '#ff7a30' : '#ffd060', grav: 0 }); } }
+    // 2) the Algol laser: a star of red beams drawn round her, each point firing into her
+    if (k >= L.algol && k < L.spin) { const g = easeOut(u(L.algol, L.algol + .06)), fade = 1 - u(L.vert + .06, L.spin), R = 260, P6 = [0, 1, 2, 3, 4, 5].map((i) => { const a = -Math.PI / 2 + i * Math.PI / 3 + c.t * .4; return [cx + Math.cos(a) * R, cy + Math.sin(a) * R * .85]; });
+      for (let i = 0; i < 6; i++) { const [x0, y0] = P6[i], [x1, y1] = P6[(i + 2) % 6]; redBeam(x0, y0, lerp(x0, x1, g), lerp(y0, y1, g), 10 * (1 + Math.sin(fx.clock * 50) * .1), fade); redBeam(x0, y0, lerp(x0, cx, g), lerp(y0, cy, g), 5, fade * .8); } }
+    // 3) the vertical laser straight down through her
+    if (k >= L.vert && k < L.spin + .02) { const f = u(L.vert, L.vert + .03), fade = 1 - u(L.spin - .04, L.spin + .02), w = (30 + Math.sin(fx.clock * 60) * 4) * fade; redBeam(cx, -300, cx, lerp(-300, b.y + 40, f), w, fade); }
+    // 4) the second star: spins 2 s, exponentially faster, shaking and burning white, then overcharges and explodes
+    if (k >= L.spin && k < L.boom2) { const f = u(L.spin, L.boom2), shk = f * f * 10, R = 90 + f * 70; ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy - 30, R * (2 + f * 2), `rgba(255,${Math.round(60 + f * 160)},${Math.round(30 + f * 150)},${(.4 + f * .5).toFixed(2)})`); ctx.restore();
+      for (let j = Math.min(5, Math.floor(c.w / 4)); j >= 0; j--) hellStar(cx + (Math.random() - .5) * shk, cy - 30 + (Math.random() - .5) * shk, R, c.rot - j * .06, j ? .25 : 1);
+      if (f > .6) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,240,220,.8)'; ctx.lineWidth = 2; for (let i = 0; i < 8; i++) { let a = Math.random() * TAU, x = cx, y = cy - 30; ctx.beginPath(); ctx.moveTo(x, y); for (let j = 0; j < 4; j++) { a += (Math.random() - .5) * .9; x += Math.cos(a) * R * .4; y += Math.sin(a) * R * .4; ctx.lineTo(x, y); } ctx.stroke(); } ctx.restore(); } }
+    if (k >= L.boom2) { const e = u(L.boom2, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .25) glow(cx, cy, 1000 * (1 - e * 3), 'rgba(255,230,200,1)'); glow(cx, cy, 300 + o * 400, 'rgba(255,40,20,.6)', 1 - e); hexagram(b.x, b.y + 30, 100 + o * 700, o, 1, '#ff5030', 8, .3, 1 - e); ctx.restore(); hellStar(cx, cy, 120 + o * 600, o * 3, 1 - e); }
+    drawHero(s, s.hero.x, s.hero.y);
   }
   // MAGEN DAVID finisher: the Shield of David soaks up her shots, charges, and is rammed into her
   function drawMagen(s, c, k) {
@@ -1230,7 +1370,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     letterbox(k * 5);
     drawSlashes();
     if (k < 0.3) { ctx.save(); ctx.globalAlpha = Math.min(1, k * 8) * (1 - Math.max(0, (k - 0.22) * 12)); const sc = reducedMotion ? 1 : lerp(1.25, 1, easeOut(k * 6));
-      ctx.translate(640, 140); ctx.scale(sc, sc); text(c.name, 0, 0, 66, '#ffffff'); if (c.sub) text(c.sub, 0, 40, 22, '#9fc0ff', 'center', true, 700); ctx.restore(); }
+      ctx.translate(640, 140); ctx.scale(sc, sc); text(c.name, 0, 0, 66, c.v === HELL ? '#ff3b3b' : '#ffffff'); if (c.sub) text(c.sub, 0, 40, 22, '#9fc0ff', 'center', true, 700); ctx.restore(); }
     if (k > 0.8) { ctx.save(); ctx.globalAlpha = clamp((k - 0.8) * 8, 0, 1); text(aligned(s) || (s.stage === 2 && s.boss.hp <= c.dmg) ? 'THE ECLIPSE ALIGNS' : 'FINISH!', 640, H - 30, 30, '#ffffff'); ctx.restore(); }
   }
   function drawSlashes() {
@@ -1322,6 +1462,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     const c = s.clash; if (!c) return;
     const f = form(s), pal = P[f], heroCol = pal.hero, bossCol = f === 3 ? '#ff3b5c' : pal.boss;
     const title = ['', 'BEAM CLASH', 'FINAL BEAM CLASH', 'TOTALITY CLASH'][c.kind];
+    { const left = 3 - (c.losses || 0); ctx.save(); text('TRIES', 1150, 100, 14, '#c8d0d6', 'right', true, 700); // P13: 3 losses reset the level
+      for (let i = 0; i < 3; i++) { ctx.fillStyle = i < left ? '#7fe0b0' : '#3a444c'; ctx.beginPath(); ctx.arc(1166 + i * 22, 95, 7, 0, TAU); ctx.fill(); } ctx.restore(); }
     if (c.line && c.t - c.line.at < 1.9) { // pushing dialogue: big, one at a time, next to whoever says it
       const a = c.t - c.line.at, k = clamp(a / .15, 0, 1) * (1 - clamp((a - 1.6) / .3, 0, 1)), hero = c.line.who === 'hero';
       const cx = 640 + ((hero ? s.hero.x + 60 : s.boss.x - 250) - 640 - fx.camX) * fx.zoom, cy = 360 + ((hero ? s.hero.y - 190 : s.boss.y - 250) - 360 - fx.camY) * fx.zoom;
@@ -1341,7 +1483,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     const KM = s.M.keyMoments >= 4 ? [.56, .67, .78, .89] : [.58, .72, .86];
     KM.forEach((m, i) => { const done = i < c.km; ctx.fillStyle = done ? 'rgba(255,224,138,.35)' : '#ffe08a'; ctx.beginPath(); ctx.moveTo(x0 + w * m, y - 6); ctx.lineTo(x0 + w * m - 6, y - 14); ctx.lineTo(x0 + w * m + 6, y - 14); ctx.closePath(); ctx.fill(); });
     if (c.lost) { const k = clamp(c.lost.t / .3, 0, 1); ctx.save(); ctx.globalAlpha = .35 * (1 - clamp((c.lost.t - 1.2) / .6, 0, 1)); ctx.fillStyle = '#ff2a2a'; ctx.fillRect(0, 0, W, H); ctx.restore();
-      ctx.save(); ctx.globalAlpha = k; text('OVERPOWERED', 640, 330, 80, '#ff8a6b'); text(`SHE WON THIS PUSH · AGAIN IN ${Math.max(0, 1.8 - c.lost.t).toFixed(1)}s`, 640, 380, 22, '#ffffff', 'center', true, 600); ctx.restore(); return; }
+      ctx.save(); ctx.globalAlpha = k; text('OVERPOWERED', 640, 330, 80, '#ff8a6b'); text(c.losses >= 3 ? 'THIRD LOSS · THE LEVEL RESETS' : `SHE WON THIS PUSH · ${3 - c.losses} ${3 - c.losses === 1 ? 'TRY' : 'TRIES'} LEFT · AGAIN IN ${Math.max(0, 1.8 - c.lost.t).toFixed(1)}s`, 640, 380, 22, c.losses >= 3 ? '#ff8a6b' : '#ffffff', 'center', true, 600); ctx.restore(); return; }
     text(STAGES[s.stage].hero, x0, y + 44, 16, heroCol, 'left', true, 600); text(STAGES[s.stage].boss, x0 + w, y + 44, 16, bossCol, 'right', true, 600);
     if (c.won && c.sword && c.wonT < .55) { text('SWORD THROW!', 640, 330, 60, '#ffffff'); return; }
     if (c.won) { const k = clamp((c.wonT - (c.sword ? .55 : 0)) / 0.6, 0, 1); ctx.save(); ctx.globalAlpha = k; ctx.translate(640, 330); const sc = reducedMotion ? 1 : lerp(1.6, 1, easeOutBack(k)); ctx.scale(sc, sc); text('BREAKTHROUGH', 0, 0, 90, '#ffffff'); ctx.restore(); return; }
@@ -1541,9 +1683,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     // boss bar
     const flick = al && Math.floor(fx.clock * 8) % 5 === 0;
     text(flick ? 'THE ECLIPSE ALIGNS' : st.boss, 290, 42, 22, flick ? '#ffffff' : pal.name, 'left', true);
-    const hardM = s.M.key === 'hard';
-    text(s.stage === 3 ? 'SECRET PHASE' : `PHASE ${s.stage}`, hardM ? 920 : 990, 42, 16, s.stage === 3 ? '#ff3b5c' : '#c8d0d6', 'right', true, 600);
-    if (hardM) { ctx.fillStyle = '#7a1420'; ctx.fillRect(930, 27, 60, 20); text('HARD', 960, 42, 14, '#ffd6d6', 'center', false, 800); }
+    const hardM = s.M.key !== 'normal', ex = s.M.key === 'extreme';
+    text(s.stage === 3 ? 'SECRET PHASE' : `PHASE ${s.stage}`, hardM ? (ex ? 906 : 920) : 990, 42, 16, s.stage === 3 ? '#ff3b5c' : '#c8d0d6', 'right', true, 600);
+    if (hardM) { ctx.fillStyle = ex ? '#000000' : '#7a1420'; ctx.fillRect(ex ? 916 : 930, 27, ex ? 74 : 60, 20); if (ex) { ctx.strokeStyle = '#ff3b3b'; ctx.lineWidth = 2; ctx.strokeRect(916, 27, 74, 20); } text(s.M.name, ex ? 953 : 960, 42, 14, ex ? '#ff4a4a' : '#ffd6d6', 'center', false, 800); }
     hpBar(290, 52, 700, 14, b.hp, b.chip, b.max, pal.bar, b.gates.slice(b.gateIndex));
     if (fx.callout && fx.callout.t < 1 && s.phase === 'fight') { ctx.save(); ctx.globalAlpha = 1 - clamp((fx.callout.t - 0.6) / 0.4, 0, 1); text(fx.callout.text, 640, 96, 20, pal.tele); ctx.restore(); }
     // hero panel
@@ -1574,8 +1716,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       const p = s.finisher.prompt / FIN.window, pulse = reducedMotion ? 1 : 1 + Math.sin(fx.clock * 12) * 0.06;
       const fpx = clamp(640 + (h.x - 640 - fx.camX) * fx.zoom, 200, 1080), fpy = clamp(360 + (h.y - 185 - 360 - fx.camY) * fx.zoom, 150, touch ? 470 : 520); // above the hero, never on top of him
       ctx.save(); ctx.translate(fpx, fpy); ctx.scale(pulse, pulse);
-      const col = al ? '#ffffff' : '#ffe08a';
-      ctx.fillStyle = '#0b1014'; ctx.fillRect(-160, -30, 320, 60); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.strokeRect(-160, -30, 320, 60);
+      const hellP = s.finisher.hell, col = hellP ? '#ff3b3b' : al ? '#ffffff' : '#ffe08a';
+      ctx.fillStyle = hellP ? '#2a0003' : '#0b1014'; ctx.fillRect(-160, -30, 320, 60); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.strokeRect(-160, -30, 320, 60);
       ctx.fillStyle = col; ctx.fillRect(-160, 26, 320 * p, 4);
       ctx.font = font(30); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(FIN_NAMES[finNext(s)] + (touch ? '!' : '  [ F ]'), 0, 0, 296); ctx.restore(); ctx.textBaseline = 'alphabetic';
     }
@@ -1692,6 +1834,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       if (heroFirst) { dh(); drawBoss(s); } else { drawBoss(s); dh(); }
     }
     if (s.phase === 'clash' && s.clash && s.clash.won && s.clash.wonT > (s.clash.sword ? .55 : 0.15)) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(b.x, b.y - 110, 300 * easeOut(s.clash.wonT), 'rgba(255,255,255,.85)'); ctx.restore(); }
+    drawMinions(s);
     drawShots(s);
     drawHazards(s, true);
     if (s.phase === 'chained') drawChained(s);
@@ -1707,9 +1850,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     drawBox(s);
     drawRune(s);
     drawTiming(s);
-    drawFinisherQte(s);
     // screen space
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
+    drawFinisherQte(s); // P13: in screen space so the keys sit centred whatever the camera does
     fx.chroma = Math.max(h.invert > 0 ? 0.12 + 0.05 * Math.sin(fx.clock * 9) : 0, fx.chroma - dt * 1.5);
     if (fx.chroma > 0 && !reducedMotion) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fx.chroma * 0.6; ctx.fillStyle = '#ff2a2a'; ctx.fillRect(-6, 0, W, H); ctx.fillStyle = '#2affd8'; ctx.fillRect(6, 0, W, H); ctx.restore(); }
     fx.vignette = Math.max(h.hp < 25 && s.phase === 'fight' ? 0.25 + 0.15 * Math.sin(fx.clock * 5) : 0, fx.vignette - dt);

@@ -60,6 +60,7 @@
     font: 700 16px 'Barlow Condensed', sans-serif; letter-spacing: 1px; background: rgba(11,16,20,.82); color: var(--ink); border: 2px solid #3a4650; cursor: pointer; }
   #pauseBtn:hover { border-color: var(--gold); }
   button.big.hard { background: #8e1a26; color: #fff1ec; }
+  button.big.extreme { background: #000; color: #ff4a4a; box-shadow: inset 0 0 0 2px #ff3b3b; }
   .modeinfo { color: #c8d0d6; font-size: 17px; margin-top: 14px; max-width: 62ch; justify-self: center; line-height: 1.35; }
   .modeinfo b { color: var(--gold); letter-spacing: .06em; } .modeinfo b.hardtxt { color: #ff9a8a; margin-left: 8px; }
   .touchkeys { display: none; color: #c8d0d6; font-size: 17px; margin: 0 auto 16px; max-width: 60ch; line-height: 1.4; }
@@ -90,7 +91,7 @@
 <button id="skipBtn" type="button" hidden>SKIP ▸</button>
 <div class="screen" id="title">
   <h1>THE ECLIPSE</h1>
-  <div class="sub">PROTOTYPE 13-CLAUDE · 3X BOSS HP · CHAOTIC FIGHTS · SIX STAR OF DAVID FINISHERS</div>
+  <div class="sub">PROTOTYPE 13-CLAUDE · 3X BOSS HP · CHAOTIC FIGHTS · TEN STAR OF DAVID FINISHERS</div>
   <div class="keys">
     <b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b><span>Move</span>
     <b><kbd>J</kbd> hold</b><span>Slash · also the counter and the clash mash</span>
@@ -98,16 +99,16 @@
     <b><kbd>1</kbd>–<kbd>6</kbd> <kbd>Q</kbd><kbd>E</kbd></b><span>Pick a special (six per form)</span>
     <b><kbd>SPACE</kbd></b><span>Dodge · just before a hit = PERFECT</span>
     <b><kbd>H</kbd></b><span>Heal · 2 per phase, +1 when a SURVIVE box starts · works everywhere</span>
-    <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its 7 keys (six versions in turn, newest first)</span>
+    <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its 7 keys (each phase has its own; rarely the red STAR OF HELL)</span>
     <b><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd></b><span>Clash key moments: type them in order, mashing is ignored</span>
     <b>CLICK · ENTER · J</b><span>Next dialogue line · X skips</span>
     <b>ON SCREEN KEYS</b><span>Rune Lock and chain escapes</span>
     <b><kbd>M</kbd> <kbd>P</kbd></b><span>Sound on/off · pause</span>
   </div>
   <div class="touchkeys">Left stick moves. ATTACK slashes, CAST fires the selected special, tap a special to pick it. DODGE just before a hit for a PERFECT. In a clash tap PUSH fast, then tap the keys shown.</div>
-  <div class="row modes"><button class="big" id="start" type="button" data-mode="normal">FIGHT · NORMAL</button><button class="big hard" id="startHard" type="button" data-mode="hard">FIGHT · HARD</button></div>
+  <div class="row modes"><button class="big" id="start" type="button" data-mode="normal">FIGHT · NORMAL</button><button class="big hard" id="startHard" type="button" data-mode="hard">FIGHT · HARD</button><button class="big extreme" id="startExtreme" type="button" data-mode="extreme">EXTREME</button></div>
   <div class="row cont" id="contRow" hidden><button class="ghost" id="cont" type="button">CONTINUE</button></div>
-  <div class="modeinfo"><b>NORMAL</b> the full fight, fair and readable. <b class="hardtxt">HARD</b> faster, hits harder, more boxes, 5-key clash moments and she pushes far harder.</div>
+  <div class="modeinfo"><b>NORMAL</b> the full fight, fair and readable. <b class="hardtxt">HARD</b> faster, hits harder, more boxes, 5-key clash moments and she pushes far harder. <b class="hardtxt">EXTREME</b> everything at its hardest, and she summons shades you must kill before she can be hurt again.</div>
 </div>
 <div class="screen" id="paused" hidden><h1>PAUSED</h1><div class="sub">P / ESC TO RESUME</div><div class="row"><button class="big" id="resume" type="button">RESUME</button><button class="ghost" id="restart1" type="button">RESTART</button><button class="ghost" id="muteBtn2" type="button">SOUND ON</button></div></div>
 <div class="screen" id="end" hidden>
@@ -119,9 +120,9 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H } from './sim.js?v=13e';
-import { createRenderer } from './render.js?v=13e';
-import { createSfx } from './sfx.js?v=13e';
+import { createFight, step, W, H } from './sim.js?v=13h';
+import { createRenderer } from './render.js?v=13h';
+import { createSfx } from './sfx.js?v=13h';
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
 const canvas = document.getElementById('c');
@@ -198,8 +199,8 @@ function input() {
   return inp;
 }
 const empty = { skip: false, mx: 0, my: 0, attack: false, attack0: false, cast: false, next: false, prev: false, dodge: false, heal: false, finisher: false, confirm: false, taps: 0, keysPressed: [] };
-let mode = q.get('mode') === 'hard' ? 'hard' : 'normal';
-try { if (!q.get('mode') && localStorage.getItem('p13mode') === 'hard') mode = 'hard'; } catch {}
+let mode = ['hard', 'extreme'].includes(q.get('mode')) ? q.get('mode') : 'normal';
+try { const lm = localStorage.getItem('p13mode'); if (!q.get('mode') && ['hard', 'extreme'].includes(lm)) mode = lm; } catch {}
 // phase checkpoints (owner: "make it save phases"): the furthest phase reached is saved per mode; a loss can retry
 // from it and the title offers CONTINUE. Clearing the fight clears the save.
 const CK = 'p13checkpoint';
@@ -207,7 +208,7 @@ const ckLoad = () => { try { return JSON.parse(localStorage.getItem(CK) || '{}')
 const ckSave = (m, st) => { try { const c = ckLoad(); if (st > 1) c[m] = Math.max(c[m] || 1, st); else delete c[m]; localStorage.setItem(CK, JSON.stringify(c)); } catch {} };
 const phaseName = (st) => st === 3 ? 'TOTALITY' : 'PHASE ' + st;
 function refreshContinue() {
-  const c = ckLoad(), m = c.hard ? 'hard' : c.normal ? 'normal' : null;
+  const c = ckLoad(), m = c.extreme ? 'extreme' : c.hard ? 'hard' : c.normal ? 'normal' : null;
   $('contRow').hidden = !m; if (m) { $('cont').textContent = `CONTINUE · ${phaseName(c[m])} · ${m.toUpperCase()}`; $('cont').onclick = () => { mode = m; start(c[m]); }; }
 }
 function start(from = 1) {
@@ -215,8 +216,9 @@ function start(from = 1) {
   try { localStorage.setItem('p13mode', mode); } catch {}
   // P13 owner: "I don't see the sukkot finisher": the four finishers now rotate across fights (saved), and a new
   // player gets the newest first (DAVID LASER, Oct 2). ?fin=0..5 picks one for testing.
-  let fin = 4; try { const f = localStorage.getItem('p13fin6'); if (f != null) fin = Number(f) % 6 || 0; } catch {}
-  if (q.get('fin') != null) fin = Number(q.get('fin')) % 6 || 0;
+  // P13 final: each phase has its own finishers, taken in turn (saved per phase). ?fin=0..9 forces one (9 = STAR OF HELL)
+  let fin = null; try { fin = JSON.parse(localStorage.getItem('p13finIdx') || 'null'); } catch {}
+  if (q.get('fin') != null) fin = (Number(q.get('fin')) || 0) % 10;
   fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1, fin });
   if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   if (q.get('act')) fight.forceAct = q.get('act');
@@ -227,21 +229,21 @@ function start(from = 1) {
 function togglePause() { if (!running || ended) return; paused = !paused; $('paused').hidden = !paused; last = performance.now(); }
 function toggleMute() { const m = sfx.toggle(); $('muteBtn').textContent = $('muteBtn2').textContent = m ? 'SOUND OFF' : 'SOUND ON'; }
 $('muteBtn').onclick = toggleMute; $('skipBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); edges.add('Skip'); }); $('muteBtn2').onclick = toggleMute;
-$('start').onclick = () => { mode = 'normal'; start(); }; $('retry').onclick = () => start(fight.retryFrom || 1); refreshContinue(); $('startHard').onclick = () => { mode = 'hard'; start(); }; $('again').onclick = start;
-$('swapMode').onclick = () => { mode = mode === 'hard' ? 'normal' : 'hard'; start(); }; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
+$('start').onclick = () => { mode = 'normal'; start(); }; $('retry').onclick = () => start(fight.retryFrom || 1); refreshContinue(); $('startHard').onclick = () => { mode = 'hard'; start(); }; $('startExtreme').onclick = () => { mode = 'extreme'; start(); }; $('again').onclick = start;
+$('swapMode').onclick = () => { mode = mode === 'normal' ? 'hard' : mode === 'hard' ? 'extreme' : 'normal'; start(); }; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
 function showEnd() {
   ended = true;
   const win = fight.phase === 'victory', secret = win && fight.result.tier === 'secret';
   $('endTitle').textContent = secret ? 'TRUE VICTORY' : win ? 'VICTORY' : 'DEFEATED';
   $('endTitle').style.color = secret ? '#ffffff' : '';
-  $('endSub').textContent = (mode === 'hard' && win ? 'HARD CLEAR · ' : '') + (secret ? 'TOTALITY IS OVER' : win ? 'THE ECLIPSE IS BROKEN' : fight.stage === 3 ? 'TOTALITY ENDURES' : 'THE ECLIPSE ENDURES');
+  $('endSub').textContent = fight.result?.reset ? 'OVERPOWERED 3 TIMES IN THE CLASH · THE LEVEL RESETS' : (mode !== 'normal' && win ? mode.toUpperCase() + ' CLEAR · ' : '') + (secret ? 'TOTALITY IS OVER' : win ? 'THE ECLIPSE IS BROKEN' : fight.stage === 3 ? 'TOTALITY ENDURES' : 'THE ECLIPSE ENDURES');
   $('rewards').replaceChildren(...(win ? fight.result.rewards : []).map((r) => { const li = document.createElement('li'); li.textContent = r; if (secret) li.className = 'secret'; return li; }));
   const st = fight.stats;
   const secs = Math.round(fight.t), clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
   $('stats').textContent = `${fight.M.name}  ·  TIME ${clock}  ·  PERFECT DODGES ${st.perfects}  ·  FINISHERS ${st.finishers}  ·  HEALS USED ${st.heals}`;
-  $('swapMode').textContent = mode === 'hard' ? 'PLAY NORMAL' : 'TRY HARD';
-  if (win) ckSave(mode, 1); // cleared: the save is done with
-  fight.retryFrom = !win && fight.stage > 1 ? fight.stage : 1;
+  $('swapMode').textContent = mode === 'normal' ? 'TRY HARD' : mode === 'hard' ? 'TRY EXTREME' : 'PLAY NORMAL';
+  if (win || fight.result?.reset) ckSave(mode, 1); // cleared, or reset by 3 clash losses: the save is done with
+  fight.retryFrom = !win && !fight.result?.reset && fight.stage > 1 ? fight.stage : 1;
   $('retry').hidden = fight.retryFrom < 2; $('retry').textContent = `RETRY ${phaseName(fight.retryFrom)}`; $('again').textContent = fight.retryFrom > 1 ? 'START OVER' : 'FIGHT AGAIN';
   refreshContinue();
   // the secret phase is hinted only after a normal clear
@@ -257,7 +259,7 @@ function frame(now) {
     // held state (move, J held) applies to every sub-step; presses only to the first
     let inp = acc >= 1 / 120 ? input() : null; // no step this frame (high refresh): keep the presses for the next one
     while (acc >= 1 / 120) { step(fight, 1 / 120, inp); acc -= 1 / 120; inp = { ...empty, mx: inp.mx, my: inp.my, attack: inp.attack, jump: inp.jump }; }
-    if (fight.stats.finishers !== fight.finSaved) { fight.finSaved = fight.stats.finishers; if (fight.finSaved) try { localStorage.setItem('p13fin6', String((fight.fin0 + fight.finSaved) % 6)); } catch {} }
+    if (fight.stats.finishers !== fight.finSaved) { fight.finSaved = fight.stats.finishers; if (fight.finSaved && fight.forceFin == null) try { localStorage.setItem('p13finIdx', JSON.stringify(fight.finIdx)); } catch {} }
     syncTouchUi(); sfx.update(fight); $('skipBtn').hidden = fight.phase !== 'talk';
     if (!fight.force && fight.stage > (fight.savedStage || 1)) { fight.savedStage = fight.stage; ckSave(mode, fight.stage); } // a new phase reached: save it
     if ((fight.phase === 'victory' && fight.phaseT > 1.6) || (fight.phase === 'defeat' && fight.phaseT > 1.4)) showEnd();

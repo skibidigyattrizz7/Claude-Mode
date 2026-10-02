@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13e';
+import { SCRIPT } from './script.js?v=13h';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -43,6 +43,9 @@ export const HERO_MAX = 100, HEAL = 32;
 // owner: Normal (what we've been tuning) and Hard ("extremely hard but still beatable"), picked on the title screen
 export const MODES = {
   normal: { key: 'normal', name: 'NORMAL', hp: 1, speed: 1, dmg: 1, dodge: 1, gates6: false, combo: [0, .45, .6, .8], triple: [0, .1, .2, .3], gapMul: .62, pressure: [0, 2.1, 1.7, 1.4], pressN: 3, qte: 1, boxEvery: 24, need: [4.6, 0, 1], keyMoments: 3, keyCount: 4, keyTime: 1, stun: 1.1, hardBox: false },
+  // P13 owner (final): "an extreme mode where everything is extremely hard, and the boss sometimes spawns minions you
+  // have to kill before you can damage her again"
+  extreme: { key: 'extreme', name: 'EXTREME', hp: 1.6, speed: 1.3, dmg: 1.55, dodge: 2.2, gates6: true, combo: [0, .9, .95, 1], triple: [0, .55, .7, .8], gapMul: .34, pressure: [0, .8, .65, .55], pressN: 6, qte: .7, boxEvery: 12, need: [7.2, 0, 1.2], keyMoments: 4, keyCount: 6, keyTime: .72, stun: 1.5, hardBox: true, minions: true },
   hard: { key: 'hard', name: 'HARD', hp: 1.3, speed: 1.15, dmg: 1.3, dodge: 1.7, gates6: true, combo: [0, .75, .85, .95], triple: [0, .35, .5, .6], gapMul: .45, pressure: [0, 1.05, .85, .7], pressN: 5, qte: .8, boxEvery: 15, need: [6.2, 0, 1.1], keyMoments: 4, keyCount: 5, keyTime: .8, stun: 1.3, hardBox: true },
 };
 const SLASH = { cd: 0.24, dmg: [0, 4, 6, 8], speed: 1000, r: 24 };
@@ -63,8 +66,12 @@ export const FIN = { mult: 6, // P12: x3 with the boss HP so a finisher still la
 // P13 owner: "finishers always pop up as Star of David something, the names don't change": each has its own name,
 // shown on the prompt, the key screen and the cinematic. finNext() is the one the next finisher will be.
 // P13 owner: "if any look way too similar make them unique": SIX POINTS became MAGEN DAVID, RISING STAR became STAR CAGE
-export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR'];
-export const finNext = (s) => (s.fin0 + s.stats.finishers) % FIN_NAMES.length;
+export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR', 'STAR BARRAGE', "DAVID'S BLADE", 'STAR TORNADO', 'STAR OF HELL'];
+// P13 owner (final): "a different type of finisher for each phase": each phase has its own set, taken in turn (the
+// turn is saved between fights per phase). STAR OF HELL is the rare one (5% whenever a finisher comes up, any phase).
+export const FIN_POOLS = { 1: [0, 1, 6, 4], 2: [2, 3, 7, 5], 3: [8] };
+export const HELL = 9;
+export const finNext = (s) => { if (s.finisher.hell) return HELL; if (s.forceFin != null) return s.forceFin; const P = FIN_POOLS[s.stage]; return P[(s.finIdx[s.stage] || 0) % P.length]; };
 export const FIN_KEYS = ['W', 'A', 'S', 'D', 'J', 'K', 'L', 'I'];
 export const RUNE_KEYS = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F'];
 export const CHAIN_KEYS = ['J', 'K', 'L', 'U', 'I', 'O'];
@@ -78,10 +85,10 @@ export function createFight({ seed = 7, force = null, mode = 'normal', start = 1
   const s = {
     M: MODES[mode] || MODES.normal,
     t: 0, phase: 'intro', phaseT: 0, stage: 1, R: rng(seed), events: [], force, forceUsed: false,
-    hero: { x: 300, y: 560, vx: 0, vy: 0, hp: HERO_MAX, chip: HERO_MAX, face: 1, inv: 0, dodgeT: 0, dodgeCd: 0, dodgeDir: [1, 0],
+    minions: [], hero: { x: 300, y: 560, vx: 0, vy: 0, hp: HERO_MAX, chip: HERO_MAX, face: 1, inv: 0, dodgeT: 0, dodgeCd: 0, dodgeDir: [1, 0],
       slashCd: 0, cds: {}, sel: 'star', heals: 1, invert: 0, squash: 0, hurt: 0, trail: [], cast: null, orbit: null, lance: null, field: null, charge: null, starfall: null },
     boss: null, shots: [], heroShots: [], hazards: [], box: null, timing: null, rune: null, chain: null, clash: null, cine: null,
-    finisher: { prompt: 0, cd: 6, cine: null }, fq: null, talk: null, noTalk: !!force, banner: null, hitstop: 0, slowmo: 0, secret: false, result: null, stats: { perfects: 0, finishers: 0, heals: 0 }, fin0: fin | 0,
+    finisher: { prompt: 0, cd: 6, cine: null }, fq: null, talk: null, noTalk: !!force, banner: null, hitstop: 0, slowmo: 0, secret: false, result: null, stats: { perfects: 0, finishers: 0, heals: 0 }, finIdx: { 1: 0, 2: 0, 3: 0, ...(typeof fin === 'object' && fin ? fin : {}) }, forceFin: typeof fin === 'number' ? fin : null,
   };
   setupStage(s, 1, true);
   if (start >= 2 && !force) { // P11 owner: "make it save phases": begin at a saved phase checkpoint
@@ -111,24 +118,26 @@ function setupStage(s, stage, silent = false) {
 }
 
 function ev(s, type, extra = {}) { s.events.push({ type, ...extra }); }
-function setPhase(s, p) { s.phase = p; s.phaseT = 0; }
+function setPhase(s, p) { s.phase = p; s.phaseT = 0; if ((p === 'clash' || p === 'cine') && s.minions) s.minions.length = 0; }
 function banner(s, text, sub = '', color = '#ffd7a1') { s.banner = { text, sub, color, t: 0 }; }
 const cfg = (s) => { const b = STAGES[s.stage], M = s.M; return { ...b, speed: b.speed * M.speed, dmg: b.dmg * M.dmg, dodge: Math.min(.6, b.dodge * M.dodge), gap: b.gap / M.speed * (M.gapMul || 1) }; };
 
 // ---------------------------------------------------------------------------------------------- damage
 function hurtHero(s, dmg, source, x = s.hero.x, y = s.hero.y - 46) {
   const h = s.hero;
-  if (h.inv > 0 || h.dodgeT > 0 || !['fight', 'box', 'chained', 'rune'].includes(s.phase)) return false;
+  if (h.inv > 0 || h.dodgeT > .06 || !['fight', 'box', 'chained', 'rune'].includes(s.phase)) return false; // the dodge's tail has no i-frames
   const d = Math.round(dmg * cfg(s).dmg);
   h.hp = Math.max(0, h.hp - d); h.inv = 0.7; h.hurt = 0.3;
   ev(s, 'heroHit', { dmg: d, source, x, y });
   if (h.hp <= 0) { setPhase(s, 'defeat'); s.result = { tier: 'defeat' }; ev(s, 'defeat'); }
   return true;
 }
+const ext = (s) => s.M.key === 'extreme';
 const bossFloor = (s) => s.boss.gateIndex < s.boss.gates.length ? s.boss.gates[s.boss.gateIndex] : 0;
 function hurtBoss(s, dmg, kind, x = s.boss.x, y = s.boss.y - 80) {
   const b = s.boss;
   if (b.hp <= 0 || !['fight', 'finisher', 'timing', 'rune', 'chained'].includes(s.phase)) return 0;
+  if (s.minions.length && kind !== 'finisher') { if (s.t - (s.shieldPing ?? -9) > .35) { s.shieldPing = s.t; ev(s, 'shielded', { x, y }); } return 0; } // EXTREME: her shades shield her
   const floor = bossFloor(s), before = b.hp;
   b.hp = Math.max(floor, b.hp - dmg); b.flash = 0.09;
   const dealt = Math.round(before - b.hp);
@@ -143,20 +152,21 @@ function hurtBoss(s, dmg, kind, x = s.boss.x, y = s.boss.y - 80) {
 // ---------------------------------------------------------------------------------------------- boss attacks
 const eye = (s) => ({ x: s.boss.x, y: s.boss.y - 160 });
 const POOLS = {
-  1: [['box', 1.4], ['orbs', 3], ['slam', 2], ['barrage', 1.3], ['chains', 1.5], ['rune', 1.1], ['catch', 1.6], ['earth', 1.6], ['laser', 2]],
-  2: [['box', 1.4], ['orbs', 2], ['slam', 1.6], ['barrage', 1.6], ['chains', 1.4], ['rune', 1.2], ['catch', 1.4], ['earth', 1.3], ['laser', 1.8], ['cross', 1.8], ['doom', 1.6], ['gravity', 1.4], ['spiral', 1.6]],
-  3: [['box', 1.4], ['orbs', 1.5], ['slam', 1.4], ['barrage', 1.5], ['chains', 1.3], ['rune', 1.2], ['catch', 1.3], ['earth', 1.2], ['laser', 1.6], ['cross', 1.7], ['doom', 1.6], ['gravity', 1.3], ['spiral', 1.6], ['corona', 1.8], ['twin', 1.2]],
+  1: [['box', 1.4], ['orbs', 3], ['slam', 2], ['barrage', 1.3], ['chains', 1.5], ['rune', 1.1], ['catch', 1.6], ['earth', 1.6], ['laser', 2], ['spikes', 1.3]],
+  2: [['box', 1.4], ['orbs', 2], ['slam', 1.6], ['barrage', 1.6], ['chains', 1.4], ['rune', 1.2], ['catch', 1.4], ['earth', 1.3], ['laser', 1.8], ['cross', 1.8], ['doom', 1.6], ['gravity', 1.4], ['spiral', 1.6], ['spikes', 1.5]],
+  3: [['box', 1.4], ['orbs', 1.5], ['slam', 1.4], ['barrage', 1.5], ['chains', 1.3], ['rune', 1.2], ['catch', 1.3], ['earth', 1.2], ['laser', 1.6], ['cross', 1.7], ['doom', 1.6], ['gravity', 1.3], ['spiral', 1.6], ['corona', 1.8], ['twin', 1.2], ['spikes', 1.6]],
 };
-const SOLO = new Set(['rune', 'chains', 'box']); // never part of a combo
+const SOLO = new Set(['rune', 'chains', 'box', 'minions']); // never part of a combo
 function chooseAttack(s) {
   const b = s.boss;
-  if (s.force && s.force !== 'box' && !s.forceUsed && (POOLS[3].some(([k]) => k === s.force) || s.force === 'minibox')) { if (s.force === 'minibox') { s.forceUsed = true; return ['box']; } s.forceUsed = true; return [s.force]; }
-  const ready = POOLS[s.stage].filter(([k]) => (b.cds[k] ?? 0) <= 0 && k !== b.last);
+  if (s.force && s.force !== 'box' && !s.forceUsed && (POOLS[3].some(([k]) => k === s.force) || s.force === 'minibox' || s.force === 'minions')) { if (s.force === 'minibox') { s.forceUsed = true; return ['box']; } s.forceUsed = true; return [s.force]; }
+  const pool = s.M.minions ? [...POOLS[s.stage], ['minions', s.stage === 3 ? 1.3 : 1]] : POOLS[s.stage];
+  const ready = pool.filter(([k]) => (b.cds[k] ?? 0) <= 0 && k !== b.last && !(k === 'minions' && s.minions.length));
   if (!ready.length) return ['orbs'];
   const pick = () => { const tot = ready.reduce((a, [, w]) => a + w, 0); let p = s.R() * tot; for (const [k, w] of ready) { p -= w; if (p <= 0) return k; } return ready[0][0]; };
   const first = pick();
   // phase 2-3: sometimes two attacks at once (never two hand attacks or pulls, never with a QTE)
-  const BIG = ['slam', 'gravity', 'twin', 'barrage', 'catch'];
+  const BIG = ['slam', 'gravity', 'twin', 'barrage', 'catch', 'spikes'];
   if (!SOLO.has(first) && s.R() < s.M.combo[s.stage]) { // owner: multiple attacks at once
     const second = ready.map(([k]) => k).filter((k) => k !== first && !SOLO.has(k) && !(BIG.includes(k) && BIG.includes(first)));
     if (second.length) { const two = second[Math.floor(s.R() * second.length)];
@@ -170,15 +180,30 @@ function startAttacks(s, kinds) {
   const b = s.boss;
   b.tell = 0.45; b.tellKind = kinds[0]; ev(s, 'tell', { kind: kinds[0] });
   let wait = cfg(s).gap;
-  kinds.forEach((kind, i) => { if (i === 0) wait += spawnAttack(s, kind); else { b.queue.push({ kind, t: .55 * i }); wait += s.M.key === 'hard' ? .5 : .9; } });
+  kinds.forEach((kind, i) => { if (i === 0) wait += spawnAttack(s, kind); else { b.queue.push({ kind, t: .55 * i }); wait += s.M.key === 'normal' ? .9 : s.M.key === 'hard' ? .5 : .35; } });
   b.attackCd = wait;
 }
 // one attack; returns the extra time before her next move
 function spawnAttack(s, kind) {
   const b = s.boss, h = s.hero, R = s.R, sp = cfg(s).speed, fast = 1 / sp;
   let wait = 0;
-  b.last = kind; b.cds[kind] = { box: s.M.boxEvery, orbs: 0, barrage: 10, slam: 9, chains: 11, rune: 18, catch: 8, earth: 6, laser: 3.5, cross: 7, doom: 9, gravity: 10, spiral: 6, corona: 8, twin: 14 }[kind] * (s.stage === 3 ? 0.75 : 1);
+  b.last = kind; b.cds[kind] = { box: s.M.boxEvery, orbs: 0, barrage: 10, slam: 9, chains: 11, rune: 18, catch: 8, earth: 6, laser: 3.5, cross: 7, doom: 9, gravity: 10, spiral: 6, corona: 8, twin: 14, spikes: 10, minions: 30 }[kind] * (s.stage === 3 ? 0.75 : 1);
   if (kind === 'box') { beginBox(s, true); return 0; }
+  if (kind === 'minions') { // EXTREME: she splits off shades; while any live she can't be hurt
+    const n = 2 + s.stage;
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (i - (n - 1) / 2) * .7; s.minions.push({ x: b.x + Math.cos(a) * 60, y: b.y - 120 + Math.sin(a) * 40, vx: Math.cos(a) * 260 - 160, vy: Math.sin(a) * 160, hp: 70 + s.stage * 30, max: 70 + s.stage * 30, r: 30, fire: 1.2 + i * .35, t: 0, hurt: 0 }); }
+    ev(s, 'minions', { x: b.x, y: b.y - 120, n }); banner(s, 'SHADES', 'KILL THEM TO HURT HER AGAIN', '#ff6a5a');
+    return .8;
+  }
+  if (kind === 'spikes') { // P13 owner: rows of red dots; a second after each row appears, spikes shoot up where its dots are.
+    // The rows march in from the edges to the middle, first left/right, then top/bottom, then rings going outwards.
+    const rows = [], cx = (FLOOR.minX + FLOOR.maxX) / 2, cy = (FLOOR.minY + FLOOR.maxY) / 2, gap = .3 * fast; let t = 0;
+    for (let i = 0; i < 5; i++, t += gap) { const f = i / 5; rows.push({ shape: 'v', x: lerp(FLOOR.minX + 20, cx, f), t: -t }, { shape: 'v', x: lerp(FLOOR.maxX - 20, cx, f), t: -t }); }
+    for (let i = 0; i < 4; i++, t += gap) { const f = i / 4; rows.push({ shape: 'h', y: lerp(FLOOR.minY + 14, cy, f), t: -t }, { shape: 'h', y: lerp(FLOOR.maxY - 10, cy, f), t: -t }); }
+    for (let i = 0; i < 6; i++, t += gap) rows.push({ shape: 'c', cx, cy, r: 70 + i * 105, t: -t });
+    s.hazards.push({ kind: 'spikes', t: 0, rows, end: t + 1.4 });
+    return t + .4;
+  }
   if (kind === 'orbs') {
     const e = eye(s), n = 5 + s.stage * 2, base = Math.atan2(h.y - 40 - e.y, h.x - e.x);
     for (let i = 0; i < n; i++) s.shots.push({ kind: 'orb', x: e.x, y: e.y, a: base + (i - (n - 1) / 2) * 0.16, speed: 320 * sp, r: 13, dmg: 9, tele: .55 * fast, age: 0 });
@@ -302,8 +327,8 @@ function moveHero(s, dt, inp) {
   h.x = clamp(h.x, FLOOR.minX, FLOOR.maxX); h.y = clamp(h.y, FLOOR.minY, FLOOR.maxY);
   if (inp.dodge && h.dodgeCd <= 0 && h.dodgeT <= 0) {
     h.dodgeDir = len ? [mx / len, my / len] : [h.face, 0]; h.dodgeT = .24; h.dodgeCd = .55; ev(s, 'dodge', { x: h.x, y: h.y });
-    if (dangerNear(s)) { s.slowmo = .45; h.inv = Math.max(h.inv, .5); s.stats.perfects++; h.hp = Math.min(HERO_MAX, h.hp + 2); ev(s, 'perfect', { x: h.x, y: h.y }); // from ChatGPT 14: a perfect dodge also mends 2 HP s.finisher.cd = Math.max(0, s.finisher.cd - 4);
-      if (aligned(s) && s.finisher.prompt <= 0) { s.finisher.prompt = FIN.window; ev(s, 'finisherReady', { aligned: true }); } }
+    if (s.t - (s.lastPerfect ?? -9) > 1.1 && dangerNear(s)) { s.lastPerfect = s.t; s.slowmo = .45; h.inv = Math.max(h.inv, .5); s.stats.perfects++; h.hp = Math.min(HERO_MAX, h.hp + 2); ev(s, 'perfect', { x: h.x, y: h.y }); // from ChatGPT 14: a perfect dodge also mends 2 HP s.finisher.cd = Math.max(0, s.finisher.cd - 4);
+      if (aligned(s) && s.finisher.prompt <= 0) { s.finisher.prompt = FIN.window; s.finisher.hell = false; ev(s, 'finisherReady', { aligned: true }); } }
   }
 }
 function dangerNear(s) {
@@ -312,7 +337,12 @@ function dangerNear(s) {
   return s.hazards.some((z) => {
     if (z.kind === 'slam') return !z.hit && z.t > z.tele - .22 && Math.hypot(z.x - h.x, (z.y - h.y) * 1.6) < z.r + 20;
     if (z.kind === 'meteor') return !z.hit && z.t > z.tele - .22 && Math.hypot(z.x - h.x, (z.y - h.y) * 1.6) < z.r + 20;
-    if (z.kind === 'laser' || z.kind === 'cross') return !z.hit && z.t > z.tele - .22 && z.t < z.tele + z.len;
+    // P13 owner: "a glitch where you don't get damaged": any dodge during ANY laser counted as perfect (no position
+    // check, whole laser length), so spamming dodge gave endless i-frames + heals. Now: only just before it fires,
+    // and only if the beam would actually cross you.
+    if (z.kind === 'laser') return !z.hit && z.t > z.tele - .22 && z.t < z.tele + .06 && segDist(hx, hy, z.x, z.y, z.x + Math.cos(z.a) * 1600, z.y + Math.sin(z.a) * 1600) < z.w + 30;
+    if (z.kind === 'cross') return !z.hit && z.t > z.tele - .22 && z.t < z.tele + .06 && [z.a, z.a + Math.PI / 2].some((a) => segDist(hx, hy, z.x - Math.cos(a) * 1500, z.y - Math.sin(a) * 1500, z.x + Math.cos(a) * 1500, z.y + Math.sin(a) * 1500) < z.w + 30);
+    if (z.kind === 'spikes') return z.rows.some((r) => !r.hit && r.t > 1 - .22 && r.t < 1.06 && spikeHits(r, h));
     if (z.kind === 'catch') return !z.hit && z.t > z.tele + z.close - .25 && Math.abs(h.y - 20 - z.y) < z.band;
     if (z.kind === 'earth') return !z.hit && z.t > z.tele + z.fly - .22 && Math.hypot(z.tx - h.x, (z.ty - h.y) * 1.6) < z.r;
     if (z.kind === 'chain') return z.t >= z.tele && !z.done && z.cx != null && Math.hypot(z.cx - hx, z.cy - hy) < 130;
@@ -332,9 +362,9 @@ function heroActions(s, dt, inp) {
   if (inp.cast && (h.cds[h.sel] || 0) <= 0 && h.dodgeT <= 0 && !h.lance && !h.charge) castAbility(s, h.sel);
   if (inp.heal && h.heals > 0 && h.hp < HERO_MAX) { h.heals--; s.stats.heals++; h.hp = Math.min(HERO_MAX, h.hp + HEAL); ev(s, 'heal', { x: h.x, y: h.y }); }
   if (inp.finisher && s.finisher.prompt > 0) { // owner: the finisher takes 7 keys in order
-    s.finisher.prompt = 0; const keys = [];
-    while (keys.length < FIN.keys) { const k = FIN_KEYS[Math.floor(s.R() * FIN_KEYS.length)]; if (k !== keys[keys.length - 1]) keys.push(k); }
-    s.fq = { keys, i: 0, t: 0, limit: FIN.qte[s.stage], wrong: -1, done: null, doneT: 0 }; setPhase(s, 'finisherQte'); ev(s, 'fqStart');
+    s.finisher.prompt = 0; const keys = [], hell = s.finisher.hell, nk = hell ? 11 : FIN.keys;
+    while (keys.length < nk) { const k = FIN_KEYS[Math.floor(s.R() * FIN_KEYS.length)]; if (k !== keys[keys.length - 1]) keys.push(k); }
+    s.fq = { keys, i: 0, t: 0, ready: 1, hell, limit: FIN.qte[s.stage] * (hell ? 2.1 : 1), wrong: -1, done: null, doneT: 0 }; setPhase(s, 'finisherQte'); ev(s, 'fqStart'); // P13 owner: a 1 s GET READY (dyslexia) before the clock runs; STAR OF HELL: 11 keys, about twice the time
   }
 }
 // the secret: in phase 2, once a finisher would be the killing blow the eclipse ALIGNS (sky and name pulse white).
@@ -344,16 +374,18 @@ function startFinisherCine(s) {
   s.finisher.cd = FIN.cooldown; s.stats.finishers++;
   // P11 owner: the finisher traces the Star of David with a trail, then a beam of light falls from the sky onto a
   // huge spinning star on the ground. Three versions, taken in turn so it is never the same one twice in a row.
-  const v = (s.fin0 + s.stats.finishers - 1) % FIN_NAMES.length; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
-  s.finisher.cine = { t: 0, len: v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
+  const v = finNext(s); if (v !== HELL && s.forceFin == null) s.finIdx[s.stage] = (s.finIdx[s.stage] || 0) + 1; s.finisher.hell = false; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
+  s.finisher.cine = { t: 0, len: v === HELL ? 7.6 : v === 6 ? 4.4 : v === 7 ? 4.6 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
     name: FIN_NAMES[v], sub: '', hits: 0, pole: [0, 0, 0, 0], branches: 0,
     hx: clamp(s.boss.x - 430, FLOOR.minX + 120, FLOOR.maxX - 500), hy: clamp(s.boss.y + 40, FLOOR.minY + 160, FLOOR.maxY - 10), bombs: [] };
-  if (v >= 4) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
+  if (v === 4 || v === 5) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
   s.shots = []; s.hazards = s.hazards.filter((z) => z.kind === 'hole'); setPhase(s, 'finisher'); ev(s, 'finisherStart');
 }
 function updateFinisherQte(s, dt, inp) {
-  const q = s.fq; q.t += dt;
-  if (q.done) { q.doneT += dt; if (q.doneT > .45) { s.fq = null; if (q.done === 'win') startFinisherCine(s); else { setPhase(s, 'fight'); s.finisher.cd = 8; banner(s, 'BREAKER FAILED', '', '#ff8a6b'); } } return; }
+  const q = s.fq;
+  if (q.ready > 0 && !q.done) { q.ready -= dt; return; } // GET READY: the keys are shown, presses are ignored, no clock
+  q.t += dt;
+  if (q.done) { q.doneT += dt; if (q.doneT > .45) { s.fq = null; if (q.done === 'win') startFinisherCine(s); else { setPhase(s, 'fight'); s.finisher.cd = 8; s.finisher.hell = false; banner(s, 'BREAKER FAILED', '', '#ff8a6b'); } } return; }
   if (q.t > .25) for (const k of inp.keysPressed) { // a short grace so a J held for slashing can't fail it instantly
     if (!FIN_KEYS.includes(k)) continue;
     if (k === q.keys[q.i]) { q.i++; ev(s, 'qteGood'); if (q.i >= q.keys.length) { q.done = 'win'; ev(s, 'fqWin'); break; } }
@@ -368,7 +400,23 @@ function landHit(s, p, dmg, x, y) {
   if (s.R() < (MISS[p.kind] || 0)) { ev(s, 'miss', { x, y }); return; }
   hurtBoss(s, Math.round(dmg * (.9 + s.R() * .2)), p.kind, x, y);
   // while the eclipse is aligned the random finisher is off: the secret needs a deliberate perfect dodge
-  if (!aligned(s) && s.phase === 'fight' && s.finisher.cd <= 0 && s.finisher.prompt <= 0 && b.hp > 0 && s.R() < FIN.chance[s.stage]) { s.finisher.prompt = FIN.window; ev(s, 'finisherReady'); }
+  if (!s.minions.length && !aligned(s) && s.phase === 'fight' && s.finisher.cd <= 0 && s.finisher.prompt <= 0 && b.hp > 0 && s.R() < FIN.chance[s.stage]) { s.finisher.prompt = FIN.window; s.finisher.hell = s.forceFin === HELL || (s.forceFin == null && s.R() < .05); ev(s, 'finisherReady', { hell: s.finisher.hell }); }
+}
+function updateMinions(s, dt) { // EXTREME shades: drift around the hero, fire small orbs, die to her shots
+  const h = s.hero;
+  for (let i = s.minions.length - 1; i >= 0; i--) {
+    const m = s.minions[i]; m.t += dt; m.hurt = Math.max(0, m.hurt - dt);
+    const tx = h.x + Math.cos(m.t * .9 + i * 2.1) * 260, ty = h.y - 60 + Math.sin(m.t * 1.3 + i) * 120;
+    m.vx = lerp(m.vx, (tx - m.x) * 1.6, 1 - Math.exp(-dt * 2)); m.vy = lerp(m.vy, (ty - m.y) * 1.6, 1 - Math.exp(-dt * 2));
+    m.x = clamp(m.x + m.vx * dt, FLOOR.minX + 20, FLOOR.maxX - 20); m.y = clamp(m.y + m.vy * dt, 120, FLOOR.maxY - 40);
+    m.fire -= dt; if (m.fire <= 0 && s.phase === 'fight') { m.fire = 1.6 + s.R() * .8; const a = Math.atan2(h.y - 40 - m.y, h.x - m.x); s.shots.push({ kind: 'orb', x: m.x, y: m.y, a, speed: 300 * cfg(s).speed, r: 9, dmg: 7, tele: .35, age: 0 }); }
+    if (Math.hypot(m.x - h.x, m.y - (h.y - 40)) < m.r + 22) hurtHero(s, 8, 'minion');
+    if (m.hp <= 0) { s.minions.splice(i, 1); ev(s, 'minionDie', { x: m.x, y: m.y, last: !s.minions.length }); if (!s.minions.length) banner(s, 'SHIELD DOWN', '', '#7fe0b0'); }
+  }
+}
+function hitMinion(s, p) { // a hero shot meets a shade first if one is in the way
+  for (const m of s.minions) if (Math.hypot(p.x - m.x, p.y - m.y) < p.r + m.r) { m.hp -= p.dmg; m.hurt = .15; ev(s, 'minionHit', { x: m.x, y: m.y }); return true; }
+  return false;
 }
 function updateHeroShots(s, dt) {
   const b = s.boss, h = s.hero;
@@ -384,6 +432,7 @@ function updateHeroShots(s, dt) {
         let da = want - cur; da = Math.atan2(Math.sin(da), Math.cos(da)); const a = cur + clamp(da, -turn, turn); p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp; }
     }
     if (p.kind === 'fall' && p.gy != null && p.y + p.vy * dt >= p.gy) { // a falling star bursts on the ground near her
+      for (const m of s.minions) if (Math.hypot(m.x - p.x, m.y - (p.gy - 60)) < 130) { m.hp -= p.dmg; m.hurt = .15; ev(s, 'minionHit', { x: m.x, y: m.y }); }
       const near = Math.abs(p.x - b.x) < 130 && b.dodgeT <= 0; if (near) landHit(s, p, p.dmg, p.x, p.gy - 60); ev(s, 'splash', { x: p.x, y: p.gy, r: 90, kind: 'fall' }); s.heroShots.splice(i, 1); continue; }
     if (p.ret && p.age > .55 && !p.turned) { p.turned = true; p.hitBoss = false; } // the shield hits again on the way back
     if (p.ret && p.age > .55) { const dx = h.x - p.x, dy = (h.y - 50) - p.y, d = Math.hypot(dx, dy) || 1; p.vx = lerp(p.vx, dx / d * 900, .08); p.vy = lerp(p.vy, dy / d * 900, .08); if (d < 30 && p.age > .8) { s.heroShots.splice(i, 1); continue; } }
@@ -392,6 +441,7 @@ function updateHeroShots(s, dt) {
     if (b.dodgeCd <= 0 && b.dodgeT <= 0 && s.phase === 'fight' && b.stagger <= 0 && Math.hypot(p.x - b.x, p.y - b.y) < 200 && !['fall', 'wave'].includes(p.kind)) {
       b.dodgeCd = 1.4; if (s.R() < cfg(s).dodge) { b.dodgeT = .28; b.dodgeDir = s.R() < .5 ? -1 : 1; ev(s, 'bossDodge', { x: b.x, y: b.y }); }
     }
+    if (s.minions.length && !(p.kind === 'fall' && p.gy != null) && !p.hitMin && hitMinion(s, p)) { if (p.pierce || p.ret) p.hitMin = true; else { s.heroShots.splice(i, 1); continue; } }
     if (!p.hitBoss && !(p.kind === 'fall' && p.gy != null) && heroShotHits(s, p)) {
       if (b.dodgeT > 0) { /* passes through the afterimage */ }
       else {
@@ -406,6 +456,18 @@ function updateHeroShots(s, dt) {
 }
 
 // ---------------------------------------------------------------------------------------------- hazards
+function spikeHits(r, h) { // spikes stand along the row's dots; the hero's feet must be clear of them
+  if (r.shape === 'v') return Math.abs(h.x - r.x) < 30;
+  if (r.shape === 'h') return Math.abs(h.y - r.y) < 22;
+  return Math.abs(Math.hypot(h.x - r.cx, (h.y - r.cy) / .6) - r.r) < 30;
+}
+export const spikeDots = (r) => { // where the dots of a row are (also used to draw them)
+  const pts = [];
+  if (r.shape === 'v') for (let y = FLOOR.minY + 8; y <= FLOOR.maxY; y += 30) pts.push([r.x, y]);
+  else if (r.shape === 'h') for (let x = FLOOR.minX + 10; x <= FLOOR.maxX; x += 36) pts.push([x, r.y]);
+  else { const n = Math.max(10, Math.round(r.r / 16)); for (let i = 0; i < n; i++) { const a = i / n * TAU, x = r.cx + Math.cos(a) * r.r, y = r.cy + Math.sin(a) * r.r * .6; if (x > FLOOR.minX - 10 && x < FLOOR.maxX + 10 && y > FLOOR.minY - 6 && y < FLOOR.maxY + 6) pts.push([x, y]); } }
+  return pts;
+};
 function segDist(px, py, x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy || 1, t = clamp(((px - x1) * dx + (py - y1) * dy) / l, 0, 1); return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy)); }
 function updateHazards(s, dt) {
   const h = s.hero, b = s.boss, hx = h.x, hy = h.y - 40;
@@ -455,6 +517,10 @@ function updateHazards(s, dt) {
       case 'earth': {
         if (!z.hit && z.t >= z.tele + z.fly) { z.hit = true; ev(s, 'impact', { x: z.tx, y: z.ty, big: true }); if (Math.hypot(z.tx - h.x, (z.ty - h.y) * 1.6) < z.r) hurtHero(s, 15, 'earth'); }
         if (z.t > z.tele + z.fly + .3) done(); break;
+      }
+      case 'spikes': {
+        for (const r of z.rows) { r.t += dt; if (!r.hit && r.t >= 1 && r.t < 1.3 && spikeHits(r, h)) { r.hit = true; hurtHero(s, 12, 'spikes'); } if (r.t >= 1 && !r.fired) { r.fired = true; ev(s, 'spikeUp', { shape: r.shape }); } }
+        if (z.t > z.end) done(); break;
       }
       case 'laser': {
         if (z.track && z.t < z.tele * .7) { const e = eye(s); z.x = e.x; z.y = e.y; z.a = lerp(z.a, Math.atan2(hy - z.y, hx - z.x), 1 - Math.exp(-dt * 3)); }
@@ -678,26 +744,27 @@ function updateBox(s, dt, inp) {
       b.aimT = (hard ? Math.max(.9, 1.35 - b.gate * .07) : Math.max(1.3, 1.9 - b.gate * .1)) / sp;
     }
   } else if (b.act === 'bones') { // Papyrus: bones slide in along the floor and from the ceiling
-    // P13 owner: "bones are extremely easy now, make it like before but slightly easier". Back to the P12 mix (both
-    // directions, doubles, slower blue/orange bones), spawning ~9% slower. One guard stays: two bones never reach
-    // the soul so close together that they ask for things it can't do at once (e.g. a ceiling bone mid-jump).
+    // P13 owner (final): "bones are even easier, never from the other side, always blue: make it really hard but doable".
+    // Bones come from BOTH sides in every mode, faster and denser, every colour. The one guard stays (two bones never
+    // ask for incompatible moves at the same moment), but a blocked bone now WAITS instead of being re-rolled, which
+    // is what had quietly turned most of them blue.
     B.spawn -= dt;
     if (B.spawn <= 0 && live) {
-      const R = s.R(), dir = (hard || st >= 2) && s.R() < .3 ? 1 : -1, v = (hard ? 450 : 390) * sp * dir, x = dir < 0 ? BOX.maxX + 10 : BOX.minX - 10;
       const lateTall = st >= 2 || hard || b.gate >= 1;
-      const need = R < .42 ? 'jump' : R < .62 ? 'down' : R < .84 || !lateTall ? 'still' : 'move', vv = need === 'jump' || need === 'down' ? v : v * .85;
+      if (!B.pend) { const R = s.R(); B.pend = { need: R < .38 ? 'jump' : R < .58 ? 'down' : R < .79 || !lateTall ? 'still' : 'move', dir: s.R() < .45 ? 1 : -1, dbl: s.R() < (hard ? .6 : .45) }; }
+      const { need, dir, dbl } = B.pend, v = (ext(s) ? 560 : hard ? 520 : 470) * sp * dir, x = dir < 0 ? BOX.maxX + 10 : BOX.minX - 10, vv = need === 'jump' || need === 'down' ? v : v * .88;
       const tA = b.actT + Math.max(0, (so.x - x) * Math.sign(vv)) / Math.abs(vv);
       B.arr = (B.arr || []).filter((q) => q.t > b.actT - .2);
-      const clash = B.arr.some((q) => { const d = Math.abs(q.t - tA); if (q.need === need) return need === 'jump' && d > .12 && d < .7; return d < (q.need === 'jump' || need === 'jump' ? .62 : .3); });
-      if (clash) B.spawn = .07;
+      const clash = B.arr.some((q) => { const d = Math.abs(q.t - tA); if (q.need === need) return need === 'jump' && d > .14 && d < .6; return d < (q.need === 'jump' || need === 'jump' ? .5 : .26); });
+      if (clash) B.spawn = .05;
       else {
         if (need === 'jump') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.maxY - (34 + s.R() * 40), y2: BOX.maxY, col: 'white' });
         if (need === 'down') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.minY, y2: BOX.maxY - 46, col: 'white' });
         if (need === 'still') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.minY + 8, y2: BOX.maxY, col: 'blue' });
         if (need === 'move') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.minY + 8, y2: BOX.maxY, col: 'orange' });
-        if (need === 'jump' && s.R() < (hard ? .5 : .3)) b.beams.push({ kind: 'bone', x: x - dir * 46, vx: vv, y1: BOX.maxY - (30 + s.R() * 30), y2: BOX.maxY, col: 'white' }); // a double: one jump clears both
-        B.arr.push({ t: tA, need });
-        B.spawn = (hard ? .37 : .46) * [0, 1, .94, .88][st] / sp;
+        if (need === 'jump' && dbl) b.beams.push({ kind: 'bone', x: x - dir * 46, vx: vv, y1: BOX.maxY - (30 + s.R() * 30), y2: BOX.maxY, col: 'white' }); // a double: one jump clears both
+        B.arr.push({ t: tA, need }); B.pend = null;
+        B.spawn = (ext(s) ? .23 : hard ? .26 : .3) * [0, 1, .94, .88][st] / sp;
       }
     }
   } else if (b.act === 'strings') { // Muffet: spiders run along the strings
@@ -760,7 +827,7 @@ function updateBox(s, dt, inp) {
     B.spawn -= dt;
     if (B.spawn <= 0 && live) { // P12 owner: spears come from several sides at the same time (staggered so each can be blocked)
       const dirs = ['up', 'down', 'left', 'right'].sort(() => s.R() - .5), r = s.R(), n = hard ? (r < .35 ? 3 : r < .85 ? 2 : 1) : (r < .55 ? 2 : 1);
-      const V = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }, spd = (hard ? 500 : 430) * sp, gapT = hard ? .34 : .42; // P13 owner: "arrows come at the same time": arrivals are now spaced for a human turn of the shield
+      const V = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }, spd = (hard ? 545 : 470) * sp, gapT = hard ? .34 : .42; /* final: arrows a bit faster, same spacing */ // P13 owner: "arrows come at the same time": arrivals are now spaced for a human turn of the shield
       const now0 = b.actT + 330 / spd, start = Math.max(now0, (B.lastArrive ?? -9) + gapT) - now0; // P13 fairness: never two spears at the same moment
       for (let k = 0; k < n; k++) {
         const d = dirs[k], dist = 330 + (start + k * gapT) * spd, rev = (n === 1 || hard) && k === n - 1 && s.R() < (hard ? .38 : st >= 2 ? .22 : .12); // a flipping spear only ever comes last
@@ -882,6 +949,10 @@ function updateRune(s, dt, inp) {
   if (r.done === 'fail' && !r.failed) { r.failed = true; h.invertIn = 1.6; h.invertLen = 5 + s.stage; h.inv = 0; hurtHero(s, 10, 'rune'); ev(s, 'runeFail'); } // inversion starts after a clear countdown
 }
 export const STAR_PATH = [0, 2, 4, 0, 1, 3, 5, 1]; // up-triangle, then a dash to the down-triangle
+export const BARRAGE = { shots: [.1, .6], n: 30, gap: (.6 - .1) / 30, fly: .045, charge: .63, final: .78 };
+export const BLADE = { grow: .06, cut1: .3, cut2: .45, sheathe: .6, split: .76 };
+export const TORNADO = { rise: .04, collapse: .74, burst: .8 };
+export const HELLT = { fire: .1, boom1: .2, algol: .27, vert: .44, spin: .56, boom2: .84 };
 export const MAGEN = { shots: [.14, .5], n: 8, fly: .32, charge: .56, dash: [.66, .74] }; // MAGEN DAVID timeline
 export const CAGE = { fly: [.08, .4], lock: .4, squeeze: [.47, .54, .61], shatter: .7 };         // STAR CAGE timeline
 // SUKKAH timeline (fractions of the cine) and the hut's shape, built round the boss: back poles higher up the floor
@@ -895,7 +966,7 @@ export const starPoint = (c, i) => { const a = -Math.PI / 2 + i * Math.PI / 3; r
 function updateFinisher(s, dt) {
   const c = s.finisher.cine, h = s.hero, b = s.boss; c.t += dt;
   const k = c.t / c.len, TR = .52; // the trace takes the first 52%
-  if (c.v >= 4) { // owner, Oct 2: he blinks to each of the six points, then ("make them two different finishers")
+  if (c.v === 4 || c.v === 5) { // owner, Oct 2: he blinks to each of the six points, then ("make them two different finishers")
     // 4 DAVID LASER: all six of him fire into her at once, the beams make the sign, then it blows.
     // 5 SPINNING STAR: each point fires at the points across to draw the star, it spins up very fast, then blows.
     const L = DLASER[c.v], u = (a, b) => clamp((k - a) / (b - a), 0, 1);
@@ -908,6 +979,45 @@ function updateFinisher(s, dt) {
     if (k < L.boom) { const [x, y] = dlPoint(c, Math.min(5, Math.max(0, c.hits - 1))); h.x = x; h.y = y + 60; } // he is the sixth point
     else { h.x = lerp(h.x, b.x - 300, .1); h.y = lerp(h.y, b.y + 40, .1); }
     if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    return;
+  }
+  if (c.v >= 6) { // the P13-final finishers: STAR BARRAGE, DAVID'S BLADE, STAR TORNADO, and the rare STAR OF HELL
+    const at = (x) => k >= x && c.t - dt < x * c.len; // true on the one step the timeline passes x
+    const end = () => { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg, hell: c.v === HELL }); s.hitstop = .2; b.stagger = 1.6; };
+    if (c.v === 6) { // STAR BARRAGE: a stream of small stars into her, then one big charged star
+      const B = BARRAGE; h.x = lerp(h.x, b.x - 430, .12); h.y = lerp(h.y, b.y + 40, .12);
+      for (let i = 0; i < B.n; i++) if (at(B.shots[0] + i * B.gap + B.fly)) ev(s, 'sbImpact', { x: b.x - 40 + ((i * 37) % 60 - 30), y: b.y - 120 + ((i * 53) % 90 - 45), i });
+      for (let i = 0; i < B.n; i++) if (at(B.shots[0] + i * B.gap)) ev(s, 'sbShot', { i });
+      if (at(B.charge)) ev(s, 'sbCharge', { x: h.x + 50, y: h.y - 80 });
+      if (at(B.final + B.fly)) { ev(s, 'sbFinal', { x: b.x - 40, y: b.y - 120 }); s.hitstop = .14; }
+    } else if (c.v === 7) { // DAVID'S BLADE: the sword grows, two giant cuts, he sheathes it, then everything splits
+      const D = BLADE;
+      if (k < D.cut1 - .04) { h.x = lerp(h.x, b.x - 420, .12); h.y = lerp(h.y, b.y + 40, .12); }
+      else if (k < D.sheathe) { h.x = lerp(h.x, b.x - 170, .3); h.y = lerp(h.y, b.y + 40, .3); }
+      else { h.x = lerp(h.x, b.x - 430, .08); }
+      if (at(D.grow)) ev(s, 'dbGrow', { x: h.x, y: h.y - 100 });
+      if (at(D.cut1)) { ev(s, 'dbCut', { x: b.x, y: b.y - 120, n: 1 }); s.hitstop = .08; }
+      if (at(D.cut2)) { ev(s, 'dbCut', { x: b.x, y: b.y - 120, n: 2 }); s.hitstop = .08; }
+      if (at(D.sheathe)) ev(s, 'dbSheathe', { x: h.x, y: h.y });
+      if (at(D.split)) { ev(s, 'dbSplit', { x: b.x, y: b.y - 120 }); s.hitstop = .16; }
+    } else if (c.v === 8) { // STAR TORNADO: a whirlwind of stars round her, tightening, then it collapses into her and bursts
+      const T = TORNADO; h.x = lerp(h.x, b.x - 440, .1); h.y = lerp(h.y, b.y + 40, .1);
+      if (at(T.rise)) ev(s, 'stRise', { x: b.x, y: b.y });
+      if (at(T.collapse)) { ev(s, 'stCollapse', { x: b.x, y: b.y - 150 }); s.hitstop = .08; }
+      if (at(T.burst)) { ev(s, 'stBurst', { x: b.x, y: b.y - 150 }); s.hitstop = .16; }
+    } else { // STAR OF HELL (Algol, the demon star): red star + fire from the sky + blast; a star-shaped laser; a
+      // vertical laser; then a second star spins 2 s, exponentially faster, overcharges and explodes. 20% of her HP.
+      const L = HELLT; h.x = lerp(h.x, b.x - 460, .08); h.y = lerp(h.y, b.y + 40, .08);
+      if (at(.02)) ev(s, 'hellStar', { x: b.x, y: b.y - 330 });
+      if (at(L.fire)) ev(s, 'hellFire', { x: b.x, y: b.y });
+      if (at(L.boom1)) { ev(s, 'hellBoom', { x: b.x, y: b.y - 100, big: false }); s.hitstop = .12; }
+      if (at(L.algol)) ev(s, 'hellAlgol', { x: b.x, y: b.y - 120 });
+      if (at(L.vert)) { ev(s, 'hellVert', { x: b.x, y: b.y - 120 }); s.hitstop = .08; }
+      if (at(L.spin)) ev(s, 'hellSpin', { x: b.x, y: b.y - 150 });
+      if (k >= L.spin && k < L.boom2) { const u2 = (k - L.spin) / (L.boom2 - L.spin); c.w = .8 * Math.exp(u2 * 4.2); c.rot += c.w * dt; }
+      if (at(L.boom2)) { ev(s, 'hellBoom', { x: b.x, y: b.y - 150, big: true }); s.hitstop = .22; }
+    }
+    if (c.t >= c.len) end();
     return;
   }
   if (c.v === 1) { // MAGEN DAVID (the Shield of David): he raises a giant star shield, she fires into it, it soaks up every
@@ -993,8 +1103,9 @@ function beginClash(s, kind) {
 }
 function loseClash(s) {
   const c = s.clash, h = s.hero; c.p = 0; c.seq = null; c.lost = { t: 0 };
-  const dmg = Math.round(14 * s.M.dmg); h.hp = Math.max(1, h.hp - dmg); // never lethal: the clash is always retryable
-  s.hitstop = .2; ev(s, 'clashLost', { dmg });
+  const dmg = Math.round(14 * s.M.dmg); h.hp = Math.max(1, h.hp - dmg); // never lethal by itself
+  c.losses = (c.losses || 0) + 1; // P13 owner (final): lose the clash 3 times and the whole level resets
+  s.hitstop = .2; ev(s, 'clashLost', { dmg, losses: c.losses });
 }
 function say(s, l) { s.clash.line = { ...l, at: s.clash.t }; ev(s, 'talkLine', { who: l.who }); }
 function updateClash(s, dt, inp) {
@@ -1010,7 +1121,7 @@ function updateClash(s, dt, inp) {
     return;
   }
   if (c.won) { c.wonT += dt; if (c.sword && !c.swordHit && c.wonT >= .55) { c.swordHit = true; ev(s, 'swordHit', { x: s.boss.x, y: s.boss.y - 120 }); s.hitstop = .18; } if (c.wonT > (c.sword ? 2 : 1.2)) afterClash(s); return; }
-  if (c.lost) { c.lost.t += dt; if (c.lost.t >= 1.8) { c.lost = null; c.p = .5; c.rampT = 0; c.km = 0; c.seq = null; c.retries++; ev(s, 'clashRetry'); } return; }
+  if (c.lost) { c.lost.t += dt; if (c.lost.t >= 1.8 && c.losses >= 3) { setPhase(s, 'defeat'); s.result = { tier: 'defeat', reset: true }; ev(s, 'defeat'); return; } if (c.lost.t >= 1.8) { c.lost = null; c.p = .5; c.rampT = 0; c.km = 0; c.seq = null; c.retries++; ev(s, 'clashRetry'); } return; }
   if (c.t < 1.3) { c.power = c.t / 1.3; return; } // beams build up first
   // her push, in "taps per second you need to match her": rises as you near her and slowly while you mash (capped)
   const N = s.M.need, push = k.step * (N[0] + N[1] * (c.p - .5) + (c.kind - 1) * .5 + Math.min(c.rampT * .1, N[2]) - Math.max(0, c.rampT - 30) * .05); // after 30 s she tires, so no endless stalemate
@@ -1021,7 +1132,7 @@ function updateClash(s, dt, inp) {
   const KM = s.M.keyMoments >= 4 ? [.56, .67, .78, .89] : [.58, .72, .86];
   if (!c.seq && c.km < KM.length && c.p >= KM[c.km]) {
     c.km++; const keys = []; while (keys.length < s.M.keyCount) { const kk = CLASH_KEYS[Math.floor(s.R() * 4)]; if (kk !== keys[keys.length - 1]) keys.push(kk); }
-    c.seq = { warn: s.M.key === 'hard' ? 1.1 : 1.4, keys, i: 0, t: 0, limit: [0, 3.2, 2.9, 2.6][c.kind] * s.M.keyTime * (keys.length / 4), stun: 0 }; ev(s, 'clashSeq');
+    c.seq = { warn: s.M.key === 'normal' ? 1.4 : 1.1, keys, i: 0, t: 0, limit: [0, 3.2, 2.9, 2.6][c.kind] * s.M.keyTime * (keys.length / 4), stun: 0 }; ev(s, 'clashSeq');
   }
   if (c.seq) {
     const q = c.seq; c.p -= push * .45 * dt; // she keeps pushing, a little slower
@@ -1115,7 +1226,7 @@ export function step(s, dt, inp) {
   if (s.phase === 'finisher') { updateFinisher(s, sdt); return s; }
   if (s.phase === 'finisherQte') { updateFinisherQte(s, sdt, inp); return s; }
   // fight
-  if (s.forceFinisherPrompt) { s.forceFinisherPrompt = false; s.finisher.prompt = FIN.window; ev(s, 'finisherReady'); }
+  if (s.forceFinisherPrompt) { s.forceFinisherPrompt = false; s.finisher.prompt = FIN.window; s.finisher.hell = s.forceFin === HELL; ev(s, 'finisherReady', { hell: s.finisher.hell }); }
   s.finisher.cd = Math.max(0, s.finisher.cd - sdt); s.finisher.prompt = Math.max(0, s.finisher.prompt - dt);
   moveHero(s, sdt, inp); heroActions(s, sdt, inp); updateHeroPowers(s, sdt);
   if (s.phase !== 'fight') return s;
@@ -1132,7 +1243,7 @@ export function step(s, dt, inp) {
     if (b.pressT <= 0) { b.pressT = s.M.pressure[s.stage] * (.8 + s.R() * .4); const hd = b.hands[Math.floor(s.R() * 2)], base = Math.atan2(h.y - 40 - hd.y, h.x - hd.x);
       const pn = s.M.pressN || 3; for (let i = -(pn - 1) / 2; i <= (pn - 1) / 2; i++) s.shots.push({ kind: 'orb', x: hd.x, y: hd.y, a: base + i * .18, speed: 360 * cfg(s).speed, r: 10, dmg: 6, tele: .4, age: 0 }); ev(s, 'pressure', { x: hd.x, y: hd.y }); }
   }
-  updateHeroShots(s, sdt); updateHazards(s, sdt);
+  updateHeroShots(s, sdt); updateHazards(s, sdt); updateMinions(s, sdt);
   if (s.phase !== 'fight') return s;
   if (s.pendingClash) { const k = s.pendingClash; s.pendingClash = 0; s.pendingGate = false; s.shots = []; s.hazards = []; if (k === 2) startTalk(s, 'domain', (s2) => beginClash(s2, 2)); else beginClash(s, k); } // owner: he DOES want the stop-and-read dialogue
   else if (s.pendingGate) { s.pendingGate = false; beginBox(s); }
