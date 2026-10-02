@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13c';
+import { SCRIPT } from './script.js?v=13d';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -62,7 +62,8 @@ export const FIN = { mult: 6, // P12: x3 with the boss HP so a finisher still la
   chance: [0, .08, .08, .06], cooldown: 16, window: 2.6, len: 4.2, keys: 7, qte: [0, 4.2, 3.8, 3.3] };
 // P13 owner: "finishers always pop up as Star of David something, the names don't change": each has its own name,
 // shown on the prompt, the key screen and the cinematic. finNext() is the one the next finisher will be.
-export const FIN_NAMES = ['STAR PATH', 'SIX POINTS', 'RISING STAR', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR'];
+// P13 owner: "if any look way too similar make them unique": SIX POINTS became MAGEN DAVID, RISING STAR became STAR CAGE
+export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR'];
 export const finNext = (s) => (s.fin0 + s.stats.finishers) % FIN_NAMES.length;
 export const FIN_KEYS = ['W', 'A', 'S', 'D', 'J', 'K', 'L', 'I'];
 export const RUNE_KEYS = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F'];
@@ -344,7 +345,7 @@ function startFinisherCine(s) {
   // P11 owner: the finisher traces the Star of David with a trail, then a beam of light falls from the sky onto a
   // huge spinning star on the ground. Three versions, taken in turn so it is never the same one twice in a row.
   const v = (s.fin0 + s.stats.finishers - 1) % FIN_NAMES.length; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
-  s.finisher.cine = { t: 0, len: v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - (v === 2 ? 330 : 105), R: v === 2 ? 150 : 235,
+  s.finisher.cine = { t: 0, len: v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
     name: FIN_NAMES[v], sub: '', hits: 0, pole: [0, 0, 0, 0], branches: 0,
     hx: clamp(s.boss.x - 430, FLOOR.minX + 120, FLOOR.maxX - 500), hy: clamp(s.boss.y + 40, FLOOR.minY + 160, FLOOR.maxY - 10), bombs: [] };
   if (v >= 4) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
@@ -867,6 +868,8 @@ function updateRune(s, dt, inp) {
   if (r.done === 'fail' && !r.failed) { r.failed = true; h.invertIn = 1.6; h.invertLen = 5 + s.stage; h.inv = 0; hurtHero(s, 10, 'rune'); ev(s, 'runeFail'); } // inversion starts after a clear countdown
 }
 export const STAR_PATH = [0, 2, 4, 0, 1, 3, 5, 1]; // up-triangle, then a dash to the down-triangle
+export const MAGEN = { shots: [.14, .5], n: 8, fly: .32, charge: .56, dash: [.66, .74] }; // MAGEN DAVID timeline
+export const CAGE = { fly: [.08, .4], lock: .4, squeeze: [.47, .54, .61], shatter: .7 };         // STAR CAGE timeline
 // SUKKAH timeline (fractions of the cine) and the hut's shape, built round the boss: back poles higher up the floor
 export const SUKKAH = { len: 6.6, poles: [.06, .36], beams: [.36, .41], walls: [.41, .54], roof: [.54, .68], deco: [.68, .72], leap: .72, branches: 9, bombs: [.75, .88], n: 5, fall: .38, big: .93 };
 export const sukkahGeom = (b) => { const x = b.x, gy = b.y + 44, top = b.y - 372, fw = 300, bw = 252, back = -40;
@@ -890,6 +893,29 @@ function updateFinisher(s, dt) {
     if (k >= L.boom && !c.boomed) { c.boomed = true; c.w = 0; ev(s, 'dlBoom', { x: c.cx, y: c.cy }); s.hitstop = .18; }
     if (k < L.boom) { const [x, y] = dlPoint(c, Math.min(5, Math.max(0, c.hits - 1))); h.x = x; h.y = y + 60; } // he is the sixth point
     else { h.x = lerp(h.x, b.x - 300, .1); h.y = lerp(h.y, b.y + 40, .1); }
+    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    return;
+  }
+  if (c.v === 1) { // MAGEN DAVID (the Shield of David): he raises a giant star shield, she fires into it, it soaks up every
+    // shot and charges, then he rams it into her.
+    const M = MAGEN, sx = h.x + 115, sy = h.y - 105;
+    if (k < M.dash[0]) { h.x = lerp(h.x, b.x - (k > M.charge ? 430 : 400), .12); h.y = lerp(h.y, b.y + 40, .12); } // braces back as it charges
+    else if (k < M.dash[1]) { const f = (k - M.dash[0]) / (M.dash[1] - M.dash[0]); h.x = lerp(b.x - 420, b.x - 190, f * f); }
+    else { h.x = lerp(h.x, b.x - 330, .06); }
+    if (k >= .03 && !c.raised) { c.raised = true; ev(s, 'mdRaise', { x: sx, y: sy }); }
+    for (let i = 0; i < M.n; i++) { const at = M.shots[0] + i * (M.shots[1] - M.shots[0]) / M.n; if (k >= at && !c.orbs[i]) { c.orbs[i] = { t: 0, y0: b.y - 150 + ((i * 47) % 90 - 45) }; ev(s, 'mdShot', { x: b.x - 60, y: b.y - 150 }); } }
+    for (const o of c.orbs) if (o) { o.t += dt; if (!o.hit && o.t >= M.fly) { o.hit = true; c.absorbed++; ev(s, 'mdAbsorb', { x: sx, y: sy, n: c.absorbed }); } }
+    if (k >= M.charge && !c.charged) { c.charged = true; ev(s, 'mdCharge', { x: sx, y: sy }); }
+    if (k >= M.dash[1] && !c.slammed) { c.slammed = true; ev(s, 'mdSlam', { x: b.x - 80, y: b.y - 120 }); s.hitstop = .16; }
+    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    return;
+  }
+  if (c.v === 2) { // STAR CAGE: the two triangles of the star fly in from both sides, lock round her as a cage, crush in three
+    // squeezes, then the whole star shatters.
+    const C = CAGE; h.x = lerp(h.x, b.x - 430, .1); h.y = lerp(h.y, b.y + 40, .1);
+    if (k >= C.lock && !c.locked) { c.locked = true; ev(s, 'scLock', { x: b.x, y: b.y - 120 }); s.hitstop = .1; }
+    for (let i = 0; i < 3; i++) if (k >= C.squeeze[i] && c.squeeze <= i) { c.squeeze = i + 1; ev(s, 'scSqueeze', { x: b.x, y: b.y - 120, n: i + 1 }); s.hitstop = .05; }
+    if (k >= C.shatter && !c.shattered) { c.shattered = true; ev(s, 'scShatter', { x: b.x, y: b.y - 120 }); s.hitstop = .16; }
     if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }

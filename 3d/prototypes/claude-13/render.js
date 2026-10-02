@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, FIN_NAMES, finNext, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13c';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, FIN_NAMES, finNext, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13d';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -117,6 +117,13 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'sukkahWalls': shake(.15); break;
         case 'sukkahBranch': part(e.x, e.y, 6, '#7fbf5a', 200, .4, 3); break;
         case 'sukkahBlown': part(e.x, e.y - 200, 50, '#c9a66b', 900, 1.2, 5, 400); break;
+        case 'mdRaise': flash('#cfe0ff', .2); ring(e.x, e.y, '#ffffff', 20, 220, .4, 5); part(e.x, e.y, 20, '#ffffff', 400, .5, 3); break;
+        case 'mdAbsorb': shake(.15 + e.n * .03); ring(e.x, e.y, '#cfe0ff', 40, 200 + e.n * 12, .3, 4); part(e.x, e.y, 10, '#ffe7b8', 380, .4, 3); break;
+        case 'mdCharge': flash('#ffffff', .3); shake(.4); break;
+        case 'mdSlam': shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; fx.bossKick = 1.4; ring(e.x, e.y, '#ffffff', 30, 900, 1, 14); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'scLock': shake(.8); flash('#ffffff', .5); ring(e.x, e.y, '#ffffff', 280, 420, .4, 8); part(e.x, e.y, 40, '#cfe0ff', 600, .6, 4); break;
+        case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
+        case 'scShatter': blast('burst', e.x, e.y, 320); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 40, 950, 1, 12); part(e.x, e.y, 70, '#cfe0ff', 1000, 1.1, 5); break;
         case 'starBombBig': blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
         case 'finisherStar': shake(.9); flash('#ffffff', .5); negative(.07); ring(e.x, e.y - 100, '#ffffff', 20, 520, .7, 10); part(e.x, e.y - 100, 50, '#ffffff', 700, 1, 4); fx.finStarT = 0; break;
         case 'finisherBeam': shake(1); flash('#ffffff', .6); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); break;
@@ -999,6 +1006,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.save(); ctx.fillStyle = `rgba(0,4,16,${dark.toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
     if (c.v === 3) { drawSukkahFront(s, c, k); ctx.restore(); drawHero(s, s.hero.x, s.hero.y); return; }
     if (c.v >= 4) { drawDavidLaser(s, c, k); ctx.restore(); return; }
+    if (c.v === 1) { drawMagen(s, c, k); ctx.restore(); return; }
+    if (c.v === 2) { drawCage(s, c, k); ctx.restore(); return; }
     // 1) the trace: every line of the Star of David drawn behind him as he runs it (flag blue on a white core)
     const segs = STAR_PATH.length - 1, done = c.trace * segs;
     let cx = c.cx, cy = c.cy, R = c.R;
@@ -1032,6 +1041,63 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     }
     ctx.restore();
     for (const tr of s.hero.trail) drawHero(s, tr.x, tr.y, tr.life * 2.4, tr.face, true); drawHero(s, s.hero.x, s.hero.y); // he stays on top of his own star
+  }
+  // MAGEN DAVID finisher: the Shield of David soaks up her shots, charges, and is rammed into her
+  function drawMagen(s, c, k) {
+    const M = MAGEN, h = s.hero, b = s.boss, u = (a, b2) => clamp((k - a) / (b2 - a), 0, 1), col = P[form(s)].hero, pal = P[form(s)];
+    const sx = h.x + 115, sy = h.y - 105, ch = k < M.charge ? c.absorbed / M.n : 1, R = 98 * easeOut(u(0, .1)) * (1 + ch * .15);
+    ctx.fillStyle = `rgba(0,4,20,${(.35 * u(0, .1)).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
+    // her shots, flying into the shield
+    for (const o of c.orbs) { if (!o || o.hit) continue; const f = clamp(o.t / M.fly, 0, 1), x = lerp(b.x - 60, sx, f), y = lerp(o.y0, sy, f) - Math.sin(f * Math.PI) * 40;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(x, y, 34, pal.orb); ctx.restore(); ctx.fillStyle = pal.orbCore; ctx.beginPath(); ctx.arc(x, y, 9, 0, TAU); ctx.fill(); }
+    if (k < M.dash[1]) {
+      const spin = k > M.charge ? (k - M.charge) * c.len * 14 : Math.sin(fx.clock * 2) * .08, pulse = k > M.charge ? 1 + Math.sin(fx.clock * 40) * .05 : 1;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(sx, sy, R * (1.5 + ch), `rgba(150,200,255,${(.25 + ch * .55).toFixed(2)})`); if (k > M.charge) glow(sx, sy, R * .7, 'rgba(255,255,255,.9)'); ctx.restore();
+      drawHero(s, h.x, h.y); // he holds it out in front
+      ctx.save(); ctx.globalAlpha = .55; ctx.fillStyle = '#0a1a40'; ctx.beginPath(); ctx.arc(sx, sy, R * 1.02 * pulse, 0, TAU); ctx.fill(); ctx.restore(); // the shield's face
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4 + ch * 4; ctx.beginPath(); ctx.arc(sx, sy, R * 1.04 * pulse, 0, TAU); ctx.stroke();
+      davidStar(sx, sy, R * .92 * pulse, spin, col, 1, 0);
+      if (k > M.dash[0]) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 1; i <= 4; i++) glow(sx - i * 50, sy, R * .8, 'rgba(160,200,255,.25)', 1 - i / 5); ctx.restore(); } // the charge streak
+    } else { // the slam: the star punches through her, a ground shockwave rolls out both ways
+      const e = u(M.dash[1], 1), o = easeOut(e), gy = b.y + 30;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      if (e < .2) glow(b.x - 80, b.y - 120, 700 * (1 - e * 4), 'rgba(255,255,255,1)');
+      ctx.fillStyle = `rgba(255,255,255,${(.8 * (1 - e)).toFixed(2)})`; ctx.fillRect(-500, b.y - 128 - 8 * (1 - e), W + 1000, 16 * (1 - e) + 2); // the shock line
+      hexagram(b.x, gy, 80 + o * 640, o * .6, 1, '#ffffff', 6, .3, 1 - e); hexagram(b.x, gy, 60 + o * 420, -o, 1, 'rgba(120,170,255,1)', 4, .3, (1 - e) * .8);
+      ctx.restore();
+      davidStar(b.x - 40, b.y - 120, 150 + o * 260, o * 2, col, 1 - e, 0);      // the shield's star, driven into her
+      davidStar(b.x + 120 + o * 500, b.y - 120, 90 * (1 - e * .5), o * 6, '#ffffff', (1 - e) * .8, 0); // and out of her back
+      drawHero(s, h.x, h.y);
+      ctx.save(); ctx.translate(h.x + 115, h.y - 105); ctx.globalAlpha = .9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 60, 0, TAU); ctx.stroke(); ctx.restore(); davidStar(h.x + 115, h.y - 105, 54, 0, col, .9, 0); // he keeps the shield
+    }
+  }
+  // STAR CAGE finisher: the two triangles slam together round her, crush, shatter
+  function oneTri(x, y, r, rot, off, a = 1) {
+    if (a <= 0 || r <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(rot); ctx.lineJoin = 'miter'; ctx.miterLimit = 3; const band = Math.max(3, r * .12);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = band + 6; triPath(r, off); ctx.stroke(); ctx.strokeStyle = FLAG_BLUE; ctx.lineWidth = band; triPath(r, off); ctx.stroke(); ctx.restore();
+  }
+  function drawCage(s, c, k) {
+    const C = CAGE, b = s.boss, u = (a, b2) => clamp((k - a) / (b2 - a), 0, 1), cx = b.x, cy = b.y - 120, R0 = 290;
+    ctx.fillStyle = `rgba(0,4,20,${(.35 * u(0, .1)).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
+    if (k < C.lock) { // flying in: up-triangle from the left, down-triangle from the right, spinning to a stop
+      const f = u(C.fly[0], C.fly[1]), e = f * f * f, d = (1 - e) * 1200, rot = (1 - e) * 7;
+      for (let i = 3; i >= 0; i--) { const dd = d + i * 70 * (1 - e), a = i ? .18 * (1 - i / 4) : 1;
+        oneTri(cx - dd, cy, R0, rot + i * .1, -Math.PI / 2, a); oneTri(cx + dd, cy, R0, -rot - i * .1, Math.PI / 2, a); }
+    } else if (k < C.shatter) { // locked: the cage, crushing in three squeezes, cracking white-hot
+      const sq = c.squeeze + (c.squeeze < 3 ? 0 : u(C.squeeze[2], C.shatter) * .3), R = R0 - sq * 48, shake = (k > C.squeeze[2] ? 6 : 2) * Math.sin(fx.clock * 60);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, R * 1.6, `rgba(150,190,255,${(.2 + sq * .15).toFixed(2)})`); glow(cx, cy, 60 + sq * 50, 'rgba(255,255,255,.9)'); ctx.restore();
+      oneTri(cx + shake, cy, R, 0, -Math.PI / 2); oneTri(cx - shake, cy, R, 0, Math.PI / 2);
+      ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.globalAlpha = .9; // the cracks
+      for (let i = 0; i < c.squeeze * 4; i++) { let a = i * 2.39, x = cx + Math.cos(a) * R * .2, y = cy + Math.sin(a) * R * .2; ctx.beginPath(); ctx.moveTo(x, y);
+        for (let j = 0; j < 4; j++) { a += ((i * 7 + j * 3) % 5 - 2) * .25; x += Math.cos(a) * R * .2; y += Math.sin(a) * R * .2; ctx.lineTo(x, y); } ctx.stroke(); }
+      ctx.restore();
+    } else { // shattered: shards of the star flung out spinning
+      const e = u(C.shatter, 1), o = easeOut(e), R = R0 - 3 * 48;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(cx, cy, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); glow(cx, cy, 200 + o * 300, 'rgba(120,170,255,.5)', 1 - e); ctx.restore();
+      for (let i = 0; i < 30; i++) { const a = i * 2.399, d = R * .4 + o * (170 + (i * 67) % 360), x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * .85 + e * e * 260, r = 26 + (i * 13) % 34;
+        ctx.save(); ctx.globalAlpha = 1 - e * e; ctx.translate(x, y); ctx.rotate(i + o * (6 + i % 5)); ctx.fillStyle = i % 3 ? FLAG_BLUE : '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r * .8, r * .6); ctx.lineTo(-r * .7, r * .5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
+    }
+    drawHero(s, s.hero.x, s.hero.y);
   }
   // DAVID LASER finisher: six of him on the six points, lasers into her, lasers across into the star, spin-up, blow
   function laser(x0, y0, x1, y1, w, a = 1) { // a flag-blue beam on a white-hot core, with a soft glow

@@ -87,6 +87,14 @@ export function createSfx() {
       case 'sukkahWalls': noise(0.5, 1200, 0.1, 1, 'bandpass', 0, 400); break;
       case 'sukkahBranch': noise(0.18, 3000, 0.08, 1, 'highpass'); break;
       case 'sukkahBlown': noise(0.9, 2500, 0.2, 1, 'bandpass', 0.05, 300); break;
+      case 'mdRaise': tone(660, 660, 0.6, 'triangle', 0.07); tone(990, 990, 0.6, 'triangle', 0.04, 0.02); break;
+      case 'mdShot': tone(520, 300, 0.2, 'sawtooth', 0.04); break;
+      case 'mdAbsorb': tone(300 + (e.n || 0) * 70, 300 + (e.n || 0) * 70, 0.18, 'triangle', 0.08); noise(0.08, 2000, 0.12, 1, 'bandpass'); break;
+      case 'mdCharge': tone(200, 1600, 0.7, 'sawtooth', 0.06); break;
+      case 'mdSlam': boom(1.4); noise(0.8, 600, 0.35, 1, 'lowpass', 0, 60); tone(1200, 200, 0.4, 'square', 0.05); break;
+      case 'scLock': tone(110, 80, 0.5, 'square', 0.12); noise(0.3, 1500, 0.25, 1, 'bandpass'); boom(0.8); break;
+      case 'scSqueeze': noise(0.25, 900 + (e.n || 0) * 300, 0.25, 1, 'bandpass'); tone(160, 90, 0.25, 'sawtooth', 0.06); break;
+      case 'scShatter': boom(1.3); noise(1.0, 6000, 0.3, 1, 'highpass'); [1800, 2400, 3100, 2700].forEach((f, i) => tone(f, f * .7, 0.4, 'triangle', 0.03, i * 0.04)); break;
       case 'starBombBig': boom(1.3); noise(1.4, 500, 0.35, 1, 'lowpass', 0, 60); tone(90, 30, 1.4, 'sine', 0.18); break;
       case 'pressure': tone(240, 200, 0.05, 'square', 0.02); break;
       case 'invertOn': tone(700, 200, 0.35, 'sawtooth', 0.08); break;
