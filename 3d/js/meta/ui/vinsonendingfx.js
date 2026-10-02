@@ -121,13 +121,13 @@ export function drawPeacefulEnding(ctx, shot, t, reducedMotion, drawStar) {
     if(impact>0){ctx.save();ctx.globalAlpha*=impact;ctx.strokeStyle='#b99a62';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(710,568,28+(1-impact)*52,7+(1-impact)*10,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
   }
   drawSword(ctx, shot.sword, shot.landingAge, reducedMotion);
-  ctx.fillStyle = '#394a32'; ctx.beginPath(); ctx.ellipse(590, 571, 54, 11, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#77563b'; ctx.beginPath(); ctx.ellipse(590, 571, 54, 11, 0, 0, Math.PI * 2); ctx.fill();
   // A low mound carries across both keepsakes and covers the shield's lower third.
-  ctx.fillStyle = '#33432f'; ctx.beginPath();
+  ctx.fillStyle = '#584332'; ctx.beginPath();
   ctx.moveTo(505, 540); ctx.quadraticCurveTo(545, 512, 583, 522); ctx.quadraticCurveTo(610, 537, 636, 540);
   ctx.quadraticCurveTo(672, 530, 709, 541); ctx.quadraticCurveTo(741, 550, 775, 536);
   ctx.quadraticCurveTo(802, 570, 710, 585); ctx.quadraticCurveTo(553, 600, 488, 572); ctx.quadraticCurveTo(482, 552, 505, 540); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = '#728052'; ctx.lineWidth = 3; ctx.beginPath();
+  ctx.strokeStyle = '#a48359'; ctx.lineWidth = 3; ctx.beginPath();
   ctx.moveTo(506, 543); ctx.quadraticCurveTo(548, 516, 583, 527); ctx.quadraticCurveTo(612, 542, 638, 545);
   ctx.quadraticCurveTo(678, 535, 711, 546); ctx.quadraticCurveTo(744, 554, 775, 541); ctx.stroke();
   ctx.fillStyle = '#85714b';

@@ -127,3 +127,38 @@
 @media(hover:hover) and (pointer:fine){.vb-touch{display:none!important}}
 @media(hover:none),(pointer:coarse){.vb-hint{display:none}}
 @media(max-height:450px){.vb-weapons button{min-height:36px;font-size:14px}.vb-top button{min-height:36px;padding:7px 12px}}
+
+.vb-difficulty{display:flex;justify-content:center;gap:12px;margin:18px 0 8px}.vb-difficulty button{min-width:120px;min-height:48px;border:0;background:#182a35;color:#edf3f5;font:800 17px system-ui;cursor:pointer}.vb-difficulty button[aria-pressed="true"]{background:#e2edf2;color:#102431;box-shadow:inset 0 -4px #76bced}.vb-difficulty-help{font:16px/1.4 system-ui!important;max-width:520px;margin:8px auto!important;color:#e0e6e8!important}.vb-difficulty button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+/* Keep small labels readable in both desktop and landscape layouts. */
+.vb-screen .vb-hint,.vb-screen .vb-subtitle strong,.vb-screen .vb-subtitle p,.vb-screen .vb-reward,.vb-screen .vb-dialogue-speaker,.vb-screen .vb-dialogue-continue,.vb-screen .vb-weapons button,.vb-screen .vb-touch button{font-size:14px}
+
+/* Ability dock: opaque field controls, with a stable six-slot desktop row. */
+.vb-controls{background:#071827;border-top:2px solid #24435b;color:#f4f7f8;padding:8px max(16px,env(safe-area-inset-right,0px)) calc(9px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));gap:10px}
+.vb-weapons{flex:1;min-width:0;display:flex;flex-wrap:nowrap;justify-content:center;gap:6px}
+.vb-weapons button:not(.vb-cycle){position:relative;isolation:isolate;overflow:hidden;display:grid;grid-template-columns:28px minmax(0,1fr) 32px;align-items:center;gap:7px;width:clamp(112px,12vw,156px);min-width:0;min-height:52px;padding:6px 9px;border:1px solid #42627a;border-bottom:3px solid #18354a;background:#0c2233;color:#e5edf1;font:700 14px/1.15 system-ui,sans-serif;text-align:left;white-space:nowrap}
+.vb-weapons button:not(.vb-cycle)::before{display:none}
+.vb-weapons .vb-ability-icon{display:grid;place-items:center;width:28px;height:28px;color:#9ed0f0;font-size:22px;line-height:1}
+.vb-weapons .vb-ability-name{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.vb-weapons .vb-ability-cooldown{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle,#0c2233 56%,transparent 59%),conic-gradient(#70b9e8 var(--cooldown,0deg),#20394a 0);color:#fff;font:700 14px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.vb-weapons button.cooling .vb-ability-cooldown{box-shadow:inset 0 0 0 3px #0c2233}
+.vb-weapons button.on{z-index:1;transform:translateY(-2px);border-color:#8ecaf0;border-bottom-color:#8ecaf0;background:#163954;color:#fff;box-shadow:inset 0 0 0 1px #8ecaf0,0 3px 0 #04111c}
+.vb-weapons button.on .vb-ability-icon{color:#d6efff}
+.vb-weapons button:not(.vb-cycle):after{content:none}
+.vb-weapons button:focus-visible{outline:3px solid #fff;outline-offset:3px;z-index:2}
+.vb-weapons button:disabled{opacity:.58}
+@media(min-width:901px){.vb-weapons .vb-cycle{display:none}.vb-weapons button:not(.vb-cycle){flex:1 1 0;max-width:156px}}
+@media(max-width:900px){
+ .vb-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));}
+ .vb-weapons{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;width:min(100%,420px);gap:6px}
+ .vb-weapons button:not(.vb-cycle){display:none}
+ .vb-weapons button.on{display:grid;grid-column:2;grid-row:1;width:100%;max-width:none;min-height:48px;transform:none}
+ .vb-weapons .vb-cycle{display:block;grid-row:1;width:44px;min-width:44px;min-height:48px;padding:4px;border:1px solid #42627a;background:#0c2233;color:#fff;font-size:18px}
+ .vb-weapons .vb-cycle-prev{grid-column:1}.vb-weapons .vb-cycle-next{grid-column:3}
+ .vb-touch button{min-height:44px}
+}
+@media(max-width:420px){.vb-weapons button.on{grid-template-columns:26px minmax(0,1fr) 32px;padding:5px 7px}.vb-weapons .vb-ability-name{font-size:14px}}
+
+/* P16: readable numerical cooldowns and a full-width fixed ability row. */
+@media(min-width:901px){.vb-controls{display:grid;grid-template-columns:minmax(0,1fr)}.vb-hint{max-width:none;text-align:center;font-size:14px}.vb-weapons{width:100%}}
+.vb-weapons button:not(.vb-cycle){grid-template-columns:24px minmax(0,1fr) 38px;gap:5px}.vb-weapons .vb-ability-cooldown{width:38px;height:38px;font-size:14px}.vb-weapons .vb-ability-cooldown[data-ready="true"]{font-size:18px}

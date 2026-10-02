@@ -56,6 +56,13 @@ const bootFight = async (options={}) => {
 };
 
 try {
+  // P16 keeps semantic labels and cooldown elements stable while firing and cycling.
+  {
+    const {battle,screen}=await bootFight();const dock=find(screen,'vb-weapons'),buttons=dock.children.filter(b=>b.dataset.weapon);
+    assert.equal(buttons.length,6);const star=buttons[0],name=star.children[1],cooldown=star.children[2];
+    down('j');step(10);up('j');assert.equal(star.children[1],name);assert.equal(star.children[2],cooldown);assert.equal(name.textContent,'Star');assert.match(cooldown.textContent,/^\d+\.\d$/);assert.match(star.attributes['aria-label'],/cooldown/);
+    tap('e');step(1);assert.equal(buttons[1].attributes['aria-pressed'],'true');assert.equal(star.attributes['aria-pressed'],'false');battle.close();
+  }
   // Timed ordered keys win the live clash, then the original story resumes.
   {
     const battle = launchVinsonBattle({ previewEnding: true, reducedMotion: true, onWin: async () => ({ ok: true, immune: true }) });
@@ -69,8 +76,8 @@ try {
     skip.onclick(); step(1);
     assert.equal(battle.state.time, pausedTime, 'skip cannot advance the live clash or battle state');
 
-    for (let i = 0; i < 1800 && skip.hidden; i++) {
-      const dock=find(screen,'vb-clash-keys');if(i%18===0&&dock.dataset.ready==='1')tap(dock.dataset.phase==='push'?'j':dock.dataset.next);
+    for (let i = 0; i < 3600 && skip.hidden; i++) {
+      const dock=find(screen,'vb-clash-keys');if(i%8===0&&dock.dataset.ready==='1')tap(dock.dataset.phase==='push'?'j':dock.dataset.next);
       step(1);
     }
     assert.equal(skip.hidden, false, 'correct timed sequences win and resume the finale');
@@ -96,7 +103,7 @@ try {
     const panel=find(screen,'vb-panel');assert.ok(panel.children.some(n=>n.textContent==='Clash lost'),'losing all ground can lose');assert.equal(wins,0);
     const frozen=battle.state.time;step(100);assert.equal(battle.state.time,frozen);
     panel.lastChild.children.find(n=>n.textContent==='Retry clash').onclick();
-    for(let i=0;i<1800&&skip.hidden;i++){const dock=find(screen,'vb-clash-keys');if(i%18===0&&!dock.hidden&&dock.dataset.ready==='1'){if(dock.dataset.phase==='push')tap('j');else dock.children.find(n=>n.textContent.toLowerCase()===dock.dataset.next)?.onclick();}step(1);}
+    for(let i=0;i<3600&&skip.hidden;i++){const dock=find(screen,'vb-clash-keys');if(i%8===0&&!dock.hidden&&dock.dataset.ready==='1'){if(dock.dataset.phase==='push')tap('j');else dock.children.find(n=>n.textContent.toLowerCase()===dock.dataset.next)?.onclick();}step(1);}
     assert.equal(skip.hidden,false,'correct touch sequence wins after a loss/retry');battle.close();
   }
 
@@ -112,6 +119,7 @@ try {
     startVinsonSequence(battle.state, 'chains');
     battle.state.sequence.keys = ['f', 'q', 'e'];
     step(1);
+    assert.equal(find(screen,'vb-subtitle').children.length,0,'taunts cannot cover active chains keys');
     const dock = find(screen, 'vb-sequence-keys');
     for (const key of ['f', 'q', 'e']) {
       dock.children.find(button => button.textContent.toLowerCase() === key).onclick();

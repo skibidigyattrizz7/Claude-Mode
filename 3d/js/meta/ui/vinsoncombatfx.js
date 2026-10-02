@@ -1,3 +1,4 @@
+import {drawFlagStar} from './vinsonweaponart16.js?v=16';
 const clamp=n=>Math.max(0,Math.min(1,n));
 export function drawVinsonBlackHole(ctx,h,t,reducedMotion){
   const age=h.elapsed-h.telegraph,ready=age>=0;
@@ -32,6 +33,20 @@ export function drawVinsonCombo(ctx,state,t,reducedMotion){
   for(let i=0;i<12;i++){const sy=215+i*28;ctx.beginPath();ctx.moveTo(x-160-i%3*30,sy);ctx.lineTo(x-35,sy);ctx.stroke();}
   for(let i=0;i<3;i++){const a=-.85+i*.8+Math.sin(p*Math.PI)*.35,r=65+p*95;ctx.strokeStyle=i%2?'#ffe1a5':'#93dfff';ctx.lineWidth=(reducedMotion?3:5)*(1-p*.5);ctx.globalAlpha=.9;
     ctx.beginPath();ctx.arc(c.target.x,c.target.y,r,a,a+1.15);ctx.stroke();}
+  // Three visual routes share the same three-press, damage-capped finisher rules.
+  const variant=c.variant||0,phase=clamp(c.elapsed/2.2),radius=95,centre={x:c.target.x,y:c.target.y};
+  const points=Array.from({length:6},(_,i)=>({x:centre.x+Math.cos(-Math.PI/2+i*Math.PI/3)*radius,y:centre.y+Math.sin(-Math.PI/2+i*Math.PI/3)*radius}));
+  ctx.globalAlpha=.85;ctx.lineJoin='round';
+  if(variant===0){
+    const route=[0,2,4,0,3,5,1,3],travel=phase*7;
+    for(const [color,width] of [['#ffffff',6],['#0038b8',3]]){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(points[route[0]].x,points[route[0]].y);for(let i=0;i<7;i++){const a=points[route[i]],b=points[route[i+1]],f=clamp(travel-i);if(f>0)ctx.lineTo(a.x+(b.x-a.x)*f,a.y+(b.y-a.y)*f);}ctx.stroke();}
+  }else if(variant===1){
+    for(let i=0;i<Math.ceil(phase*6);i++)drawFlagStar(ctx,points[i].x,points[i].y,18,reducedMotion?0:t*.4,.9);
+    const current=points[Math.min(5,Math.floor(phase*6))];ctx.strokeStyle='#b9d4ff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(c.from.x,c.from.y-50);ctx.lineTo(current.x,current.y);ctx.stroke();
+  }else{
+    const rise=Math.sin(phase*Math.PI)*115;drawFlagStar(ctx,centre.x,centre.y-rise,35+phase*50,reducedMotion?0:t*.45,.9);
+  }
+  if(c.beat==='impact'&&c.quality===2){const fade=1-clamp(c.beatTime/.65);ctx.globalAlpha=fade;ctx.fillStyle='#d8e6ff33';ctx.fillRect(centre.x-28,0,56,centre.y);drawFlagStar(ctx,centre.x,centre.y,95+clamp(c.beatTime/.65)*35,reducedMotion?0:t*.45,fade);}
   // Two distinct strikes: crossing blades, then a short starburst at the contact point.
   if(c.presses>=2){const hit=clamp(c.beatTime/.35),r=85+hit*70;ctx.globalAlpha=1-hit*.7;ctx.strokeStyle='#e6f9ff';ctx.lineWidth=8;
     for(const sign of [-1,1]){ctx.beginPath();ctx.moveTo(c.target.x-r,c.target.y-sign*r*.55);ctx.lineTo(c.target.x+r,c.target.y+sign*r*.55);ctx.stroke();}}

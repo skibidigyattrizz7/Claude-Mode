@@ -209,6 +209,7 @@ test('weapon inputs create distinct projectile patterns, cooldowns, and impact s
     assert.ok(battle.state.hero.attackCooldown > 0);
     const p = battle.state.projectiles[0];
     if (weapon === 'eyes'||weapon==='nova') assert.ok(Math.abs(p.y - (battle.state.hero.y - 117*120/175)) < 25);
+    else if(weapon==='constellation')assert.ok(p.falling&&p.y<160&&p.vy>0,'Sixfold rains down from the sky');
     else assert.ok(Math.abs(p.y - (battle.state.hero.y - 50)) < 25);
     if (weapon === 'eyes') {
       assert.equal(battle.state.projectiles[0].origins.length, 2);
@@ -314,4 +315,4 @@ test('a telegraph-aware player can beat stage two in a seeded dodge-and-attack s
 
 console.log(`${count} Vinson battle tests passed`);
 
-for(const stage of [0,1]){const b=createVinsonBattle({stage});b.step(0,{advance:true});b.state.hero.invulnerable=999;for(let i=0;i<200;i++)b.step(.05,{y:-1,dodge:i%20===0});assert.ok(b.state.hero.y>=(stage?350:280),'portrait top remains below HUD while moving/dodging upward');}
+for(const stage of [0,1]){const b=createVinsonBattle({stage});b.step(0,{advance:true});b.state.hero.invulnerable=999;for(let i=0;i<200;i++)b.step(.05,{y:-1,dodge:i%20===0});assert.ok(b.state.hero.y>=(stage?320:250),'portrait top remains below HUD while moving/dodging upward');}

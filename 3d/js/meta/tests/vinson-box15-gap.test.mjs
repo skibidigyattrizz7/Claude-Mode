@@ -10,7 +10,7 @@ for(const compact of [false,true])for(const pattern of ['lanes','vertical','radi
 }
 for(const kind of ['inversion','chains']){const b=createVinsonBattle();b.step(0,{advance:true});startVinsonSequence(b.state,kind);assert.equal(b.state.sequence.remaining,kind==='chains'?6:5.5);assert.equal(b.state.sequenceCooldown,35);}
 for(const kind of ['chains','inversion']){const w=createVinsonBattle();w.step(0,{advance:true});w.state.attackTimer=99;startVinsonSequence(w.state,kind,{warning:1.5});const remaining=w.state.sequence.remaining;for(let i=0;i<20;i++)w.step(.05,{sequenceKey:'wrong'});assert.equal(w.state.sequence.index,0);assert.equal(w.state.sequence.remaining,remaining);assert.equal(w.state.hero.invertedTime,0);assert.ok(w.state.sequence.warning>0);}
-const b=createVinsonBattle({seed:15});b.step(0,{advance:true});b.state.hero.hp=1e6;const starts=[];
+const b=createVinsonBattle({seed:15});b.step(0,{advance:true});b.state.hero.hp=1e6;b.state.boxClock=-1e6;const starts=[]; // Isolate QTE cooldown from periodic bonus boxes.
 for(let i=0;i<2400;i++){b.step(.05,{sequenceKey:b.state.sequence?.keys[b.state.sequence.index]});for(const e of b.state.events)if(e.type==='sequenceStart')starts.push(b.state.time);}
 assert.ok(starts.length>=2);assert.ok(starts[0]>=20);for(let i=1;i<starts.length;i++)assert.ok(starts[i]-starts[i-1]>=34.9,'long breathing room between combat sequences');
 console.log('Vinson15 all gap/spawn geometries align, top gap reachable and combat QTE pacing eased');

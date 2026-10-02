@@ -9,7 +9,7 @@ for(let i=0;i<3600&&!s.won&&!s.lost;i++){
  const key=s.phase==='sequence'&&i%12===0?s.keys[s.index]:i%8===0?'j':null;
  stepVinsonClash(s,1/60,{key});warnings+=s.events.filter(e=>e.type==='warning').length;
 }
-assert.equal(s.won,true);assert.equal(warnings,2,'only specific50/80% moments ask for sequences');
+assert.equal(s.won,true);assert.equal(warnings,3,'three announced progress gates ask for sequences');
 const warning=createVinsonClash();warning.progress=.51;stepVinsonClash(warning,.01);
 assert.equal(warning.phase,'warning');assert.ok(warning.warning>=2,'clear warning precedes active keys');
 for(let i=0;i<40;i++)stepVinsonClash(warning,.05,{key:'j',presses:20,held:true});
