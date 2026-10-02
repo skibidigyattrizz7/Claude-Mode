@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13h';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, DOMINO, dominoPos, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13k';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -125,6 +125,17 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
         case 'scShatter': blast('burst', e.x, e.y, 320); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 40, 950, 1, 12); part(e.x, e.y, 70, '#cfe0ff', 1000, 1.1, 5); break;
         case 'spikeUp': shake(.12); break;
+        case 'dmPlace': if (e.i % 2 === 0) shake(.06); break;
+        case 'dmFlick': shake(.2); part(e.x, e.y, 10, '#ffffff', 300, .3, 3); break;
+        case 'dmPop': blast('hit', e.x, e.y - 20, 30 + e.i * 5); shake(.1 + e.i * .04); part(e.x, e.y - 20, 6 + e.i, '#cfe0ff', 300 + e.i * 30, .4, 3); break;
+        case 'dmFinal': case 'rcFinal': blast('burst', e.x, e.y, 300); shake(1); flash('#ffffff', .85); negative(.08); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 30, 950, 1, 12); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); break;
+        case 'rcHit': blast('hit', e.x, e.y, 60 + e.i * 4); shake(.25 + e.i * .03); flash('#cfe0ff', .08); break;
+        case 'rcBounce': ring(e.x, e.y, '#cfe0ff', 6, 70, .25, 3); part(e.x, e.y, 8, '#ffffff', 300, .3, 2); break;
+        case 'clDraw': shake(.2); break;
+        case 'clCollapse': shake(.5); flash('#000000', .4); break;
+        case 'clNova': blast('nova', e.x, e.y, 340); shake(1); flash('#ffffff', 1); negative(.12); fx.chroma = .8; ring(e.x, e.y, '#ffffff', 30, 1300, 1.2, 16); part(e.x, e.y, 120, '#ffffff', 1300, 1.3, 5); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'codeKey': fx.keyFlash = fx.keyFlash || {}; fx.keyFlash[e.k] = 1; break;
+        case 'codeOk': shake(1); flash('#ffffff', .8); negative(.08); ring(s.boss.x, s.boss.y - 120, '#ffffff', 40, 900, 1, 12); part(640, 110, 80, '#ffffff', 700, 1.2, 4); break;
         case 'sbShot': if (e.i % 3 === 0) shake(.08); break;
         case 'sbImpact': blast('hit', e.x, e.y, 34); part(e.x, e.y, 4, '#ffffff', 300, .3, 2); break;
         case 'sbCharge': flash('#cfe0ff', .15); break;
@@ -794,6 +805,22 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.fillStyle = '#e8ecf2'; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - Math.cos(a - 0.5) * 18, y2 - Math.sin(a - 0.5) * 18); ctx.lineTo(x2 - Math.cos(a + 0.5) * 18, y2 - Math.sin(a + 0.5) * 18); ctx.fill();
     ctx.restore();
   }
+  // the secret: while the eclipse aligns, a keyboard of stars hangs in the sky; a light runs over it in the order the
+  // code is played (letter rows top to bottom, then the number row). Keys you press flash; nothing says if you're right.
+  const SKY_ROWS = [['1234567890', 392, 58], ['QWERTYUIOP', 414, 92], ['ASDFGHJKL', 426, 126], ['ZXCVBNM', 448, 160]], SKY_ORDER = [1, 2, 3, 0];
+  const skyPos = {}; SKY_ROWS.forEach(([keys, x0, y]) => [...keys].forEach((ch, i) => { skyPos[ch] = [x0 + i * 50, y]; }));
+  const skySeq = SKY_ORDER.flatMap((r) => [...SKY_ROWS[r][0]]);
+  function drawSkyKeys(s) {
+    fx.keyFlash = fx.keyFlash || {};
+    const cyc = skySeq.length * .2 + 1.2, t = fx.clock % cyc, lit = t / .2;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(200,220,255,.08)'; ctx.lineWidth = 1; ctx.beginPath(); skySeq.forEach((ch, i) => { const [x, y] = skyPos[ch]; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+    for (const ch of skySeq) { const [x, y] = skyPos[ch], i = skySeq.indexOf(ch), d = lit - i, run = d >= 0 && d < 3 ? 1 - d / 3 : 0, f = fx.keyFlash[ch] || 0, tw = .25 + .1 * Math.sin(fx.clock * 3 + i);
+      glow(x, y, 10 + run * 22 + f * 24, `rgba(${f > run ? '140,230,255' : '255,255,255'},${Math.min(1, tw + run * .8 + f).toFixed(2)})`);
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(1, tw + .3 + run + f).toFixed(2)})`; ctx.beginPath(); ctx.arc(x, y, 2 + run * 2 + f * 2, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    for (const k in fx.keyFlash) fx.keyFlash[k] = Math.max(0, fx.keyFlash[k] - 1 / 60 * 2.5);
+  }
   function drawMinions(s) { // EXTREME shades: small eclipses with eyes, a tether to her, an HP bar; her shield while they live
     if (!s.minions || !s.minions.length) return;
     const b = s.boss;
@@ -1066,6 +1093,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     if (c.v === 7) { drawBlade(s, c, k); ctx.restore(); return; }
     if (c.v === 8) { drawTornado(s, c, k); ctx.restore(); return; }
     if (c.v === HELL) { drawHell(s, c, k); ctx.restore(); return; }
+    if (c.v === 10) { drawDomino(s, c, k); ctx.restore(); return; }
+    if (c.v === 11) { drawRicochet(s, c, k); ctx.restore(); return; }
+    if (c.v === 12) { drawCollapse(s, c, k); ctx.restore(); return; }
     if (c.v === 1) { drawMagen(s, c, k); ctx.restore(); return; }
     if (c.v === 2) { drawCage(s, c, k); ctx.restore(); return; }
     // 1) the trace: every line of the Star of David drawn behind him as he runs it (flag blue on a white core)
@@ -1150,6 +1180,49 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         davidStar(x, yy, 10 + (i % 4) * 4, a * 2, i % 5 ? col : '#ffffff', .4 + .6 * (Math.sin(a) * .5 + .5), 0); }
     } else { const e = ku(k, T.burst, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 150, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.restore();
       for (let i = 0; i < 40; i++) { const a = i * 2.399, d = o * (250 + (i * 71) % 520); davidStar(b.x + Math.cos(a) * d, b.y - 150 + Math.sin(a) * d * .7 + e * e * 200, 16 + (i % 3) * 6, o * 9 + i, i % 4 ? col : '#ffffff', 1 - e, 0); } }
+    drawHero(s, s.hero.x, s.hero.y);
+  }
+  // STAR DOMINOES: stars stand up out of the ground in a line to her, he tips the first, the chain races in, pops grow
+  function drawDomino(s, c, k) {
+    const D = DOMINO, b = s.boss, col = P[form(s)].hero; dim(k, .4);
+    for (let i = 0; i < D.n; i++) {
+      const [x, y] = dominoPos(s, i), up = easeOut(ku(k, D.place[0] + i * (D.place[1] - D.place[0]) / D.n, D.place[0] + (i + 1) * (D.place[1] - D.place[0]) / D.n)), tp = D.chain + i * D.step, r = 18 + i * 2.2;
+      if (k < tp) { if (up <= 0) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(160,200,255,.25)'; ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * .3, 0, 0, TAU); ctx.fill(); ctx.restore(); davidStar(x, y - r * up, r * up, 0, col, 1, 0); }
+      else { const e = ku(k, tp, tp + .05); if (e < 1) davidStar(x + e * 20, y - r + e * r * .6, r * (1 + e * .6), e * 1.6, '#ffffff', 1 - e, 0); }
+    }
+    if (k > D.chain) { const n = Math.min(D.n, Math.floor((k - D.chain) / D.step) + 1); text('x' + n, b.x - 260, b.y - 280, 30 + n * 2, '#ffffff'); } // the chain count
+    if (k > D.final) { const e = ku(k, D.final, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 100, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); hexagram(b.x, b.y + 30, 100 + o * 600, o, 1, '#ffffff', 6, .3, 1 - e); ctx.restore(); davidStar(b.x, b.y - 100, 100 + o * 380, o * 2, col, 1 - e, 0); }
+    drawHero(s, s.hero.x, s.hero.y);
+  }
+  // STAR RICOCHET: one star bouncing between her and the edges of the screen, faster each leg, with a long trail
+  function drawRicochet(s, c, k) {
+    const b = s.boss, col = P[form(s)].hero, legs = ricochetLegs(s), tt = c.t - RICO.start * c.len, end = legs[legs.length - 1].t1; dim(k, .4);
+    const pos = (t) => { if (t <= 0) return [legs[0].x0, legs[0].y0]; for (const L of legs) if (t <= L.t1) { const f = (t - L.t0) / (L.t1 - L.t0); return [lerp(L.x0, L.x, f), lerp(L.y0, L.y, f)]; } return null; };
+    if (tt < end) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (let j = 24; j >= 1; j--) { const p0 = pos(tt - j * .012), p1 = pos(tt - (j - 1) * .012); if (!p0 || !p1) continue; ctx.strokeStyle = `rgba(160,200,255,${(.6 * (1 - j / 25)).toFixed(2)})`; ctx.lineWidth = 14 * (1 - j / 25) + 2; ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke(); }
+      ctx.restore();
+      const p = pos(Math.max(0, tt)), leg = legs.findIndex((L) => tt <= L.t1), big = leg === legs.length - 1 ? 1.8 : 1;
+      if (p) davidStar(p[0], p[1], 24 * big, c.t * 14, col, 1, 0, 'rgba(255,255,255,.6)');
+      const hits = legs.filter((L) => L.boss && L.t1 <= tt).length; if (hits) text('x' + hits, b.x + 170, b.y - 280, 30 + hits * 3, '#ffffff');
+    } else { const e = clamp((tt - end) / (c.len * (1 - RICO.start) - end), 0, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 120, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.fillStyle = `rgba(255,255,255,${(.7 * (1 - e)).toFixed(2)})`; ctx.fillRect(b.x - 30 + o * 900, b.y - 128, 40, 16); ctx.restore(); davidStar(b.x - 30, b.y - 120, 60 + o * 420, o * 3, col, 1 - e, 0); }
+    drawHero(s, s.hero.x, s.hero.y);
+  }
+  // STAR COLLAPSE: every light on screen streams into one star inside her; it shrinks to a black point; silence; supernova
+  function drawCollapse(s, c, k) {
+    const C = COLLAPSE, b = s.boss, cx = b.x, cy = b.y - 120, col = P[form(s)].hero, draw = ku(k, 0, C.collapse), dark = Math.min(.85, .3 + draw * .55);
+    ctx.fillStyle = `rgba(0,2,10,${(k < C.nova ? dark : dark * (1 - ku(k, C.nova, C.nova + .05))).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
+    if (k < C.collapse) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (let i = 0; i < 70; i++) { const a = i * 2.399, ph = (c.t * (1.1 + draw) + i * .137) % 1, d = (1 - ph) * 950, len = 40 + draw * 80; ctx.strokeStyle = `rgba(${i % 3 ? '200,220,255' : '255,240,200'},${(.25 + .6 * ph).toFixed(2)})`; ctx.lineWidth = 2 + ph * 2;
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * d, cy + Math.sin(a) * d * .7); ctx.lineTo(cx + Math.cos(a) * Math.max(0, d - len), cy + Math.sin(a) * Math.max(0, d - len) * .7); ctx.stroke(); }
+      glow(cx, cy, 40 + draw * 160, 'rgba(255,255,255,.9)'); ctx.restore();
+      davidStar(cx, cy, 14 + easeOut(draw) * 60, c.t * (2 + draw * 10), col, 1, 0);
+    } else if (k < C.nova) { const f = ku(k, C.collapse, C.nova), r = lerp(70, 5, easeOut(f)); // the black point, a beat of nothing
+      ctx.save(); ctx.lineJoin = 'miter'; ctx.translate(cx, cy); ctx.rotate(c.t * 12); ctx.fillStyle = '#000'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.fill(); ctx.stroke(); } ctx.restore(); }
+    else { const e = ku(k, C.nova, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .25) glow(cx, cy, 1100 * (1 - e * 3), 'rgba(255,255,255,1)');
+      for (let j = 0; j < 4; j++) hexagram(cx, cy, 60 + o * (300 + j * 220), o * (j % 2 ? -1 : 1) * 2, 1, j % 2 ? 'rgba(120,170,255,1)' : '#ffffff', 6 - j, 1, (1 - e) * (1 - j * .18)); ctx.restore();
+      davidStar(cx, cy, 80 + o * 500, o * 2, col, 1 - e, 0); }
     drawHero(s, s.hero.x, s.hero.y);
   }
   // STAR OF HELL (Algol, the demon star): everything red. The red star and fire from the sky, a blast, a star-shaped
@@ -1821,6 +1894,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.translate(640 + shx, 360 + shy); ctx.rotate(rot); ctx.scale(fx.zoom, fx.zoom); ctx.translate(-640 - fx.camX, -360 - fx.camY);
     drawArena(s);
+    if (s.phase === 'fight' && aligned(s) && !s.codeOk) drawSkyKeys(s); // the hint for the secret code
     if (s.clash) drawClashWorld(s); // also while a clash story beat is paused
     drawHazards(s);
     const heroFirst = h.y < b.y + 30;

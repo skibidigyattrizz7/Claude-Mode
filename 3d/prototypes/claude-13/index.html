@@ -120,9 +120,9 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H } from './sim.js?v=13h';
-import { createRenderer } from './render.js?v=13h';
-import { createSfx } from './sfx.js?v=13h';
+import { createFight, step, W, H, aligned } from './sim.js?v=13k';
+import { createRenderer } from './render.js?v=13k';
+import { createSfx } from './sfx.js?v=13k';
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
 const canvas = document.getElementById('c');
@@ -147,8 +147,9 @@ view.touch = isTouch;
 const keyName = (e) => e.key === ' ' ? ' ' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
 addEventListener('keydown', (e) => {
   const k = keyName(e);
-  if (k === 'Escape' || k === 'P') { togglePause(); e.preventDefault(); return; }
-  if (k === 'M') { toggleMute(); return; }
+  const typing = fight && running && !paused && fight.phase === 'fight' && aligned(fight) && !fight.codeOk; // the secret code may use P and M
+  if (k === 'Escape' || (k === 'P' && !typing)) { togglePause(); e.preventDefault(); return; }
+  if (k === 'M' && !typing) { toggleMute(); return; }
   if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
   if (!e.repeat) { edges.add(k); if (/^[A-Z0-9]$/.test(k)) letters.push(k); }
   held.add(k);
@@ -218,7 +219,7 @@ function start(from = 1) {
   // player gets the newest first (DAVID LASER, Oct 2). ?fin=0..5 picks one for testing.
   // P13 final: each phase has its own finishers, taken in turn (saved per phase). ?fin=0..9 forces one (9 = STAR OF HELL)
   let fin = null; try { fin = JSON.parse(localStorage.getItem('p13finIdx') || 'null'); } catch {}
-  if (q.get('fin') != null) fin = (Number(q.get('fin')) || 0) % 10;
+  if (q.get('fin') != null) fin = (Number(q.get('fin')) || 0) % 13;
   fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1, fin });
   if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   if (q.get('act')) fight.forceAct = q.get('act');
@@ -248,7 +249,7 @@ function showEnd() {
   refreshContinue();
   // the secret phase is hinted only after a normal clear
   $('secretHint').hidden = !(win && !secret);
-  $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, LAND A PERFECT DODGE, THEN LAND THE FINISHER.';
+  $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, A KEYBOARD APPEARS IN THE SKY. PLAY IT THE WAY IT LIGHTS UP, THEN LAND THE FINISHER.';
   $('end').hidden = false;
 }
 function frame(now) {

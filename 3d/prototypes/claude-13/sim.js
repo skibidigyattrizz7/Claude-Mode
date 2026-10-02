@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13h';
+import { SCRIPT } from './script.js?v=13k';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -42,11 +42,11 @@ export const STAGES = {
 export const HERO_MAX = 100, HEAL = 32;
 // owner: Normal (what we've been tuning) and Hard ("extremely hard but still beatable"), picked on the title screen
 export const MODES = {
-  normal: { key: 'normal', name: 'NORMAL', hp: 1, speed: 1, dmg: 1, dodge: 1, gates6: false, combo: [0, .45, .6, .8], triple: [0, .1, .2, .3], gapMul: .62, pressure: [0, 2.1, 1.7, 1.4], pressN: 3, qte: 1, boxEvery: 24, need: [4.6, 0, 1], keyMoments: 3, keyCount: 4, keyTime: 1, stun: 1.1, hardBox: false },
+  normal: { key: 'normal', name: 'NORMAL', hp: 1, speed: 1, dmg: 1, dodge: 1, gates6: false, combo: [0, .45, .6, .8], triple: [0, .1, .2, .3], gapMul: .62, pressure: [0, 2.1, 1.7, 1.4], pressN: 3, qte: 1, boxEvery: 24, need: [5.3, 0, 1.1], keyMoments: 3, keyCount: 5, keyTime: .9, stun: 1.1, hardBox: false },
   // P13 owner (final): "an extreme mode where everything is extremely hard, and the boss sometimes spawns minions you
   // have to kill before you can damage her again"
-  extreme: { key: 'extreme', name: 'EXTREME', hp: 1.6, speed: 1.3, dmg: 1.55, dodge: 2.2, gates6: true, combo: [0, .9, .95, 1], triple: [0, .55, .7, .8], gapMul: .34, pressure: [0, .8, .65, .55], pressN: 6, qte: .7, boxEvery: 12, need: [7.2, 0, 1.2], keyMoments: 4, keyCount: 6, keyTime: .72, stun: 1.5, hardBox: true, minions: true },
-  hard: { key: 'hard', name: 'HARD', hp: 1.3, speed: 1.15, dmg: 1.3, dodge: 1.7, gates6: true, combo: [0, .75, .85, .95], triple: [0, .35, .5, .6], gapMul: .45, pressure: [0, 1.05, .85, .7], pressN: 5, qte: .8, boxEvery: 15, need: [6.2, 0, 1.1], keyMoments: 4, keyCount: 5, keyTime: .8, stun: 1.3, hardBox: true },
+  extreme: { key: 'extreme', name: 'EXTREME', hp: 1.6, speed: 1.3, dmg: 1.55, dodge: 2.2, gates6: true, combo: [0, .9, .95, 1], triple: [0, .55, .7, .8], gapMul: .34, pressure: [0, .8, .65, .55], pressN: 6, qte: .7, boxEvery: 12, need: [7.6, 0, 1.3], keyMoments: 5, keyCount: 7, keyTime: .66, stun: 1.5, hardBox: true, minions: true },
+  hard: { key: 'hard', name: 'HARD', hp: 1.3, speed: 1.15, dmg: 1.3, dodge: 1.7, gates6: true, combo: [0, .75, .85, .95], triple: [0, .35, .5, .6], gapMul: .45, pressure: [0, 1.05, .85, .7], pressN: 5, qte: .8, boxEvery: 15, need: [6.9, 0, 1.2], keyMoments: 4, keyCount: 6, keyTime: .72, stun: 1.3, hardBox: true },
 };
 const SLASH = { cd: 0.24, dmg: [0, 4, 6, 8], speed: 1000, r: 24 };
 // six specials per form (index = stage); "strongest normal attack" = nova of the current form
@@ -66,10 +66,10 @@ export const FIN = { mult: 6, // P12: x3 with the boss HP so a finisher still la
 // P13 owner: "finishers always pop up as Star of David something, the names don't change": each has its own name,
 // shown on the prompt, the key screen and the cinematic. finNext() is the one the next finisher will be.
 // P13 owner: "if any look way too similar make them unique": SIX POINTS became MAGEN DAVID, RISING STAR became STAR CAGE
-export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR', 'STAR BARRAGE', "DAVID'S BLADE", 'STAR TORNADO', 'STAR OF HELL'];
+export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR', 'STAR BARRAGE', "DAVID'S BLADE", 'STAR TORNADO', 'STAR OF HELL', 'STAR DOMINOES', 'STAR RICOCHET', 'STAR COLLAPSE'];
 // P13 owner (final): "a different type of finisher for each phase": each phase has its own set, taken in turn (the
 // turn is saved between fights per phase). STAR OF HELL is the rare one (5% whenever a finisher comes up, any phase).
-export const FIN_POOLS = { 1: [0, 1, 6, 4], 2: [2, 3, 7, 5], 3: [8] };
+export const FIN_POOLS = { 1: [0, 1, 6, 4], 2: [2, 3, 7, 5], 3: [10, 8, 11, 12] }; // phase 3 (owner: "more finishers, most creatively")
 export const HELL = 9;
 export const finNext = (s) => { if (s.finisher.hell) return HELL; if (s.forceFin != null) return s.forceFin; const P = FIN_POOLS[s.stage]; return P[(s.finIdx[s.stage] || 0) % P.length]; };
 export const FIN_KEYS = ['W', 'A', 'S', 'D', 'J', 'K', 'L', 'I'];
@@ -98,7 +98,8 @@ export function createFight({ seed = 7, force = null, mode = 'normal', start = 1
   if (force === 'stage2') { setupStage(s, 2, true); }
   if (force === 'stage3') { setupStage(s, 3, true); }
   if (force === 'clash1' || force === 'clash2' || force === 'clash3') { const k = Number(force.slice(-1)); if (k > 1) setupStage(s, k, true); s.boss.hp = 0; s.pendingClash = k; s.secret = k === 2 && false; }
-  if (force === 'secret') { setupStage(s, 2, true); s.boss.gateIndex = s.boss.gates.length; s.boss.hp = 40; s.boss.chip = 40; s.finisher.cd = 0; s.forceFinisherPrompt = true; }
+  if (force === 'align') { setupStage(s, 2, true); s.boss.gateIndex = s.boss.gates.length; s.boss.hp = 200; s.boss.chip = 200; } // test: phase 2, eclipse aligned, code not typed
+  if (force === 'secret') { s.codeOk = true; setupStage(s, 2, true); s.boss.gateIndex = s.boss.gates.length; s.boss.hp = 40; s.boss.chip = 40; s.finisher.cd = 0; s.forceFinisherPrompt = true; }
   if (force === 'box') { s.pendingGate = true; s.boss.hp = s.boss.gates[0]; s.boss.chip = s.boss.hp; }
   if (force === 'finisher') { s.finisher.cd = 0; s.forceFinisherPrompt = true; }
   return s;
@@ -143,7 +144,7 @@ function hurtBoss(s, dmg, kind, x = s.boss.x, y = s.boss.y - 80) {
   const dealt = Math.round(before - b.hp);
   ev(s, 'bossHit', { dmg: dealt, kind, x, y });
   if (b.hp <= 0) {
-    if (s.stage === 2 && kind === 'finisher') s.secret = true; // the secret path to TOTALITY
+    if (s.stage === 2 && kind === 'finisher' && s.codeOk) s.secret = true; // the secret path to TOTALITY (needs the code)
     s.pendingClash = s.stage; ev(s, 'bossDown', { stage: s.stage });
   } else if (b.hp <= floor && floor > 0) s.pendingGate = true;
   return dealt;
@@ -152,15 +153,16 @@ function hurtBoss(s, dmg, kind, x = s.boss.x, y = s.boss.y - 80) {
 // ---------------------------------------------------------------------------------------------- boss attacks
 const eye = (s) => ({ x: s.boss.x, y: s.boss.y - 160 });
 const POOLS = {
-  1: [['box', 1.4], ['orbs', 3], ['slam', 2], ['barrage', 1.3], ['chains', 1.5], ['rune', 1.1], ['catch', 1.6], ['earth', 1.6], ['laser', 2], ['spikes', 1.3]],
-  2: [['box', 1.4], ['orbs', 2], ['slam', 1.6], ['barrage', 1.6], ['chains', 1.4], ['rune', 1.2], ['catch', 1.4], ['earth', 1.3], ['laser', 1.8], ['cross', 1.8], ['doom', 1.6], ['gravity', 1.4], ['spiral', 1.6], ['spikes', 1.5]],
-  3: [['box', 1.4], ['orbs', 1.5], ['slam', 1.4], ['barrage', 1.5], ['chains', 1.3], ['rune', 1.2], ['catch', 1.3], ['earth', 1.2], ['laser', 1.6], ['cross', 1.7], ['doom', 1.6], ['gravity', 1.3], ['spiral', 1.6], ['corona', 1.8], ['twin', 1.2], ['spikes', 1.6]],
+  1: [['box', 1.4], ['orbs', 3], ['slam', 2], ['barrage', 1.3], ['chains', 1.5], ['rune', 1.1], ['catch', 1.6], ['earth', 1.6], ['laser', 2]],
+  2: [['box', 1.4], ['orbs', 2], ['slam', 1.6], ['barrage', 1.6], ['chains', 1.4], ['rune', 1.2], ['catch', 1.4], ['earth', 1.3], ['laser', 1.8], ['cross', 1.8], ['doom', 1.6], ['gravity', 1.4], ['spiral', 1.6]],
+  3: [['box', 1.4], ['orbs', 1.5], ['slam', 1.4], ['barrage', 1.5], ['chains', 1.3], ['rune', 1.2], ['catch', 1.3], ['earth', 1.2], ['laser', 1.6], ['cross', 1.7], ['doom', 1.6], ['gravity', 1.3], ['spiral', 1.6], ['corona', 1.8], ['twin', 1.2]],
 };
 const SOLO = new Set(['rune', 'chains', 'box', 'minions']); // never part of a combo
 function chooseAttack(s) {
   const b = s.boss;
-  if (s.force && s.force !== 'box' && !s.forceUsed && (POOLS[3].some(([k]) => k === s.force) || s.force === 'minibox' || s.force === 'minions')) { if (s.force === 'minibox') { s.forceUsed = true; return ['box']; } s.forceUsed = true; return [s.force]; }
-  const pool = s.M.minions ? [...POOLS[s.stage], ['minions', s.stage === 3 ? 1.3 : 1]] : POOLS[s.stage];
+  if (s.force && s.force !== 'box' && !s.forceUsed && (POOLS[3].some(([k]) => k === s.force) || s.force === 'minibox' || s.force === 'minions' || s.force === 'spikes')) { if (s.force === 'minibox') { s.forceUsed = true; return ['box']; } s.forceUsed = true; return [s.force]; }
+  // owner: BLOOD SPIKES and the SHADES are EXTREME-only
+  const pool = s.M.minions ? [...POOLS[s.stage], ['minions', s.stage === 3 ? 1.3 : 1], ['spikes', 1.3 + s.stage * .1]] : POOLS[s.stage];
   const ready = pool.filter(([k]) => (b.cds[k] ?? 0) <= 0 && k !== b.last && !(k === 'minions' && s.minions.length));
   if (!ready.length) return ['orbs'];
   const pick = () => { const tot = ready.reduce((a, [, w]) => a + w, 0); let p = s.R() * tot; for (const [k, w] of ready) { p -= w; if (p <= 0) return k; } return ready[0][0]; };
@@ -328,7 +330,7 @@ function moveHero(s, dt, inp) {
   if (inp.dodge && h.dodgeCd <= 0 && h.dodgeT <= 0) {
     h.dodgeDir = len ? [mx / len, my / len] : [h.face, 0]; h.dodgeT = .24; h.dodgeCd = .55; ev(s, 'dodge', { x: h.x, y: h.y });
     if (s.t - (s.lastPerfect ?? -9) > 1.1 && dangerNear(s)) { s.lastPerfect = s.t; s.slowmo = .45; h.inv = Math.max(h.inv, .5); s.stats.perfects++; h.hp = Math.min(HERO_MAX, h.hp + 2); ev(s, 'perfect', { x: h.x, y: h.y }); // from ChatGPT 14: a perfect dodge also mends 2 HP s.finisher.cd = Math.max(0, s.finisher.cd - 4);
-      if (aligned(s) && s.finisher.prompt <= 0) { s.finisher.prompt = FIN.window; s.finisher.hell = false; ev(s, 'finisherReady', { aligned: true }); } }
+    }
   }
 }
 function dangerNear(s) {
@@ -361,6 +363,13 @@ function heroActions(s, dt, inp) {
   }
   if (inp.cast && (h.cds[h.sel] || 0) <= 0 && h.dodgeT <= 0 && !h.lance && !h.charge) castAbility(s, h.sel);
   if (inp.heal && h.heals > 0 && h.hp < HERO_MAX) { h.heals--; s.stats.heals++; h.hp = Math.min(HERO_MAX, h.hp + HEAL); ev(s, 'heal', { x: h.x, y: h.y }); }
+  // P13 owner: the 3rd phase opens only with a secret key sequence typed while the eclipse aligns (phase 2, last
+  // stretch of her HP). Only a hash is stored here; the game hints it (the sky shows a keyboard and lights it in order).
+  if (aligned(s) && !s.codeOk) for (const k of inp.keysPressed) {
+    s.codeBuf = ((s.codeBuf || '') + k).slice(-SECRET.len); ev(s, 'codeKey', { k });
+    if (s.codeBuf.length === SECRET.len && fnv(s.codeBuf) === SECRET.hash) { s.codeOk = true; s.finisher.prompt = FIN.window * 2; s.finisher.hell = false; banner(s, 'THE ECLIPSE OPENS', 'LAND THE FINISHER', '#ffffff'); ev(s, 'codeOk'); ev(s, 'finisherReady', { aligned: true }); break; }
+  }
+  if (aligned(s) && s.codeOk && s.phase === 'fight' && s.finisher.prompt <= 0 && s.finisher.cd <= 0) { s.finisher.prompt = FIN.window * 2; s.finisher.hell = false; ev(s, 'finisherReady', { aligned: true }); } // missed it: the breaker comes back
   if (inp.finisher && s.finisher.prompt > 0) { // owner: the finisher takes 7 keys in order
     s.finisher.prompt = 0; const keys = [], hell = s.finisher.hell, nk = hell ? 11 : FIN.keys;
     while (keys.length < nk) { const k = FIN_KEYS[Math.floor(s.R() * FIN_KEYS.length)]; if (k !== keys[keys.length - 1]) keys.push(k); }
@@ -369,13 +378,15 @@ function heroActions(s, dt, inp) {
 }
 // the secret: in phase 2, once a finisher would be the killing blow the eclipse ALIGNS (sky and name pulse white).
 // A perfect dodge then calls the ECLIPSE BREAKER; landing it as the killing blow opens TOTALITY.
+export const SECRET = { len: 36, hash: 0x87b8d909 }; // FNV-1a of the code (uppercase). The code itself is the owner's.
+export const fnv = (str) => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
 export function aligned(s) { const b = s.boss; return s.stage === 2 && b.gateIndex >= b.gates.length && b.hp > 0 && b.hp <= ABIL.nova.dmg[2] * FIN.mult * 0.95; }
 function startFinisherCine(s) {
   s.finisher.cd = FIN.cooldown; s.stats.finishers++;
   // P11 owner: the finisher traces the Star of David with a trail, then a beam of light falls from the sky onto a
   // huge spinning star on the ground. Three versions, taken in turn so it is never the same one twice in a row.
   const v = finNext(s); if (v !== HELL && s.forceFin == null) s.finIdx[s.stage] = (s.finIdx[s.stage] || 0) + 1; s.finisher.hell = false; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
-  s.finisher.cine = { t: 0, len: v === HELL ? 7.6 : v === 6 ? 4.4 : v === 7 ? 4.6 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
+  s.finisher.cine = { t: 0, len: v === 10 ? 5 : v === 11 ? 3.9 : v === 12 ? 5.2 : v === HELL ? 7.6 : v === 6 ? 4.4 : v === 7 ? 4.6 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
     name: FIN_NAMES[v], sub: '', hits: 0, pole: [0, 0, 0, 0], branches: 0,
     hx: clamp(s.boss.x - 430, FLOOR.minX + 120, FLOOR.maxX - 500), hy: clamp(s.boss.y + 40, FLOOR.minY + 160, FLOOR.maxY - 10), bombs: [] };
   if (v === 4 || v === 5) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
@@ -949,6 +960,16 @@ function updateRune(s, dt, inp) {
   if (r.done === 'fail' && !r.failed) { r.failed = true; h.invertIn = 1.6; h.invertLen = 5 + s.stage; h.inv = 0; hurtHero(s, 10, 'rune'); ev(s, 'runeFail'); } // inversion starts after a clear countdown
 }
 export const STAR_PATH = [0, 2, 4, 0, 1, 3, 5, 1]; // up-triangle, then a dash to the down-triangle
+export const DOMINO = { n: 12, place: [.04, .22], chain: .3, step: .033, final: .72 };
+export const dominoPos = (s, i) => { const h = s.hero, b = s.boss, f = (i + 1) / (DOMINO.n + 1); return [lerp(h.x + 60, b.x - 90, f), lerp(h.y + 10, b.y + 40, f) + Math.sin(f * Math.PI) * 70]; };
+export const RICO = { start: .08 };
+export const ricochetLegs = (s) => { // waypoints: her, an edge, her, another edge ... each leg shorter than the last
+  const b = s.boss, h = s.hero, bx = b.x - 30, by = b.y - 120, walls = [[220, 120], [1180, 640], [1120, 110], [160, 650], [700, 90], [1210, 400], [300, 380]];
+  const pts = [[h.x + 50, h.y - 70]]; for (let i = 0; i < walls.length; i++) { pts.push([bx, by, true]); pts.push(walls[i]); } pts.push([bx, by, true]);
+  const out = []; let t = 0, d = .42; for (let i = 1; i < pts.length; i++) { out.push({ x0: pts[i - 1][0], y0: pts[i - 1][1], x: pts[i][0], y: pts[i][1], boss: !!pts[i][2], t0: t, t1: t + d }); t += d; d = Math.max(.07, d * .8); }
+  return out;
+};
+export const COLLAPSE = { collapse: .55, nova: .66 };
 export const BARRAGE = { shots: [.1, .6], n: 30, gap: (.6 - .1) / 30, fly: .045, charge: .63, final: .78 };
 export const BLADE = { grow: .06, cut1: .3, cut2: .45, sheathe: .6, split: .76 };
 export const TORNADO = { rise: .04, collapse: .74, burst: .8 };
@@ -1005,6 +1026,22 @@ function updateFinisher(s, dt) {
       if (at(T.rise)) ev(s, 'stRise', { x: b.x, y: b.y });
       if (at(T.collapse)) { ev(s, 'stCollapse', { x: b.x, y: b.y - 150 }); s.hitstop = .08; }
       if (at(T.burst)) { ev(s, 'stBurst', { x: b.x, y: b.y - 150 }); s.hitstop = .16; }
+    } else if (c.v === 10) { // STAR DOMINOES: a line of stars rises from the ground to her; he tips the first and the
+      // chain races to her, each pop bigger than the last
+      const D = DOMINO; h.x = lerp(h.x, b.x - 470, .12); h.y = lerp(h.y, b.y + 40, .12);
+      for (let i = 0; i < D.n; i++) { if (at(D.place[0] + i * (D.place[1] - D.place[0]) / D.n)) ev(s, 'dmPlace', { i }); if (at(D.chain + i * D.step)) { const [x, y] = dominoPos(s, i); ev(s, 'dmPop', { i, x, y, n: D.n }); } }
+      if (at(D.chain - .02)) ev(s, 'dmFlick', { x: h.x + 60, y: h.y - 40 });
+      if (at(D.final)) { ev(s, 'dmFinal', { x: b.x, y: b.y - 100 }); s.hitstop = .16; }
+    } else if (c.v === 11) { // STAR RICOCHET: one star bounces between her and the edges of the screen, faster every leg
+      h.x = lerp(h.x, b.x - 470, .12); h.y = lerp(h.y, b.y + 40, .12);
+      const legs = ricochetLegs(s), tt = c.t - RICO.start * c.len;
+      legs.forEach((L, i) => { if (tt >= L.t1 && tt - dt < L.t1) { ev(s, L.boss ? (i === legs.length - 1 ? 'rcFinal' : 'rcHit') : 'rcBounce', { x: L.x, y: L.y, i }); if (L.boss) s.hitstop = Math.max(s.hitstop, i === legs.length - 1 ? .18 : .04); } });
+    } else if (c.v === 12) { // STAR COLLAPSE: all the light on screen streams into one star inside her, it collapses to a
+      // black point, a beat of silence, then it goes supernova
+      const C = COLLAPSE; h.x = lerp(h.x, b.x - 470, .1); h.y = lerp(h.y, b.y + 40, .1);
+      if (at(.02)) ev(s, 'clDraw', { x: b.x, y: b.y - 120 });
+      if (at(C.collapse)) { ev(s, 'clCollapse', { x: b.x, y: b.y - 120 }); s.hitstop = .06; }
+      if (at(C.nova)) { ev(s, 'clNova', { x: b.x, y: b.y - 120 }); s.hitstop = .2; }
     } else { // STAR OF HELL (Algol, the demon star): red star + fire from the sky + blast; a star-shaped laser; a
       // vertical laser; then a second star spins 2 s, exponentially faster, overcharges and explodes. 20% of her HP.
       const L = HELLT; h.x = lerp(h.x, b.x - 460, .08); h.y = lerp(h.y, b.y + 40, .08);

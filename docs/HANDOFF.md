@@ -97,3 +97,6 @@ index.html imports sim/render/sfx, render.js imports sim.js, sim.js imports scri
 Modes: normal / hard / extreme. Finishers: FIN_NAMES + FIN_POOLS in sim.js, visuals in render.js drawFinisherWorld branches.
 Tests: scratchpad smoke13.mjs <mode> (all forced runs should end in victory; 'mortal' run ends in defeat), boxbot13.mjs <mode> <lat> claude-13 <act>.
 Gotcha: never append code after a `//` comment on the same line (it silently disables it; this happened once).
+Secret phase-3 code: only its FNV-1a 32-bit hash + length live in claude-13/sim.js (SECRET). To change it, hash the new
+code in UPPERCASE with fnv() from sim.js and replace SECRET.hash/len (and the sky hint order in render.js SKY_ORDER if the
+pattern changes). Never write the code itself into the repo.

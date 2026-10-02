@@ -116,6 +116,17 @@ export function createSfx() {
       case 'hellAlgol': tone(220, 230, 1.0, 'sawtooth', 0.08); tone(330, 320, 1.0, 'square', 0.04); break;
       case 'hellVert': boom(1); tone(900, 100, 0.6, 'sawtooth', 0.08); break;
       case 'hellSpin': tone(60, 3000, 2.0, 'sawtooth', 0.07); tone(120, 4000, 2.0, 'square', 0.03); break;
+      case 'codeKey': tone(880 + Math.random() * 400, 880, 0.08, 'triangle', 0.03); break;
+      case 'codeOk': [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, f, 0.8, 'triangle', 0.08, i * 0.07)); boom(0.8); break;
+      case 'dmPlace': tone(300 + (e.i || 0) * 40, 300 + (e.i || 0) * 40, 0.06, 'triangle', 0.04); break;
+      case 'dmFlick': tone(1200, 1600, 0.06, 'square', 0.04); break;
+      case 'dmPop': tone(400 + (e.i || 0) * 90, 300 + (e.i || 0) * 60, 0.12, 'square', 0.05); noise(0.08, 2500, 0.08, 1, 'highpass'); break;
+      case 'dmFinal': case 'rcFinal': boom(1.4); noise(1.0, 700, 0.3, 1, 'lowpass', 0, 60); break;
+      case 'rcHit': tone(700 + (e.i || 0) * 60, 400, 0.1, 'square', 0.06); boom(0.4); break;
+      case 'rcBounce': tone(1600 + (e.i || 0) * 50, 1200, 0.05, 'triangle', 0.04); break;
+      case 'clDraw': noise(2.6, 300, 0.12, 1, 'bandpass', 0, 3000); tone(80, 400, 2.6, 'sine', 0.08); break;
+      case 'clCollapse': tone(400, 30, 0.5, 'sine', 0.12); break;
+      case 'clNova': boom(1.6); noise(1.8, 3000, 0.35, 1, 'bandpass', 0, 200); tone(50, 20, 1.8, 'sine', 0.25); break;
       case 'spikeUp': noise(0.12, 2600, 0.1, 1, 'highpass'); tone(900, 300, 0.1, 'square', 0.03); break;
       case 'starBombBig': boom(1.3); noise(1.4, 500, 0.35, 1, 'lowpass', 0, 60); tone(90, 30, 1.4, 'sine', 0.18); break;
       case 'pressure': tone(240, 200, 0.05, 'square', 0.02); break;
