@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13k';
+import { SCRIPT } from './script.js?v=13n';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -126,7 +126,7 @@ const cfg = (s) => { const b = STAGES[s.stage], M = s.M; return { ...b, speed: b
 // ---------------------------------------------------------------------------------------------- damage
 function hurtHero(s, dmg, source, x = s.hero.x, y = s.hero.y - 46) {
   const h = s.hero;
-  if (h.inv > 0 || h.dodgeT > .06 || !['fight', 'box', 'chained', 'rune'].includes(s.phase)) return false; // the dodge's tail has no i-frames
+  if (h.inv > 0 || (h.dodgeT > .06 && s.phase !== 'box') || !['fight', 'box', 'chained', 'rune'].includes(s.phase)) return false; // the dodge's tail has no i-frames; a dodge never carries into the box (it used to make the whole box harmless)
   const d = Math.round(dmg * cfg(s).dmg);
   h.hp = Math.max(0, h.hp - d); h.inv = 0.7; h.hurt = 0.3;
   ev(s, 'heroHit', { dmg: d, source, x, y });
@@ -138,6 +138,10 @@ const bossFloor = (s) => s.boss.gateIndex < s.boss.gates.length ? s.boss.gates[s
 function hurtBoss(s, dmg, kind, x = s.boss.x, y = s.boss.y - 80) {
   const b = s.boss;
   if (b.hp <= 0 || !['fight', 'finisher', 'timing', 'rune', 'chained'].includes(s.phase)) return 0;
+  if (s.minions.length && kind !== 'finisher' && !['slash', 'star', 'spin', 'burst', 'fall', 'nova', 'wave', 'shard', 'shield'].includes(kind)) { // area / special moves auto-target a shade
+    let m = s.minions[0]; for (const q of s.minions) if (Math.hypot(q.x - b.x, q.y - b.y) < Math.hypot(m.x - b.x, m.y - b.y)) m = q;
+    m.hp -= dmg; m.hurt = .15; ev(s, 'minionHit', { x: m.x, y: m.y }); return 0;
+  }
   if (s.minions.length && kind !== 'finisher') { if (s.t - (s.shieldPing ?? -9) > .35) { s.shieldPing = s.t; ev(s, 'shielded', { x, y }); } return 0; } // EXTREME: her shades shield her
   const floor = bossFloor(s), before = b.hp;
   b.hp = Math.max(floor, b.hp - dmg); b.flash = 0.09;
@@ -193,7 +197,7 @@ function spawnAttack(s, kind) {
   if (kind === 'box') { beginBox(s, true); return 0; }
   if (kind === 'minions') { // EXTREME: she splits off shades; while any live she can't be hurt
     const n = 2 + s.stage;
-    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (i - (n - 1) / 2) * .7; s.minions.push({ x: b.x + Math.cos(a) * 60, y: b.y - 120 + Math.sin(a) * 40, vx: Math.cos(a) * 260 - 160, vy: Math.sin(a) * 160, hp: 70 + s.stage * 30, max: 70 + s.stage * 30, r: 30, fire: 1.2 + i * .35, t: 0, hurt: 0 }); }
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (i - (n - 1) / 2) * .7; s.minions.push({ x: b.x + Math.cos(a) * 60, y: b.y - 120 + Math.sin(a) * 40, vx: Math.cos(a) * 260 - 160, vy: Math.sin(a) * 160, hp: 38 + s.stage * 16, max: 38 + s.stage * 16, r: 32, fire: 1.2 + i * .35, t: 0, hurt: 0 }); }
     ev(s, 'minions', { x: b.x, y: b.y - 120, n }); banner(s, 'SHADES', 'KILL THEM TO HURT HER AGAIN', '#ff6a5a');
     return .8;
   }
@@ -259,7 +263,9 @@ function spawnAttack(s, kind) {
 }
 
 // ---------------------------------------------------------------------------------------------- hero
-function aimAt(s, ox, oy) { const b = s.boss, dx = b.x - ox, dy = (b.y - 105) - oy, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; }
+// P13 owner: "the minions don't get auto-targeted": while SHADES live, every aimed or homing attack goes for the nearest one
+function tgt(s, ox, oy) { if (s.minions.length) { let best = null, bd = 1e9; for (const m of s.minions) { const d = Math.hypot(m.x - ox, m.y - oy); if (d < bd) { bd = d; best = m; } } const lead = bd / 900; return [best.x + best.vx * lead, best.y + best.vy * lead, true]; } /* leads the moving shade */ return [s.boss.x, s.boss.y - 105, false]; }
+function aimAt(s, ox, oy) { const [tx, ty] = tgt(s, ox, oy), dx = tx - ox, dy = ty - oy, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; }
 function castAbility(s, name) {
   const h = s.hero, b = s.boss, st = s.stage, a = ABIL[name], ox = h.x + h.face * 30, oy = h.y - 50, [ax, ay] = aimAt(s, ox, oy), ang = Math.atan2(ay, ax);
   h.cds[name] = a.cd[st]; h.squash = .16; h.face = ax >= 0 ? 1 : -1;
@@ -270,12 +276,12 @@ function castAbility(s, name) {
     case 'spinner1': for (let i = -1; i <= 1; i++) { const r = ang + i * .34; shot({ kind: 'spin', vx: Math.cos(r) * 700, vy: Math.sin(r) * 700, r: 12, life: 1.7, homing: .035 }); } break; // owner: three stars, slight homing
     case 'burst1': shot({ kind: 'burst', vx: ax * 520, vy: ay * 520, r: 24, splash: 120, popEnd: true }); break; // big spinning star, explodes on impact
     case 'eyes1': s.hazards.push({ kind: 'heroBeam', x: ox, y: oy - 30, a: ang, t: 0, tele: .14, len: .22, dmg, hit: false }); break;
-    case 'lattice1': for (let i = 0; i < 6; i++) s.heroShots.push({ kind: 'fall', x: b.x + (i - 2.5) * 44 + (s.R() - .5) * 20, y: -60 - i * 70, vx: 0, vy: 950, r: 14, dmg, life: 2.5, age: 0, gy: b.y + 10 + (s.R() - .5) * 50 }); break; // stars fall from the sky and explode
+    case 'lattice1': { const [tx, ty, mn] = tgt(s, h.x, h.y); for (let i = 0; i < 6; i++) s.heroShots.push({ kind: 'fall', x: tx + (i - 2.5) * 44 + (s.R() - .5) * 20, y: -60 - i * 70, vx: 0, vy: 950, r: 14, dmg, life: 2.5, age: 0, gy: (mn ? ty + 60 : b.y + 10) + (s.R() - .5) * 50 }); } break; // stars fall from the sky and explode
     case 'nova1': shot({ kind: 'nova', vx: ax * 380, vy: ay * 380, r: 58, life: 3, pierce: true, splash: 180 }); break; // the biggest star
     // form 2 · REBORN: every special works differently from form 1
     case 'star2': shot({ kind: 'shield', vx: ax * 900, vy: ay * 900, r: 18, life: 2.2, ret: true }); break;
     case 'spinner2': h.orbit = { t: 5, fire: .5, n: 6, dmg }; break;
-    case 'burst2': s.heroShots.push({ kind: 'wave', x: h.x, y: h.y, vx: (b.x >= h.x ? 1 : -1) * 640, vy: 0, r: 30, dmg, life: 2.2, age: 0, ground: true, pierce: true }); break;
+    case 'burst2': s.heroShots.push({ kind: 'wave', x: h.x, y: h.y, vx: (tgt(s, h.x, h.y)[0] >= h.x ? 1 : -1) * 640, vy: 0, r: 30, dmg, life: 2.2, age: 0, ground: true, pierce: true }); break;
     case 'eyes2': { const d = Math.sign(b.x - h.x) || 1; h.lance = { t: 0, len: .5, fx: h.x, fy: h.y, tx: clamp(b.x - 120 * d, FLOOR.minX, FLOOR.maxX), ty: clamp(b.y + 30, FLOOR.minY, FLOOR.maxY), hit: false, dmg }; h.inv = Math.max(h.inv, .6); break; }
     case 'lattice2': s.hazards.push({ kind: 'seal', t: 0, tele: 1.1, dmg, hit: false }); break;
     case 'nova2': shot({ kind: 'nova', vx: ax * 460, vy: ay * 460, r: 52, life: 3, pierce: true, splash: 160 }); h.field = { t: 4, r: 210 }; break;
@@ -437,7 +443,7 @@ function updateHeroShots(s, dt) {
     // missed (she sidestepped) hung shaking on her. Now it turns at a capped rate, keeps its speed, and stops homing
     // once it has flown past her.
     if (p.homing && p.age > .12 && !p.passed) {
-      const dx = s.boss.x - p.x, dy = (s.boss.y - 105) - p.y, sp = Math.hypot(p.vx, p.vy) || 1;
+      const [tx, ty] = tgt(s, p.x, p.y), dx = tx - p.x, dy = ty - p.y, sp = Math.hypot(p.vx, p.vy) || 1;
       if (dx * p.vx + dy * p.vy < 0) p.passed = true;
       else { const cur = Math.atan2(p.vy, p.vx), want = Math.atan2(dy, dx), turn = (p.homing === true ? 6 : 2.6) * dt;
         let da = want - cur; da = Math.atan2(Math.sin(da), Math.cos(da)); const a = cur + clamp(da, -turn, turn); p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp; }
@@ -861,28 +867,32 @@ function updateBox(s, dt, inp) {
   }
   // ---- damage. Blue things only hurt a moving soul, orange only a still one.
   const hurts = (col) => col === 'blue' ? b.moving : col === 'orange' ? !b.moving : true;
-  const hit = () => { if (h.inv <= 0 && hurtHero(s, (hard ? 4.6 : 7) * [0, 1, .85, .55][st], 'box', so.x, so.y)) { b.shake = .25; h.inv = .45; } };
+  const hit = () => { if (h.inv <= 0 && hurtHero(s, (hard ? 4.6 : 7) * [0, 1, .85, .55][st], 'box', so.x, so.y)) { b.shake = .25; h.inv = .4; } };
+  // P13 owner: "the walls sometimes don't work": dense droplets kept the i-frames running, so a wall passing then did
+  // nothing. Walls (sweeps, bones, gate walls, crushers) now have their own i-frame timer.
+  b.wInv = Math.max(0, (b.wInv || 0) - dt);
+  const hitWall = () => { if (b.wInv > 0) return; const keep = h.inv; h.inv = 0; if (hurtHero(s, (hard ? 4.6 : 7) * [0, 1, .85, .55][st], 'box', so.x, so.y)) { b.shake = .25; b.wInv = .4; h.inv = Math.max(keep, .25); } else h.inv = keep; };
   for (let i = b.beams.length - 1; i >= 0; i--) {
     const z = b.beams[i]; z.t = (z.t || 0) + dt;
     if (z.kind === 'swipe') {
       z.x += z.vx * dt;
-      if (Math.abs(so.x - z.x) < 24 && hurts(z.col)) hit();
+      if (Math.abs(so.x - z.x) < 24 && hurts(z.col)) hitWall();
       if (z.x < BOX.minX - 60 || z.x > BOX.maxX + 60) b.beams.splice(i, 1);
       continue;
     }
     if (z.kind === 'bone') {
       z.x += z.vx * dt;
-      if (Math.abs(so.x - z.x) < 13 && so.y + 6 > z.y1 && so.y - 6 < z.y2 && hurts(z.col)) hit();
+      if (Math.abs(so.x - z.x) < 13 && so.y + 6 > z.y1 && so.y - 6 < z.y2 && hurts(z.col)) hitWall();
       if (z.x < BOX.minX - 40 || z.x > BOX.maxX + 40) b.beams.splice(i, 1);
     } else if (z.kind === 'sweep') { // a wall of light crosses the box; only its gap is safe
       if (z.t < 0) continue;
       const k = z.t / z.len; z.x = z.fromLeft ? lerp(BOX.minX, BOX.maxX, k) : lerp(BOX.maxX, BOX.minX, k);
-      if (Math.abs(so.x - z.x) < 9 && Math.abs(so.y - z.gapY) > z.half - 4) hit();
+      if (Math.abs(so.x - z.x) < 9 && Math.abs(so.y - z.gapY) > z.half - 4) hitWall();
       if (k >= 1) b.beams.splice(i, 1);
     } else { // crusher: top and bottom close to a corridor, hold, open
       const tt = z.t; z.k = tt < z.close ? easeOut(tt / z.close) : tt < z.close + z.hold ? 1 : 1 - (tt - z.close - z.hold) / z.open;
       const top = lerp(BOX.minY, z.cy - z.half, z.k), bot = lerp(BOX.maxY, z.cy + z.half, z.k);
-      if (z.k > .3 && (so.y - 5 < top || so.y + 5 > bot)) hit();
+      if (z.k > .3 && (so.y - 5 < top || so.y + 5 > bot)) hitWall();
       if (tt > z.close + z.hold + z.open) b.beams.splice(i, 1);
     }
   }
@@ -996,15 +1006,15 @@ function updateFinisher(s, dt) {
     if (k >= L.link && !c.linked) { c.linked = true; ev(s, 'dlLink', { x: c.cx, y: c.cy }); s.hitstop = .08; }
     if (k >= L.spin && !c.spun) { c.spun = true; ev(s, 'dlSpin', { x: c.cx, y: c.cy }); }
     if (k >= L.spin && k < L.boom) { const sp = u(L.spin, L.boom); c.w = lerp(.8, 38, sp * sp); c.rot += c.w * dt; c.R = c.R0 * (1 - .22 * sp); }
-    if (k >= L.boom && !c.boomed) { c.boomed = true; c.w = 0; ev(s, 'dlBoom', { x: c.cx, y: c.cy }); s.hitstop = .18; }
+    if (k >= L.boom && !c.boomed) { c.boomed = true; c.w = 0; ev(s, 'dlBoom', { x: c.cx, y: c.cy, v: c.v }); s.hitstop = .18; }
     if (k < L.boom) { const [x, y] = dlPoint(c, Math.min(5, Math.max(0, c.hits - 1))); h.x = x; h.y = y + 60; } // he is the sixth point
     else { h.x = lerp(h.x, b.x - 300, .1); h.y = lerp(h.y, b.y + 40, .1); }
-    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }
   if (c.v >= 6) { // the P13-final finishers: STAR BARRAGE, DAVID'S BLADE, STAR TORNADO, and the rare STAR OF HELL
     const at = (x) => k >= x && c.t - dt < x * c.len; // true on the one step the timeline passes x
-    const end = () => { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg, hell: c.v === HELL }); s.hitstop = .2; b.stagger = 1.6; };
+    const end = () => { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg, hell: c.v === HELL }); s.hitstop = .2; b.stagger = 1.6; };
     if (c.v === 6) { // STAR BARRAGE: a stream of small stars into her, then one big charged star
       const B = BARRAGE; h.x = lerp(h.x, b.x - 430, .12); h.y = lerp(h.y, b.y + 40, .12);
       for (let i = 0; i < B.n; i++) if (at(B.shots[0] + i * B.gap + B.fly)) ev(s, 'sbImpact', { x: b.x - 40 + ((i * 37) % 60 - 30), y: b.y - 120 + ((i * 53) % 90 - 45), i });
@@ -1068,7 +1078,7 @@ function updateFinisher(s, dt) {
     for (const o of c.orbs) if (o) { o.t += dt; if (!o.hit && o.t >= M.fly) { o.hit = true; c.absorbed++; ev(s, 'mdAbsorb', { x: sx, y: sy, n: c.absorbed }); } }
     if (k >= M.charge && !c.charged) { c.charged = true; ev(s, 'mdCharge', { x: sx, y: sy }); }
     if (k >= M.dash[1] && !c.slammed) { c.slammed = true; ev(s, 'mdSlam', { x: b.x - 80, y: b.y - 120 }); s.hitstop = .16; }
-    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }
   if (c.v === 2) { // STAR CAGE: the two triangles of the star fly in from both sides, lock round her as a cage, crush in three
@@ -1077,7 +1087,7 @@ function updateFinisher(s, dt) {
     if (k >= C.lock && !c.locked) { c.locked = true; ev(s, 'scLock', { x: b.x, y: b.y - 120 }); s.hitstop = .1; }
     for (let i = 0; i < 3; i++) if (k >= C.squeeze[i] && c.squeeze <= i) { c.squeeze = i + 1; ev(s, 'scSqueeze', { x: b.x, y: b.y - 120, n: i + 1 }); s.hitstop = .05; }
     if (k >= C.shatter && !c.shattered) { c.shattered = true; ev(s, 'scShatter', { x: b.x, y: b.y - 120 }); s.hitstop = .16; }
-    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }
   if (c.v === 3) { // SUKKAH (P13 owner: "build the hut AROUND the boss, with a building animation, then the bombing"):
@@ -1109,7 +1119,7 @@ function updateFinisher(s, dt) {
     }
     for (const bm of c.bombs) if (bm) { bm.t += dt; if (!bm.hit && bm.t >= S.fall) { bm.hit = true; ev(s, 'starBomb', { x: bm.x, y: bm.ty }); s.hitstop = Math.max(s.hitstop, .06); } }
     if (k >= S.big && !c.done2) { c.done2 = true; ev(s, 'starBombBig', { x: b.x, y: b.y - 40 }); ev(s, 'sukkahBlown', { x: G.x, y: G.gy }); s.hitstop = .16; }
-    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+    if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }
   if (k < TR) {
@@ -1125,7 +1135,7 @@ function updateFinisher(s, dt) {
     if (!c.done1) { c.done1 = true; ev(s, 'finisherStar', { x: b.x, y: b.y, v: c.v }); s.hitstop = .1; }
     if (k >= .7 && !c.done2) { c.done2 = true; ev(s, 'finisherBeam', { x: b.x, y: b.y }); }
   }
-  if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
+  if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
 }
 
 // ---------------------------------------------------------------------------------------------- laser clashes (mash to win)

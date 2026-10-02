@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, DOMINO, dominoPos, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13k';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, TORNADO, HELLT, HELL, DOMINO, dominoPos, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13n';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -60,6 +60,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       switch (e.type) {
         case 'bossHit': { // P10 owner: "the effects of hitting aren't dramatic enough". Three tiers, all loud.
           const BIG = ['finisher', 'nova', 'counter', 'judgement', 'totality', 'seal', 'reflect'], MID = ['burst', 'eyes', 'lance', 'wave', 'shield', 'halo', 'break', 'star', 'fall', 'shard', 'spin'];
+          if (e.kind === 'finisher') { fx.bossKick = 1.4; num(e.x, e.y - 30, String(e.dmg), '#ffd27a', true); break; } // the finisher's own signature plays instead (finisherHit)
           const tier = BIG.includes(e.kind) ? 3 : MID.includes(e.kind) ? 2 : 1;
           fx.bossKick = Math.min(1.4, (fx.bossKick || 0) + [0, .35, .8, 1.3][tier]);
           part(e.x, e.y, [0, 10, 24, 46][tier], tier > 1 ? '#ffffff' : pal.hero, [0, 300, 520, 760][tier], [0, .45, .6, .9][tier], [0, 2.5, 3.5, 5][tier]);
@@ -112,7 +113,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'dlFire': shake(.6); flash('#ffffff', .3); fx.chroma = .3; ring(e.x, e.y, '#ffffff', 20, 300, .5, 8); break;
         case 'dlLink': shake(.7); flash('#ffffff', .35); negative(.05); part(e.x, e.y, 40, '#cfe0ff', 600, .8, 4); break;
         case 'dlSpin': shake(.3); break;
-        case 'dlBoom': blast('nova', e.x, e.y, 320); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1.1, 14); ring(e.x, e.y, '#7aa8ff', 20, 700, .9, 8); part(e.x, e.y, 90, '#ffffff', 1100, 1.3, 5); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'dlBoom': if (e.v === 4) { shake(1); flash(GOLD, .7); fx.sunburst = { x: e.x, y: e.y, t: 0 }; part(e.x, e.y, 80, GOLD, 900, 1.1, 4); } // DAVID LASER: a gold sunburst
+          else { shake(1); flash('#7fe8ff', .7); negative(.08); fx.chroma = .5; fx.blades = { x: e.x, y: e.y, t: 0 }; ring(e.x, e.y, '#7fe8ff', 30, 700, .9, 10); } break; // SPINNING STAR: its points fly off as blades
         case 'sukkahHammer': shake(.2 + e.n * .06); part(e.x, e.y, 10, '#ffe7a8', 260, .35, 3); ring(e.x, e.y + 4, '#ffe7a8', 6, 60, .25, 3); break;
         case 'sukkahWalls': shake(.15); break;
         case 'sukkahBranch': part(e.x, e.y, 6, '#7fbf5a', 200, .4, 3); break;
@@ -120,33 +122,34 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'mdRaise': flash('#cfe0ff', .2); ring(e.x, e.y, '#ffffff', 20, 220, .4, 5); part(e.x, e.y, 20, '#ffffff', 400, .5, 3); break;
         case 'mdAbsorb': shake(.15 + e.n * .03); ring(e.x, e.y, '#cfe0ff', 40, 200 + e.n * 12, .3, 4); part(e.x, e.y, 10, '#ffe7b8', 380, .4, 3); break;
         case 'mdCharge': flash('#ffffff', .3); shake(.4); break;
-        case 'mdSlam': shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; fx.bossKick = 1.4; ring(e.x, e.y, '#ffffff', 30, 900, 1, 14); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'mdSlam': shake(1); flash(GOLD, .7); fx.bossKick = 1.4; part(e.x, e.y, 70, GOLD, 900, 1.1, 5); addScar(s.boss.x, s.boss.y + 30); break; // MAGEN DAVID: gold, ground waves drawn in drawMagen
         case 'scLock': shake(.8); flash('#ffffff', .5); ring(e.x, e.y, '#ffffff', 280, 420, .4, 8); part(e.x, e.y, 40, '#cfe0ff', 600, .6, 4); break;
         case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
-        case 'scShatter': blast('burst', e.x, e.y, 320); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 40, 950, 1, 12); part(e.x, e.y, 70, '#cfe0ff', 1000, 1.1, 5); break;
+        case 'scShatter': shake(1); flash('#dff8ff', .8); ring(e.x, e.y, '#bff4ff', 60, 520, .8, 6); part(e.x, e.y, 90, '#dff8ff', 1100, 1.2, 3, 500); break; // STAR CAGE: ice
         case 'spikeUp': shake(.12); break;
         case 'dmPlace': if (e.i % 2 === 0) shake(.06); break;
         case 'dmFlick': shake(.2); part(e.x, e.y, 10, '#ffffff', 300, .3, 3); break;
-        case 'dmPop': blast('hit', e.x, e.y - 20, 30 + e.i * 5); shake(.1 + e.i * .04); part(e.x, e.y - 20, 6 + e.i, '#cfe0ff', 300 + e.i * 30, .4, 3); break;
-        case 'dmFinal': case 'rcFinal': blast('burst', e.x, e.y, 300); shake(1); flash('#ffffff', .85); negative(.08); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 30, 950, 1, 12); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); break;
-        case 'rcHit': blast('hit', e.x, e.y, 60 + e.i * 4); shake(.25 + e.i * .03); flash('#cfe0ff', .08); break;
+        case 'dmPop': ring(e.x, e.y - 20, GOLD, 6, 50 + e.i * 6, .3, 3, .5); for (let j = 0; j < 6; j++) { const a = j / 6 * TAU; fx.particles.push({ x: e.x, y: e.y - 20, vx: Math.cos(a) * (180 + e.i * 20), vy: Math.sin(a) * (180 + e.i * 20) - 120, life: .4, max: .4, size: 3, color: j % 2 ? GOLD : '#ffffff', grav: 500 }); } shake(.1 + e.i * .04); break;
+        case 'dmFinal': shake(1); flash(GOLD, .6); fx.fireworks = { x: e.x, y: e.y, t: 0 }; break; // STAR DOMINOES: gold star fireworks
+        case 'rcFinal': shake(1); flash('#ffe9a8', .7); fx.pathGlow = { t: 0 }; part(e.x, e.y, 60, '#ffe9a8', 1000, .9, 3); break; // STAR RICOCHET: the whole path lights up
+        case 'rcHit': fx.flares.push({ x: e.x, y: e.y, t: 0, life: .3, size: 70 + e.i * 8, color: '255,233,168' }); shake(.25 + e.i * .03); break;
         case 'rcBounce': ring(e.x, e.y, '#cfe0ff', 6, 70, .25, 3); part(e.x, e.y, 8, '#ffffff', 300, .3, 2); break;
         case 'clDraw': shake(.2); break;
         case 'clCollapse': shake(.5); flash('#000000', .4); break;
-        case 'clNova': blast('nova', e.x, e.y, 340); shake(1); flash('#ffffff', 1); negative(.12); fx.chroma = .8; ring(e.x, e.y, '#ffffff', 30, 1300, 1.2, 16); part(e.x, e.y, 120, '#ffffff', 1300, 1.3, 5); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'clNova': shake(1); flash('#ffffff', 1); negative(.12); fx.chroma = .8; part(e.x, e.y, 120, '#ffffff', 1300, 1.3, 5); part(e.x, e.y, 60, GOLD, 900, 1.3, 4); addScar(s.boss.x, s.boss.y + 30); break;
         case 'codeKey': fx.keyFlash = fx.keyFlash || {}; fx.keyFlash[e.k] = 1; break;
         case 'codeOk': shake(1); flash('#ffffff', .8); negative(.08); ring(s.boss.x, s.boss.y - 120, '#ffffff', 40, 900, 1, 12); part(640, 110, 80, '#ffffff', 700, 1.2, 4); break;
         case 'sbShot': if (e.i % 3 === 0) shake(.08); break;
-        case 'sbImpact': blast('hit', e.x, e.y, 34); part(e.x, e.y, 4, '#ffffff', 300, .3, 2); break;
+        case 'sbImpact': for (let j = 0; j < 4; j++) fx.particles.push({ x: e.x, y: e.y, vx: 120 + Math.random() * 260, vy: (Math.random() - .5) * 260, life: .3, max: .3, size: 2.5, color: j % 2 ? GOLD : '#ffffff', grav: 0 }); break;
         case 'sbCharge': flash('#cfe0ff', .15); break;
-        case 'sbFinal': blast('burst', e.x, e.y, 260); shake(1); flash('#ffffff', .8); negative(.08); ring(e.x, e.y, '#ffffff', 30, 800, .9, 12); part(e.x, e.y, 70, '#ffffff', 900, 1, 4); break;
+        case 'sbFinal': shake(1); flash(GOLD, .7); for (let i = 0; i < 90; i++) fx.particles.push({ x: e.x + (Math.random() - .5) * 60, y: e.y, vx: (Math.random() - .5) * 700, vy: -300 - Math.random() * 900, life: 1.3, max: 1.3, size: 4, color: i % 3 ? GOLD : '#ffffff', grav: 1300 }); break; // STAR BARRAGE: a gold fountain
         case 'dbGrow': flash('#cfe0ff', .2); part(e.x, e.y, 20, '#ffffff', 300, .6, 3, -100); break;
         case 'dbCut': shake(.7); flash('#ffffff', .3); fx.slashes.push({ y: 360, a: e.n === 1 ? Math.PI / 2 - .08 : .06, t: 0 }); part(e.x, e.y, 30, '#ffffff', 700, .5, 3); break;
         case 'dbSheathe': shake(.15); break;
-        case 'dbSplit': shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1, 14); part(e.x, e.y, 90, '#cfe0ff', 1100, 1.2, 5); break;
+        case 'dbSplit': shake(1); flash('#e8f0ff', .9); negative(.1); fx.chroma = .6; break; // DAVID'S BLADE: the cuts tear open (drawBlade)
         case 'stRise': shake(.3); break;
         case 'stCollapse': shake(.6); flash('#cfe0ff', .3); break;
-        case 'stBurst': blast('nova', e.x, e.y, 300); shake(1); flash('#ffffff', .85); negative(.08); fx.chroma = .5; ring(e.x, e.y, '#ffffff', 30, 950, 1, 12); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); break;
+        case 'stBurst': shake(1); flash('#6fe8d0', .7); part(e.x, e.y, 70, '#6fe8d0', 900, 1.1, 4, -500); break; // STAR TORNADO: teal, the stars spiral up and away (drawTornado)
         case 'hellStar': flash('#ff2a1a', .35); shake(.4); break;
         case 'hellFire': flash('#ff5020', .3); shake(.5); break;
         case 'hellBoom': shake(1); flash(e.big ? '#fff0e0' : '#ff6030', e.big ? 1 : .6); negative(e.big ? .12 : .06); fx.chroma = e.big ? .8 : .4; ring(e.x, e.y, '#ff5030', 30, e.big ? 1200 : 700, 1, e.big ? 16 : 10); part(e.x, e.y, e.big ? 120 : 60, '#ff9a50', e.big ? 1300 : 800, 1.2, 5); if (e.big) addScar(s.boss.x, s.boss.y + 30); break;
@@ -162,7 +165,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'finisherBeam': shake(1); flash('#ffffff', .6); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); break;
         case 'finisherSlash': if (e.star) { shake(.3); blast('hit', e.x, e.y, 60); fx.blasts[fx.blasts.length - 1].tier = 2; part(e.x, e.y, 14, '#ffffff', 420, .5, 3); break; }
           shake(0.35); flash('#ffffff', 0.2); fx.slashes.push({ t: 0, a: -0.45 + e.n * 1.6, y: 260 + e.n * 160 }); if (s.stage === 3) negative(0.05); break;
-        case 'finisherHit': shake(1); flash('#ffffff', 0.55); negative(0.08); ring(s.boss.x, s.boss.y - 90, '#ffffff', 20, 420, 0.7, 10); part(s.boss.x, s.boss.y - 90, 60, '#ffe7b8', 700, 1.1, 5); break;
+        case 'finisherHit': { const ac = FIN_ACCENT[e.v] || '#ffffff', x = s.boss.x, y = s.boss.y - 110; shake(.8); sig(e.v, x, y, ac); break; }
         case 'clashLost': shake(0.7); fx.vignette = 0.8; fx.chroma = 0.4; break;
         case 'boxStart': ring(640, 470, '#e8f1ff', 300, 40, 0.4, 3); break;
         case 'timingResult': if (e.result === 'perfect') { flash('#ffffff', 0.3); shake(0.6); negative(0.06); part(s.boss.x, s.boss.y - 90, 40, '#ffe7b8', 600, 0.9, 4); } else if (e.result === 'good') shake(0.35); break;
@@ -282,6 +285,33 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   }
   // star-shaped explosions, one look per move
   const blast = (kind, x, y, r = 120) => { fx.blasts.push({ kind, x, y, r, t: 0, rot: Math.random() * TAU, life: { bomb: 1.3, hit: .45, nova: 1.5, burst: .85, fall: .5, eyes: .55, lance: .5, fizzle: .4, shard: .35 }[kind] || .5 }); if (fx.blasts.length > 24) fx.blasts.shift(); };
+  // four-point light flares (the ricochet's hits)
+  function drawFlares(dt) {
+    fx.flares = fx.flares || []; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const f of fx.flares) { f.t += dt; if (f.t < 0) continue; const k = clamp(f.t / f.life, 0, 1), a = 1 - k, L = f.size * (.6 + k * .6);
+      ctx.strokeStyle = `rgba(${f.color},${a.toFixed(2)})`; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.moveTo(f.x - L, f.y); ctx.lineTo(f.x + L, f.y); ctx.moveTo(f.x, f.y - L * .7); ctx.lineTo(f.x, f.y + L * .7); ctx.stroke(); glow(f.x, f.y, 30 * a + 6, `rgba(${f.color},${a.toFixed(2)})`); }
+    fx.flares = fx.flares.filter((f) => f.t < f.life); ctx.restore();
+  }
+  // each finisher's final-hit signature: its own colour AND its own particle behaviour, never a shared explosion
+  function sig(v, x, y, ac) {
+    const P2 = (o) => fx.particles.push({ life: 1, max: 1, size: 3, color: ac, grav: 0, ...o }), R = Math.random;
+    switch (v) {
+      case 0: for (let i = 0; i < 50; i++) P2({ x: x + (R() - .5) * 160, y: y + R() * 120, vx: (R() - .5) * 40, vy: -80 - R() * 160, life: 1.6, max: 1.6, color: i % 3 ? '#ffffff' : '#9fc0ff' }); break;       // STAR PATH: motes of light rising
+      case 1: for (let i = 0; i < 40; i++) P2({ x, y: y + (R() - .5) * 140, vx: (i % 2 ? 1 : -1) * (500 + R() * 600), vy: (R() - .5) * 40, life: .6, max: .6, size: 4 }); break;      // MAGEN DAVID: gold streaks sideways
+      case 2: for (let i = 0; i < 36; i++) { const a = i / 36 * TAU; P2({ x, y, vx: Math.cos(a) * 700, vy: Math.sin(a) * 700, life: .35, max: .35, size: 4, color: i % 2 ? '#bff4ff' : '#ffffff' }); } break; // STAR CAGE: ice splinters
+      case 3: for (let i = 0; i < 40; i++) P2({ x: x + (R() - .5) * 300, y: y - 200 - R() * 100, vx: (R() - .5) * 120, vy: 40 + R() * 80, life: 2.2, max: 2.2, size: 5, color: ['#3f7a34', '#5ea24a', '#ffcf3a', '#e8483a'][i % 4], grav: 60 }); break; // SUKKAH: leaves and fruit tumbling down
+      case 4: for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; P2({ x, y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, life: .7, max: .7, size: 5 }); } break;    // DAVID LASER: an even gold sunburst
+      case 5: for (let i = 0; i < 48; i++) { const a = i * .5, sp = 200 + i * 12; P2({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: .8, max: .8, size: 3 }); } break;  // SPINNING STAR: a cyan spiral
+      case 6: for (let i = 0; i < 60; i++) P2({ x: x + (R() - .5) * 60, y, vx: (R() - .5) * 500, vy: -500 - R() * 600, life: 1.2, max: 1.2, size: 4, color: i % 3 ? GOLD : '#ffffff', grav: 1300 }); break; // STAR BARRAGE: a gold fountain
+      case 7: for (let i = 0; i < 40; i++) { const d = i % 2 ? 1 : -1, sp = 300 + R() * 500; P2({ x, y, vx: sp * .7 * d, vy: sp * .7 * (i % 4 < 2 ? 1 : -1), life: .5, max: .5, size: 3, color: '#e8f0ff' }); } break; // DAVID'S BLADE: silver along the X of the cuts
+      case 8: for (let i = 0; i < 50; i++) { const a = i * .7, r = 40 + i * 3; P2({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r * .3, vx: -Math.sin(a) * 260, vy: -160 - i * 6, life: 1, max: 1, size: 3 }); } break; // STAR TORNADO: teal wind winding upward
+      case 9: for (let i = 0; i < 70; i++) P2({ x: x + (R() - .5) * 260, y: y + R() * 160, vx: (R() - .5) * 60, vy: -60 - R() * 220, life: 1.8, max: 1.8, size: 3 + R() * 3, color: ['#ff3a20', '#ff9a40', '#ffd060'][i % 3], grav: -40 }); break; // STAR OF HELL: embers
+      case 10: for (let i = 0; i < 70; i++) P2({ x: x + (R() - .5) * 400, y: y - 260 - R() * 120, vx: (R() - .5) * 140, vy: 30 + R() * 90, life: 2, max: 2, size: 4, color: [GOLD, '#ffffff', '#7fb0ff'][i % 3], grav: 90 }); break; // STAR DOMINOES: confetti
+      case 11: for (let k2 = 0; k2 < 6; k2++) fx.flares.push({ x: x + (R() - .5) * 300, y: y + (R() - .5) * 200, t: -k2 * .06, life: .35, size: 60, color: '255,233,168' }); break; // STAR RICOCHET: echo flares
+      case 12: for (let i = 0; i < 60; i++) { const a = R() * TAU, r = 300 + R() * 200; P2({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r * .7, vx: -Math.cos(a) * r * 2.2, vy: -Math.sin(a) * r * 1.5, life: .45, max: .45, size: 3, color: i % 2 ? '#ffffff' : GOLD }); } break; // STAR COLLAPSE: an implosion
+      default: for (let i = 0; i < 40; i++) P2({ x, y, vx: (R() - .5) * 600, vy: (R() - .5) * 600, life: .7, max: .7 });
+    }
+  }
   function drawBlasts(dt) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (const bl of fx.blasts) {
@@ -1132,6 +1162,21 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.restore();
     for (const tr of s.hero.trail) drawHero(s, tr.x, tr.y, tr.life * 2.4, tr.face, true); drawHero(s, s.hero.x, s.hero.y); // he stays on top of his own star
   }
+  // P13 owner: "don't reuse effects; colours that match blue, gold looks really cool": each finisher keeps the flag blue
+  // and gets its own accent, and its own ending
+  const GOLD = '#ffcf4a', FIN_ACCENT = { 0: '#ffffff', 1: GOLD, 2: '#bff4ff', 3: '#ffb347', 4: '#ffd76a', 5: '#7fe8ff', 6: GOLD, 7: '#e8f0ff', 8: '#6fe8d0', 9: '#ff3b3b', 10: GOLD, 11: '#ffe9a8', 12: '#ffffff' };
+  function goldStar(x, y, r, rot, a = 1, rim = GOLD) { // flag-blue bands on a gold rim
+    if (a <= 0 || r <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(rot); ctx.lineJoin = 'miter'; ctx.miterLimit = 3; const band = Math.max(2, r * .2);
+    ctx.strokeStyle = rim; ctx.lineWidth = band + Math.max(2.5, r * .09); for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); }
+    ctx.strokeStyle = FLAG_BLUE; ctx.lineWidth = band; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); } ctx.restore(); }
+  function flagShield(x, y, R, rot = 0, a = 1) { // P13 owner: "the shield in the Israeli flag colours, the star standing out more"
+    if (R <= 0 || a <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+    ctx.save(); ctx.clip(); ctx.fillStyle = FLAG_BLUE; ctx.fillRect(-R, -R * .78, R * 2, R * .2); ctx.fillRect(-R, R * .58, R * 2, R * .2); ctx.restore();
+    ctx.rotate(rot); ctx.lineJoin = 'miter'; ctx.miterLimit = 3; const r = R * .5;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = r * .3; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); } // a white halo so the star pops
+    ctx.strokeStyle = FLAG_BLUE; ctx.lineWidth = r * .2; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.stroke(); }
+    ctx.rotate(-rot); ctx.strokeStyle = GOLD; ctx.lineWidth = Math.max(3, R * .07); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.stroke(); ctx.restore(); }
   const ku = (k, a, b) => clamp((k - a) / (b - a), 0, 1);
   const dim = (k, a = .35) => { ctx.fillStyle = `rgba(0,4,20,${(a * ku(k, 0, .1)).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600); };
   // STAR BARRAGE: thirty small stars stream from his hand into her, then a big charged one
@@ -1140,12 +1185,12 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     for (let i = 0; i < B.n; i++) { const t0 = B.shots[0] + i * B.gap, f = ku(k, t0, t0 + B.fly); if (k < t0 || f >= 1) continue;
       const tx = b.x - 40 + ((i * 37) % 60 - 30), ty = b.y - 120 + ((i * 53) % 90 - 45), x = lerp(hx, tx, f), y = lerp(hy, ty, f);
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(160,200,255,.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(lerp(hx, tx, Math.max(0, f - .5)), lerp(hy, ty, Math.max(0, f - .5))); ctx.stroke(); ctx.restore();
-      davidStar(x, y, 15, k * 40 + i, col, 1, 0); }
+      goldStar(x, y, 15, k * 40 + i, 1, i % 2 ? GOLD : '#ffffff'); }
     if (k > B.shots[0] && k < B.shots[1] + .03) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(hx, hy, 50 + Math.sin(fx.clock * 50) * 8, 'rgba(200,220,255,.8)'); ctx.restore(); } // the muzzle
     const n = Math.min(B.n, Math.floor(ku(k, B.shots[0] + B.fly, B.shots[1] + B.fly) * B.n)); if (n > 0 && k < B.final + .05) text('x' + n, b.x + 150, b.y - 260, 34 + Math.min(20, n), '#ffffff');
-    if (k >= B.charge && k < B.final) { const g = ku(k, B.charge, B.final); ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(hx, hy, 60 + g * 120, 'rgba(255,255,255,.85)'); ctx.restore(); davidStar(hx + 30, hy, 20 + g * 70, k * 30, col, 1, 0); }
-    if (k >= B.final && k < B.final + B.fly * 2) { const f = ku(k, B.final, B.final + B.fly * 2); davidStar(lerp(hx + 30, b.x - 40, f), lerp(hy, b.y - 120, f), 90, k * 30, col, 1, 0, 'rgba(255,255,255,.6)'); }
-    if (k > B.final + B.fly) { const e = ku(k, B.final + B.fly, 1), o = easeOut(e); davidStar(b.x - 40, b.y - 120, 90 + o * 400, o * 2, col, 1 - e, 0); ctx.save(); ctx.globalCompositeOperation = 'lighter'; hexagram(b.x, b.y + 30, 80 + o * 520, o, 1, '#ffffff', 5, .3, 1 - e); ctx.restore(); }
+    if (k >= B.charge && k < B.final) { const g = ku(k, B.charge, B.final); ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(hx, hy, 60 + g * 120, 'rgba(255,220,120,.85)'); ctx.restore(); goldStar(hx + 30, hy, 20 + g * 70, k * 30, 1); }
+    if (k >= B.final && k < B.final + B.fly * 2) { const f = ku(k, B.final, B.final + B.fly * 2); goldStar(lerp(hx + 30, b.x - 40, f), lerp(hy, b.y - 120, f), 90, k * 30, 1); }
+    if (k > B.final + B.fly) { const e = ku(k, B.final + B.fly, 1); goldStar(b.x - 40, b.y - 120, 90 * (1 + e * .3), e * 8, (1 - e) * (Math.sin(e * 40) > 0 ? 1 : .6)); } /* the gold star flickers out in her; the fountain is particles */
     drawHero(s, h.x, h.y);
   }
   // DAVID'S BLADE: the sword becomes a giant blade with a Star of David at the hilt, two cuts, sheathe, then the split
@@ -1157,7 +1202,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       ctx.fillStyle = FLAG_BLUE; ctx.fillRect(0, -2, len - 50, 4); ctx.restore(); davidStar(x, y, 26, ang, col, a, 0); };
     const gl = ku(k, D.grow, D.cut1 - .06) * (1 - ku(k, D.sheathe, D.sheathe + .06)), len = 40 + easeOut(gl) * 560;
     // the cuts left hanging in the air: one down through her, one across
-    const cutA = (n, t0) => { if (k < t0) return; const f = ku(k, t0, t0 + .05), fade = k < D.split ? 1 : 1 - ku(k, D.split, D.split + .08), w = k < D.split ? 6 : 6 + ku(k, D.split, D.split + .08) * 60;
+    const cutA = (n, t0) => { if (k < t0) return; const f = ku(k, t0, t0 + .05), fade = k < D.split ? 1 : 1 - ku(k, D.split, D.split + .2), w = k < D.split ? 6 : 6 + ku(k, D.split, D.split + .2) * 46;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath();
       if (n === 1) { ctx.moveTo(b.x + 40, b.y - 420); ctx.lineTo(b.x - 40 + 0, lerp(b.y - 420, b.y + 120, f)); } else { ctx.moveTo(b.x - 330, b.y - 140); ctx.lineTo(lerp(b.x - 330, b.x + 330, f), b.y - 100); }
       ctx.stroke(); ctx.strokeStyle = 'rgba(120,170,255,.6)'; ctx.lineWidth = w * 3; ctx.stroke(); ctx.restore(); };
@@ -1165,7 +1210,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     if (k < D.cut1 - .04) blade(h.x + 20, h.y - 80, -Math.PI / 2 + .15, len);                                              // raised high
     else if (k < D.sheathe) { const sw = k < D.cut2 ? ku(k, D.cut1 - .04, D.cut1 + .02) : ku(k, D.cut2 - .04, D.cut2 + .02), ang = k < D.cut2 ? lerp(-Math.PI / 2 - .3, Math.PI / 2 - .4, easeOut(sw)) : lerp(-.9, .5, easeOut(sw)); blade(h.x + 20, h.y - 80, ang, len); }
     else if (k < D.split) blade(h.x + 20, h.y - 40, Math.PI / 2 - .2, len, 1 - ku(k, D.sheathe, D.sheathe + .06));         // sheathing
-    if (k >= D.split) { const e = ku(k, D.split, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 120, 700 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.restore(); davidStar(b.x, b.y - 120, 120 + o * 420, o * 1.5, col, 1 - e, 0); }
+    if (k >= D.split) { const e = ku(k, D.split, 1); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .15) glow(b.x, b.y - 120, 600 * (1 - e * 6), 'rgba(232,240,255,1)'); ctx.restore();
+      if (!reducedMotion && e < .7) for (let i = 0; i < 6; i++) { const f = Math.random(), vert = i % 2; fx.particles.push({ x: vert ? lerp(b.x + 40, b.x - 40, f) : lerp(b.x - 330, b.x + 330, f), y: vert ? lerp(b.y - 420, b.y + 120, f) : lerp(b.y - 140, b.y - 100, f), vx: (Math.random() - .5) * 80, vy: 60 + Math.random() * 200, life: .8, max: .8, size: 3, color: i % 3 ? '#e8f0ff' : '#b8c8e0', grav: 600 }); } }
     drawHero(s, h.x, h.y);
   }
   // STAR TORNADO: a whirlwind of stars round her, tightening and speeding up, then it collapses into her and bursts
@@ -1178,8 +1224,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       glow(b.x, base - 280 * rise, 200 + col2 * 200, `rgba(150,190,255,${(.15 + col2 * .5).toFixed(2)})`); ctx.restore();
       for (let i = 0; i < N; i++) { const y = i / N, r = (70 + y * 260) * (1 - col2 * .85), a = spin * (1.6 - y * .6) + i * 2.399, x = b.x + Math.cos(a) * r, yy = base - y * 560 * rise + Math.sin(a) * r * .22;
         davidStar(x, yy, 10 + (i % 4) * 4, a * 2, i % 5 ? col : '#ffffff', .4 + .6 * (Math.sin(a) * .5 + .5), 0); }
-    } else { const e = ku(k, T.burst, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 150, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.restore();
-      for (let i = 0; i < 40; i++) { const a = i * 2.399, d = o * (250 + (i * 71) % 520); davidStar(b.x + Math.cos(a) * d, b.y - 150 + Math.sin(a) * d * .7 + e * e * 200, 16 + (i % 3) * 6, o * 9 + i, i % 4 ? col : '#ffffff', 1 - e, 0); } }
+    } else { const e = ku(k, T.burst, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .15) glow(b.x, b.y - 150, 600 * (1 - e * 6), 'rgba(160,255,235,1)'); ctx.restore();
+      for (let i = 0; i < 50; i++) { const a = i * 2.399 + o * 7, r = 60 + o * (200 + (i * 37) % 260), y = b.y - 150 - o * (300 + (i * 53) % 500); davidStar(b.x + Math.cos(a) * r, y + Math.sin(a) * r * .25, 12 + (i % 3) * 5, a * 2, i % 4 ? '#6fe8d0' : col, 1 - e, 0); } }
     drawHero(s, s.hero.x, s.hero.y);
   }
   // STAR DOMINOES: stars stand up out of the ground in a line to her, he tips the first, the chain races in, pops grow
@@ -1188,10 +1234,13 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     for (let i = 0; i < D.n; i++) {
       const [x, y] = dominoPos(s, i), up = easeOut(ku(k, D.place[0] + i * (D.place[1] - D.place[0]) / D.n, D.place[0] + (i + 1) * (D.place[1] - D.place[0]) / D.n)), tp = D.chain + i * D.step, r = 18 + i * 2.2;
       if (k < tp) { if (up <= 0) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(160,200,255,.25)'; ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * .3, 0, 0, TAU); ctx.fill(); ctx.restore(); davidStar(x, y - r * up, r * up, 0, col, 1, 0); }
-      else { const e = ku(k, tp, tp + .05); if (e < 1) davidStar(x + e * 20, y - r + e * r * .6, r * (1 + e * .6), e * 1.6, '#ffffff', 1 - e, 0); }
+      else { const e = ku(k, tp, tp + .05); if (e < 1) goldStar(x + e * 20, y - r + e * r * .6, r * (1 + e * .6), e * 1.6, 1 - e); }
     }
     if (k > D.chain) { const n = Math.min(D.n, Math.floor((k - D.chain) / D.step) + 1); text('x' + n, b.x - 260, b.y - 280, 30 + n * 2, '#ffffff'); } // the chain count
-    if (k > D.final) { const e = ku(k, D.final, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 100, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); hexagram(b.x, b.y + 30, 100 + o * 600, o, 1, '#ffffff', 6, .3, 1 - e); ctx.restore(); davidStar(b.x, b.y - 100, 100 + o * 380, o * 2, col, 1 - e, 0); }
+    if (k > D.final) { const e = ku(k, D.final, 1); // gold fireworks: six rockets climb from her, then each bursts into a star of sparks
+      for (let i = 0; i < 6; i++) { const rx = b.x + (i - 2.5) * 110, top = 120 + (i * 47) % 90, up = ku(e, 0, .35), burst = ku(e, .35, 1), y = lerp(b.y - 100, top, easeOut(up));
+        if (up < 1) { ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(rx, y, 5, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(255,207,74,.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx, y + 60); ctx.stroke(); }
+        else for (let j = 0; j < 12; j++) { const a = j / 12 * TAU, rr = easeOut(burst) * 110 * (j % 2 ? .62 : 1); ctx.fillStyle = j % 2 ? '#ffffff' : (i % 2 ? GOLD : '#7fb0ff'); ctx.globalAlpha = 1 - burst; ctx.beginPath(); ctx.arc(rx + Math.cos(a - Math.PI / 2) * rr, top + Math.sin(a - Math.PI / 2) * rr + burst * burst * 60, 4, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; } } }
     drawHero(s, s.hero.x, s.hero.y);
   }
   // STAR RICOCHET: one star bouncing between her and the edges of the screen, faster each leg, with a long trail
@@ -1205,7 +1254,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       const p = pos(Math.max(0, tt)), leg = legs.findIndex((L) => tt <= L.t1), big = leg === legs.length - 1 ? 1.8 : 1;
       if (p) davidStar(p[0], p[1], 24 * big, c.t * 14, col, 1, 0, 'rgba(255,255,255,.6)');
       const hits = legs.filter((L) => L.boss && L.t1 <= tt).length; if (hits) text('x' + hits, b.x + 170, b.y - 280, 30 + hits * 3, '#ffffff');
-    } else { const e = clamp((tt - end) / (c.len * (1 - RICO.start) - end), 0, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(b.x, b.y - 120, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); ctx.fillStyle = `rgba(255,255,255,${(.7 * (1 - e)).toFixed(2)})`; ctx.fillRect(b.x - 30 + o * 900, b.y - 128, 40, 16); ctx.restore(); davidStar(b.x - 30, b.y - 120, 60 + o * 420, o * 3, col, 1 - e, 0); }
+    } else { const e = clamp((tt - end) / (c.len * (1 - RICO.start) - end), 0, 1); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (const L of legs) { ctx.strokeStyle = `rgba(255,233,168,${(.85 * (1 - e)).toFixed(2)})`; ctx.lineWidth = 6 + 10 * (1 - e); ctx.beginPath(); ctx.moveTo(L.x0, L.y0); ctx.lineTo(L.x, L.y); ctx.stroke(); if (!L.boss) glow(L.x, L.y, 40 * (1 - e) + 10, 'rgba(255,220,140,.8)'); }
+      ctx.restore(); }
     drawHero(s, s.hero.x, s.hero.y);
   }
   // STAR COLLAPSE: every light on screen streams into one star inside her; it shrinks to a black point; silence; supernova
@@ -1221,8 +1272,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     } else if (k < C.nova) { const f = ku(k, C.collapse, C.nova), r = lerp(70, 5, easeOut(f)); // the black point, a beat of nothing
       ctx.save(); ctx.lineJoin = 'miter'; ctx.translate(cx, cy); ctx.rotate(c.t * 12); ctx.fillStyle = '#000'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; for (const off of [-Math.PI / 2, Math.PI / 2]) { triPath(r, off); ctx.fill(); ctx.stroke(); } ctx.restore(); }
     else { const e = ku(k, C.nova, 1), o = easeOut(e); ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .25) glow(cx, cy, 1100 * (1 - e * 3), 'rgba(255,255,255,1)');
-      for (let j = 0; j < 4; j++) hexagram(cx, cy, 60 + o * (300 + j * 220), o * (j % 2 ? -1 : 1) * 2, 1, j % 2 ? 'rgba(120,170,255,1)' : '#ffffff', 6 - j, 1, (1 - e) * (1 - j * .18)); ctx.restore();
-      davidStar(cx, cy, 80 + o * 500, o * 2, col, 1 - e, 0); }
+      for (let j = 0; j < 5; j++) hexagram(cx, cy, 60 + o * (260 + j * 200), o * (j % 2 ? -1 : 1) * 2, 1, j % 2 ? GOLD : 'rgba(120,170,255,1)', 7 - j, 1, (1 - e) * (1 - j * .15)); ctx.restore(); }
     drawHero(s, s.hero.x, s.hero.y);
   }
   // STAR OF HELL (Algol, the demon star): everything red. The red star and fire from the sky, a blast, a star-shaped
@@ -1267,21 +1317,20 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       const spin = k > M.charge ? (k - M.charge) * c.len * 14 : Math.sin(fx.clock * 2) * .08, pulse = k > M.charge ? 1 + Math.sin(fx.clock * 40) * .05 : 1;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(sx, sy, R * (1.5 + ch), `rgba(150,200,255,${(.25 + ch * .55).toFixed(2)})`); if (k > M.charge) glow(sx, sy, R * .7, 'rgba(255,255,255,.9)'); ctx.restore();
       drawHero(s, h.x, h.y); // he holds it out in front
-      ctx.save(); ctx.globalAlpha = .55; ctx.fillStyle = '#0a1a40'; ctx.beginPath(); ctx.arc(sx, sy, R * 1.02 * pulse, 0, TAU); ctx.fill(); ctx.restore(); // the shield's face
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4 + ch * 4; ctx.beginPath(); ctx.arc(sx, sy, R * 1.04 * pulse, 0, TAU); ctx.stroke();
-      davidStar(sx, sy, R * .92 * pulse, spin, col, 1, 0);
+      flagShield(sx, sy, R * 1.04 * pulse, spin, 1); // the shield: the flag
       if (k > M.dash[0]) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 1; i <= 4; i++) glow(sx - i * 50, sy, R * .8, 'rgba(160,200,255,.25)', 1 - i / 5); ctx.restore(); } // the charge streak
     } else { // the slam: the star punches through her, a ground shockwave rolls out both ways
       const e = u(M.dash[1], 1), o = easeOut(e), gy = b.y + 30;
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       if (e < .2) glow(b.x - 80, b.y - 120, 700 * (1 - e * 4), 'rgba(255,255,255,1)');
-      ctx.fillStyle = `rgba(255,255,255,${(.8 * (1 - e)).toFixed(2)})`; ctx.fillRect(-500, b.y - 128 - 8 * (1 - e), W + 1000, 16 * (1 - e) + 2); // the shock line
-      hexagram(b.x, gy, 80 + o * 640, o * .6, 1, '#ffffff', 6, .3, 1 - e); hexagram(b.x, gy, 60 + o * 420, -o, 1, 'rgba(120,170,255,1)', 4, .3, (1 - e) * .8);
+      ctx.fillStyle = `rgba(255,207,74,${(.85 * (1 - e)).toFixed(2)})`; ctx.fillRect(-500, b.y - 128 - 8 * (1 - e), W + 1000, 16 * (1 - e) + 2); // the gold shock line
+      for (const sd of [-1, 1]) for (let j = 0; j < 3; j++) { const x = b.x + sd * (60 + o * (520 - j * 120)), hgt = (90 - j * 22) * (1 - e); // gold ground waves rolling out both ways
+        ctx.fillStyle = `rgba(255,${200 - j * 30},${80 - j * 20},${((1 - e) * (.8 - j * .2)).toFixed(2)})`; ctx.beginPath(); ctx.moveTo(x - sd * 70, gy); ctx.quadraticCurveTo(x, gy - hgt * 2, x + sd * 30, gy); ctx.closePath(); ctx.fill(); }
       ctx.restore();
-      davidStar(b.x - 40, b.y - 120, 150 + o * 260, o * 2, col, 1 - e, 0);      // the shield's star, driven into her
-      davidStar(b.x + 120 + o * 500, b.y - 120, 90 * (1 - e * .5), o * 6, '#ffffff', (1 - e) * .8, 0); // and out of her back
+      flagShield(b.x - 40, b.y - 120, 150 + o * 160, o * 2, 1 - e);               // the flag shield, driven into her
+      goldStar(b.x + 120 + o * 500, b.y - 120, 90 * (1 - e * .5), o * 6, (1 - e) * .8, '#ffffff'); // its star, out of her back
       drawHero(s, h.x, h.y);
-      ctx.save(); ctx.translate(h.x + 115, h.y - 105); ctx.globalAlpha = .9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 60, 0, TAU); ctx.stroke(); ctx.restore(); davidStar(h.x + 115, h.y - 105, 54, 0, col, .9, 0); // he keeps the shield
+      flagShield(h.x + 115, h.y - 105, 62, 0, 1); // he keeps the shield
     }
   }
   // STAR CAGE finisher: the two triangles slam together round her, crush, shatter
@@ -1306,9 +1355,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       ctx.restore();
     } else { // shattered: shards of the star flung out spinning
       const e = u(C.shatter, 1), o = easeOut(e), R = R0 - 3 * 48;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(cx, cy, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); glow(cx, cy, 200 + o * 300, 'rgba(120,170,255,.5)', 1 - e); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(cx, cy, 800 * (1 - e * 4), 'rgba(255,255,255,1)'); glow(cx, cy, 200 + o * 300, 'rgba(170,240,255,.5)', 1 - e); ctx.restore();
       for (let i = 0; i < 30; i++) { const a = i * 2.399, d = R * .4 + o * (170 + (i * 67) % 360), x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * .85 + e * e * 260, r = 26 + (i * 13) % 34;
-        ctx.save(); ctx.globalAlpha = 1 - e * e; ctx.translate(x, y); ctx.rotate(i + o * (6 + i % 5)); ctx.fillStyle = i % 3 ? FLAG_BLUE : '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r * .8, r * .6); ctx.lineTo(-r * .7, r * .5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
+        ctx.save(); ctx.globalAlpha = 1 - e * e; ctx.translate(x, y); ctx.rotate(i + o * (6 + i % 5)); ctx.fillStyle = ['#bff4ff', FLAG_BLUE, '#e8fbff'][i % 3]; ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r * .8, r * .6); ctx.lineTo(-r * .7, r * .5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#7fd8ff'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
     }
     drawHero(s, s.hero.x, s.hero.y);
   }
@@ -1366,16 +1415,19 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       // his echoes ride the spinning points (drawn over the beams)
       if (k >= L.spin) for (let i = 0; i < 6; i++) { const [x, y] = pts[i]; drawHero(s, x, y + 60, i === 5 ? 1 : .8, x < cx ? 1 : -1, i !== 5); }
     } else {
-      // the blow-up: a white-out core, a hollow star shockwave, six stars flung out, a star burned flat into the ground
-      const e = u(L.boom, 1), o = easeOut(e), gy = s.boss.y + 30;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      if (e < .25) glow(cx, cy, 900 * (1 - e * 3), 'rgba(255,255,255,1)');
-      glow(cx, cy, 160 + o * 260, 'rgba(120,170,255,.6)', 1 - e);
-      ctx.restore();
-      davidStar(cx, cy, 60 + o * 480, o * 1.2, P[form(s)].hero, (1 - e) * .95, 0);
-      davidStar(cx, cy, 40 + o * 380, -o * 2, '#ffffff', (1 - e) * .8, 0);
-      for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + i * Math.PI / 3, d = 40 + o * 760; davidStar(cx + Math.cos(a) * d, cy + Math.sin(a) * d * .82, 34 * (1 - e * .5), e * 14 + i, P[form(s)].hero, 1 - e, 0, 'rgba(200,220,255,.5)'); }
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; hexagram(s.boss.x, gy, 120 + o * 420, o * .8, 1, '#ffffff', 6, .34, 1 - e); hexagram(s.boss.x, gy, 90 + o * 300, -o, 1, 'rgba(120,170,255,1)', 4, .34, (1 - e) * .8); ctx.restore();
+      const e = u(L.boom, 1), o = easeOut(e);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (e < .2) glow(cx, cy, 900 * (1 - e * 4), c.v === 4 ? 'rgba(255,230,160,1)' : 'rgba(200,250,255,1)');
+      if (c.v === 4) { // DAVID LASER: a gold sunburst, long rays turning slowly, the sign burnt gold into her
+        for (let i = 0; i < 24; i++) { const a = i / 24 * TAU + o * .4, L1 = 80 + o * (500 + (i % 3) * 160); ctx.fillStyle = `rgba(255,${i % 2 ? 207 : 235},${i % 2 ? 74 : 160},${(.55 * (1 - e)).toFixed(2)})`;
+          ctx.beginPath(); ctx.moveTo(cx + Math.cos(a - .05) * 40, cy + Math.sin(a - .05) * 40); ctx.lineTo(cx + Math.cos(a) * L1, cy + Math.sin(a) * L1); ctx.lineTo(cx + Math.cos(a + .05) * 40, cy + Math.sin(a + .05) * 40); ctx.fill(); }
+        ctx.restore(); goldStar(cx, cy, 120 + o * 60, 0, 1 - e);
+      } else { // SPINNING STAR: its six points break off and fly out as spinning blades, cyan trails behind them
+        for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + i * Math.PI / 3 + e * 2.5, d = 60 + e * 560;
+          ctx.strokeStyle = `rgba(127,232,255,${(.5 * (1 - e)).toFixed(2)})`; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(cx, cy, d, a - .5, a); ctx.stroke(); }
+        ctx.restore();
+        for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + i * Math.PI / 3 + e * 2.5, d = 60 + e * 560, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+          ctx.save(); ctx.globalAlpha = 1 - e; ctx.translate(x, y); ctx.rotate(c.t * 20 + i); ctx.fillStyle = '#e8fbff'; ctx.strokeStyle = FLAG_BLUE; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(28, 22); ctx.lineTo(-28, 22); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+      }
       drawHero(s, s.hero.x, s.hero.y);
     }
   }
@@ -1423,10 +1475,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       // the bombs: Stars of David dropping out of the sky onto the hut, a light streak behind each
       for (const q of c.bombs) { if (!q || q.hit) continue; const f = clamp(q.t / S.fall, 0, 1), y = lerp(-320, q.ty, f * f);
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createLinearGradient(0, y - 220, 0, y); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(200,220,255,.8)'); ctx.fillStyle = g; ctx.fillRect(q.x - 6, y - 220, 12, 220); ctx.restore();
-        davidStar(q.x, y, 36, q.t * 6, col, 1, 0, 'rgba(255,255,255,.6)'); }
+        goldStar(q.x, y, 36, q.t * 6, 1); }
       if (k > S.big - .07) { const f = skU(k, S.big - .07, S.big), y = lerp(-500, b.y - 60, f * f); // the giant one
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(G.x, y, 240, 'rgba(255,255,255,.7)'); ctx.fillStyle = 'rgba(200,220,255,.35)'; ctx.fillRect(G.x - 40, y - 600, 80, 600); ctx.restore();
-        davidStar(G.x, y, 110, f * 4, col, 1, 0, 'rgba(255,240,200,.6)'); }
+        goldStar(G.x, y, 110, f * 4, 1); }
     } else { // blown apart: poles spin away, branches and reed scraps fly, everything fades
       const e = skU(k, S.big, 1), o = easeOut(e);
       ctx.save(); ctx.globalAlpha = 1 - e;
@@ -1914,7 +1966,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     if (s.phase === 'chained') drawChained(s);
     drawFinisherWorld(s);
     drawCineWorld(s);
-    drawBlasts(dt);
+    drawBlasts(dt); drawFlares(dt);
     drawFx(dt);
     if (!fx.meadow) { // foreground rubble: parallax faster than the floor gives the arena depth
       ctx.save(); ctx.translate(-fx.camX * .35, 0); ctx.fillStyle = form(s) === 3 ? '#000' : '#020304';
