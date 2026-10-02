@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13d';
+import { SCRIPT } from './script.js?v=13e';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -105,7 +105,7 @@ function setupStage(s, stage, silent = false) {
     attackCd: 2.2, last: null, tell: 0, tellKind: null, flash: 0, stagger: 0, sway: 0, dodgeCd: 2, dodgeT: 0, dodgeDir: 1,
     cds: { box: M.boxEvery * .6, barrage: 7, slam: 4, chains: 6, rune: 10, catch: 7, earth: 5, laser: 3, cross: 6, doom: 8, gravity: 9, spiral: 5, corona: 7, twin: 12 },
     hands: [{ x: 860, y: 450, busy: false }, { x: 1100, y: 450, busy: false }] };
-  s.hero.heals = 1; // heals never carry into the next phase
+  s.hero.heals = 2; // heals never carry into the next phase (P13 owner: was 1, he ran dry; now 2, +1 when a box starts)
   Object.assign(s.hero, { cds: {}, invert: 0, orbit: null, lance: null, field: null, charge: null, starfall: null }); s.shots = []; s.heroShots = []; s.hazards = [];
   if (!silent) { ev(s, 'stage', { stage }); }
 }
@@ -549,6 +549,7 @@ function beginBox(s, short = false) {
   const mix = pickGate(BOX_MIX[st], g);
   s.box = { t: 0, len, short, hard, gate: g, mix, acts, ai: 0, actT: 0, actLen: al, act: null, trans: null, mode: 'red', moving: false, prevMy: 0,
     soul: { x: 640, y: 411, vx: 0, vy: 0, si: 1, ground: false }, bullets: [], beams: [], emitters: [], turrets: [], wave: 0, next: 1, preview: null, shown: null, aimT: 9, shake: 0, line: null, hint: null };
+  s.hero.heals = Math.min(4, s.hero.heals + 1); ev(s, 'healGain', { heals: s.hero.heals }); // P13: the bonus heal comes AT the start of the box so it can be used inside
   Object.assign(BOX, BOX_SHAPES[acts[0]]);
   startAct(s, acts[0]);
   const lines = SCRIPT.boxLines || []; if (lines.length && !short) s.box.line = { text: lines[(s.boxCount = (s.boxCount || 0) + 1) % lines.length], t: 0 };
@@ -599,7 +600,18 @@ function spawnBoxWave(s, pv) {
   } else if (pv.pattern === 'sweep') b.beams.push({ kind: 'sweep', t: 0, len: 1.3 / sp, gapY: pv.gapY, half: pv.half, fromLeft: pv.fromLeft, x: pv.fromLeft ? BOX.minX : BOX.maxX });
   else if (pv.pattern === 'crush') b.beams.push({ kind: 'crush', t: 0, cy: pv.cy, half: pv.half, close: .4 / sp, hold: .7, open: .3, k: 0 });
   else if (pv.pattern === 'gapwall') { // a run of walls, each with one gap, the gap moving from wall to wall
-    pv.gaps.forEach((gy, i) => b.beams.push({ kind: 'sweep', t: -i * (b.hard ? .32 : .4), len: 1.6 / sp, gapY: gy, half: b.hard ? 40 : 46, fromLeft: pv.fromLeft, x: pv.fromLeft ? BOX.minX : BOX.maxX, wall: true }));
+    // P13 owner: "the first one is literally impossible to reach; make it longer but make the gates make sense".
+    // The first gap is always within reach of where the soul is when its wall gets there; each next gap is within
+    // reach of the one before (soul speed x the time between walls, with a margin). 8 walls (9 on Hard).
+    const so = b.soul, n = b.hard ? 9 : 8, gapT = b.hard ? .42 : .5, len = 1.9 / sp, wv = BW() / len, lo = BOX.minY + 52, hi = BOX.maxY - 52, lead = .45, R = () => s.R();
+    const x0 = pv.fromLeft ? BOX.minX : BOX.maxX, tFirst = lead + Math.abs(so.x - x0) / wv;
+    let gy = clamp(so.y + (R() - .5) * 2 * Math.min(150, 300 * tFirst * .55), lo, hi), dir = R() < .5 ? -1 : 1;
+    pv.gaps = [];
+    for (let i = 0; i < n; i++) {
+      if (i) { if (R() < .35) dir = -dir; let step = (.4 + R() * .6) * 300 * gapT * .6; if (gy + dir * step < lo || gy + dir * step > hi) dir = -dir; gy = clamp(gy + dir * step, lo, hi); }
+      pv.gaps.push(gy); b.beams.push({ kind: 'sweep', t: -(lead + i * gapT), len, gapY: gy, half: b.hard ? 42 : 48, fromLeft: pv.fromLeft, x: x0, wall: true });
+    }
+    pv.runT = lead + (n - 1) * gapT + len; b.actLen = Math.max(b.actLen, b.actT + pv.runT + .4); // the act waits for the whole run
   } else if (pv.pattern === 'ring') { // a ring closes in on the soul; one gap is the way out
     const n = b.hard ? 34 : 28, R0 = 250, gapN = b.hard ? 3 : 4;
     for (let i = 0; i < n; i++) { const a = pv.gap + i / n * TAU; if (i < gapN) continue; b.bullets.push({ x: b.soul.x + Math.cos(a) * R0, y: b.soul.y + Math.sin(a) * R0, vx: -Math.cos(a) * 165 * sp, vy: -Math.sin(a) * 165 * sp, r: 9, age: 0, tele: .45, ring: true }); }
@@ -658,6 +670,7 @@ function updateBox(s, dt, inp) {
       const pv = b.preview || previewFor(s); spawnBoxWave(s, pv); b.preview = null;
       b.shown = lead[pv.pattern] ? { ...pv, until: b.t + ({ lanes: 1, radial: .9, sweep: 1.3 / sp, crush: 1.3 }[pv.pattern]) } : null;
       b.next = ({ gapwall: 1.9, spiral: 1.7, ring: 1.35, sweep: 1.05, crush: 1.2 }[pv.pattern] || .95) * (hard ? .68 : .78) * [0, 1, .95, .9][st];
+      if (pv.pattern === 'gapwall') b.next = Math.max(b.next, pv.runT - (hard ? 1.2 : .8)); // nothing new piles onto the gate run until its end
     }
     if (b.aimT <= 0 && live) {
       const side = Math.floor(s.R() * 4), ex = [BOX.minX + 10, BOX.maxX - 10][side % 2], ey = side < 2 ? BOX.minY + 10 : BOX.maxY - 10, a = Math.atan2(so.y - ey, so.x - ex), n = hard ? 2 : 1;
@@ -665,25 +678,26 @@ function updateBox(s, dt, inp) {
       b.aimT = (hard ? Math.max(.9, 1.35 - b.gate * .07) : Math.max(1.3, 1.9 - b.gate * .1)) / sp;
     }
   } else if (b.act === 'bones') { // Papyrus: bones slide in along the floor and from the ceiling
-    // P13 fairness (owner: "some mini games are genuinely impossible"): one direction per act and a scheduler that
-    // never asks for something the soul can't do yet, e.g. a ceiling bone while it is still in the air from a jump.
-    B.spawn -= dt; B.since = (B.since ?? 9) + dt;
+    // P13 owner: "bones are extremely easy now, make it like before but slightly easier". Back to the P12 mix (both
+    // directions, doubles, slower blue/orange bones), spawning ~9% slower. One guard stays: two bones never reach
+    // the soul so close together that they ask for things it can't do at once (e.g. a ceiling bone mid-jump).
+    B.spawn -= dt;
     if (B.spawn <= 0 && live) {
-      B.dir ??= (st >= 2 || hard) && s.R() < .35 ? 1 : -1;
-      const v = (hard ? 490 : 420) * sp * B.dir, x = B.dir < 0 ? BOX.maxX + 10 : BOX.minX - 10, lateTall = st >= 2 || hard || b.gate >= 1;
-      const NEED = { jump: { jump: .86, down: .86, still: .86, move: 0 }, down: { jump: .3, down: 0, still: .2, move: 0 }, still: { jump: .3, down: .2, still: 0, move: .26 }, move: { jump: 0, down: 0, still: .26, move: 0 } };
-      const want = (() => { const R = s.R(); return R < .42 ? 'jump' : R < .62 ? 'down' : R < .84 || !lateTall ? 'still' : 'move'; })();
-      const ok = (r) => !B.last || B.since >= NEED[B.last][r];
-      const pick = ok(want) ? want : ['move', 'down', 'still', 'jump'].find((r) => ok(r) && (r !== 'move' || lateTall));
-      if (!pick) B.spawn = .06;
+      const R = s.R(), dir = (hard || st >= 2) && s.R() < .3 ? 1 : -1, v = (hard ? 450 : 390) * sp * dir, x = dir < 0 ? BOX.maxX + 10 : BOX.minX - 10;
+      const lateTall = st >= 2 || hard || b.gate >= 1;
+      const need = R < .42 ? 'jump' : R < .62 ? 'down' : R < .84 || !lateTall ? 'still' : 'move', vv = need === 'jump' || need === 'down' ? v : v * .85;
+      const tA = b.actT + Math.max(0, (so.x - x) * Math.sign(vv)) / Math.abs(vv);
+      B.arr = (B.arr || []).filter((q) => q.t > b.actT - .2);
+      const clash = B.arr.some((q) => { const d = Math.abs(q.t - tA); if (q.need === need) return need === 'jump' && d > .12 && d < .7; return d < (q.need === 'jump' || need === 'jump' ? .62 : .3); });
+      if (clash) B.spawn = .07;
       else {
-        if (pick === 'jump') b.beams.push({ kind: 'bone', x, vx: v, y1: BOX.maxY - (34 + s.R() * 40), y2: BOX.maxY, col: 'white' });
-        if (pick === 'down') b.beams.push({ kind: 'bone', x, vx: v, y1: BOX.minY, y2: BOX.maxY - 46, col: 'white' });
-        if (pick === 'still') b.beams.push({ kind: 'bone', x, vx: v, y1: BOX.minY + 8, y2: BOX.maxY, col: 'blue' });
-        if (pick === 'move') b.beams.push({ kind: 'bone', x, vx: v, y1: BOX.minY + 8, y2: BOX.maxY, col: 'orange' });
-        if (pick === 'jump' && s.R() < (hard ? .6 : .35)) b.beams.push({ kind: 'bone', x: x - B.dir * 46, vx: v, y1: BOX.maxY - (30 + s.R() * 30), y2: BOX.maxY, col: 'white' }); // a double: one jump clears both
-        B.last = pick; B.since = 0;
-        B.spawn = (hard ? .28 : .36) * [0, 1, .94, .88][st] / sp;
+        if (need === 'jump') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.maxY - (34 + s.R() * 40), y2: BOX.maxY, col: 'white' });
+        if (need === 'down') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.minY, y2: BOX.maxY - 46, col: 'white' });
+        if (need === 'still') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.minY + 8, y2: BOX.maxY, col: 'blue' });
+        if (need === 'move') b.beams.push({ kind: 'bone', x, vx: vv, y1: BOX.minY + 8, y2: BOX.maxY, col: 'orange' });
+        if (need === 'jump' && s.R() < (hard ? .5 : .3)) b.beams.push({ kind: 'bone', x: x - dir * 46, vx: vv, y1: BOX.maxY - (30 + s.R() * 30), y2: BOX.maxY, col: 'white' }); // a double: one jump clears both
+        B.arr.push({ t: tA, need });
+        B.spawn = (hard ? .37 : .46) * [0, 1, .94, .88][st] / sp;
       }
     }
   } else if (b.act === 'strings') { // Muffet: spiders run along the strings
@@ -746,14 +760,14 @@ function updateBox(s, dt, inp) {
     B.spawn -= dt;
     if (B.spawn <= 0 && live) { // P12 owner: spears come from several sides at the same time (staggered so each can be blocked)
       const dirs = ['up', 'down', 'left', 'right'].sort(() => s.R() - .5), r = s.R(), n = hard ? (r < .35 ? 3 : r < .85 ? 2 : 1) : (r < .55 ? 2 : 1);
-      const V = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }, spd = (hard ? 540 : 450) * sp, gapT = hard ? .19 : .24;
+      const V = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }, spd = (hard ? 500 : 430) * sp, gapT = hard ? .34 : .42; // P13 owner: "arrows come at the same time": arrivals are now spaced for a human turn of the shield
       const now0 = b.actT + 330 / spd, start = Math.max(now0, (B.lastArrive ?? -9) + gapT) - now0; // P13 fairness: never two spears at the same moment
       for (let k = 0; k < n; k++) {
         const d = dirs[k], dist = 330 + (start + k * gapT) * spd, rev = (n === 1 || hard) && k === n - 1 && s.R() < (hard ? .38 : st >= 2 ? .22 : .12); // a flipping spear only ever comes last
         B.lastArrive = b.actT + dist / spd;
         b.bullets.push({ x: 640 + V[d][0] * dist, y: 411 + V[d][1] * dist, vx: -V[d][0] * spd, vy: -V[d][1] * spd, r: 8, age: 0, tele: 0, spear: true, from: d, rev, outside: true });
       }
-      B.spawn = (hard ? .18 : .25) * (1 + (n - 1) * .55) * [0, 1, .94, .88][st] / sp;
+      B.spawn = (hard ? .3 : .4) * (1 + (n - 1) * .8) * [0, 1, .94, .88][st] / sp;
     }
   } else if (b.act === 'swipes') { // Asgore: full-height sweeps (blue: stand still, orange: keep moving) and falling fire
     B.spawn -= dt; B.fire -= dt;
@@ -823,7 +837,7 @@ function finishBox(s) {
   if (s.phase !== 'box' || b.trans || b.ai < b.acts.length - 1 || b.actT < b.actLen) return;
   Object.assign(BOX, BOX_SHAPES.mix);
   if (b.short) { s.box = null; setPhase(s, 'fight'); s.boss.attackCd = 1.4; ev(s, 'boxEnd'); return; } // a mid-fight trap: straight back to fighting
-  s.box = null; h.heals++; ev(s, 'healGain', { heals: h.heals });
+  s.box = null;
   s.boss.gateIndex++; // floor moves to the next gate before the counter lands
   s.timing = { t: 0, len: 3 * 1.15 / cfg(s).speed, pass: 1.15 / cfg(s).speed, marker: 0, result: null, resT: 0 };
   setPhase(s, 'timing'); ev(s, 'timingStart');
@@ -1085,6 +1099,9 @@ export function step(s, dt, inp) {
   if (s.phase === 'intro') { if (s.phaseT > 1.8) startTalk(s, 'intro', toFight); return s; }
   if (s.phase === 'talk') { updateTalk(s, dt, inp); return s; }
   if (s.phase === 'victory' || s.phase === 'defeat') return s;
+  // P13 owner: "healing during anything": H works in the clash, the counter bar, the chains, the rune lock and the
+  // finisher keys too (the fight and the box have their own heal with its effect at the soul)
+  if (inp.heal && h.heals > 0 && h.hp < HERO_MAX && ['clash', 'timing', 'chained', 'rune', 'finisherQte'].includes(s.phase)) { h.heals--; s.stats.heals++; h.hp = Math.min(HERO_MAX, h.hp + HEAL); ev(s, 'heal', { x: h.x, y: h.y }); }
   if (s.phase === 'clash') { updateClash(s, sdt, inp); return s; }
   if (s.phase === 'cine') { updateCine(s, sdt, inp); return s; }
   if (h.invertIn > 0) { h.invertIn -= sdt; if (h.invertIn <= 0) { h.invertIn = 0; h.invert = h.invertLen; banner(s, 'CONTROLS INVERTED', `${Math.ceil(h.invert)} SECONDS`, '#ff8a6b'); ev(s, 'invertOn'); } }

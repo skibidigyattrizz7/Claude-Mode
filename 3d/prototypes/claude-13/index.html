@@ -97,7 +97,7 @@
     <b><kbd>K</kbd></b><span>Cast the selected special</span>
     <b><kbd>1</kbd>–<kbd>6</kbd> <kbd>Q</kbd><kbd>E</kbd></b><span>Pick a special (six per form)</span>
     <b><kbd>SPACE</kbd></b><span>Dodge · just before a hit = PERFECT</span>
-    <b><kbd>H</kbd></b><span>Heal · 1 per phase, +1 per SURVIVE · works in the box too</span>
+    <b><kbd>H</kbd></b><span>Heal · 2 per phase, +1 when a SURVIVE box starts · works everywhere</span>
     <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its 7 keys (six versions in turn, newest first)</span>
     <b><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd></b><span>Clash key moments: type them in order, mashing is ignored</span>
     <b>CLICK · ENTER · J</b><span>Next dialogue line · X skips</span>
@@ -119,9 +119,9 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H } from './sim.js?v=13d';
-import { createRenderer } from './render.js?v=13d';
-import { createSfx } from './sfx.js?v=13d';
+import { createFight, step, W, H } from './sim.js?v=13e';
+import { createRenderer } from './render.js?v=13e';
+import { createSfx } from './sfx.js?v=13e';
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
 const canvas = document.getElementById('c');
