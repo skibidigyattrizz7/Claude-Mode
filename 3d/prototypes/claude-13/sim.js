@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13b';
+import { SCRIPT } from './script.js?v=13c';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -60,6 +60,10 @@ const MISS = { slash: .07, star: .08, shield: .05, spin: .1, burst: .05, fall: .
 export const ABIL_ORDER = ['star', 'spinner', 'burst', 'eyes', 'lattice', 'nova'];
 export const FIN = { mult: 6, // P12: x3 with the boss HP so a finisher still lands like one
   chance: [0, .08, .08, .06], cooldown: 16, window: 2.6, len: 4.2, keys: 7, qte: [0, 4.2, 3.8, 3.3] };
+// P13 owner: "finishers always pop up as Star of David something, the names don't change": each has its own name,
+// shown on the prompt, the key screen and the cinematic. finNext() is the one the next finisher will be.
+export const FIN_NAMES = ['STAR PATH', 'SIX POINTS', 'RISING STAR', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR'];
+export const finNext = (s) => (s.fin0 + s.stats.finishers) % FIN_NAMES.length;
 export const FIN_KEYS = ['W', 'A', 'S', 'D', 'J', 'K', 'L', 'I'];
 export const RUNE_KEYS = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F'];
 export const CHAIN_KEYS = ['J', 'K', 'L', 'U', 'I', 'O'];
@@ -76,7 +80,7 @@ export function createFight({ seed = 7, force = null, mode = 'normal', start = 1
     hero: { x: 300, y: 560, vx: 0, vy: 0, hp: HERO_MAX, chip: HERO_MAX, face: 1, inv: 0, dodgeT: 0, dodgeCd: 0, dodgeDir: [1, 0],
       slashCd: 0, cds: {}, sel: 'star', heals: 1, invert: 0, squash: 0, hurt: 0, trail: [], cast: null, orbit: null, lance: null, field: null, charge: null, starfall: null },
     boss: null, shots: [], heroShots: [], hazards: [], box: null, timing: null, rune: null, chain: null, clash: null, cine: null,
-    finisher: { prompt: 0, cd: 6, cine: null }, finName: SCRIPT.finisherName || 'STAR OF DAVID STRIKE', fq: null, talk: null, noTalk: !!force, banner: null, hitstop: 0, slowmo: 0, secret: false, result: null, stats: { perfects: 0, finishers: 0, heals: 0 }, fin0: fin | 0,
+    finisher: { prompt: 0, cd: 6, cine: null }, fq: null, talk: null, noTalk: !!force, banner: null, hitstop: 0, slowmo: 0, secret: false, result: null, stats: { perfects: 0, finishers: 0, heals: 0 }, fin0: fin | 0,
   };
   setupStage(s, 1, true);
   if (start >= 2 && !force) { // P11 owner: "make it save phases": begin at a saved phase checkpoint
@@ -339,9 +343,9 @@ function startFinisherCine(s) {
   s.finisher.cd = FIN.cooldown; s.stats.finishers++;
   // P11 owner: the finisher traces the Star of David with a trail, then a beam of light falls from the sky onto a
   // huge spinning star on the ground. Three versions, taken in turn so it is never the same one twice in a row.
-  const v = (s.fin0 + s.stats.finishers - 1) % 6; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
-  s.finisher.cine = { t: 0, len: v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - (v === 2 ? 330 : 105), R: v === 2 ? 150 : 235,
-    name: v === 4 ? 'DAVID LASER' : v === 5 ? 'SPINNING STAR' : SCRIPT.finisherName || 'STAR OF DAVID STRIKE', sub: (SCRIPT.finisherVariants || [])[v] || '', hits: 0,
+  const v = (s.fin0 + s.stats.finishers - 1) % FIN_NAMES.length; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
+  s.finisher.cine = { t: 0, len: v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - (v === 2 ? 330 : 105), R: v === 2 ? 150 : 235,
+    name: FIN_NAMES[v], sub: '', hits: 0, pole: [0, 0, 0, 0], branches: 0,
     hx: clamp(s.boss.x - 430, FLOOR.minX + 120, FLOOR.maxX - 500), hy: clamp(s.boss.y + 40, FLOOR.minY + 160, FLOOR.maxY - 10), bombs: [] };
   if (v >= 4) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
   s.shots = []; s.hazards = s.hazards.filter((z) => z.kind === 'hole'); setPhase(s, 'finisher'); ev(s, 'finisherStart');
@@ -863,6 +867,10 @@ function updateRune(s, dt, inp) {
   if (r.done === 'fail' && !r.failed) { r.failed = true; h.invertIn = 1.6; h.invertLen = 5 + s.stage; h.inv = 0; hurtHero(s, 10, 'rune'); ev(s, 'runeFail'); } // inversion starts after a clear countdown
 }
 export const STAR_PATH = [0, 2, 4, 0, 1, 3, 5, 1]; // up-triangle, then a dash to the down-triangle
+// SUKKAH timeline (fractions of the cine) and the hut's shape, built round the boss: back poles higher up the floor
+export const SUKKAH = { len: 6.6, poles: [.06, .36], beams: [.36, .41], walls: [.41, .54], roof: [.54, .68], deco: [.68, .72], leap: .72, branches: 9, bombs: [.75, .88], n: 5, fall: .38, big: .93 };
+export const sukkahGeom = (b) => { const x = b.x, gy = b.y + 44, top = b.y - 372, fw = 300, bw = 252, back = -40;
+  return { x, gy, top, fw, bw, back, poles: [[x - bw, gy + back], [x - fw, gy], [x + fw, gy], [x + bw, gy + back]], poleH: (i) => (i === 0 || i === 3) ? gy + back - (top - 22) : gy - top }; };
 // the two laser finishers' timelines (fractions of the cine; 2 = that step is not in this one)
 export const DLASER = { 4: { tp: .3, fire: .34, link: 2, spin: 2, boom: .8 }, 5: { tp: .3, fire: 2, link: .36, spin: .46, boom: .82 } };
 export const dlPoint = (c, i) => { const a = -Math.PI / 2 + i * Math.PI / 3 + c.rot; return [c.cx + Math.cos(a) * c.R, c.cy + Math.sin(a) * c.R * .82]; };
@@ -885,12 +893,35 @@ function updateFinisher(s, dt) {
     if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }
-  if (c.v === 3) { // SUKKAH: he raises the hut (poles, walls, a roof of branches), then Stars of David launch from it and rain on her
-    h.x = lerp(h.x, c.hx, .2); h.y = lerp(h.y, c.hy, .2); c.trace = clamp(k / .34, 0, 1);
-    if (k > .3 && !c.built) { c.built = true; ev(s, 'sukkahBuilt', { x: c.hx, y: c.hy }); }
-    for (let i = 0; i < 6; i++) { const at = .36 + i * .055; if (c.t - dt < at * c.len && c.t >= at * c.len) { const tx = b.x + (i % 2 ? 1 : -1) * (40 + (i * 37 % 90)), ty = b.y + 10 + (i * 23 % 40); c.bombs.push({ t: 0, x0: c.hx, y0: c.hy - 230, tx, ty }); ev(s, 'starLaunch', { x: c.hx, y: c.hy - 230 }); } }
-    for (const bm of c.bombs) { bm.t += dt; if (!bm.hit && bm.t >= .55) { bm.hit = true; ev(s, 'starBomb', { x: bm.tx, y: bm.ty }); s.hitstop = Math.max(s.hitstop, .06); } }
-    if (k >= .74 && !c.done2) { c.done2 = true; ev(s, 'starBombBig', { x: b.x, y: b.y }); s.hitstop = .14; }
+  if (c.v === 3) { // SUKKAH (P13 owner: "build the hut AROUND the boss, with a building animation, then the bombing"):
+    // he hammers in four poles round her, the beams go on, the walls unroll, he throws branches up for the roof and
+    // hangs the fruit; then he leaps clear, Star of David bombs fall out of the sky onto the hut, then one giant one.
+    const S = SUKKAH, G = sukkahGeom(b), u = (a2, b2) => clamp((k - a2) / (b2 - a2), 0, 1);
+    const pw = (S.poles[1] - S.poles[0]) / 4, pi = Math.min(3, Math.floor((k - S.poles[0]) / pw));
+    if (k < S.poles[0]) { h.x = lerp(h.x, G.poles[0][0] - 46, .15); h.y = lerp(h.y, G.poles[0][1], .15); }
+    else if (k < S.poles[1]) {
+      const [px, py] = G.poles[pi], f = (k - S.poles[0]) / pw - pi;
+      const sx = px + (pi >= 2 ? 46 : -46); // he stands on the outside of each pole
+      if (c.slot !== pi) { c.slot = pi; c.from = [h.x, h.y]; }
+      if (f < .2) { const e2 = easeOut(f / .2); h.x = lerp(c.from[0], sx, e2); h.y = lerp(c.from[1], py, e2) - Math.sin(e2 * Math.PI) * 70; } // a leap to the next pole
+      else { h.x = sx; h.y = py; }
+      const hits = f < .35 ? 0 : f < .6 ? 1 : f < .85 ? 2 : 3;
+      for (let j = 0; j < pi; j++) c.pole[j] = 1;
+      if (hits / 3 > c.pole[pi]) { c.pole[pi] = hits / 3; ev(s, 'sukkahHammer', { x: px, y: py - G.poleH(pi) * c.pole[pi], n: hits }); }
+    } else {
+      c.pole = [1, 1, 1, 1];
+      if (k < S.leap) { h.x = lerp(h.x, G.x - G.fw - 110, .12); h.y = lerp(h.y, G.gy + 10, .12); }
+      else { h.x = lerp(h.x, clamp(G.x - G.fw - 260, FLOOR.minX + 40, FLOOR.maxX), .1); h.y = lerp(h.y, G.gy + 30, .1); }
+    }
+    if (k >= S.walls[0] && !c.walled) { c.walled = true; ev(s, 'sukkahWalls', { x: G.x, y: G.gy }); }
+    const nb = Math.floor(u(S.roof[0], S.roof[1]) * S.branches); if (nb > c.branches) { c.branches = nb; ev(s, 'sukkahBranch', { x: h.x, y: h.y - 80 }); }
+    if (k >= S.deco[1] && !c.built) { c.built = true; ev(s, 'sukkahBuilt', { x: G.x, y: G.gy }); }
+    for (let i = 0; i < S.n; i++) {
+      const at = S.bombs[0] + i * (S.bombs[1] - S.bombs[0]) / S.n;
+      if (k >= at && !c.bombs[i]) { const x = G.x + ((i * 37) % 5 - 2) * G.fw * .32; c.bombs[i] = { t: 0, x, ty: b.y - 90 - (i * 29 % 50) }; ev(s, 'starLaunch', { x, y: -200 }); }
+    }
+    for (const bm of c.bombs) if (bm) { bm.t += dt; if (!bm.hit && bm.t >= S.fall) { bm.hit = true; ev(s, 'starBomb', { x: bm.x, y: bm.ty }); s.hitstop = Math.max(s.hitstop, .06); } }
+    if (k >= S.big && !c.done2) { c.done2 = true; ev(s, 'starBombBig', { x: b.x, y: b.y - 40 }); ev(s, 'sukkahBlown', { x: G.x, y: G.gy }); s.hitstop = .16; }
     if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
     return;
   }

@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13b';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, FIN_NAMES, finNext, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13c';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -113,6 +113,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'dlLink': shake(.7); flash('#ffffff', .35); negative(.05); part(e.x, e.y, 40, '#cfe0ff', 600, .8, 4); break;
         case 'dlSpin': shake(.3); break;
         case 'dlBoom': blast('nova', e.x, e.y, 320); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1.1, 14); ring(e.x, e.y, '#7aa8ff', 20, 700, .9, 8); part(e.x, e.y, 90, '#ffffff', 1100, 1.3, 5); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'sukkahHammer': shake(.2 + e.n * .06); part(e.x, e.y, 10, '#ffe7a8', 260, .35, 3); ring(e.x, e.y + 4, '#ffe7a8', 6, 60, .25, 3); break;
+        case 'sukkahWalls': shake(.15); break;
+        case 'sukkahBranch': part(e.x, e.y, 6, '#7fbf5a', 200, .4, 3); break;
+        case 'sukkahBlown': part(e.x, e.y - 200, 50, '#c9a66b', 900, 1.2, 5, 400); break;
         case 'starBombBig': blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
         case 'finisherStar': shake(.9); flash('#ffffff', .5); negative(.07); ring(e.x, e.y - 100, '#ffffff', 20, 520, .7, 10); part(e.x, e.y - 100, 50, '#ffffff', 700, 1, 4); fx.finStarT = 0; break;
         case 'finisherBeam': shake(1); flash('#ffffff', .6); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); break;
@@ -982,7 +986,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     const cx = 640, cy = 250, n = q.keys.length, gap = 64, x0 = cx - (n - 1) * gap / 2, k = clamp(q.t / .25, 0, 1);
     ctx.save(); ctx.fillStyle = `rgba(0,0,0,${.55 * k})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
     ctx.globalCompositeOperation = 'lighter'; hexagram(cx, cy, 230, fx.clock * .4, k, 'rgba(255,224,138,.6)', 2); ctx.globalCompositeOperation = 'source-over';
-    text(s.finName || 'STAR OF DAVID STRIKE', cx, cy - 92, 46, '#ffffff');
+    text(FIN_NAMES[finNext(s)], cx, cy - 92, 46, '#ffffff');
     text(q.done === 'win' ? 'UNLEASHED' : q.done === 'fail' ? 'BROKEN' : 'TYPE ALL 7 KEYS IN ORDER', cx, cy - 52, 22, q.done === 'fail' ? '#ff8a6b' : '#ffffff', 'center', true, 600);
     q.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, q.done === 'fail' && i === q.wrong ? 'bad' : i < q.i ? 'done' : i === q.i && !q.done ? 'now' : 'todo', 50));
     const left = clamp(1 - q.t / q.limit, 0, 1); ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 220, cy + 46, 440, 8); ctx.fillStyle = left < .3 ? '#ff5a46' : '#ffe08a'; ctx.fillRect(cx - 220, cy + 46, 440 * left, 8);
@@ -993,7 +997,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     const c = s.finisher.cine; if (!c) return;
     const k = c.t / c.len, b = s.boss, dark = clamp(k * 6, 0, 1) * .4;
     ctx.save(); ctx.fillStyle = `rgba(0,4,16,${dark.toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
-    if (c.v === 3) { drawSukkah(s, c, k); ctx.restore(); drawHero(s, s.hero.x, s.hero.y); return; }
+    if (c.v === 3) { drawSukkahFront(s, c, k); ctx.restore(); drawHero(s, s.hero.x, s.hero.y); return; }
     if (c.v >= 4) { drawDavidLaser(s, c, k); ctx.restore(); return; }
     // 1) the trace: every line of the Star of David drawn behind him as he runs it (flag blue on a white core)
     const segs = STAR_PATH.length - 1, done = c.trace * segs;
@@ -1096,38 +1100,61 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       drawHero(s, s.hero.x, s.hero.y);
     }
   }
-  // P12 SUKKAH finisher: the hut (poles, woven walls, a roof of branches with hanging fruit), then the star bombs
-  function drawSukkah(s, c, k) {
-    const x = c.hx, gy = c.hy, p = c.trace, Wd = 230, Ht = 210, top = gy - Ht;
-    const seg = (a, b) => clamp((p - a) / (b - a), 0, 1);
-    const poles = seg(0, .35), walls = seg(.3, .65), roof = seg(.6, .9), deco = seg(.85, 1);
+  // SUKKAH finisher (P13: built AROUND her). The back wall, side walls and back poles are drawn before the boss so she
+  // stands inside the hut; the front poles, beams, roof, fruit and the bombs after her.
+  const SK = { reed: '#c9a66b', reedDark: '#b48e55', weave: 'rgba(90,60,30,.55)', pole: '#7a5530', beam: '#6a4a26', leaf: '#3f7a34', leaf2: '#5ea24a' };
+  const skU = (k, a, b) => clamp((k - a) / (b - a), 0, 1);
+  function skPole(x0, y0, len, p, w = 12) { if (p <= 0) return; ctx.fillStyle = SK.pole; ctx.fillRect(x0 - w / 2, y0 - len * p, w, len * p); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x0 + w / 2 - 4, y0 - len * p, 4, len * p); }
+  function skPanel(pts, p) { // a woven reed panel, unrolled from its top edge by p (pts: top-left, top-right, bottom-right, bottom-left)
+    if (p <= 0) return; const [a, b, c2, d] = pts, bl = [lerp(a[0], d[0], p), lerp(a[1], d[1], p)], br = [lerp(b[0], c2[0], p), lerp(b[1], c2[1], p)];
+    ctx.fillStyle = SK.reed; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(br[0], br[1]); ctx.lineTo(bl[0], bl[1]); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.clip(); ctx.strokeStyle = SK.weave; ctx.lineWidth = 2; for (let i = 1; i < 40; i++) { const f = i / 40; if (f > p) break; ctx.beginPath(); ctx.moveTo(lerp(a[0], d[0], f), lerp(a[1], d[1], f)); ctx.lineTo(lerp(b[0], c2[0], f), lerp(b[1], c2[1], f)); ctx.stroke(); } ctx.restore();
+    ctx.fillStyle = SK.reedDark; ctx.fillRect(Math.min(bl[0], br[0]), Math.min(bl[1], br[1]) - 3, Math.abs(br[0] - bl[0]) || 3, 6); // the rolled edge
+  }
+  function drawSukkahBack(s) {
+    const c = s.finisher.cine; if (!c || c.v !== 3) return; const k = c.t / c.len; if (k >= SUKKAH.big) return;
+    const G = sukkahGeom(s.boss), bt = G.top - 22, by = G.gy + G.back, w = easeOut(skU(k, SUKKAH.walls[0], SUKKAH.walls[1])), bm = skU(k, SUKKAH.beams[0], SUKKAH.beams[1]);
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter'; glow(x, gy - 90, 170 * walls, 'rgba(255,200,120,.35)'); ctx.globalCompositeOperation = 'source-over';
-    // back wall + side walls: woven reed panels
-    if (walls > 0) {
-      ctx.globalAlpha = walls; ctx.fillStyle = '#c9a66b'; ctx.fillRect(x - Wd / 2 + 26, top + 26, Wd - 26, (Ht - 26) * walls);
-      ctx.strokeStyle = 'rgba(90,60,30,.55)'; ctx.lineWidth = 2;
-      for (let yy = top + 34; yy < top + 26 + (Ht - 26) * walls; yy += 12) { ctx.beginPath(); ctx.moveTo(x - Wd / 2 + 26, yy); ctx.lineTo(x + Wd / 2, yy); ctx.stroke(); }
-      ctx.fillStyle = '#b48e55'; ctx.beginPath(); ctx.moveTo(x - Wd / 2, top + 4); ctx.lineTo(x - Wd / 2 + 26, top + 26); ctx.lineTo(x - Wd / 2 + 26, top + 26 + (Ht - 26) * walls); ctx.lineTo(x - Wd / 2, top + (Ht) * walls); ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    // four poles rising out of the ground
-    ctx.fillStyle = '#7a5530';
-    for (const [px, dy] of [[x - Wd / 2 + 26, 26], [x + Wd / 2, 26], [x - Wd / 2, 0], [x + Wd / 2 - 26, 0]]) { const hgt = (Ht - dy) * poles; ctx.fillRect(px - 5, gy - dy * .3 - hgt, 10, hgt); }
-    // the roof: branches laid across, leaves, then hanging fruit
-    if (roof > 0) {
-      ctx.strokeStyle = '#6a4a26'; ctx.lineWidth = 6; for (let i = 0; i < 4; i++) { const yy = top + 4 + i * 7; ctx.beginPath(); ctx.moveTo(x - Wd / 2 - 10, yy); ctx.lineTo(x - Wd / 2 - 10 + (Wd + 30) * roof, yy - 4); ctx.stroke(); }
-      ctx.fillStyle = '#3f7a34'; for (let i = 0; i < 26 * roof; i++) { const lx = x - Wd / 2 - 6 + (i * 37 % (Wd + 20)), ly = top - 6 + (i * 13 % 26); ctx.beginPath(); ctx.ellipse(lx, ly, 14, 6, (i % 5 - 2) * .4, 0, TAU); ctx.fill(); }
-      ctx.fillStyle = '#5ea24a'; for (let i = 0; i < 14 * roof; i++) { const lx = x - Wd / 2 + (i * 53 % Wd), ly = top - 10 + (i * 7 % 18); ctx.beginPath(); ctx.ellipse(lx, ly, 10, 4, (i % 3 - 1) * .5, 0, TAU); ctx.fill(); }
-    }
-    if (deco > 0) { const cols = ['#ffcf3a', '#e8483a', '#9fd65a', '#ffffff']; for (let i = 0; i < 7; i++) { const dx = x - Wd / 2 + 30 + i * 30, len = 18 + (i % 3) * 10; ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(dx, top + 10); ctx.lineTo(dx, top + 10 + len * deco); ctx.stroke(); ctx.fillStyle = cols[i % 4]; ctx.beginPath(); ctx.arc(dx, top + 14 + len * deco, 5, 0, TAU); ctx.fill(); } }
+    skPanel([[G.x - G.bw, bt], [G.x + G.bw, bt], [G.x + G.bw, by], [G.x - G.bw, by]], w);                                              // back wall
+    ctx.globalAlpha = .92; skPanel([[G.x - G.fw, G.top], [G.x - G.bw, bt], [G.x - G.bw, by], [G.x - G.fw, G.gy]], w);                       // side walls
+    skPanel([[G.x + G.bw, bt], [G.x + G.fw, G.top], [G.x + G.fw, G.gy], [G.x + G.bw, by]], w); ctx.globalAlpha = 1;
+    skPole(G.poles[0][0], by, G.poleH(0), c.pole[0]); skPole(G.poles[3][0], by, G.poleH(3), c.pole[3]);
+    ctx.strokeStyle = SK.beam; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    if (bm > 0) { ctx.beginPath(); ctx.moveTo(G.x - G.bw, bt); ctx.lineTo(lerp(G.x - G.bw, G.x + G.bw, bm), bt); ctx.stroke(); // back + side beams
+      for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(G.x + sd * G.bw, bt); ctx.lineTo(lerp(G.x + sd * G.bw, G.x + sd * G.fw, bm), lerp(bt, G.top, bm)); ctx.stroke(); } }
     ctx.restore();
-    // the star bombs: up out of the roof, then down onto her
-    for (const bm of c.bombs) {
-      if (bm.hit) continue; const t = bm.t;
-      let bx, by; if (t < .22) { const u = easeOut(t / .22); bx = bm.x0; by = bm.y0 - u * 300; } else { const u = clamp((t - .22) / .33, 0, 1); bx = lerp(bm.x0, bm.tx, u); by = lerp(bm.y0 - 300, bm.ty - 30, u * u); }
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(200,220,255,.5)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - (bm.tx - bm.x0) * .08, by - 60); ctx.stroke(); ctx.restore();
-      davidStar(bx, by, 30, t * 3, P[form(s)].hero, 1, 0, 'rgba(255,255,255,.55)');
+  }
+  function drawSukkahFront(s, c, k) {
+    const S = SUKKAH, G = sukkahGeom(s.boss), b = s.boss, col = P[form(s)].hero;
+    if (k < S.big) {
+      const bm = skU(k, S.beams[0], S.beams[1]), deco = skU(k, S.deco[0], S.deco[1]);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (c.built) glow(G.x, G.gy - 160, 340, 'rgba(255,200,120,.18)'); ctx.restore();
+      skPole(G.poles[1][0], G.gy, G.poleH(1), c.pole[1], 14); skPole(G.poles[2][0], G.gy, G.poleH(2), c.pole[2], 14);
+      if (bm > 0) { ctx.strokeStyle = SK.beam; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(G.x - G.fw, G.top); ctx.lineTo(lerp(G.x - G.fw, G.x + G.fw, bm), G.top); ctx.stroke(); }
+      // the roof: branches he throws up, laid front to back, each with its leaves
+      const span = 2 * G.fw, nb = S.branches, bx = (j) => G.x - G.fw + (j + .5) * span / nb;
+      const branch = (x, y, rot, a = 1) => { ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(rot); ctx.strokeStyle = SK.beam; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-34, 8); ctx.lineTo(34, -8); ctx.stroke();
+        for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? SK.leaf2 : SK.leaf; ctx.beginPath(); ctx.ellipse(-30 + i * 12, -4 + (i % 3) * 5 - 6, 14, 6, (i % 3 - 1) * .5, 0, TAU); ctx.fill(); } ctx.restore(); };
+      for (let j = 0; j < c.branches; j++) branch(bx(j), G.top - 14 - (j % 2) * 6, -.12 + (j % 3) * .08);
+      if (k >= S.roof[0] && k < S.roof[1] && c.branches < nb) { // the one in the air: an arc from his hands to its place
+        const f = skU(k, S.roof[0], S.roof[1]) * nb - c.branches, tx = bx(c.branches), ty = G.top - 14, hx = s.hero.x, hy = s.hero.y - 90;
+        branch(lerp(hx, tx, f), lerp(hy, ty, f) - Math.sin(f * Math.PI) * 170, f * 7);
+      }
+      if (deco > 0) { const cols = ['#ffcf3a', '#e8483a', '#9fd65a', '#ffffff', '#ff9a3a']; for (let i = 0; i < 9; i++) { const dx = G.x - G.fw + 40 + i * (span - 80) / 8, len = (22 + (i % 3) * 14) * easeOut(deco); ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(dx, G.top + 4); ctx.lineTo(dx, G.top + 4 + len); ctx.stroke(); ctx.fillStyle = cols[i % 5]; ctx.beginPath(); ctx.arc(dx, G.top + 8 + len, 6, 0, TAU); ctx.fill(); } }
+      // the bombs: Stars of David dropping out of the sky onto the hut, a light streak behind each
+      for (const q of c.bombs) { if (!q || q.hit) continue; const f = clamp(q.t / S.fall, 0, 1), y = lerp(-320, q.ty, f * f);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createLinearGradient(0, y - 220, 0, y); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(200,220,255,.8)'); ctx.fillStyle = g; ctx.fillRect(q.x - 6, y - 220, 12, 220); ctx.restore();
+        davidStar(q.x, y, 36, q.t * 6, col, 1, 0, 'rgba(255,255,255,.6)'); }
+      if (k > S.big - .07) { const f = skU(k, S.big - .07, S.big), y = lerp(-500, b.y - 60, f * f); // the giant one
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(G.x, y, 240, 'rgba(255,255,255,.7)'); ctx.fillStyle = 'rgba(200,220,255,.35)'; ctx.fillRect(G.x - 40, y - 600, 80, 600); ctx.restore();
+        davidStar(G.x, y, 110, f * 4, col, 1, 0, 'rgba(255,240,200,.6)'); }
+    } else { // blown apart: poles spin away, branches and reed scraps fly, everything fades
+      const e = skU(k, S.big, 1), o = easeOut(e);
+      ctx.save(); ctx.globalAlpha = 1 - e;
+      G.poles.forEach(([px, py], i) => { ctx.save(); const dx = px - G.x; ctx.translate(px + dx * o * 2.2, py - 140 - o * 260 + e * e * 300); ctx.rotate((i % 2 ? 1 : -1) * o * 6); ctx.fillStyle = SK.pole; ctx.fillRect(-6, -150, 12, 300); ctx.restore(); });
+      for (let i = 0; i < 26; i++) { const a = -Math.PI / 2 + (i / 26 - .5) * 3, d = o * (300 + (i * 53 % 260)); ctx.save(); ctx.translate(G.x + Math.cos(a) * d, G.top + 80 + Math.sin(a) * d + e * e * 400); ctx.rotate(i + o * 9);
+        if (i % 3) { ctx.fillStyle = i % 2 ? SK.leaf : SK.leaf2; ctx.beginPath(); ctx.ellipse(0, 0, 16, 7, 0, 0, TAU); ctx.fill(); } else { ctx.fillStyle = SK.reed; ctx.fillRect(-22, -12, 44, 24); } ctx.restore(); }
+      ctx.restore();
     }
   }
   function letterbox(k) { const bar = easeOut(clamp(k, 0, 1)) * 74; ctx.fillStyle = '#000'; ctx.fillRect(-500, -300, W + 1000, 300 + bar); ctx.fillRect(-500, H - bar, W + 1000, bar + 300); }
@@ -1484,7 +1511,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       const col = al ? '#ffffff' : '#ffe08a';
       ctx.fillStyle = '#0b1014'; ctx.fillRect(-160, -30, 320, 60); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.strokeRect(-160, -30, 320, 60);
       ctx.fillStyle = col; ctx.fillRect(-160, 26, 320 * p, 4);
-      ctx.font = font(30); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(touch ? 'FINISHER!' : 'FINISHER  [ F ]', 0, 0); ctx.restore(); ctx.textBaseline = 'alphabetic';
+      ctx.font = font(30); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(FIN_NAMES[finNext(s)] + (touch ? '!' : '  [ F ]'), 0, 0, 296); ctx.restore(); ctx.textBaseline = 'alphabetic';
     }
     if (h.invertIn > 0 && s.phase !== 'rune') { // the countdown before the inversion lands: big, centred, can't be missed
       const n = Math.ceil(h.invertIn / .55), pu = reducedMotion ? 1 : 1 + (1 - (h.invertIn % .55) / .55) * .25;
@@ -1570,7 +1597,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     const h = s.hero, b = s.boss;
     // camera
     let tz = 1, tx = 0, ty = 0;
-    if (s.phase === 'finisher') { tz = 1.35; tx = (b.x - 640) * 0.6; ty = (b.y - 140 - 360) * 0.6; }
+    if (s.phase === 'finisher' && s.finisher.cine?.v === 3) { tz = .95; tx = (b.x - 640) * .7; ty = -40; } // the whole hut in frame
+    else if (s.phase === 'finisher') { tz = 1.35; tx = (b.x - 640) * 0.6; ty = (b.y - 140 - 360) * 0.6; }
     else if (s.phase === 'box') tz = 0.96;
     else if (s.phase === 'talk' && s.talk) { const hero = s.talk.lines[s.talk.i].who === 'hero', sx = hero ? h.x : b.x, sy = hero ? h.y - 60 : b.y - 150; tz = 1.22 + (fx.talkPunch || 0) * .03; tx = sx - 640 - ((hero ? 720 : 520) - 640) / tz; ty = (sy - 330) * .5; }
     else if (s.phase === 'finisherQte') { tz = 1.1; tx = (b.x - 640) * .3; }
@@ -1594,6 +1622,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       // reborn cine: the hero fades into the sigil and only reappears when the sky light lifts
       const rk = s.phase === 'cine' && s.cine?.kind === 'reborn' ? s.cine.t / s.cine.len : -1, heroA = rk < 0 ? 1 : rk < .16 ? 1 - rk / .16 : rk < .5 ? 0 : 1;
       const dh = () => { if (s.phase === 'fight' && heroA >= 1) { const hc = P[form(s)].hero; glow(h.x, h.y, 90, hc, .16); ctx.save(); ctx.globalAlpha = .5; ctx.strokeStyle = hc; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(h.x, h.y + 2, 34, 10, 0, 0, TAU); ctx.stroke(); ctx.restore(); } if (heroA > 0) { if (heroA < 1) { ctx.save(); ctx.globalAlpha = heroA; drawHero(s, h.x, h.y, heroA); ctx.restore(); } else drawHero(s, h.x, h.y); } };
+      if (s.phase === 'finisher') drawSukkahBack(s); // the hut goes up around her
       if (heroFirst) { dh(); drawBoss(s); } else { drawBoss(s); dh(); }
     }
     if (s.phase === 'clash' && s.clash && s.clash.won && s.clash.wonT > (s.clash.sword ? .55 : 0.15)) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(b.x, b.y - 110, 300 * easeOut(s.clash.wonT), 'rgba(255,255,255,.85)'); ctx.restore(); }
