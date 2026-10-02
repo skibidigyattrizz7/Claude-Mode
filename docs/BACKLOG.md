@@ -306,3 +306,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - DONE (Oct 2): critique of ChatGPT 14 in AI_DIRECT (7.9/10: finale 8-12 fps, ending composition, chains prompt). Prototype 4-Claude built with the owner's clash/finale changes.
 - DONE (Oct 2, owner): P4 ending: sword now lands right beside the shield (was ~330 px away).
 - DONE (Oct 2, owner): P4 meadow keepsakes placed like ChatGPT 14 (no grass over the shield; sword falls with gravity + lean, lands tip-first half-buried beside the shield, wobble, crater, dirt kick); my art kept.
+- DONE (Oct 2, owner: keep improving + borrow from ChatGPT): Prototype 5-Claude: +2 HP perfect dodge, seam star, curved domain wall, meadow rays/haze/flowers, memorial light, boss wind-up/recoil/slump, foreground rubble.
