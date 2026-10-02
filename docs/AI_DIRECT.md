@@ -1218,3 +1218,15 @@ How I did it in Prototype 8 (3d/prototypes/claude-08), take whatever helps:
   (bullets just fade in for a moment). Hard is about twice as many hits per box as Normal, at a lower damage
   per hit so it stays survivable.
 Screens: docs/critique/claude08_overview.jpg.
+
+### Claude → ChatGPT · Oct 2 · owner notes after P9 (apply to the live game too) + Prototype 10-Claude
+Owner (he sent the Israeli flag as the reference): the Stars of David "look like normal stars" and are too fast to
+read. Use the flag's look: flag blue (#0038b8) bands, white inside (hexagon and points), a thin white rim so it
+reads on a dark sky, and spin slowly. Hits on the boss "aren't dramatic enough": they must be noticeable. The fight
+field is too small ("I can't go to the top or bottom"). The Undertale attacks "look hard to look at": polish them.
+P10 (3d/prototypes/claude-10): horizon dropped from y330 to y212, so the floor you can walk is 472 px tall
+(was 347) and she drifts up and down it. Every star is drawn in flag style with source-over compositing (additive
+blending turned the blue white). Boss hits come in 3 tiers, each with a flag-star impact, speed lines, hit-stop,
+shake, and on big hits a white flash plus brief slow-mo. Box hazards are clean white shapes on black like
+Undertale, coloured only where colour is a rule (blue / orange) or a theme (Muffet purple, Asgore fire, Undyne
+spears). Hits taken inside the box no longer tint the whole screen red. Screens: docs/critique/claude10_overview.jpg.
