@@ -66,12 +66,12 @@ function pointSegmentDistance(px, py, x1, y1, x2, y2) {
 function spawnHazard(state, rng, forcedType = null, forcedHand = null) {
   if (state.hazards.length >= MAX_HAZARDS) return;
   const maxY = arenaMaxY(state);
-  const types = ['laserline', 'bombcircle', 'painring', 'handslam', 'handcatch', 'earththrow', 'inversion', 'chains', ...(state.stage?['eclipsecross','doomfall','gravitywell']:[])];
+  const types = ['laserline', 'bombcircle', 'painring', 'handslam', 'handcatch', 'earththrow', ...(state.phaseTime>=20&&state.sequenceCooldown<=0&&!state.sequence?['inversion','chains']:[]), ...(state.stage?['eclipsecross','doomfall','gravitywell']:[])];
   let choices = types.filter(type => type !== state._lastAttack);
   if (state.stage === 1 && rng() > 0.4) choices = choices.filter(type => type !== 'painring');
   let type = forcedType || choices[Math.floor(rng() * choices.length)];
   if(type==='inversion'||type==='chains'){
-    if(!state.sequence&&state.sequenceCooldown<=0){startVinsonSequence(state,type);state._lastAttack=type;}
+    if(!state.sequence&&state.sequenceCooldown<=0){startVinsonSequence(state,type,{warning:1.5});state._lastAttack=type;}
     return;
   }
   const h = state.hero, b = state.boss;
@@ -232,7 +232,10 @@ function fireWeapon(state, weaponName) {
 function moveHero(state, dt, input, bounds = ARENA) {
   const hero = state.hero;
   const maxY = bounds === ARENA ? arenaMaxY(state) : bounds.maxY;
-  const minY = bounds===ARENA?(state.stage?350:bounds.minY):bounds.minY+44;
+  const minY = bounds===ARENA?(state.stage?350:bounds.minY):bounds.minY+(bounds.heroRadius||7);
+  const minX=bounds===ARENA?bounds.minX:bounds.minX+(bounds.heroRadius||7);
+  const maxX=bounds===ARENA?bounds.maxX:bounds.maxX-(bounds.heroRadius||7);
+  const movementMaxY=bounds===ARENA?maxY:maxY-(bounds.heroRadius||7);
   const direction=hero.invertedTime>0?-1:1;
   const move = normVector(clamp(finite(input.x)*direction, -1, 1), clamp(finite(input.y)*direction, -1, 1));
   hero.invertedTime=Math.max(0,hero.invertedTime-dt);
@@ -247,18 +250,32 @@ function moveHero(state, dt, input, bounds = ARENA) {
     event(state, 'heal', { hp: hero.hp, charges: hero.heals });
   }
   const dodgeDown = bool(input.dodge), dodgePressed = dodgeDown && !state._dodgeWasDown; state._dodgeWasDown = dodgeDown;
-  let speed = state.sequence?.kind==='chains' ? 85 : 300;
-  if (dodgePressed && hero.dodgeCooldown <= 0 && state.sequence?.kind!=='chains') {
+  const chainActive=state.sequence?.kind==='chains' && !(state.sequence.warning>0);
+  let speed = chainActive ? 85 : 300;
+  if (dodgePressed && hero.dodgeCooldown <= 0 && !chainActive) {
     const perfect=bounds===ARENA&&state.hazards.some(h=>h.telegraph-h.elapsed>0&&h.telegraph-h.elapsed<=.15&&hazardHitsHero({...h,elapsed:h.telegraph+(h.type==='handslam'?.35:h.type==='handcatch'?.6:.05)},hero));
     const direction = Math.hypot(move.x, move.y) ? move : { x: -1, y: 0 };
-    hero.x = clamp(hero.x + direction.x * 620 * 0.19, bounds.minX, bounds.maxX);
-    hero.y = clamp(hero.y + direction.y * 620 * 0.19, minY, maxY);
+    hero.x = clamp(hero.x + direction.x * 620 * 0.19, minX, maxX);
+    hero.y = clamp(hero.y + direction.y * 620 * 0.19, minY, movementMaxY);
     hero.invulnerable = 0.38; hero.dodgeCooldown = state.stage ? 0.9 : 0.86; speed = 0;
     event(state, 'dodge', { x: hero.x, y: hero.y });
     if(perfect){hero.hp=Math.min(hero.maxHp,hero.hp+2);event(state,'perfectDodge',{x:hero.x,y:hero.y});}
   }
-  hero.x = clamp(hero.x + move.x * speed * dt, bounds.minX, bounds.maxX);
-  hero.y = clamp(hero.y + move.y * speed * dt, minY, maxY);
+  hero.x = clamp(hero.x + move.x * speed * dt, minX, maxX);
+  hero.y = clamp(hero.y + move.y * speed * dt, minY, movementMaxY);
+}
+// Shared main-wave gap geometry. Aimed attacks are separate; this is not an invulnerability zone.
+export function vinsonBoxGap(box,preview){
+ const safe=preview.safe,pattern=preview.pattern;
+ if(pattern==='vertical')return {kind:'vertical',x:box.minX+(box.maxX-box.minX)*(safe+.5)/5,y:(box.minY+box.maxY)/2,width:(box.maxX-box.minX)/5};
+ if(pattern==='radial'){
+  const x=(box.minX+box.maxX)/2,y=(box.minY+box.maxY)/2;
+  const gap=Math.round(safe*16/5),angle=(gap+1)*Math.PI/8+(preview.wave||0)*.19;
+  const dx=Math.cos(angle),dy=Math.sin(angle),r=box.heroRadius||7;
+  const reach=Math.min((box.maxX-box.minX-2*r)/2/Math.max(.0001,Math.abs(dx)),(box.maxY-box.minY-2*r)/2/Math.max(.0001,Math.abs(dy)))*.65;
+  return {kind:'radial',gap,angle,half:Math.PI/8*1.4,x:x+dx*reach,y:y+dy*reach,originX:x,originY:y};
+ }
+ return {kind:'horizontal',x:(box.minX+box.maxX)/2,y:box.minY+(box.maxY-box.minY)*(safe+.5)/5,height:(box.maxY-box.minY)/5};
 }
 function beginBox(state) {
   state.sequence=null;state.comboOffer=0;
@@ -294,7 +311,7 @@ function updateBox(state, dt, input) {
     if (box.pattern === 'radial') {
       const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
       for (let lane = 0; lane < 16 && box.bullets.length < 64; lane++) {
-        const gap=Math.round(safe*16/5);
+        const gap=vinsonBoxGap(box,{safe,wave:box.wave,pattern:box.pattern}).gap;
         if ((lane-gap+16)%16<=2) continue;
         const angle = lane * Math.PI / 8 + box.wave*.19, speed = 170 + state.thresholdIndex*18;
         box.bullets.push({ x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
@@ -346,17 +363,18 @@ function updateBox(state, dt, input) {
   if (state.phase === 'defeat') return;
   if (box.elapsed >= box.duration) {state.hero.heals++;event(state,'healCharge',{charges:state.hero.heals});beginTiming(state, input);}
 }
-export function startVinsonSequence(state,kind){
+export function startVinsonSequence(state,kind,{warning=0}={}){
   if(state.sequence||state.phase!=='fight')return false;
   const pool=['q','e','r','f'];
   state.sequence={kind,keys:Array.from({length:3},()=>pool.splice(Math.floor(nextRandom(state)*pool.length),1)[0]),
-    index:0,remaining:kind==='chains'?4.5:3.5,origin:{x:state.boss.x,y:state.boss.y-80}};
-  state.sequenceCooldown=10;
+    index:0,warning,remaining:kind==='chains'?6:5.5,origin:{x:state.boss.x,y:state.boss.y-80}};
+  state.sequenceCooldown=35;
   event(state,'sequenceStart',{kind,keys:state.sequence.keys.slice()});return true;
 }
 function updateSequence(state,dt,input){
   state.sequenceCooldown=Math.max(0,state.sequenceCooldown-dt);
   const s=state.sequence;if(!s)return;
+  if(s.warning>0){s.warning=Math.max(0,s.warning-dt);return;}
   s.remaining-=dt;
   const key=typeof input.sequenceKey==='string'?input.sequenceKey.toLowerCase():null;
   if(key){
@@ -430,7 +448,7 @@ function updateFight(state, dt, input) {
   if(bool(input.combo)&&triggerVinsonCombo(state)){updateCombo(state,dt);return;}
   updateSequence(state,dt,input);if(state.phase==='defeat')return;
   moveHero(state, dt, input);
-  if(state.sequence?.kind==='chains'){
+  if(state.sequence?.kind==='chains' && !(state.sequence.warning>0)){
     const origin=state.sequence.origin,dx=hero.x-origin.x,dy=hero.y-hero.bodyRise-origin.y,distance=Math.hypot(dx,dy);
     if(distance<125){const d=normVector(dx||-1,dy);hero.x=clamp(origin.x+d.x*125,ARENA.minX,ARENA.maxX);hero.y=clamp(origin.y+hero.bodyRise+d.y*125,ARENA.minY,maxY);}
   }

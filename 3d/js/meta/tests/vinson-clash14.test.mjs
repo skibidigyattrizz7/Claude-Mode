@@ -2,23 +2,26 @@ import assert from 'node:assert/strict';
 import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js';
 import {sampleVinsonCinematic} from '../ui/vinsoncinematic.js';
 
-const run=(solve)=>{
-  const s=createVinsonClash({seed:42});
-  for(let frame=0;frame<60*46&&!s.won&&!s.lost;frame++){
-    const key=solve&&s.stun<=0&&s.recovery<=0&&frame%18===0?s.keys[s.index]:null;
-    stepVinsonClash(s,1/60,{key});assert.ok(s.progress>=0&&s.progress<=1);
-  }return s;
-};
-const solved=run(true),idle=run(false);
-assert.equal(solved.won,true,'timely complete sequences win');assert.equal(solved.lost,false);
-assert.ok(solved.accepted>=16,'four ordered keys per push, no single-key mash');
-assert.equal(idle.lost,true,'timeouts cause actual defeat');assert.equal(idle.won,false);
-const wrong=createVinsonClash();const start=wrong.progress;
-stepVinsonClash(wrong,.016,{key:'j'});assert.ok(wrong.stun>1);assert.ok(wrong.progress<start);assert.equal(wrong.mistakes,1);
-const count=wrong.accepted;stepVinsonClash(wrong,.05,{key:wrong.keys[0]});assert.equal(wrong.accepted,count,'stun cannot be bypassed');
-const a=createVinsonClash({seed:3}),b=createVinsonClash({seed:3});
-for(let i=0;i<600;i++){const input={key:i%18===0?a.keys[a.index]:null};stepVinsonClash(a,1/60,input);stepVinsonClash(b,1/60,input);}assert.deepEqual(a,b);
-const mash=createVinsonClash();for(let i=0;i<100;i++)stepVinsonClash(mash,.05,{presses:10,held:true});assert.equal(mash.accepted,0,'holding or auto-clicking cannot solve ordered prompts');
+const s=createVinsonClash({seed:42});
+assert.equal(s.phase,'push');assert.equal(s.keys.length,0,'normal clash starts without a sequence');
+let warnings=0;
+for(let i=0;i<3600&&!s.won&&!s.lost;i++){
+ const key=s.phase==='sequence'&&i%12===0?s.keys[s.index]:i%8===0?'j':null;
+ stepVinsonClash(s,1/60,{key});warnings+=s.events.filter(e=>e.type==='warning').length;
+}
+assert.equal(s.won,true);assert.equal(warnings,2,'only specific50/80% moments ask for sequences');
+const warning=createVinsonClash();warning.progress=.51;stepVinsonClash(warning,.01);
+assert.equal(warning.phase,'warning');assert.ok(warning.warning>=2,'clear warning precedes active keys');
+for(let i=0;i<40;i++)stepVinsonClash(warning,.05,{key:'j',presses:20,held:true});
+assert.equal(warning.mistakes,0,'spam during warning cannot fail');assert.equal(warning.phase,'warning');
+for(let i=0;i<6;i++)stepVinsonClash(warning,.05,{key:'j'});
+assert.equal(warning.phase,'sequence');const index=warning.index;
+stepVinsonClash(warning,.01,{key:'j',presses:100,held:true});assert.equal(warning.index,index);assert.equal(warning.mistakes,0,'attack spam is ignored during sequence');
+stepVinsonClash(warning,.01,{key:warning.keys[0]==='q'?'e':'q'});assert.ok(warning.stun>1);assert.equal(warning.lost,false);
+for(let i=0;i<24;i++)stepVinsonClash(warning,.05);assert.equal(warning.phase,'push','stun returns to same clash');
+for(let i=0;i<5;i++){warning.phase='sequence';warning.progress=.9;warning.remaining=3;warning.keys=['q','e','r','f'];warning.index=0;stepVinsonClash(warning,.01,{key:'e'});assert.equal(warning.lost,false,'no three-strike defeat');}
+const idle=createVinsonClash();for(let i=0;i<3000&&!idle.lost;i++)stepVinsonClash(idle,1/60);assert.equal(idle.lost,true,'losing ALL territorial ground still loses');
+const a=createVinsonClash({seed:3}),b=createVinsonClash({seed:3});for(let i=0;i<600;i++){const input={key:i%8===0?'j':null};stepVinsonClash(a,1/60,input);stepVinsonClash(b,1/60,input);}assert.deepEqual(a,b);
 
 const live=createVinsonClash();live.progress=.63;live.pulse=.8;live.threshold=1;live.thresholdAge=.4;live.elapsed=5;
 const shot=sampleVinsonCinematic('finale',1.65,{clash:live});

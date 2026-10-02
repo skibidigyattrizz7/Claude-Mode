@@ -92,11 +92,11 @@ export function drawClashHUD(ctx,shot,t,reducedMotion){
   ctx.fillStyle='#9f1f33';ctx.fillRect(387+506*p,128,506*(1-p),10);
   ctx.fillStyle='#fff4cf';ctx.fillRect(385+506*p-2,123,4,20);
   ctx.translate(640,102);ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle='#fff4df';ctx.font='900 25px Impact,system-ui,sans-serif';ctx.fillText(shot.clashStun>0?'STUNNED · VINSON PUSHES BACK':'PRESS THE KEYS IN ORDER',0,0);
-  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#c9c5bb';ctx.font='700 15px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText('Three mistakes lose the clash · '+(shot.clashMistakes||0)+'/3',640,158);
+  ctx.fillStyle='#fff4df';ctx.font='900 25px Impact,system-ui,sans-serif';ctx.fillText(shot.clashStun>0?'STUNNED · VINSON PUSHES BACK':shot.clashMode==='warning'?'GET READY · KEY SEQUENCE IN '+shot.clashWarning.toFixed(1)+'s':shot.clashMode==='sequence'?'NOW · PRESS THE KEYS IN ORDER':'PUSH · J / CLICK / TAP',0,0);
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#c9c5bb';ctx.font='700 15px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(shot.clashMode==='push'?'Keep pushing. Key moments are announced first.':'Wrong sequence keys stun you. Attack spam is ignored.',640,158);
   if(shot.clashStun>0){ctx.fillStyle='#ff8a8a';ctx.font='900 28px monospace';ctx.fillText(shot.clashStun.toFixed(1)+'s',640,232);}
   else if(shot.clashRecovery>0){ctx.fillStyle='#bee8ff';ctx.font='900 25px monospace';ctx.fillText('PUSH!',640,232);}
-  else{for(let i=0;i<(shot.clashKeys||[]).length;i++){const x=532+i*72;ctx.fillStyle=i<shot.clashKeyIndex?'#173c35':i===shot.clashKeyIndex?'#254457':'#141a22';ctx.fillRect(x-28,183,56,58);ctx.strokeStyle=i===shot.clashKeyIndex?'#d4f4ff':'#71818c';ctx.lineWidth=2;ctx.strokeRect(x-28,183,56,58);ctx.fillStyle=i<shot.clashKeyIndex?'#89ddba':'#ecf7ff';ctx.font='900 36px monospace';ctx.fillText(shot.clashKeys[i].toUpperCase(),x,214);}ctx.font='900 18px monospace';ctx.fillStyle='#ffb5a5';ctx.fillText((shot.clashTimeLeft||0).toFixed(1)+'s',812,214);}
+  else if(['sequence','warning'].includes(shot.clashMode)){for(let i=0;i<(shot.clashKeys||[]).length;i++){const x=532+i*72;ctx.fillStyle=i<shot.clashKeyIndex?'#173c35':i===shot.clashKeyIndex?'#254457':'#141a22';ctx.fillRect(x-28,183,56,58);ctx.strokeStyle=i===shot.clashKeyIndex?'#d4f4ff':'#71818c';ctx.lineWidth=2;ctx.strokeRect(x-28,183,56,58);ctx.fillStyle=i<shot.clashKeyIndex?'#89ddba':'#ecf7ff';ctx.font='900 36px monospace';ctx.fillText(shot.clashKeys[i].toUpperCase(),x,214);}ctx.font='900 18px monospace';ctx.fillStyle='#ffb5a5';ctx.fillText(shot.clashMode==='warning'?'WAIT':(shot.clashTimeLeft||0).toFixed(1)+'s',812,214);}
   if(shot.mashThresholdAge<2.2){const captain=shot.mashThreshold===1;ctx.textAlign=captain?'left':'right';ctx.fillStyle=captain?'#d8f2ff':'#ff8b91';ctx.font='900 27px Impact,system-ui';ctx.fillText(captain?'FOR EVERYONE WE LOST.':'I ASSIGN YOUR END.',captain?55:1225,285);}
 
   ctx.restore();

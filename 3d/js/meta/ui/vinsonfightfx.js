@@ -1,4 +1,4 @@
-import {vinsonEarthPosition} from '../core/vinsonbattle.js?v=vinson29';
+import {vinsonEarthPosition,vinsonBoxGap} from '../core/vinsonbattle.js?v=vinson31';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
@@ -72,16 +72,18 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
   ctx.fillStyle='#f5e9dc';ctx.font='bold 23px monospace';ctx.textAlign='center';ctx.fillText(`SURVIVE  ${Math.max(0,Math.ceil(b.duration-b.elapsed))}`,640,b.minY-20);
   ctx.font='14px monospace';ctx.fillStyle='#b5c5d0';ctx.fillText('MOVE / DODGE · NO ATTACKS IN THE BOX',640,b.maxY+28);
   if(b.preview){
-    const preview=b.preview,laneHeight=(b.maxY-b.minY)/5,laneWidth=(b.maxX-b.minX)/5;
+    const preview=b.preview,gapPoint=vinsonBoxGap(b,preview),laneHeight=(b.maxY-b.minY)/5,laneWidth=(b.maxX-b.minX)/5;
     ctx.save();ctx.strokeStyle='#98bbcf';ctx.fillStyle='#aecddd';ctx.globalAlpha=.75;ctx.lineWidth=2;ctx.setLineDash([7,7]);
-    if(preview.pattern==='vertical'){const x=b.minX+laneWidth*preview.safe;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
+    if(preview.pattern==='vertical'){const x=gapPoint.x-laneWidth/2;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
     else if(preview.pattern==='radial'){
       // Point at the real escape gap: the skipped spokes are gap..gap+2 (core spawn), centred on gap+1.
-      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,gap=Math.round(preview.safe*16/5),mid=(gap+1)*Math.PI/8+(preview.wave||0)*.19,half=Math.PI/8*1.4,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
+      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,mid=gapPoint.angle,half=gapPoint.half,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
       ctx.save();ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
       ctx.fillStyle='#aecddd';ctx.globalAlpha=.16;ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,r,mid-half,mid+half);ctx.closePath();ctx.fill();
       ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid-half)*r,y+Math.sin(mid-half)*r);ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid+half)*r,y+Math.sin(mid+half)*r);ctx.stroke();ctx.restore();}
-    else{const y=b.minY+laneHeight*preview.safe;ctx.strokeRect(b.minX+4,y+4,b.maxX-b.minX-8,laneHeight-8);}
+    else{const y=gapPoint.y-laneHeight/2;ctx.strokeRect(b.minX+4,y+4,b.maxX-b.minX-8,laneHeight-8);}
+    ctx.setLineDash([]);ctx.globalAlpha=1;ctx.strokeStyle='#d9f7ff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(gapPoint.x,gapPoint.y,10,0,Math.PI*2);ctx.stroke();
+    ctx.font='12px monospace';ctx.fillStyle='#d9f7ff';ctx.textAlign='center';ctx.fillText('NEXT MAIN WAVE GAP · DODGE AIMED SHOTS',640,b.maxY+46);
     ctx.restore();
   }
   ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();

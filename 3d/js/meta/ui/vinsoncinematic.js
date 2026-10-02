@@ -13,7 +13,7 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash
     clashProgress: 0, clashPower: 0, clashX: 640, explosion: 0, arrival: 0, skyBeam: 0, arrivalStar: 0, arrivalSpin: 0,
     domainPower:0,throwSword:0,peace:0,landingAge:0,interactiveClash:false,
     mashProgress:0,mashPulse:0,mashElapsed:0,mashThreshold:0,mashThresholdAge:99,
-    clashKeys:[],clashKeyIndex:0,clashTimeLeft:0,clashStun:0,clashRecovery:0,clashMistakes:0 };
+    clashMode:'push',clashWarning:0,clashKeys:[],clashKeyIndex:0,clashTimeLeft:0,clashStun:0,clashRecovery:0,clashMistakes:0 };
   if (kind === 'transition') {
     // World fades after defeat; Phonk returns through a soft veil rather than a cut.
     shot.villainAlpha = 1 - ramp(t, 0, 2.2);
@@ -58,7 +58,7 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash
     shot.hero = 'captain'; shot.villain = 'phonk';
     if(clash && !clash.won && t>=1.65){
       shot.domainPower=1;shot.beams=1;shot.interactiveClash=true;
-      shot.clashKeys=(clash.keys||[]).slice();shot.clashKeyIndex=clash.index||0;
+      shot.clashMode=clash.phase||'push';shot.clashWarning=clash.warning||0;shot.clashKeys=(clash.keys||[]).slice();shot.clashKeyIndex=clash.index||0;
       shot.clashTimeLeft=clash.remaining||0;shot.clashStun=clash.stun||0;
       shot.clashRecovery=clash.recovery||0;shot.clashMistakes=clash.mistakes||0;
       shot.mashProgress=clamp(clash.progress);shot.mashPulse=clamp(clash.pulse);

@@ -70,7 +70,7 @@ try {
     assert.equal(battle.state.time, pausedTime, 'skip cannot advance the live clash or battle state');
 
     for (let i = 0; i < 1800 && skip.hidden; i++) {
-      const dock=find(screen,'vb-clash-keys');if(i%18===0&&dock.dataset.ready==='1')tap(dock.dataset.next);
+      const dock=find(screen,'vb-clash-keys');if(i%18===0&&dock.dataset.ready==='1')tap(dock.dataset.phase==='push'?'j':dock.dataset.next);
       step(1);
     }
     assert.equal(skip.hidden, false, 'correct timed sequences win and resume the finale');
@@ -93,10 +93,10 @@ try {
     let wins=0;const battle=launchVinsonBattle({previewEnding:true,reducedMotion:true,onWin:async()=>{wins++;return {ok:true,immune:true};}});
     const screen=body.children[0],conversation=find(screen,'vb-dialogue'),skip=find(screen,'vb-top').children.find(n=>n.textContent==='Skip ending');
     step(140);tap('j');step(1);step(1800);
-    const panel=find(screen,'vb-panel');assert.ok(panel.children.some(n=>n.textContent==='Clash lost'),'wrong keys/timeouts can lose');assert.equal(wins,0);
+    const panel=find(screen,'vb-panel');assert.ok(panel.children.some(n=>n.textContent==='Clash lost'),'losing all ground can lose');assert.equal(wins,0);
     const frozen=battle.state.time;step(100);assert.equal(battle.state.time,frozen);
     panel.lastChild.children.find(n=>n.textContent==='Retry clash').onclick();
-    for(let i=0;i<1800&&skip.hidden;i++){const dock=find(screen,'vb-clash-keys');if(i%18===0&&!dock.hidden&&dock.dataset.ready==='1')dock.children.find(n=>n.textContent.toLowerCase()===dock.dataset.next)?.onclick();step(1);}
+    for(let i=0;i<1800&&skip.hidden;i++){const dock=find(screen,'vb-clash-keys');if(i%18===0&&!dock.hidden&&dock.dataset.ready==='1'){if(dock.dataset.phase==='push')tap('j');else dock.children.find(n=>n.textContent.toLowerCase()===dock.dataset.next)?.onclick();}step(1);}
     assert.equal(skip.hidden,false,'correct touch sequence wins after a loss/retry');battle.close();
   }
 

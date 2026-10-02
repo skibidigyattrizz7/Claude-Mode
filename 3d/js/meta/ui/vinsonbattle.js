@@ -1,12 +1,12 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson29';
-import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15';
-import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15';
+import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson31';
+import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15c';
+import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15d';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15';
 import {drawPeacefulEnding} from './vinsonendingfx.js?v=15';
-import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15b';
-import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=15';
-import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=15';
+import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15c';
+import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=15c';
+import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=15e';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 import { load } from '../core/storage.js';
 
@@ -388,6 +388,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   let mode = '', cinematicKind = '', cinematicTime = 0, trauma = 0, particles = [], nonce = null, victoryBusy = false, victoryConfirmed = false;
   let finalClash=null,clashInputs=[],finaleWinDelay=0;
   const clashDock=node('div','vb-clash-keys');clashDock.hidden=true;stage.append(clashDock);
+  const pushButton=node('button','','Push · J');pushButton.dataset.action='push';pushButton.style.width='120px';pushButton.addEventListener('pointerdown',e=>{e.preventDefault();clashInputs.push('j');held.add('attack');pushButton.setPointerCapture(e.pointerId);});for(const evt of ['pointerup','pointercancel','lostpointercapture'])pushButton.addEventListener(evt,()=>held.delete('attack'));clashDock.append(pushButton);
   for(const key of ['q','e','r','f']){const b=node('button','',key.toUpperCase());b.setAttribute('aria-label','Clash key '+key.toUpperCase());b.onclick=()=>{if(finalClash&&!finalClash.won&&!finalClash.lost)clashInputs.push(key);};clashDock.append(b);}
   const feedback={pops:[],trails:[],chips:{hero:battle.state.hero.hp,boss:battle.state.boss.hp},chipDelay:{hero:0,boss:0},hurt:0,flash:0,bossFlash:0,banner:0,stop:0,slow:0};
   let dialogue=null,lastDialogue=-10;
@@ -472,7 +473,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     if(blockingDialogue && ['Enter',' '].includes(e.key)){e.preventDefault();if(!e.repeat)advanceDialogue();return;}
     if(blockingDialogue && e.key!=='Tab'){e.preventDefault();return;}
     if(cinematicKind==='finale'&&finalClash&&!finalClash.won&&!finalClash.lost&&e.key!=='Tab'){
-      e.preventDefault();if(!e.repeat)clashInputs.push(e.key.toLowerCase());return;
+      e.preventDefault();if(e.key.toLowerCase()==='j')keys.add('j');if(!e.repeat)clashInputs.push(e.key.toLowerCase());return;
     }
     if(battle.state.sequence&&['q','e','r','f'].includes(e.key.toLowerCase())){e.preventDefault();if(!e.repeat)sequenceInputs.push(e.key.toLowerCase());return;}
     if(e.key.toLowerCase()==='c'){e.preventDefault();if(!e.repeat)comboPressed=true;return;}
@@ -560,11 +561,12 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       let clashView=cinematicKind==='finale'?finalClash:null;
       if(cinematicKind==='finale'&&cinematicTime<1.65)cinematicTime+=dt;
       else if(cinematicKind==='finale'&&finalClash&&!finalClash.won){
-        stepVinsonClash(finalClash,dt,{key:clashInputs.shift()});clashView=finalClash;
-        if(finalClash.stun>0||finalClash.recovery>0)clashInputs.length=0;
+        const previousClashPhase=finalClash.phase;
+        stepVinsonClash(finalClash,dt,{key:clashInputs.shift(),held:keys.has('j')||held.has('attack')});clashView=finalClash;
+        if(finalClash.phase!==previousClashPhase||['warning','stunned'].includes(finalClash.phase))clashInputs.length=0;
         if(finalClash.lost){
           mode='defeat';held.clear();keys.clear();clashDock.hidden=true;particles.length=0;
-          showPanel('Clash lost', 'Vinson overpowered you. Three mistakes, losing all ground or running out of time ends the clash.', [['Retry clash',()=>{finalClash=createVinsonClash({seed});clashInputs=[];cinematicTime=0;mode='finale';panel.hidden=true;}],['Return to Pitchside',close]]);return;
+          showPanel('Clash lost', 'Vinson overpowered you. Losing all ground or running out of time ends the clash. Mistakes only stun you.', [['Retry clash',()=>{finalClash=createVinsonClash({seed});clashInputs=[];cinematicTime=0;mode='finale';panel.hidden=true;}],['Return to Pitchside',close]]);return;
         }
         for(const evt of finalClash.events){
           if(evt.type==='push'){const x=vinsonClashX(finalClash.progress);burst(x,337,'#fff0b5',Math.min(12,evt.count*5));trauma=Math.min(1,trauma+(reducedMotion?0:.08*evt.count));tone('fire');}
@@ -586,7 +588,10 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       else if (shot.done && mode !== 'result') { mode = 'result';endingSeen=true;try{globalThis.localStorage?.setItem('vinson-ending13-seen','1');}catch{} subtitle.replaceChildren(); void confirmVictory(); }
       return;
     }
+    const preparingSequence=battle.state.sequence?.warning>0;
     const s = battle.step(dt, {...input(),sequenceKey:sequenceInputs.shift(),combo:comboPressed});comboPressed=false;
+    if(preparingSequence||s.sequence?.warning>0)sequenceInputs.length=0;
+    for(const button of sequenceDock.children)button.disabled=s.sequence?.warning>0;
     sequenceDock.hidden=!s.sequence;controls.classList[s.sequence?'add':'remove']('vb-has-sequence');controls.children[0].hidden=s.time>20;comboButton.hidden=s.comboOffer<=0||s.phase!=='fight';comboButton.textContent='STARBREAKER · C · '+s.comboOffer.toFixed(1)+'s';
     if(!s.sequence)sequenceInputs.length=0;
     const attackButton=[...touch.children].find(b=>b.dataset.action==='attack');if(attackButton){attackButton.disabled=s.phase==='dodgebox';attackButton.textContent=s.phase==='timing'?'Strike':'Attack';}
@@ -665,7 +670,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     drawVinsonBattle(ctx, battle.state, images, clock, { shot, particles, trauma, reducedMotion, visualHero: viewHero, camera,feedback });
     controls.classList[cinematicKind==='finale'?'add':'remove']('vb-ending');
     clashDock.hidden=!(cinematicKind==='finale'&&finalClash&&!finalClash.won&&!finalClash.lost&&cinematicTime>=1.65);
-    if(!clashDock.hidden){clashDock.dataset.next=finalClash.keys[finalClash.index]||'';clashDock.dataset.ready=finalClash.stun<=0&&finalClash.recovery<=0?'1':'0';for(const b of clashDock.children)b.disabled=finalClash.stun>0||finalClash.recovery>0;}
+    if(!clashDock.hidden){clashDock.dataset.phase=finalClash.phase;clashDock.dataset.next=finalClash.keys[finalClash.index]||'';clashDock.dataset.ready=['push','sequence'].includes(finalClash.phase)?'1':'0';for(const b of clashDock.children){const isPush=b===pushButton;b.hidden=isPush?finalClash.phase!=='push':finalClash.phase!=='sequence';b.disabled=!['push','sequence'].includes(finalClash.phase);}}
     skipEnding.hidden=!(endingSeen&&cinematicKind==='finale'&&finalClash?.won&&mode!=='result');
     const activeDialogue=dialogue&&clock<dialogue.until&&mode==='fight'?dialogue:null;
     const text = blockingDialogue || shot || mode==='result' ? '' : activeDialogue?.text || '';

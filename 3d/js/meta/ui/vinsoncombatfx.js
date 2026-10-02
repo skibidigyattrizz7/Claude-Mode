@@ -10,7 +10,7 @@ export function drawVinsonBlackHole(ctx,h,t,reducedMotion){
 }
 export function drawVinsonSequence(ctx,state,t,reducedMotion){
   const s=state.sequence;if(!s)return;
-  if(s.kind==='chains'){
+  if(s.kind==='chains' && !(s.warning>0)){
     ctx.save();ctx.strokeStyle='#c1a78a';ctx.lineWidth=3;ctx.shadowColor='#891f33';ctx.shadowBlur=0;
     for(const offset of [-14,14]){const x1=s.origin.x,y1=s.origin.y+offset,x2=state.hero.x,y2=state.hero.y-state.hero.bodyRise+offset;
       const count=Math.min(96,Math.max(4,Math.ceil(Math.hypot(x2-x1,y2-y1)/12)));
@@ -20,9 +20,9 @@ export function drawVinsonSequence(ctx,state,t,reducedMotion){
   // Keycaps follow Patel without crossing the top HUD or leaving the camera frame.
   const cx=Math.max(185,Math.min(1095,state.hero.x)),cy=Math.max(265,Math.min(480,state.hero.y-state.hero.bodyRise-145));
   ctx.save();ctx.textAlign='center';ctx.fillStyle='rgba(5,5,9,.9)';ctx.fillRect(cx-174,cy-45,348,132);
-  ctx.fillStyle=s.kind==='chains'?'#f4d6ac':'#ecafff';ctx.font='900 25px system-ui';ctx.fillText(s.kind==='chains'?'BREAK THE CHAINS':'KEEP CONTROL',cx,cy-12);
+  ctx.fillStyle=s.kind==='chains'?'#f4d6ac':'#ecafff';ctx.font='900 25px system-ui';ctx.fillText(s.warning>0?'GET READY · '+s.warning.toFixed(1)+'s':s.kind==='chains'?'BREAK THE CHAINS':'KEEP CONTROL',cx,cy-12);
   for(let i=0;i<s.keys.length;i++){const x=cx-100+i*100;ctx.fillStyle=i<s.index?'#183d33':i===s.index?'#433426':'#15151c';ctx.fillRect(x-35,cy,70,66);ctx.strokeStyle=i===s.index?'#fff0c6':'#8d869b';ctx.lineWidth=2;ctx.strokeRect(x-35,cy,70,66);ctx.fillStyle=i<s.index?'#8fe1bf':i===s.index?'#fff0c6':'#bbb4c7';ctx.font='900 44px monospace';ctx.fillText(s.keys[i].toUpperCase(),x,cy+49);}
-  ctx.fillStyle='#f2b1ad';ctx.font='700 17px monospace';ctx.fillText(s.remaining.toFixed(1)+'s',cx,cy+84);ctx.restore();
+  ctx.fillStyle='#f2b1ad';ctx.font='700 17px monospace';ctx.fillText(s.warning>0?'WAIT FOR THE SIGNAL':s.remaining.toFixed(1)+'s',cx,cy+84);ctx.restore();
 }
 export function drawVinsonCombo(ctx,state,t,reducedMotion){
   const c=state.combo;if(!c)return;

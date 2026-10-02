@@ -45,7 +45,7 @@ for (const kind of ['inversion', 'chains']) {
 {
   const battle = freshFight(1417);
   startVinsonSequence(battle.state, 'inversion');
-  for (let i = 0; i < 75 && battle.state.sequence; i++) battle.step(.05, {});
+  for (let i = 0; i < 120 && battle.state.sequence; i++) battle.step(.05, {});
   assert.equal(battle.state.sequence, null);
   assert.ok(battle.state.hero.invertedTime > 5.9);
 }
