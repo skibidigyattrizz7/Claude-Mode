@@ -3,7 +3,7 @@ const clamp = (n) => Math.max(0, Math.min(1, n));
 const smooth = (n) => { const t = clamp(n); return t * t * (3 - 2 * t); };
 const ramp = (t, a, b) => smooth((t - a) / (b - a));
 export const VINSON_CINEMATIC_DURATION = { transition: 28, finale: 25 };
-export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}) {
+export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash = null } = {}) {
   const t = Math.max(0, Number.isFinite(time) ? time : 0);
   const shot = { time: t, black: 0, white: 0, zoom: 1, focusX: 640, focusY: 425,
     hero: 'patel', villain: 'world', heroAlpha: 1, villainAlpha: 1, beams: 0,
@@ -11,7 +11,9 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}
     // Transition-only choreography: normalized struggle/impact strength, eye-ring world X,
     // whiteout strength, Captain's arrival/beam/star, and smooth star rotation in radians.
     clashProgress: 0, clashPower: 0, clashX: 640, explosion: 0, arrival: 0, skyBeam: 0, arrivalStar: 0, arrivalSpin: 0,
-    domainPower:0,throwSword:0,peace:0,landingAge:0 };
+    domainPower:0,throwSword:0,peace:0,landingAge:0,interactiveClash:false,
+    mashProgress:0,mashPulse:0,mashElapsed:0,mashThreshold:0,mashThresholdAge:99,
+    clashKeys:[],clashKeyIndex:0,clashTimeLeft:0,clashStun:0,clashRecovery:0,clashMistakes:0 };
   if (kind === 'transition') {
     // World fades after defeat; Phonk returns through a soft veil rather than a cut.
     shot.villainAlpha = 1 - ramp(t, 0, 2.2);
@@ -54,7 +56,22 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}
     shot.done = t >= 28;
   } else {
     shot.hero = 'captain'; shot.villain = 'phonk';
+    if(clash && !clash.won && t>=1.65){
+      shot.domainPower=1;shot.beams=1;shot.interactiveClash=true;
+      shot.clashKeys=(clash.keys||[]).slice();shot.clashKeyIndex=clash.index||0;
+      shot.clashTimeLeft=clash.remaining||0;shot.clashStun=clash.stun||0;
+      shot.clashRecovery=clash.recovery||0;shot.clashMistakes=clash.mistakes||0;
+      shot.mashProgress=clamp(clash.progress);shot.mashPulse=clamp(clash.pulse);
+      shot.mashElapsed=Math.max(0,clash.elapsed||0);shot.mashThreshold=clash.threshold||0;shot.mashThresholdAge=Math.max(0,clash.thresholdAge||0);
+      shot.clashX=440+500*shot.mashProgress;
+      shot.clashPower=.55+.35*shot.mashProgress+.1*shot.mashPulse;
+      shot.clashProgress=shot.mashProgress;shot.impact=.35+.35*shot.mashPulse;
+      shot.zoom=reducedMotion?1:1+.07*clamp(shot.mashElapsed/10);
+      shot.focusX=640;shot.focusY=400;
+      return shot;
+    }
     // Two territories push against each other; the beam's midpoint tells the story.
+    shot.postMashStruggle=!!clash?.won&&t>=1.7&&t<7;
     shot.domainPower=ramp(t,0,1.4)*(1-ramp(t,8.5,9.5));
     shot.beams=ramp(t,.7,1.7)*(1-ramp(t,8.5,9.2));
     const struggle=clamp((t-1.7)/5.8),contested=640+Math.sin((t-1.7)*2.05)*220*struggle;
@@ -67,16 +84,18 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false } = {}
     if(t>=5.8&&t<6.7){shot.speaker='CAPTAIN ISRAEL';shot.text='Then I will give the world everything I have.';shot.dialogueId='final-captain-resolve';}
     // A short anticipation, then the sword catches Vinson off guard.
     shot.throwSword=ramp(t,7,8.15);
-    shot.white=t>=8.15&&t<8.18?1:ramp(t,8.65,8.9)*(1-ramp(t,9.3,9.8));
-    shot.explosion=ramp(t,8.65,8.9)*(1-ramp(t,9.3,9.8));
-    shot.black=ramp(t,9.9,10.7)*(1-ramp(t,11.6,13));
+    const flash = ramp(t,8.65,8.85)*(1-ramp(t,9.25,9.5));
+    shot.white=t>=8.15&&t<8.18?1:flash;
+    shot.explosion=flash;
+    // Keep the scene change in place, but limit the fully saturated blackout to 0.4s.
+    shot.black=ramp(t,9.9,10.1)*(1-ramp(t,10.5,10.8));
     shot.heroAlpha=1-ramp(t,9.5,10.3);shot.villainAlpha=1-ramp(t,8.65,9.3);
     if(t>=10.3){shot.heroAlpha=0;shot.villainAlpha=0;shot.beams=0;shot.domainPower=0;shot.impact=0;}
     // One wide quiet memorial shot. The falling blade is the primary motion.
     shot.peace=ramp(t,11.7,13);
     shot.shield=shot.peace;shot.sword=clamp((t-13.6)/2.4);shot.landingAge=Math.max(0,t-16);
     if(t>=13){shot.zoom=1;shot.focusX=640;shot.focusY=360;}
-    if(t>=17){shot.text="Captain Israel was Grumpy Patel. His sacrifice saved humanity from eternal doom, marking a new humble beginning.";shot.dialogueId='captain-sacrifice';shot.speaker='CAPTAIN ISRAEL';}
+    if(t>=17){shot.revealFace=ramp(t,17,17.8);shot.text="Captain Israel was Grumpy Patel. His sacrifice saved humanity from eternal doom, marking a new humble beginning.";shot.dialogueId='captain-sacrifice';shot.speaker='CAPTAIN ISRAEL';}
     shot.done=t>=25;
   }
   if (reducedMotion) { shot.zoom = 1; shot.white = 0; shot.explosion = 0; }

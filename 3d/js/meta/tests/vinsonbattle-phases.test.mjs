@@ -15,7 +15,7 @@ const until = (battle, phase, input = {}, limit = 3000) => {
 for (const stage of [0, 1]) {
   const battle = start(91, stage);
   assert.equal(battle.state.phase, 'fight');
-  assert.equal(battle.state.hero.heals, 3);
+  assert.equal(battle.state.hero.heals, 1);
   for (let threshold = 1; threshold <= 4; threshold++) {
     // A lethal hit cannot skip a threshold.
     battle.state.boss.hp = battle.state.boss.maxHp * (1 - threshold * .2) + 1;
@@ -50,6 +50,7 @@ for (const stage of [0, 1]) {
   if (!stage) {
     const frozen = structuredClone(battle.state);
     tick(battle, { attack: true }); assert.deepEqual(battle.state, frozen);
+    assert.equal(battle.next().hero.heals, 1, 'transition to stage two resets earned heals to one');
   } else {
     until(battle, 'victory');
     const frozen = structuredClone(battle.state);
@@ -60,13 +61,14 @@ for (const stage of [0, 1]) {
 {
   const battle = start(31);
   battle.state.hero.hp = 30;
+  battle.state.hero.heals = 3; // Three earned charges keep the multi-heal debounce case meaningful.
   tick(battle, { heal: true });
   assert.equal(battle.state.hero.hp, 62); assert.equal(battle.state.hero.heals, 2);
   for (let i = 0; i < 40; i++) tick(battle, { heal: true });
   assert.equal(battle.state.hero.heals, 2, 'holding heal never repeats');
   tick(battle, { heal: false }); tick(battle, { heal: true });
   assert.equal(battle.state.hero.heals, 1);
-  battle.retry(); assert.equal(battle.state.hero.heals, 3);
+  battle.retry(); assert.equal(battle.state.hero.heals, 1);
 }
 
 {

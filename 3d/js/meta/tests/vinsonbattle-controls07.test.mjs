@@ -47,6 +47,7 @@ try {
   const weapons = find(screen, 'vb-weapons').children;
   down('e'); assert.equal(weapons[1]['aria-pressed'], 'true'); up('e');
   down('q'); assert.equal(weapons[0]['aria-pressed'], 'true'); up('q');
+  battle.state.hero.heals = 3; // Seed three earned charges for the multi-heal debounce case.
   battle.state.hero.hp = 37;
   down('h'); step(3); assert.equal(battle.state.hero.hp, 69); assert.equal(battle.state.hero.heals, 2);
   step(100); assert.equal(battle.state.hero.heals, 2, 'held H spends once even past cooldown'); up('h'); step(2);
