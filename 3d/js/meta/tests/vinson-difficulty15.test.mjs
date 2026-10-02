@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createVinsonBattle, vinsonBoxSafeRect } from '../core/vinsonbattle.js';
+import { createVinsonBattle, vinsonBoxSafeRect, vinsonBoxMarkerWave } from '../core/vinsonbattle.js';
 import { createVinsonClash, stepVinsonClash } from '../core/vinsonclash.js';
 
 const tick = (battle, dt = .05, input = {}) => battle.step(dt, input);
@@ -47,7 +47,7 @@ for (const [difficulty, seconds] of [['normal', 35], ['hard', 20]]) {
   assert.equal(battle.state.thresholdIndex, 1, 'bonus timing timeout leaves the HP gate untouched');
 }
 
-// Normal boxes expose a safe rectangle for each actual pattern and never add aimed fans.
+// Normal boxes expose a safe rectangle for each actual pattern and retain prototype13 aimed fans.
 // Hard preserves fans, shortens main-wave cadence, and remains seeded/deterministic.
 for (const pattern of ['lanes', 'vertical', 'radial', 'beams']) {
   const normal = ready({ seed: 715, openingAttack: 'box', boxPattern: pattern });
@@ -56,12 +56,12 @@ for (const pattern of ['lanes', 'vertical', 'radial', 'beams']) {
   hard.state.hero.invulnerable = 1e6;
   assert.equal(normal.state.phase, 'dodgebox');
   assert.equal(hard.state.phase, 'dodgebox');
-  let sawRect = false, sawFan = false, firstNormalWave = null, firstHardWave = null;
+  let sawRect = false, sawFan = false, sawNormalFan=false, firstNormalWave = null, firstHardWave = null;
   for (let i = 0; i < 500; i++) {
     tick(normal); tick(hard);
     const nbox = normal.state.box, hbox = hard.state.box;
     if (!nbox || !hbox) break;
-    assert.equal(nbox.bullets.some(p => p.kind === 'aimed'), false);
+    sawNormalFan ||= nbox.bullets.some(p=>p.kind==='aimed');
     sawFan ||= hbox.bullets.some(p => p.kind === 'aimed');
     if (nbox.wave > 0 && firstNormalWave === null) firstNormalWave = nbox.elapsed;
     if (hbox.wave > 0 && firstHardWave === null) firstHardWave = hbox.elapsed;
@@ -72,7 +72,7 @@ for (const pattern of ['lanes', 'vertical', 'radial', 'beams']) {
       assert.ok(rect.x + rect.w <= nbox.maxX && rect.y + rect.h <= nbox.maxY);
       // Check the rectangle against each bullet's remaining straight-line path while it is live.
       for (const p of nbox.bullets) {
-        if (p.kind === 'aimed' || p.age < p.telegraph) continue;
+        if (p.kind === 'aimed' || p.age < p.telegraph || p.wave!==vinsonBoxMarkerWave(nbox)?.wave) continue;
         const points=[];
         for(let ix=0;ix<=4;ix++)for(let iy=0;iy<=4;iy++)points.push([rect.x+rect.w*ix/4,rect.y+rect.h*iy/4]);
         for(const [x,y] of points){
@@ -86,6 +86,7 @@ for (const pattern of ['lanes', 'vertical', 'radial', 'beams']) {
   assert.ok(sawRect, `${pattern} shows a safe rectangle`);
   assert.ok(firstNormalWave !== null && firstHardWave !== null);
   assert.ok(firstHardWave < firstNormalWave, `${pattern} hard wave arrives sooner`);
+  assert.ok(sawNormalFan, `${pattern} normal restores prototype13 side shots`);
   assert.ok(sawFan, `${pattern} hard box retains aimed fans`);
 }
 

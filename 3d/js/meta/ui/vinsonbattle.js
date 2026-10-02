@@ -1,5 +1,5 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson35';
+import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson36';
 import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15g';
 import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15h';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15g';
@@ -519,7 +519,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
       button.onclick=()=>{selectedDifficulty=value;battle=createVinsonBattle({seed,compact:compactArena,openingAttack:previewAttack,boxPattern:previewBox,difficulty:value});viewHero={...battle.state.hero};feedback.chips={hero:battle.state.hero.hp,boss:battle.state.boss.hp};refresh();};
       buttons.push(button);picker.append(button);
     }
-    function refresh(){for(const button of buttons){button.setAttribute('aria-pressed',String(button.dataset.difficulty===selectedDifficulty));}help.textContent=selectedDifficulty==='hard'?'Hard: stronger boss, six health-gate boxes, faster attacks and a tougher clash.':'Normal: the current fight, clear blue safe areas and simpler dodge boxes.';}
+    function refresh(){for(const button of buttons){button.setAttribute('aria-pressed',String(button.dataset.difficulty===selectedDifficulty));}help.textContent=selectedDifficulty==='hard'?'Hard: stronger boss, six health-gate boxes, faster attacks and a tougher clash.':'Normal: the current fight, one blue main-wave gap marker and prototype13 dodge patterns.';}
     refresh();panel.insertBefore(picker,panel.lastChild);panel.insertBefore(help,panel.lastChild);
   }
   async function startFight() {

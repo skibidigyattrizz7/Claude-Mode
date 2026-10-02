@@ -1,4 +1,4 @@
-import {vinsonEarthPosition,vinsonBoxThreatPath,vinsonBoxSafeRect} from '../core/vinsonbattle.js?v=vinson34';
+import {vinsonEarthPosition,vinsonBoxSafeRect} from '../core/vinsonbattle.js?v=vinson36';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
@@ -70,9 +70,7 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
   ctx.strokeStyle='#ece8db';ctx.lineWidth=4;ctx.strokeRect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);
   ctx.strokeStyle='#9c282b';ctx.lineWidth=1;ctx.strokeRect(b.minX-8,b.minY-8,b.maxX-b.minX+16,b.maxY-b.minY+16);
   ctx.fillStyle='#f5e9dc';ctx.font='bold 23px monospace';ctx.textAlign='center';ctx.fillText(`SURVIVE  ${Math.max(0,Math.ceil(b.duration-b.elapsed))}`,640,b.minY-20);
-  ctx.font=(state.compact?'30':'18')+'px system-ui';ctx.fillStyle='#b5c5d0';ctx.fillText(state.compact?'MOVE · DODGE':'MOVE / DODGE · NO ATTACKS IN THE BOX',640,b.maxY+28);
-  // A single marker belongs to the main wave; extra shots have no route overlays.
-  ctx.font=(state.compact?'30':'20')+'px system-ui';ctx.fillStyle='#cdefff';ctx.fillText(state.difficulty==='hard'?'BLUE = MAIN WAVE GAP · DODGE EXTRA SHOTS':'MOVE TO THE BLUE SPOT',640,b.maxY+52);
+  // One main-wave marker; side shots get no guides or extra captions.
   const safe=vinsonBoxSafeRect(b);
   if(safe){const width=Math.min(48,safe.w),height=Math.min(28,safe.h),x=safe.x+(safe.w-width)/2,y=safe.y+(safe.h-height)/2;ctx.fillStyle='#388acb88';ctx.fillRect(x,y,width,height);ctx.strokeStyle='#a5dcff';ctx.lineWidth=2;ctx.strokeRect(x,y,width,height);}
   ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();

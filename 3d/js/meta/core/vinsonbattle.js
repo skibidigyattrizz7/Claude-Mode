@@ -297,10 +297,12 @@ export function vinsonBoxGap(box,preview){
  }
  return {kind:'horizontal',x:(box.minX+box.maxX)/2,y:box.minY+(box.maxY-box.minY)*(safe+.5)/5,height:(box.maxY-box.minY)/5};
 }
-/** Normal uses one wave at a time, so its blue rectangle stays genuinely safe. */
+/** Track the oldest main wave until it actually clears, even if newer waves spawn. */
+export function vinsonBoxMarkerWave(box){
+ return (box.mainWaves||[]).find(w=>box.bullets.some(p=>p.kind!=='aimed'&&p.wave===w.wave))||box.preview||null;
+}
 export function vinsonBoxSafeRect(box){
- const wave=box.safeWave&&box.bullets.some(p=>p.wave===box.safeWave.wave&&p.kind!=='aimed')?box.safeWave:box.preview;
- if(!wave)return null;const gap=vinsonBoxGap(box,wave);
+ const wave=vinsonBoxMarkerWave(box);if(!wave)return null;const gap=vinsonBoxGap(box,wave);
  if(gap.kind==='horizontal')return {x:box.minX+10,y:gap.y-gap.height/2+12,w:box.maxX-box.minX-20,h:gap.height-24};
  if(gap.kind==='vertical')return {x:gap.x-gap.width/2+18,y:box.minY+10,w:gap.width-36,h:box.maxY-box.minY-20};
  return {x:gap.x-12,y:gap.y-9,w:24,h:18};
@@ -311,7 +313,7 @@ function beginBox(state,{bonus=false}={}) {
   state.box = { minX: 260, maxX: 1020, minY: state.compact ? 270 : 300,
     maxY, heroRadius: 7, bonus, pattern: ['lanes', 'vertical', 'radial', 'beams'][bonus?(state.boxRounds-1)%4:state.thresholdIndex%4],
     elapsed: 0, duration: (state.difficulty==='hard'?11:9) + nextRandom(state) * 2, wave: 0, bullets: [], spawnTimer: state.difficulty==='hard'?.85:1.15,
-    pressureTimer: 1.25, pressureWave: 0, preview: null };
+    pressureTimer: 1.25, pressureWave: 0, mainWaves: [], preview: null };
   state.projectiles = []; state.hazards = []; state.handQueue = []; state.hero.x = clamp(state.hero.x, 290, 990);
   state.hero.y = clamp(state.hero.y, state.box.minY + 44, maxY - 18);
   setPhase(state, 'dodgebox');
@@ -324,7 +326,7 @@ function beginTiming(state, input) {
   event(state, 'timingStart', { threshold: state.thresholdIndex + 1, duration: state.timing.duration });
 }
 function updateBox(state, dt, input) {
-  const box = state.box;
+  const box = state.box;box.mainWaves??=[];
   moveHero(state, dt, input, box);
   box.elapsed += dt; box.spawnTimer -= dt;
   if (box.spawnTimer < (state.difficulty==='hard'?.55:1.1) && !box.preview) {
@@ -335,7 +337,7 @@ function updateBox(state, dt, input) {
   if (box.spawnTimer <= 0 && box.elapsed < box.duration - 0.8) {
     const lanes = 5, laneHeight = (box.maxY - box.minY) / lanes;
     const safe = box.preview?.safe ?? Math.floor(nextRandom(state) * lanes);
-    const fromRight = box.wave % 2 === 0;box.safeWave={safe,wave:box.wave,pattern:box.pattern};
+    const fromRight = box.wave % 2 === 0;box.mainWaves.push({safe,wave:box.wave,pattern:box.pattern});
     if (box.pattern === 'radial') {
       const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
       for (let lane = 0; lane < 16 && box.bullets.length < 64; lane++) {
@@ -343,7 +345,7 @@ function updateBox(state, dt, input) {
         if ((lane-gap+16)%16<=2) continue;
         const angle = lane * Math.PI / 8 + box.wave*.19, speed = 170 + state.thresholdIndex*18+(state.difficulty==='hard'?25:0);
         box.bullets.push({ x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-          radius: 8, wave: box.wave, kind: 'radial', age:0, telegraph:state.difficulty==='hard'?.65:1.1 });
+          radius: 8, wave: box.wave, kind: 'radial', age:0, telegraph:.65 });
       }
     } else {
       for (let lane = 0; lane < lanes && box.bullets.length < 64; lane++) {
@@ -355,16 +357,16 @@ function updateBox(state, dt, input) {
           y: vertical ? (fromRight ? box.minY - 18 : box.maxY + 18) : box.minY + laneHeight * (lane + .5),
           vx: vertical ? 0 : (fromRight?-1:1)*(beam ? 440 : 400)*(state.difficulty==='hard'?1.12:1),
           vy: vertical ? (fromRight ? 250 : -250)*(state.difficulty==='hard'?1.12:1) : 0,
-          radius: beam ? 13 : vertical ? 10 : 11, wave: box.wave, age:0, telegraph:state.difficulty==='hard'?.6:1.1,
+          radius: beam ? 13 : vertical ? 10 : 11, wave: box.wave, age:0, telegraph:.55,
           kind: beam ? 'beam' : vertical ? 'vertical' : 'lane' });
       }
     }
-    box.wave++; box.preview = null;box.spawnTimer += state.difficulty==='hard'?(box.pattern==='radial'?.95:.85):1.1+(box.pattern==='radial'?Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/170:box.pattern==='vertical'?(box.maxY-box.minY+45)/250:(box.maxX-box.minX+45)/400)+.15;
+    box.wave++; box.preview = null;box.spawnTimer += (box.pattern==='radial'?.95:.85)*(state.difficulty==='hard'?.85:1);
   }
   // A second, independent layer targets a snapshot of the player's position.
   // Its warning is visible before motion; the fan never homes after launch.
   box.pressureTimer -= dt;
-  if (state.difficulty==='hard' && box.pressureTimer <= 0 && box.elapsed < box.duration - 1.2) {
+  if (box.pressureTimer <= 0 && box.elapsed < box.duration - 1.2) {
     const fromTop = box.pressureWave % 2 === 0;
     const x = clamp(state.hero.x + (nextRandom(state)-.5)*240, box.minX+28,box.maxX-28);
     const y = fromTop ? box.minY+12 : box.maxY-12;
@@ -388,6 +390,7 @@ function updateBox(state, dt, input) {
     } else if (bullet.x < box.minX - 25 || bullet.x > box.maxX + 25 ||
       bullet.y < box.minY - 25 || bullet.y > box.maxY + 25) box.bullets.splice(i, 1);
   }
+  box.mainWaves=box.mainWaves.filter(w=>box.bullets.some(p=>p.kind!=='aimed'&&p.wave===w.wave));
   if (state.phase === 'defeat') return;
   if (box.elapsed >= box.duration) {state.hero.heals=Math.min(state.difficulty==='hard'?4:6,state.hero.heals+1);event(state,'healCharge',{charges:state.hero.heals});beginTiming(state, input);}
 }
