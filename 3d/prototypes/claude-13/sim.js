@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13p';
+import { SCRIPT } from './script.js?v=13r';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -66,7 +66,7 @@ export const FIN = { mult: 6, // P12: x3 with the boss HP so a finisher still la
 // P13 owner: "finishers always pop up as Star of David something, the names don't change": each has its own name,
 // shown on the prompt, the key screen and the cinematic. finNext() is the one the next finisher will be.
 // P13 owner: "if any look way too similar make them unique": SIX POINTS became MAGEN DAVID, RISING STAR became STAR CAGE
-export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR', 'STAR BARRAGE', "DAVID'S BLADE", 'STAR TORNADO', 'STAR OF HELL', 'STAR DOMINOES', 'STAR RICOCHET', 'STAR COLLAPSE'];
+export const FIN_NAMES = ['STAR PATH', 'MAGEN DAVID', 'STAR CAGE', 'SUKKAH', 'DAVID LASER', 'SPINNING STAR', 'STAR BARRAGE', "DAVID'S BLADE", 'STAR TORNADO', 'STAR OF HELL', 'STAR COMET', 'STAR RICOCHET', 'STAR COLLAPSE'];
 // P13 owner (final): "a different type of finisher for each phase": each phase has its own set, taken in turn (the
 // turn is saved between fights per phase). STAR OF HELL is the rare one (5% whenever a finisher comes up, any phase).
 export const FIN_POOLS = { 1: [0, 1, 6, 4], 2: [2, 3, 7, 5], 3: [10, 8, 11, 12] }; // phase 3 (owner: "more finishers, most creatively")
@@ -379,7 +379,7 @@ function heroActions(s, dt, inp) {
   if (inp.finisher && s.finisher.prompt > 0) { // owner: the finisher takes 7 keys in order
     s.finisher.prompt = 0; const keys = [], hell = s.finisher.hell, nk = hell ? 11 : FIN.keys;
     while (keys.length < nk) { const k = FIN_KEYS[Math.floor(s.R() * FIN_KEYS.length)]; if (k !== keys[keys.length - 1]) keys.push(k); }
-    s.fq = { keys, i: 0, t: 0, ready: 1, hell, limit: FIN.qte[s.stage] * (hell ? 2.1 : 1), wrong: -1, done: null, doneT: 0 }; setPhase(s, 'finisherQte'); ev(s, 'fqStart'); // P13 owner: a 1 s GET READY (dyslexia) before the clock runs; STAR OF HELL: 11 keys, about twice the time
+    s.fq = { keys, i: 0, t: 0, ready: s.readyTime ? 1 : 0, hell, limit: FIN.qte[s.stage] * (hell ? 2.1 : 1), wrong: -1, done: null, doneT: 0 }; setPhase(s, 'finisherQte'); ev(s, 'fqStart'); // P13 owner: a 1 s GET READY (dyslexia) before the clock runs; STAR OF HELL: 11 keys, about twice the time
   }
 }
 // the secret: in phase 2, once a finisher would be the killing blow the eclipse ALIGNS (sky and name pulse white).
@@ -392,7 +392,7 @@ function startFinisherCine(s) {
   // P11 owner: the finisher traces the Star of David with a trail, then a beam of light falls from the sky onto a
   // huge spinning star on the ground. Three versions, taken in turn so it is never the same one twice in a row.
   const v = finNext(s); if (v !== HELL && s.forceFin == null) s.finIdx[s.stage] = (s.finIdx[s.stage] || 0) + 1; s.finisher.hell = false; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
-  s.finisher.cine = { t: 0, len: v === 10 ? 5 : v === 11 ? 3.9 : v === 12 ? 5.2 : v === HELL ? 7.6 : v === 6 ? 4.4 : v === 7 ? 4.6 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 5.6 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
+  s.finisher.cine = { t: 0, len: v === 10 ? 5.2 : v === 11 ? 3.9 : v === 12 ? 5.2 : v === HELL ? 12 : v === 6 ? 4.4 : v === 7 ? 4.8 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 6.4 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
     name: FIN_NAMES[v], sub: '', hits: 0, pole: [0, 0, 0, 0], branches: 0,
     hx: clamp(s.boss.x - 430, FLOOR.minX + 120, FLOOR.maxX - 500), hy: clamp(s.boss.y + 40, FLOOR.minY + 160, FLOOR.maxY - 10), bombs: [] };
   if (v === 4 || v === 5) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
@@ -970,6 +970,8 @@ function updateRune(s, dt, inp) {
   if (r.done === 'fail' && !r.failed) { r.failed = true; h.invertIn = 1.6; h.invertLen = 5 + s.stage; h.inv = 0; hurtHero(s, 10, 'rune'); ev(s, 'runeFail'); } // inversion starts after a clear countdown
 }
 export const STAR_PATH = [0, 2, 4, 0, 1, 3, 5, 1]; // up-triangle, then a dash to the down-triangle
+export const COMET = { launch: .16, gleam: .27, dive: .33, impact: .6 };
+const ku2 = (k, a, b) => clamp((k - a) / (b - a), 0, 1);
 export const DOMINO = { n: 12, place: [.04, .22], chain: .3, step: .033, final: .72 };
 export const dominoPos = (s, i) => { const h = s.hero, b = s.boss, f = (i + 1) / (DOMINO.n + 1); return [lerp(h.x + 60, b.x - 90, f), lerp(h.y + 10, b.y + 40, f) + Math.sin(f * Math.PI) * 70]; };
 export const RICO = { start: .08 };
@@ -981,9 +983,11 @@ export const ricochetLegs = (s) => { // waypoints: her, an edge, her, another ed
 };
 export const COLLAPSE = { collapse: .55, nova: .66 };
 export const BARRAGE = { shots: [.1, .6], n: 30, gap: (.6 - .1) / 30, fly: .045, charge: .63, final: .78 };
-export const BLADE = { grow: .06, cut1: .3, cut2: .45, sheathe: .6, split: .76 };
+export const BLADE = { grow: .02, cut0: .2, cutEnd: .62, sheathe: .7, split: .8 }; // DAVID'S BLADE (remade): charge, six dashes, sheathe, split
+export const BLADE_EDGES = [[0, 2], [2, 4], [4, 0], [1, 3], [3, 5], [5, 1]];
+export const bladePt = (b, i) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [b.x + Math.cos(a) * 230, b.y - 120 + Math.sin(a) * 230 * .82]; };
 export const TORNADO = { rise: .04, collapse: .74, burst: .8 };
-export const HELLT = { fire: .1, boom1: .2, algol: .27, vert: .44, spin: .56, boom2: .84 };
+export const HELLT = { draw: .04, fire: .14, boom1: .27, algol: .33, vert: .5, spin: .61, boom2: .88 }; // STAR OF HELL, 12 s: the longest finisher
 export const MAGEN = { shots: [.14, .5], n: 8, fly: .32, charge: .56, dash: [.66, .74] }; // MAGEN DAVID timeline
 export const CAGE = { fly: [.08, .4], lock: .4, squeeze: [.47, .54, .61], shatter: .7 };         // STAR CAGE timeline
 // SUKKAH timeline (fractions of the cine) and the hut's shape, built round the boss: back poles higher up the floor
@@ -991,7 +995,7 @@ export const SUKKAH = { len: 6.6, poles: [.06, .36], beams: [.36, .41], walls: [
 export const sukkahGeom = (b) => { const x = b.x, gy = b.y + 44, top = b.y - 372, fw = 300, bw = 252, back = -40;
   return { x, gy, top, fw, bw, back, poles: [[x - bw, gy + back], [x - fw, gy], [x + fw, gy], [x + bw, gy + back]], poleH: (i) => (i === 0 || i === 3) ? gy + back - (top - 22) : gy - top }; };
 // the two laser finishers' timelines (fractions of the cine; 2 = that step is not in this one)
-export const DLASER = { 4: { tp: .3, fire: .34, link: 2, spin: 2, boom: .8 }, 5: { tp: .3, fire: 2, link: .36, spin: .46, boom: .82 } };
+export const DLASER = { 4: { tp: .3, fire: .34, link: 2, spin: 2, boom: .8 }, 5: { tp: .26, fire: 2, link: .32, spin: .41, boom: .72 } };
 export const dlPoint = (c, i) => { const a = -Math.PI / 2 + i * Math.PI / 3 + c.rot; return [c.cx + Math.cos(a) * c.R, c.cy + Math.sin(a) * c.R * .82]; };
 export const starPoint = (c, i) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [c.cx + Math.cos(a) * c.R, c.cy + Math.sin(a) * c.R * .82]; };
 function updateFinisher(s, dt) {
@@ -1007,6 +1011,7 @@ function updateFinisher(s, dt) {
     if (k >= L.spin && !c.spun) { c.spun = true; ev(s, 'dlSpin', { x: c.cx, y: c.cy }); }
     if (k >= L.spin && k < L.boom) { const sp = u(L.spin, L.boom); c.w = lerp(.8, 38, sp * sp); c.rot += c.w * dt; c.R = c.R0 * (1 - .22 * sp); }
     if (k >= L.boom && !c.boomed) { c.boomed = true; c.w = 0; ev(s, 'dlBoom', { x: c.cx, y: c.cy, v: c.v }); s.hitstop = .18; }
+    if (c.v === 5 && k >= L.boom + (1 - L.boom) * .72 && !c.ss2) { c.ss2 = true; ev(s, 'ssBoom', { x: c.cx, y: c.cy }); s.hitstop = .16; } // the blades come back and detonate
     if (k < L.boom) { const [x, y] = dlPoint(c, Math.min(5, Math.max(0, c.hits - 1))); h.x = x; h.y = y + 60; } // he is the sixth point
     else { h.x = lerp(h.x, b.x - 300, .1); h.y = lerp(h.y, b.y + 40, .1); }
     if (c.t >= c.len) { s.finisher.cine = null; setPhase(s, 'fight'); h.inv = .6; hurtBoss(s, c.dmg, 'finisher', b.x, b.y - 90); ev(s, 'finisherHit', { v: c.v, dmg: c.dmg }); s.hitstop = .2; b.stagger = 1.6; }
@@ -1021,30 +1026,37 @@ function updateFinisher(s, dt) {
       for (let i = 0; i < B.n; i++) if (at(B.shots[0] + i * B.gap)) ev(s, 'sbShot', { i });
       if (at(B.charge)) ev(s, 'sbCharge', { x: h.x + 50, y: h.y - 80 });
       if (at(B.final + B.fly)) { ev(s, 'sbFinal', { x: b.x - 40, y: b.y - 120 }); s.hitstop = .14; }
-    } else if (c.v === 7) { // DAVID'S BLADE: the sword grows, two giant cuts, he sheathes it, then everything splits
-      const D = BLADE;
-      if (k < D.cut1 - .04) { h.x = lerp(h.x, b.x - 420, .12); h.y = lerp(h.y, b.y + 40, .12); }
-      else if (k < D.sheathe) { h.x = lerp(h.x, b.x - 170, .3); h.y = lerp(h.y, b.y + 40, .3); }
-      else { h.x = lerp(h.x, b.x - 430, .08); }
+    } else if (c.v === 7) { // DAVID'S BLADE: the blade charges, he dashes through her six times along the star's lines,
+      // lands, sheathes it, and the whole star of cuts goes off
+      const D = BLADE, slot = (D.cutEnd - D.cut0) / 6;
+      if (k < D.cut0) { h.x = lerp(h.x, b.x - 420, .12); h.y = lerp(h.y, b.y + 40, .12); }
+      else if (k < D.cutEnd) { const f = (k - D.cut0) / slot, i = Math.min(5, Math.floor(f)), g = f - i, [i0, i1] = BLADE_EDGES[i], p0 = bladePt(b, i0), p1 = bladePt(b, i1), m = easeOut(clamp(g / .55, 0, 1));
+        h.x = lerp(p0[0], p1[0], m); h.y = lerp(p0[1], p1[1], m) + 60; if (i + 1 > c.hits) { c.hits = i + 1; ev(s, 'dbCut', { x: p0[0], y: p0[1], n: i }); s.hitstop = Math.max(s.hitstop, .03); } }
+      else { h.x = lerp(h.x, b.x - 330, .15); h.y = lerp(h.y, b.y + 40, .15); }
       if (at(D.grow)) ev(s, 'dbGrow', { x: h.x, y: h.y - 100 });
-      if (at(D.cut1)) { ev(s, 'dbCut', { x: b.x, y: b.y - 120, n: 1 }); s.hitstop = .08; }
-      if (at(D.cut2)) { ev(s, 'dbCut', { x: b.x, y: b.y - 120, n: 2 }); s.hitstop = .08; }
       if (at(D.sheathe)) ev(s, 'dbSheathe', { x: h.x, y: h.y });
-      if (at(D.split)) { ev(s, 'dbSplit', { x: b.x, y: b.y - 120 }); s.hitstop = .16; }
+      if (at(D.split)) { ev(s, 'dbSplit', { x: b.x, y: b.y - 120 }); s.hitstop = .18; }
     } else if (c.v === 8) { // STAR TORNADO: a whirlwind of stars round her, tightening, then it collapses into her and bursts
       const T = TORNADO; h.x = lerp(h.x, b.x - 440, .1); h.y = lerp(h.y, b.y + 40, .1);
       if (at(T.rise)) ev(s, 'stRise', { x: b.x, y: b.y });
       if (at(T.collapse)) { ev(s, 'stCollapse', { x: b.x, y: b.y - 150 }); s.hitstop = .08; }
       if (at(T.burst)) { ev(s, 'stBurst', { x: b.x, y: b.y - 150 }); s.hitstop = .16; }
-    } else if (c.v === 10) { // STAR DOMINOES: a line of stars rises from the ground to her; he tips the first and the
-      // chain races to her, each pop bigger than the last
-      const D = DOMINO; h.x = lerp(h.x, b.x - 470, .12); h.y = lerp(h.y, b.y + 40, .12);
-      for (let i = 0; i < D.n; i++) { if (at(D.place[0] + i * (D.place[1] - D.place[0]) / D.n)) ev(s, 'dmPlace', { i }); if (at(D.chain + i * D.step)) { const [x, y] = dominoPos(s, i); ev(s, 'dmPop', { i, x, y, n: D.n }); } }
-      if (at(D.chain - .02)) ev(s, 'dmFlick', { x: h.x + 60, y: h.y - 40 });
-      if (at(D.final)) { ev(s, 'dmFinal', { x: b.x, y: b.y - 100 }); s.hitstop = .16; }
+    } else if (c.v === 10) { // STAR COMET (owner: dominoes "didn't make sense"): wings of light, he launches out of sight,
+      // a gleam in the sky, then he dives into her as a comet with a Star of David at its head; crater; he climbs out
+      const C = COMET;
+      if (k < C.launch) { h.x = lerp(h.x, b.x - 420, .12); h.y = lerp(h.y, b.y + 40, .12); }
+      else if (k < C.dive) { const f = ku2(k, C.launch, C.launch + .12); h.x = b.x - 420; h.y = lerp(b.y + 40, -420, f * f); }
+      else if (k < C.impact) { const f = ku2(k, C.dive, C.impact); h.x = lerp(b.x - 760, b.x - 60, f * f); h.y = lerp(150, b.y + 20, f * f); }
+      else { h.x = lerp(h.x, b.x - 170, .08); h.y = lerp(h.y, b.y + 40, .08); }
+      if (at(.03)) ev(s, 'cmWings', { x: h.x, y: h.y - 80 });
+      if (at(C.launch)) ev(s, 'cmLaunch', { x: h.x, y: h.y });
+      if (at(C.gleam)) ev(s, 'cmGleam', { x: b.x - 760, y: 150 });
+      if (at(C.dive)) ev(s, 'cmDive', { x: b.x, y: b.y });
+      if (at(C.impact)) { ev(s, 'cmImpact', { x: b.x - 40, y: b.y }); s.hitstop = .2; }
     } else if (c.v === 11) { // STAR RICOCHET: one star bounces between her and the edges of the screen, faster every leg
       h.x = lerp(h.x, b.x - 470, .12); h.y = lerp(h.y, b.y + 40, .12);
       const legs = ricochetLegs(s), tt = c.t - RICO.start * c.len;
+      if (tt >= legs[legs.length - 1].t1 + .55 && !c.rcb) { c.rcb = true; ev(s, 'rcBoom', { x: b.x - 30, y: b.y - 120 }); s.hitstop = .18; } // the path snaps into her and goes off
       legs.forEach((L, i) => { if (tt >= L.t1 && tt - dt < L.t1) { ev(s, L.boss ? (i === legs.length - 1 ? 'rcFinal' : 'rcHit') : 'rcBounce', { x: L.x, y: L.y, i }); if (L.boss) s.hitstop = Math.max(s.hitstop, i === legs.length - 1 ? .18 : .04); } });
     } else if (c.v === 12) { // STAR COLLAPSE: all the light on screen streams into one star inside her, it collapses to a
       // black point, a beat of silence, then it goes supernova
@@ -1055,13 +1067,14 @@ function updateFinisher(s, dt) {
     } else { // STAR OF HELL (Algol, the demon star): red star + fire from the sky + blast; a star-shaped laser; a
       // vertical laser; then a second star spins 2 s, exponentially faster, overcharges and explodes. 20% of her HP.
       const L = HELLT; h.x = lerp(h.x, b.x - 460, .08); h.y = lerp(h.y, b.y + 40, .08);
-      if (at(.02)) ev(s, 'hellStar', { x: b.x, y: b.y - 330 });
+      if (at(L.draw)) ev(s, 'hellStar', { x: b.x, y: b.y - 330 });
       if (at(L.fire)) ev(s, 'hellFire', { x: b.x, y: b.y });
       if (at(L.boom1)) { ev(s, 'hellBoom', { x: b.x, y: b.y - 100, big: false }); s.hitstop = .12; }
       if (at(L.algol)) ev(s, 'hellAlgol', { x: b.x, y: b.y - 120 });
+      if (at(L.algol + .1)) { ev(s, 'hellAlgol2', { x: b.x, y: b.y - 120 }); s.hitstop = .06; }
       if (at(L.vert)) { ev(s, 'hellVert', { x: b.x, y: b.y - 120 }); s.hitstop = .08; }
       if (at(L.spin)) ev(s, 'hellSpin', { x: b.x, y: b.y - 150 });
-      if (k >= L.spin && k < L.boom2) { const u2 = (k - L.spin) / (L.boom2 - L.spin); c.w = .8 * Math.exp(u2 * 4.2); c.rot += c.w * dt; }
+      if (k >= L.spin && k < L.boom2) { const u2 = (k - L.spin) / (L.boom2 - L.spin); c.w = .6 * Math.exp(u2 * 4.6); c.rot += c.w * dt; }
       if (at(L.boom2)) { ev(s, 'hellBoom', { x: b.x, y: b.y - 150, big: true }); s.hitstop = .22; }
     }
     if (c.t >= c.len) end();

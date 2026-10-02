@@ -91,7 +91,7 @@
 <button id="skipBtn" type="button" hidden>SKIP ▸</button>
 <div class="screen" id="title">
   <h1>THE ECLIPSE</h1>
-  <div class="sub">PROTOTYPE 13-CLAUDE · 3X BOSS HP · CHAOTIC FIGHTS · TEN STAR OF DAVID FINISHERS</div>
+  <div class="sub">PROTOTYPE 13-CLAUDE · 3X BOSS HP · CHAOTIC FIGHTS · 13 FINISHERS</div>
   <div class="keys">
     <b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b><span>Move</span>
     <b><kbd>J</kbd> hold</b><span>Slash · also the counter and the clash mash</span>
@@ -99,7 +99,7 @@
     <b><kbd>1</kbd>–<kbd>6</kbd> <kbd>Q</kbd><kbd>E</kbd></b><span>Pick a special (six per form)</span>
     <b><kbd>SPACE</kbd></b><span>Dodge · just before a hit = PERFECT</span>
     <b><kbd>H</kbd></b><span>Heal · 2 per phase, +1 when a SURVIVE box starts · works everywhere</span>
-    <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its 7 keys (each phase has its own; rarely the red STAR OF HELL)</span>
+    <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its keys (each phase has its own)</span>
     <b><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd></b><span>Clash key moments: type them in order, mashing is ignored</span>
     <b>CLICK · ENTER · J</b><span>Next dialogue line · X skips</span>
     <b>ON SCREEN KEYS</b><span>Rune Lock and chain escapes</span>
@@ -107,10 +107,10 @@
   </div>
   <div class="touchkeys">Left stick moves. ATTACK slashes, CAST fires the selected special, tap a special to pick it. DODGE just before a hit for a PERFECT. In a clash tap PUSH fast, then tap the keys shown.</div>
   <div class="row modes"><button class="big" id="start" type="button" data-mode="normal">FIGHT · NORMAL</button><button class="big hard" id="startHard" type="button" data-mode="hard">FIGHT · HARD</button><button class="big extreme" id="startExtreme" type="button" data-mode="extreme">EXTREME</button></div>
-  <div class="row cont" id="contRow" hidden><button class="ghost" id="cont" type="button">CONTINUE</button></div>
+  <div class="row"><span class="cont" id="contRow" hidden><button class="ghost" id="cont" type="button">CONTINUE</button></span><button class="ghost" id="readyBtn" type="button">GET READY 1 S · OFF</button></div>
   <div class="modeinfo"><b>NORMAL</b> the full fight, fair and readable. <b class="hardtxt">HARD</b> faster, hits harder, more boxes, 5-key clash moments and she pushes far harder. <b class="hardtxt">EXTREME</b> everything at its hardest, and she summons shades you must kill before she can be hurt again.</div>
 </div>
-<div class="screen" id="paused" hidden><h1>PAUSED</h1><div class="sub">P / ESC TO RESUME</div><div class="row"><button class="big" id="resume" type="button">RESUME</button><button class="ghost" id="restart1" type="button">RESTART</button><button class="ghost" id="muteBtn2" type="button">SOUND ON</button></div></div>
+<div class="screen" id="paused" hidden><h1>PAUSED</h1><div class="sub">P / ESC TO RESUME</div><div class="row"><button class="ghost" id="readyBtn2" type="button">GET READY · OFF</button><button class="big" id="resume" type="button">RESUME</button><button class="ghost" id="restart1" type="button">RESTART</button><button class="ghost" id="muteBtn2" type="button">SOUND ON</button></div></div>
 <div class="screen" id="end" hidden>
   <h1 id="endTitle">VICTORY</h1><div class="sub" id="endSub"></div>
   <ul class="rewards" id="rewards"></ul>
@@ -120,9 +120,9 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H, aligned } from './sim.js?v=13p';
-import { createRenderer } from './render.js?v=13p';
-import { createSfx } from './sfx.js?v=13p';
+import { createFight, step, W, H, aligned } from './sim.js?v=13r';
+import { createRenderer } from './render.js?v=13r';
+import { createSfx } from './sfx.js?v=13r';
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
 const canvas = document.getElementById('c');
@@ -223,6 +223,7 @@ function start(from = 1) {
   fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1, fin });
   if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   if (q.get('act')) fight.forceAct = q.get('act');
+  fight.readyTime = readyOn; // the option: a 1 s GET READY before the finisher keys (off by default)
   window.__fight = fight; ended = false; running = true; paused = false;
   for (const id of ['title', 'end', 'paused']) $(id).hidden = true;
   last = performance.now();
@@ -230,7 +231,10 @@ function start(from = 1) {
 function togglePause() { if (!running || ended) return; paused = !paused; $('paused').hidden = !paused; last = performance.now(); }
 function toggleMute() { const m = sfx.toggle(); $('muteBtn').textContent = $('muteBtn2').textContent = m ? 'SOUND OFF' : 'SOUND ON'; }
 $('muteBtn').onclick = toggleMute; $('skipBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); edges.add('Skip'); }); $('muteBtn2').onclick = toggleMute;
-$('start').onclick = () => { mode = 'normal'; start(); }; $('retry').onclick = () => start(fight.retryFrom || 1); refreshContinue(); $('startHard').onclick = () => { mode = 'hard'; start(); }; $('startExtreme').onclick = () => { mode = 'extreme'; start(); }; $('again').onclick = start;
+$('start').onclick = () => { mode = 'normal'; start(); }; $('retry').onclick = () => start(fight.retryFrom || 1); refreshContinue();
+let readyOn = false; try { readyOn = localStorage.getItem('p13ready') === '1'; } catch {}
+const readyLabel = () => { $('readyBtn').textContent = `FINISHER GET READY 1 S · ${readyOn ? 'ON' : 'OFF'}`; $('readyBtn2').textContent = `GET READY · ${readyOn ? 'ON' : 'OFF'}`; };
+$('readyBtn').onclick = () => { readyOn = !readyOn; try { localStorage.setItem('p13ready', readyOn ? '1' : '0'); } catch {} if (fight) fight.readyTime = readyOn; readyLabel(); }; $('readyBtn2').onclick = $('readyBtn').onclick; readyLabel(); $('startHard').onclick = () => { mode = 'hard'; start(); }; $('startExtreme').onclick = () => { mode = 'extreme'; start(); }; $('again').onclick = start;
 $('swapMode').onclick = () => { mode = mode === 'normal' ? 'hard' : mode === 'hard' ? 'extreme' : 'normal'; start(); }; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
 function showEnd() {
   ended = true;

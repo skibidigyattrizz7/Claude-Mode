@@ -115,7 +115,15 @@ export function createSfx() {
       case 'hellBoom': boom(e.big ? 1.6 : 1.1); noise(e.big ? 1.8 : 0.9, 400, 0.4, 1, 'lowpass', 0, 40); if (e.big) tone(60, 20, 1.8, 'sine', 0.25); break;
       case 'hellAlgol': tone(220, 230, 1.0, 'sawtooth', 0.08); tone(330, 320, 1.0, 'square', 0.04); break;
       case 'hellVert': boom(1); tone(900, 100, 0.6, 'sawtooth', 0.08); break;
-      case 'hellSpin': tone(60, 3000, 2.0, 'sawtooth', 0.07); tone(120, 4000, 2.0, 'square', 0.03); break;
+      case 'hellSpin': tone(50, 3200, 3.2, 'sawtooth', 0.07); tone(100, 4400, 3.2, 'square', 0.03); noise(3.2, 200, 0.1, 1, 'bandpass', 0, 4000); break;
+      case 'hellAlgol2': tone(330, 340, 1.2, 'sawtooth', 0.08); boom(0.6); break;
+      case 'ssBoom': boom(1.3); noise(0.9, 4000, 0.3, 1, 'bandpass', 0, 300); break;
+      case 'rcBoom': boom(1.3); noise(1.0, 3000, 0.3, 1, 'bandpass', 0, 200); break;
+      case 'cmWings': [784, 988, 1175, 1568].forEach((f, i) => tone(f, f, 0.6, 'triangle', 0.04, i * 0.05)); break;
+      case 'cmLaunch': noise(0.8, 1200, 0.3, 1, 'bandpass', 0, 5000); tone(200, 1200, 0.6, 'sawtooth', 0.05); break;
+      case 'cmGleam': tone(2600, 2600, 0.5, 'triangle', 0.05); break;
+      case 'cmDive': tone(3000, 300, 1.1, 'sawtooth', 0.06); noise(1.1, 2000, 0.2, 1, 'bandpass', 0, 600); break;
+      case 'cmImpact': boom(1.6); noise(1.6, 500, 0.4, 1, 'lowpass', 0, 50); tone(60, 20, 1.6, 'sine', 0.25); break;
       case 'codeKey': tone(880 + Math.random() * 400, 880, 0.08, 'triangle', 0.03); break;
       case 'codeOk': [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, f, 0.8, 'triangle', 0.08, i * 0.07)); boom(0.8); break;
       case 'dmPlace': tone(300 + (e.i || 0) * 40, 300 + (e.i || 0) * 40, 0.06, 'triangle', 0.04); break;
