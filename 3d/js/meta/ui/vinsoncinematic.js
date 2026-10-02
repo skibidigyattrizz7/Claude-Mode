@@ -84,15 +84,15 @@ export function sampleVinsonCinematic(kind, time, { reducedMotion = false, clash
     if(t>=5.8&&t<6.7){shot.speaker='CAPTAIN ISRAEL';shot.text='Then I will give the world everything I have.';shot.dialogueId='final-captain-resolve';}
     // A short anticipation, then the sword catches Vinson off guard.
     shot.throwSword=ramp(t,7,8.15);
-    const flash = ramp(t,8.65,8.85)*(1-ramp(t,9.25,9.5));
+    const flash = ramp(t,8.15,8.2)*(1-ramp(t,8.55,8.7));
     shot.white=t>=8.15&&t<8.18?1:flash;
     shot.explosion=flash;
     // Keep the scene change in place, but limit the fully saturated blackout to 0.4s.
-    shot.black=ramp(t,9.9,10.1)*(1-ramp(t,10.5,10.8));
-    shot.heroAlpha=1-ramp(t,9.5,10.3);shot.villainAlpha=1-ramp(t,8.65,9.3);
+    shot.black=ramp(t,8.55,8.7)*(1-ramp(t,9.1,9.3));
+    shot.heroAlpha=1-ramp(t,8.55,8.7);shot.villainAlpha=1-ramp(t,8.15,8.55);
     if(t>=10.3){shot.heroAlpha=0;shot.villainAlpha=0;shot.beams=0;shot.domainPower=0;shot.impact=0;}
     // One wide quiet memorial shot. The falling blade is the primary motion.
-    shot.peace=ramp(t,11.7,13);
+    shot.peace=ramp(t,9.15,10.2);
     shot.shield=shot.peace;shot.sword=clamp((t-13.6)/2.4);shot.landingAge=Math.max(0,t-16);
     if(t>=13){shot.zoom=1;shot.focusX=640;shot.focusY=360;}
     if(t>=17){shot.revealFace=ramp(t,17,17.8);shot.text="Captain Israel was Grumpy Patel. His sacrifice saved humanity from eternal doom, marking a new humble beginning.";shot.dialogueId='captain-sacrifice';shot.speaker='CAPTAIN ISRAEL';}

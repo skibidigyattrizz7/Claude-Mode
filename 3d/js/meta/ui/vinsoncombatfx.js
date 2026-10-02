@@ -18,7 +18,7 @@ export function drawVinsonSequence(ctx,state,t,reducedMotion){
     ctx.restore();
   }
   // Keycaps follow Patel without crossing the top HUD or leaving the camera frame.
-  const cx=Math.max(185,Math.min(1095,state.hero.x)),cy=Math.max(265,Math.min(480,state.hero.y-state.hero.bodyRise-145));
+  const cx=640,cy=180; // Dedicated warning row above actors, below the health bars.
   ctx.save();ctx.textAlign='center';ctx.fillStyle='rgba(5,5,9,.9)';ctx.fillRect(cx-174,cy-45,348,132);
   ctx.fillStyle=s.kind==='chains'?'#f4d6ac':'#ecafff';ctx.font='900 25px system-ui';ctx.fillText(s.warning>0?'GET READY · '+s.warning.toFixed(1)+'s':s.kind==='chains'?'BREAK THE CHAINS':'KEEP CONTROL',cx,cy-12);
   for(let i=0;i<s.keys.length;i++){const x=cx-100+i*100;ctx.fillStyle=i<s.index?'#183d33':i===s.index?'#433426':'#15151c';ctx.fillRect(x-35,cy,70,66);ctx.strokeStyle=i===s.index?'#fff0c6':'#8d869b';ctx.lineWidth=2;ctx.strokeRect(x-35,cy,70,66);ctx.fillStyle=i<s.index?'#8fe1bf':i===s.index?'#fff0c6':'#bbb4c7';ctx.font='900 44px monospace';ctx.fillText(s.keys[i].toUpperCase(),x,cy+49);}
@@ -32,6 +32,10 @@ export function drawVinsonCombo(ctx,state,t,reducedMotion){
   for(let i=0;i<12;i++){const sy=215+i*28;ctx.beginPath();ctx.moveTo(x-160-i%3*30,sy);ctx.lineTo(x-35,sy);ctx.stroke();}
   for(let i=0;i<3;i++){const a=-.85+i*.8+Math.sin(p*Math.PI)*.35,r=65+p*95;ctx.strokeStyle=i%2?'#ffe1a5':'#93dfff';ctx.lineWidth=(reducedMotion?3:5)*(1-p*.5);ctx.globalAlpha=.9;
     ctx.beginPath();ctx.arc(c.target.x,c.target.y,r,a,a+1.15);ctx.stroke();}
+  // Two distinct strikes: crossing blades, then a short starburst at the contact point.
+  if(c.presses>=2){const hit=clamp(c.beatTime/.35),r=85+hit*70;ctx.globalAlpha=1-hit*.7;ctx.strokeStyle='#e6f9ff';ctx.lineWidth=8;
+    for(const sign of [-1,1]){ctx.beginPath();ctx.moveTo(c.target.x-r,c.target.y-sign*r*.55);ctx.lineTo(c.target.x+r,c.target.y+sign*r*.55);ctx.stroke();}}
+  if(c.quality===2&&c.beat==='impact'){ctx.strokeStyle='#aee5ff';ctx.lineWidth=4;ctx.globalAlpha=1-clamp(c.beatTime/.65);
+    for(let i=0;i<6;i++){const a=i*Math.PI/3,r=40+c.beatTime*240;ctx.beginPath();ctx.moveTo(c.target.x+Math.cos(a)*r*.4,c.target.y+Math.sin(a)*r*.4);ctx.lineTo(c.target.x+Math.cos(a)*r,c.target.y+Math.sin(a)*r);ctx.stroke();}}
   ctx.restore();
-  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#f9ebc7';ctx.textAlign='center';ctx.font='900 25px Impact,system-ui';ctx.fillText('STARBREAKER · SPEED BLITZ',640,120);ctx.restore();
 }

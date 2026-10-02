@@ -126,7 +126,7 @@ export function drawPeacefulEnding(ctx, shot, t, reducedMotion, drawStar) {
   ctx.fillStyle = '#33432f'; ctx.beginPath();
   ctx.moveTo(505, 540); ctx.quadraticCurveTo(545, 512, 583, 522); ctx.quadraticCurveTo(610, 537, 636, 540);
   ctx.quadraticCurveTo(672, 530, 709, 541); ctx.quadraticCurveTo(741, 550, 775, 536);
-  ctx.lineTo(785, 720); ctx.lineTo(488, 720); ctx.closePath(); ctx.fill();
+  ctx.quadraticCurveTo(802, 570, 710, 585); ctx.quadraticCurveTo(553, 600, 488, 572); ctx.quadraticCurveTo(482, 552, 505, 540); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = '#728052'; ctx.lineWidth = 3; ctx.beginPath();
   ctx.moveTo(506, 543); ctx.quadraticCurveTo(548, 516, 583, 527); ctx.quadraticCurveTo(612, 542, 638, 545);
   ctx.quadraticCurveTo(678, 535, 711, 546); ctx.quadraticCurveTo(744, 554, 775, 541); ctx.stroke();

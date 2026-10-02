@@ -9,6 +9,7 @@ for (let frame = 0; frame <= 25 * 60; frame++) {
 }
 assert.ok(spans.white / 60 < .55, `full-white flash should be brief (${spans.white / 60}s)`);
 assert.ok(spans.black / 60 < .55, `full-black pause should be brief (${spans.black / 60}s)`);
+for(let t=8.6;t<9.5;t+=.05){const shot=sampleVinsonCinematic('finale',t);assert.ok(shot.white>.1||shot.black>.1||shot.peace>0,'sword impact transitions without a dead arena');}
 assert.equal(VINSON_CINEMATIC_DURATION.finale, 25, 'the revised flashes preserve the full 25-second story timeline');
 assert.equal(sampleVinsonCinematic('finale', 17).dialogueId, 'captain-sacrifice');
 assert.equal(sampleVinsonCinematic('finale', 24.99).done, false);

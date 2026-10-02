@@ -1,12 +1,12 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson31';
-import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15c';
-import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15d';
-import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15';
-import {drawPeacefulEnding} from './vinsonendingfx.js?v=15';
-import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15c';
+import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson33';
+import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15g';
+import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15g';
+import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15g';
+import {drawPeacefulEnding} from './vinsonendingfx.js?v=15g';
+import {drawDomainClash,drawThrownSword,drawClashHUD,warmVinsonDomains} from './vinsonfinalefx.js?v=15g';
 import {createVinsonClash,stepVinsonClash,vinsonClashX} from '../core/vinsonclash.js?v=15c';
-import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=15e';
+import {drawVinsonBlackHole,drawVinsonSequence,drawVinsonCombo} from './vinsoncombatfx.js?v=15g';
 import {vinsonRenderCache} from './vinsonrendercache.js';
 import { load } from '../core/storage.js';
 
@@ -74,7 +74,7 @@ function renderHandCatch(ctx,h,t,reducedMotion) {
   // Mark the dangerous corridor while leaving the perpendicular exits conspicuously open.
   ctx.save();ctx.globalAlpha=.12+.12*tele;ctx.fillStyle='#ff251e';ctx.beginPath();ctx.moveTo(c.x1-uy*w/2,c.y1+ux*w/2);ctx.lineTo(c.x2-uy*w/2,c.y2+ux*w/2);ctx.lineTo(c.x2+uy*w/2,c.y2-ux*w/2);ctx.lineTo(c.x1+uy*w/2,c.y1-ux*w/2);ctx.closePath();ctx.fill();ctx.restore();
   ctx.save();ctx.strokeStyle='#ff6458';ctx.lineWidth=3;ctx.setLineDash([14,10]);for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(c.x1-uy*w*.5*side,c.y1+ux*w*.5*side);ctx.lineTo(c.x2-uy*w*.5*side,c.y2+ux*w*.5*side);ctx.stroke();}ctx.restore();
-  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 15px monospace';ctx.textAlign='center';ctx.fillText('DODGE ABOVE / BELOW THE RED LANE',cx,Math.max(170,cy-w*.58));ctx.textAlign='start';ctx.restore();
+  ctx.save();ctx.globalAlpha=.8;ctx.fillStyle='#ffe3a5';ctx.font='bold 15px monospace';ctx.textAlign='center';ctx.fillText('HAND SWEEP · DODGE ABOVE / BELOW THE RED LANE',640,230);ctx.textAlign='start';ctx.restore();
   if(close>.65)impactRings(ctx,cx,cy,clamp((close-.65)*2.8,0,1),t,reducedMotion,'#ff715e');
 }
 function laserRay(ctx,ray,t,ready,alpha) {
@@ -187,17 +187,17 @@ function field(ctx,t,stage=0) {
   }
   ctx.fillStyle=stage?'#96233118':'#61535c14';ctx.beginPath();ctx.ellipse(990,445,155,38,0,0,Math.PI*2);ctx.fill();
 }
-function health(ctx, s, feedback) {
-  const bar = (x, actor, label, color) => {
-    ctx.fillStyle = '#040809cc'; ctx.fillRect(x, 93, 380, 48);
-    ctx.fillStyle = '#f4eee4'; ctx.font = 'bold 17px monospace'; ctx.fillText(label.toUpperCase(), x + 12, 112);
-    ctx.fillStyle = '#34413b'; ctx.fillRect(x + 12, 121, 356, 7);
-    ctx.fillStyle='#dce4df';ctx.fillRect(x+12,121,356*(feedback?.chips?.[actor===s.hero?'hero':'boss']??actor.hp)/actor.maxHp,7);
-    ctx.fillStyle = color; ctx.fillRect(x + 12, 121, 356 * actor.hp / actor.maxHp, 7);
-    if(actor===s.boss){ctx.fillStyle='#11151a';for(const gate of [.2,.4,.6,.8])ctx.fillRect(x+12+356*gate-1,119,2,11);}
-  };
-  bar(80, s.hero, names[heroArt(s.stage)], '#88beed'); bar(820, s.boss, names[bossArt(s.stage)], '#d73d35');
+function health(ctx,s,feedback){
+ const bar=(x,actor,label,color)=>{
+  ctx.fillStyle='#050a10';ctx.fillRect(x,60,380,65);
+  ctx.fillStyle='#f8f3e8';ctx.font='900 24px Impact,system-ui';ctx.fillText(label.toUpperCase(),x+12,85);
+  ctx.fillStyle='#28323a';ctx.fillRect(x+12,96,356,20);
+  ctx.fillStyle='#f0ddbd';ctx.fillRect(x+12,96,356*(feedback?.chips?.[actor===s.hero?'hero':'boss']??actor.hp)/actor.maxHp,20);
+  ctx.fillStyle=color;ctx.fillRect(x+12,96,356*actor.hp/actor.maxHp,20);
+  if(actor===s.boss){ctx.fillStyle='#0b1016';for(const gate of [.2,.4,.6,.8])ctx.fillRect(x+12+356*gate-2,93,4,26);}
+ };bar(60,s.hero,names[heroArt(s.stage)],'#75bbe6');bar(840,s.boss,names[bossArt(s.stage)],'#d74843');
 }
+
 function shieldAndSword(ctx, shot) {
   if (!shot.shield) return;
   ctx.save(); ctx.globalAlpha = shot.shield; ctx.translate(640, 510);
@@ -261,6 +261,7 @@ export function drawVinsonBattle(ctx, state, images, t, { shot = null, camera = 
       const charged=clamp(h.elapsed/h.telegraph,0,1),flicker=reducedMotion?1:.82+.18*Math.sin(t*20+eye.x);
       ctx.save();ctx.globalCompositeOperation='lighter';ctx.shadowColor='#ff1e24';ctx.shadowBlur=0;ctx.fillStyle='#ff8170';ctx.globalAlpha=.5+flicker*.35;ctx.beginPath();ctx.arc(eye.x,eye.y,1.5+charged*1.5,0,Math.PI*2);ctx.fill();ctx.restore();
     }
+    if(state.sequence?.kind==='chains')sprite(ctx,images[heroArt(state.stage)],heroArt(state.stage),actor.x,actor.y,t,1,visualHero.moving);
     for (const p of state.projectiles) {
       if(['constellation','starLattice','starNova','domainStar'].includes(p.effect)){drawStarAbility(ctx,p,t,reducedMotion,star,beam);continue;}
       if(p.effect==='returningShield'){
@@ -335,14 +336,20 @@ export async function registerVinsonBattleAttempt(online) {
   return online.vinson.battleStart();
 }
 
-export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, previewAttack = null, previewEnding = false, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
+export function launchVinsonBattle({ parent = document.body, online, onWin, onClaim, onClose, resumeRewards = false, seed = 1, previewAttack = null, previewBox = 'lanes', previewEnding = false, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches } = {}) {
   if (document.querySelector('.vb-screen')) return null;
-  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=29', import.meta.url).href; document.head.append(link);
+  const link = node('link', ''); link.rel = 'stylesheet'; link.href = new URL('../../../css/vinsonbattle.css?v=33', import.meta.url).href; document.head.append(link);
   const screen = node('section', 'vb-screen'); screen.setAttribute('role', 'dialog'); screen.setAttribute('aria-modal', 'true'); screen.setAttribute('aria-label', 'Fight Suppression');
   const stage = node('div', 'vb-stage'), canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
   canvas.setAttribute('aria-label', 'Move to dodge the marked attacks, attack Vinson, and dodge with Space.'); stage.append(canvas);
-  const top = node('div', 'vb-top'); top.append(node('strong', 'vb-title', 'FIGHT SUPPRESSION'));
-  const closeButton = node('button', '', 'Return to Pitchside'); closeButton.onclick = close; top.append(closeButton); stage.append(top);
+  let paused=false;
+  const top = node('div', 'vb-top');
+  const pauseMenu=node('div','vb-pause');pauseMenu.hidden=true;pauseMenu.setAttribute('role','dialog');pauseMenu.setAttribute('aria-label','Fight paused');
+  const pauseTitle=node('h2','','PAUSED'),resume=node('button','','Resume fight');pauseMenu.append(pauseTitle,resume);stage.append(pauseMenu);
+  const pauseButton=node('button','vb-pause-trigger','Pause · Esc');top.append(pauseButton);
+  function setPaused(value){paused=value;pauseMenu.hidden=!value;keys.clear();held.clear();sequenceInputs.length=0;clashInputs.length=0;comboPressed=false;last=0;accumulator=0;if(value)resume.focus();else pauseButton.focus();}
+  pauseButton.onclick=()=>setPaused(true);resume.onclick=()=>setPaused(false);
+  const closeButton = node('button', '', 'Return to Pitchside'); closeButton.onclick = close; pauseMenu.append(closeButton); stage.append(top);
   let endingSeen=false;try{endingSeen=globalThis.localStorage?.getItem('vinson-ending13-seen')==='1';}catch{}
   const skipEnding=node('button','','Skip ending');skipEnding.hidden=true;skipEnding.onclick=()=>{if(!endingSeen||cinematicKind!=='finale'||!finalClash?.won)return;blockingDialogue=null;dialogueQueue=[];conversation.hidden=true;cinematicTime=VINSON_CINEMATIC_DURATION.finale;};top.append(skipEnding);
   const panel = node('div', 'vb-panel'), subtitle = node('div', 'vb-subtitle'); stage.append(panel, subtitle);
@@ -367,7 +374,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   const sequenceDock=node('div','vb-sequence-keys');sequenceDock.hidden=true;controls.append(sequenceDock);
   const sequenceInputs=[];let comboPressed=false;
   for(const key of ['q','e','r','f']){const button=node('button','',key.toUpperCase());button.setAttribute('aria-label','Sequence key '+key.toUpperCase());button.onclick=()=>sequenceInputs.push(key);sequenceDock.append(button);}
-  const comboButton=node('button','vb-combo-button','STARBREAKER · C');comboButton.hidden=true;comboButton.onclick=()=>{comboPressed=true;};controls.append(comboButton);
+  const comboButton=node('button','vb-combo-button','STARBREAKER · C');comboButton.hidden=true;comboButton.onclick=()=>{if(!blockingDialogue&&!paused)comboPressed=true;};stage.append(comboButton);
   const buttons = [['left','←'],['up','↑'],['down','↓'],['right','→'],['dodge','Dodge'],['heal','Heal 3'],['attack','Attack']];
   for (const [action, label] of buttons) {
     const b = node('button', '', label); b.dataset.action = action; b.setAttribute('aria-label', label);
@@ -384,7 +391,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     closeButton.onclick = exit; return { close: exit };
   }
   const compactArena=Number(globalThis.innerHeight)>0&&globalThis.innerHeight<=450;
-  let battle = createVinsonBattle({ seed, compact:compactArena, openingAttack:previewAttack }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
+  let battle = createVinsonBattle({ seed, compact:compactArena, openingAttack:previewAttack,boxPattern:previewBox }), raf = 0, last = 0, clock = 0, accumulator = 0, closed = false;
   let mode = '', cinematicKind = '', cinematicTime = 0, trauma = 0, particles = [], nonce = null, victoryBusy = false, victoryConfirmed = false;
   let finalClash=null,clashInputs=[],finaleWinDelay=0;
   const clashDock=node('div','vb-clash-keys');clashDock.hidden=true;stage.append(clashDock);
@@ -401,13 +408,13 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   warmVinsonDomains();
   const originalOverflow = document.documentElement.style.overflow; document.documentElement.style.overflow = 'hidden';
   for (const key of ['patel','captain','world','phonk','grumpy']) { const img = new Image(); img.src = asset(key); images[key] = img; void img.decode().then(() => { if(!closed && img.naturalWidth){battlePortrait(img,key);if(key==='world')for(const piece of ['left','right','earth'])vinsonRenderCache.get(img,piece,WORLD_PIECES[piece]);} }).catch(() => {}); }
-  const mute = node('button', '', 'Sound on'); mute.onclick = () => { muted = !muted; mute.textContent = muted ? 'Sound off' : 'Sound on'; }; top.insertBefore(mute, closeButton);
+  const mute = node('button', '', 'Sound on'); mute.onclick = () => { muted = !muted; mute.textContent = muted ? 'Sound off' : 'Sound on'; }; pauseMenu.insertBefore(mute, closeButton);
   function say(speaker,text,key='generic') {
     if(blockingDialogue||clock-(barkLast.get(key)??-20)<10)return;
     barkLast.set(key,clock);dialogue={speaker,text,until:clock+2.6};lastDialogue=clock;
   }
   function showDialogue(lines,onComplete=null){
-    dialogueQueue=lines.slice();dialogueComplete=onComplete;dialogue=null;subtitle.replaceChildren();
+    comboButton.hidden=true;dialogueQueue=lines.slice();dialogueComplete=onComplete;dialogue=null;subtitle.replaceChildren();
     held.clear();keys.clear();controls.classList.add('vb-controls-paused');nextDialogue();
   }
   function nextDialogue(){
@@ -469,7 +476,8 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     y: Number(keys.has('s') || keys.has('arrowdown') || held.has('down')) - Number(keys.has('w') || keys.has('arrowup') || held.has('up')),
     weapon: selectedWeapon, attack: keys.has('j') || held.has('attack'), dodge: keys.has(' ') || held.has('dodge'), heal: keys.has('h') || held.has('heal'), advance: keys.has('enter') }; }
   function keydown(e) {
-    if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'Escape') { e.preventDefault();if(!e.repeat)setPaused(!paused);return; }
+    if(paused&&e.key!=='Tab'){e.preventDefault();return;}
     if(blockingDialogue && ['Enter',' '].includes(e.key)){e.preventDefault();if(!e.repeat)advanceDialogue();return;}
     if(blockingDialogue && e.key!=='Tab'){e.preventDefault();return;}
     if(cinematicKind==='finale'&&finalClash&&!finalClash.won&&!finalClash.lost&&e.key!=='Tab'){
@@ -553,6 +561,7 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
   function animate(dt) {
     // A defeated arena is a held result frame. Do not advance animation clocks,
     // hazards or particles underneath the Suppressed decision panel.
+    if(paused)return;
     if(mode==='defeat')return;
     clock += dt;updateDialogue(); trauma = Math.max(0, trauma - dt * 1.8);
     particles = particles.filter(p => { p.life -= dt; p.x += (p.vx || 0) * dt; p.y += (p.vy || 0) * dt; p.vy = (p.vy || 0) + 150 * dt; return p.life > 0; });
@@ -592,7 +601,11 @@ export function launchVinsonBattle({ parent = document.body, online, onWin, onCl
     const s = battle.step(dt, {...input(),sequenceKey:sequenceInputs.shift(),combo:comboPressed});comboPressed=false;
     if(preparingSequence||s.sequence?.warning>0)sequenceInputs.length=0;
     for(const button of sequenceDock.children)button.disabled=s.sequence?.warning>0;
-    sequenceDock.hidden=!s.sequence;controls.classList[s.sequence?'add':'remove']('vb-has-sequence');controls.children[0].hidden=s.time>20;comboButton.hidden=s.comboOffer<=0||s.phase!=='fight';comboButton.textContent='STARBREAKER · C · '+s.comboOffer.toFixed(1)+'s';
+    sequenceDock.hidden=!s.sequence;controls.classList[s.sequence?'add':'remove']('vb-has-sequence');controls.children[0].hidden=s.time>20;comboButton.hidden=(!s.combo&&s.comboOffer<=0)||s.phase!=='fight'||!!s.sequence;
+    comboButton.disabled=!!s.combo&&!['slash','finish'].includes(s.combo.beat);
+    const comboLabels={windup:'GET READY · SLASH',slash:'C / TAP · SLASH NOW',crosswind:'GET READY · FINISHER',finish:'C / TAP · FINISH NOW',impact:s.combo?.quality===2?'PERFECT · STARBREAKER':'PARTIAL STRIKE'};
+    comboButton.textContent=s.combo?'STARBREAKER '+s.combo.presses+'/3\n'+comboLabels[s.combo.beat]+(['slash','finish'].includes(s.combo.beat)?' · '+Math.max(0,1.5-s.combo.beatTime).toFixed(1)+'s':''):'COMBO AVAILABLE\nC / TAP · START STARBREAKER · '+s.comboOffer.toFixed(1)+'s';
+    comboButton.dataset.beat=s.combo?.beat||'ready';
     if(!s.sequence)sequenceInputs.length=0;
     const attackButton=[...touch.children].find(b=>b.dataset.action==='attack');if(attackButton){attackButton.disabled=s.phase==='dodgebox';attackButton.textContent=s.phase==='timing'?'Strike':'Attack';}
     const healButton=[...touch.children].find(b=>b.dataset.action==='heal');if(healButton){healButton.textContent=`Heal ${s.hero.heals}`;healButton.disabled=s.hero.heals===0||s.phase==='timing';}

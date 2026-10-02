@@ -27,7 +27,7 @@ for (let frame = 0; frame <= 25 * 60; frame++) {
 assert.ok(movedLeft && movedRight, 'beam clash shifts toward both sides during the struggle');
 
 const swordBeforeBlast = sampleVinsonCinematic('finale', 8.0);
-const blast = sampleVinsonCinematic('finale', 8.9);
+const blast = sampleVinsonCinematic('finale', 8.35);
 assert.ok(swordBeforeBlast.throwSword > .9, 'Captain releases his sword before the blast');
 assert.equal(swordBeforeBlast.white, 0);
 assert.ok(blast.white > .5 && blast.explosion > .5, 'the white explosion follows the sword throw');

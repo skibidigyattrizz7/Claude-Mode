@@ -310,3 +310,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - DONE (Oct 2, owner): P5: shield deeper; stop-and-read dialogue restored (pre-clash scene + 2 paused beats per clash struggle); dodge box made much harder (ChatGPT-style aimed fans from box 1, shorter previews, faster). Full critique of ChatGPT 15 + skills list posted in AI_DIRECT.
 - DONE (Oct 2, owner): merged ChatGPT prototype 15 into the live game (versions bumped; all suites pass).
 - (Oct 2) Reviewed ChatGPT hud-15 (8.4/10, FPS solved, chains prompt regression); copied 8 skills to docs/skills-for-chatgpt for ChatGPT. Not merged yet (waiting on the chains fix).
+- DONE (Oct 2, owner: merge anyway): ChatGPT hud-15 merged live (chains-prompt overlap bug is live; ChatGPT told to fix first).
