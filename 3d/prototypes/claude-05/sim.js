@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=5';
+import { SCRIPT } from './script.js?v=5b';
 // Prototype 5-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -470,10 +470,10 @@ const BOX_MIX = {
   2: [['lanes', 'rain', 'radial'], ['sweep', 'radial', 'crush'], ['crush', 'sweep', 'rain', 'radial'], ['sweep', 'crush', 'radial', 'lanes']],
   3: [['sweep', 'crush', 'radial', 'rain'], ['crush', 'sweep', 'radial', 'lanes'], ['sweep', 'crush', 'rain', 'radial']],
 };
-const BOUNCERS = { 1: [0, 1, 1, 2], 2: [1, 1, 2, 2], 3: [2, 2, 3] };
+const BOUNCERS = { 1: [1, 1, 2, 2], 2: [1, 2, 2, 3], 3: [2, 3, 3] }; // owner: the box was far too easy
 function beginBox(s) {
   const g = s.boss.gateIndex, st = s.stage, sp = cfg(s).speed;
-  s.box = { t: 0, len: [0, 8, 8.5, 9][st], gate: g, mix: BOX_MIX[st][g] || BOX_MIX[st][BOX_MIX[st].length - 1], soul: { x: 640, y: 470 }, bullets: [], beams: [], wave: 0, next: .9, preview: null, aimT: 2.2, shake: 0 };
+  s.box = { t: 0, len: [0, 9.5, 10, 10.5][st], gate: g, mix: BOX_MIX[st][g] || BOX_MIX[st][BOX_MIX[st].length - 1], soul: { x: 640, y: 470 }, bullets: [], beams: [], wave: 0, next: .9, preview: null, aimT: 1.2, shake: 0 };
   for (let i = 0; i < (BOUNCERS[st][g] || 0); i++) { const a = s.R() * TAU; s.box.bullets.push({ x: BOX.minX + 40 + i * 120, y: BOX.minY + 30, vx: Math.cos(a) * 170 * sp, vy: Math.abs(Math.sin(a)) * 170 * sp + 60, r: 11, age: 0, tele: .9, bounce: true }); }
   s.shots = []; s.hazards = []; s.heroShots = []; s.boss.hands.forEach((hd) => { hd.busy = false; });
   setPhase(s, 'box'); banner(s, 'SURVIVE', 'DODGE · NO ATTACKS', '#e8f1ff'); ev(s, 'boxStart');
@@ -492,13 +492,13 @@ function spawnBoxWave(s, pv) {
     const vertical = pv.vertical, fromStart = b.wave % 4 < 2;
     for (let i = 0; i < lanes; i++) {
       if (i === pv.safe) continue;
-      const v = (300 + b.gate * 40) * sp;
+      const v = (370 + b.gate * 40) * sp;
       b.bullets.push({ x: vertical ? BOX.minX + lw * (i + .5) : fromStart ? BOX.minX - 14 : BOX.maxX + 14, y: vertical ? (fromStart ? BOX.minY - 14 : BOX.maxY + 14) : BOX.minY + lh * (i + .5),
         vx: vertical ? 0 : fromStart ? v : -v, vy: vertical ? (fromStart ? v : -v) : 0, r: vertical ? lw * .42 : lh * .42, wall: true, vertical, age: 0, tele: .45 });
     }
   } else if (pv.pattern === 'radial') {
     const cx = (BOX.minX + BOX.maxX) / 2, cy = (BOX.minY + BOX.maxY) / 2, spokes = 20;
-    for (let i = 0; i < spokes; i++) { if (((i - pv.safe + spokes) % spokes) <= 2) continue; const a = i / spokes * TAU + pv.off; b.bullets.push({ x: cx, y: cy, vx: Math.cos(a) * 210 * sp, vy: Math.sin(a) * 210 * sp, r: 8, age: 0, tele: .55 }); }
+    for (let i = 0; i < spokes; i++) { if (((i - pv.safe + spokes) % spokes) <= 2) continue; const a = i / spokes * TAU + pv.off; b.bullets.push({ x: cx, y: cy, vx: Math.cos(a) * (215 + b.gate * 18) * sp, vy: Math.sin(a) * (215 + b.gate * 18) * sp, r: 9, age: 0, tele: .5 }); }
   } else if (pv.pattern === 'sweep') b.beams.push({ kind: 'sweep', t: 0, len: 1.5 / sp, gapY: pv.gapY, half: pv.half, fromLeft: pv.fromLeft, x: pv.fromLeft ? BOX.minX : BOX.maxX });
   else if (pv.pattern === 'crush') b.beams.push({ kind: 'crush', t: 0, cy: pv.cy, half: pv.half, close: .45 / sp, hold: .75, open: .35, k: 0 });
   else pv.xs.forEach((x, i) => b.bullets.push({ x, y: BOX.minY + 4, vx: (s.R() - .5) * 50, vy: 320 * sp, r: 7, age: 0, tele: .3 + i * .05, rain: true }));
@@ -510,17 +510,17 @@ function updateBox(s, dt, inp) {
   let mx = inp.mx, my = inp.my; if (h.invert > 0) { mx = -mx; my = -my; }
   const len = Math.max(1, Math.hypot(mx, my));
   so.x = clamp(so.x + mx / len * 255 * dt, BOX.minX + 9, BOX.maxX - 9); so.y = clamp(so.y + my / len * 255 * dt, BOX.minY + 9, BOX.maxY - 9);
-  if (!b.preview && b.next < .55 && b.t < b.len - 1) b.preview = previewFor(s);
+  if (!b.preview && b.next < .38 && b.t < b.len - 1) b.preview = previewFor(s); // shorter warning, like ChatGPT's box
   if (b.next <= 0 && b.t < b.len - 1) {
     const pv = b.preview || previewFor(s); spawnBoxWave(s, pv); b.preview = null;
-    b.next = ({ sweep: 1.25, crush: 1.35 }[pv.pattern] || 1) * [0, 1.05, .95, .82][st];
+    b.next = ({ sweep: 1.2, crush: 1.3 }[pv.pattern] || 1) * [0, .86, .82, .84][st];
   }
-  if ((b.gate >= 1 || st === 3) && b.aimT <= 0 && b.t < b.len - 1.3) {
-    const side = Math.floor(s.R() * 4), ex = [BOX.minX + 10, BOX.maxX - 10][side % 2], ey = side < 2 ? BOX.minY + 10 : BOX.maxY - 10, a = Math.atan2(so.y - ey, so.x - ex), n = st === 3 ? 2 : 1;
-    for (let i = -n; i <= n; i++) b.bullets.push({ x: ex, y: ey, vx: Math.cos(a + i * .2) * 250, vy: Math.sin(a + i * .2) * 250, r: 7, age: 0, tele: .65, aimed: true });
-    b.aimT = (1.6 - b.gate * .2) / cfg(s).speed;
+  if (b.aimT <= 0 && b.t < b.len - 1.2) { // aimed fans from the very first box
+    const side = Math.floor(s.R() * 4), ex = [BOX.minX + 10, BOX.maxX - 10][side % 2], ey = side < 2 ? BOX.minY + 10 : BOX.maxY - 10, a = Math.atan2(so.y - ey, so.x - ex), n = b.gate >= 2 || st === 3 ? 2 : 1;
+    for (let i = -n; i <= n; i++) b.bullets.push({ x: ex, y: ey, vx: Math.cos(a + i * .22) * (230 + b.gate * 25), vy: Math.sin(a + i * .22) * (230 + b.gate * 25), r: 7, age: 0, tele: .6, aimed: true });
+    b.aimT = Math.max(.7, 1.15 - b.gate * .09) / cfg(s).speed;
   }
-  const hit = () => { if (h.inv <= 0 && hurtHero(s, st === 3 ? 8 : 10, 'box', so.x, so.y)) b.shake = .25; };
+  const hit = () => { if (h.inv <= 0 && hurtHero(s, st === 3 ? 8 : 10, 'box', so.x, so.y)) { b.shake = .25; h.inv = .45; } }; // shorter grace after a box hit
   for (let i = b.beams.length - 1; i >= 0; i--) {
     const z = b.beams[i]; z.t += dt;
     if (z.kind === 'sweep') { // a wall of light crosses the box; only its gap is safe
@@ -611,7 +611,10 @@ function updateClash(s, dt, inp) {
   c.t += dt;
   if (c.struggle) { // owner (13): after the push they struggle, the beams swing toward each of them, lines shouted
     const g = c.struggle; g.t += dt;
-    (SCRIPT.struggle?.[c.kind] || []).forEach((l, i) => { const at = .2 + i * 1.15; if (g.t - dt < at && g.t >= at) say(s, l); });
+    (SCRIPT.struggle?.[c.kind] || []).forEach((l, i) => { const at = i ? 2.5 : .2; if (g.t - dt < at && g.t >= at) say(s, l); });
+    // two stop-and-read story beats in the middle of the struggle (click to continue), like ChatGPT's 13/14
+    const beats = SCRIPT.clashBeats?.[c.kind] || [];
+    for (const [i, at] of [[0, 1], [1, 1.8]]) if (beats[i] && !g['b' + i] && g.t >= at) { g['b' + i] = true; startTalkLines(s, [beats[i]], (s2) => setPhase(s2, 'clash')); return; }
     if (g.t >= g.len) { c.struggle = null; c.won = true; c.sword = c.kind >= 2; s.hitstop = c.sword ? 0 : .2; ev(s, c.sword ? 'swordThrow' : 'clashWin', { kind: c.kind }); }
     return;
   }
@@ -628,7 +631,7 @@ function updateClash(s, dt, inp) {
   c.p -= (k.push + k.ramp * (c.t - 1.3)) * dt;
   c.p = Math.max(k.floor, c.p);
   for (const mark of [.65, .8, .9]) if (c.p >= mark && !(c['m' + mark])) { c['m' + mark] = true; ev(s, 'clashEscalate', { mark }); }
-  if (c.p >= 1) { c.p = 1; c.struggle = { t: 0, len: 2.8 }; ev(s, 'clashStruggle', { kind: c.kind }); } // then the struggle; the end clashes finish with the sword throw
+  if (c.p >= 1) { c.p = 1; c.struggle = { t: 0, len: 3.1 }; ev(s, 'clashStruggle', { kind: c.kind }); } // then the struggle; the end clashes finish with the sword throw
 }
 function afterClash(s) {
   const kind = s.clash.kind; s.clash = null;
@@ -650,8 +653,8 @@ function updateCine(s, dt, inp) {
 
 // ---------------------------------------------------------------------------------------------- dialogue
 // First press finishes the line, the next press advances. SKIP (or X) ends the scene. Forced test runs skip talk.
-function startTalk(s, key, after) {
-  const lines = SCRIPT[key];
+function startTalk(s, key, after) { startTalkLines(s, SCRIPT[key], after, key); }
+function startTalkLines(s, lines, after, key = 'beat') {
   if (!lines || !lines.length || s.noTalk) { after(s); return; }
   s.talk = { key, lines, i: 0, t: 0, after }; setPhase(s, 'talk'); ev(s, 'talkLine', { who: lines[0].who });
 }
@@ -706,7 +709,7 @@ export function step(s, dt, inp) {
   if (b.stagger <= 0) { b.attackCd -= sdt; if (b.attackCd <= 0) startAttacks(s, chooseAttack(s)); }
   updateHeroShots(s, sdt); updateHazards(s, sdt);
   if (s.phase !== 'fight') return s;
-  if (s.pendingClash) { const k = s.pendingClash; s.pendingClash = 0; s.pendingGate = false; s.shots = []; s.hazards = []; beginClash(s, k); } // owner: no stop-and-read dialogue here, only the pushing lines
+  if (s.pendingClash) { const k = s.pendingClash; s.pendingClash = 0; s.pendingGate = false; s.shots = []; s.hazards = []; if (k === 2) startTalk(s, 'domain', (s2) => beginClash(s2, 2)); else beginClash(s, k); } // owner: he DOES want the stop-and-read dialogue
   else if (s.pendingGate) { s.pendingGate = false; beginBox(s); }
   return s;
 }

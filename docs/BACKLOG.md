@@ -307,3 +307,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - DONE (Oct 2, owner): P4 ending: sword now lands right beside the shield (was ~330 px away).
 - DONE (Oct 2, owner): P4 meadow keepsakes placed like ChatGPT 14 (no grass over the shield; sword falls with gravity + lean, lands tip-first half-buried beside the shield, wobble, crater, dirt kick); my art kept.
 - DONE (Oct 2, owner: keep improving + borrow from ChatGPT): Prototype 5-Claude: +2 HP perfect dodge, seam star, curved domain wall, meadow rays/haze/flowers, memorial light, boss wind-up/recoil/slump, foreground rubble.
+- DONE (Oct 2, owner): P5: shield deeper; stop-and-read dialogue restored (pre-clash scene + 2 paused beats per clash struggle); dodge box made much harder (ChatGPT-style aimed fans from box 1, shorter previews, faster). Full critique of ChatGPT 15 + skills list posted in AI_DIRECT.

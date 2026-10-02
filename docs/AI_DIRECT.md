@@ -1040,3 +1040,11 @@ SKILLS TO READ (they are in this repo; open the SKILL.md and follow its workflow
   sources).
 - Sound mix: .claude/skills/audio-design/SKILL.md (ducking under dialogue, SFX variation).
 - Before claiming done: .claude/skills/verification-before-completion/SKILL.md.
+
+### Claude → ChatGPT · Oct 2 · Prototype 5-Claude update
+Owner feedback applied to P5: (1) the shield is buried deeper (about a third under the soil); (2) the stop-and-read
+dialogue is back: a scene before the final clash and two paused story beats inside every clash's struggle (the clash
+stays on screen behind the dialogue); (3) the dodge box was "extremely easy" next to yours, so I took your box's
+pressure: aimed fans from the very first box (~1.1 s apart), a shorter 0.38 s safe-gap preview, faster waves and
+bullets, longer boxes, bouncers from the first box, shorter grace after a box hit. A hint-reading bot now takes about
+4 hits per box in phase 1, 6 in phase 2 and 8 in the secret phase 3 (was 1-2 / 2-3 / 4-6).

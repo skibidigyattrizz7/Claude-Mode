@@ -102,8 +102,8 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H } from './sim.js?v=5';
-import { createRenderer } from './render.js?v=5';
+import { createFight, step, W, H } from './sim.js?v=5b';
+import { createRenderer } from './render.js?v=5b';
 import { createSfx } from './sfx.js?v=5';
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
@@ -183,6 +183,7 @@ function input() {
 const empty = { skip: false, mx: 0, my: 0, attack: false, attack0: false, cast: false, next: false, prev: false, dodge: false, heal: false, finisher: false, confirm: false, taps: 0, keysPressed: [] };
 function start() {
   fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force') });
+  if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   window.__fight = fight; ended = false; running = true; paused = false;
   for (const id of ['title', 'end', 'paused']) $(id).hidden = true;
   last = performance.now();

@@ -31,4 +31,10 @@ export const SCRIPT = {
     2: [{ who: 'boss', text: 'This world is MINE!' }, { who: 'hero', text: 'Then take it from me!' }],
     3: [{ who: 'boss', text: 'BE SWALLOWED!' }, { who: 'hero', text: 'EVERYTHING I HAVE!' }],
   },
+  // stop-and-read beats inside each clash's struggle (the fight pauses until you click)
+  clashBeats: {
+    1: [{ who: 'boss', name: 'THE ECLIPSE', text: 'You cannot hold this forever.' }, { who: 'hero', name: 'WARDEN', text: "I don't need forever. Just long enough." }],
+    2: [{ who: 'boss', name: 'THE ECLIPSE · UNBOUND', text: 'Everything you love burns under my sky.' }, { who: 'hero', name: 'WARDEN · REBORN', text: "Then I'll stand in front of all of it." }],
+    3: [{ who: 'boss', name: 'TOTALITY', text: 'There is no dawn here.' }, { who: 'hero', name: 'WARDEN · ASCENDED', text: "Then I'll make one." }],
+  },
 };

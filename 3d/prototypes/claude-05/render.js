@@ -1,6 +1,6 @@
 // Prototype 5-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, FLOOR, BOX, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=5';
+import { W, H, FLOOR, BOX, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=5b';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -989,7 +989,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     // keepsakes, placed like ChatGPT's 14: shield standing, the sword planted just to its right on the same soil
     const GY = 606, SHX = 590, SWX = 704, sec = s.cine ? s.cine.len : 9, age = s.cine ? s.cine.t - .4 * sec : 99;
     ctx.fillStyle = 'rgba(36,45,31,.28)'; ctx.beginPath(); ctx.ellipse(SHX, GY + 4, 78, 15, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(SWX, GY + 6, 42, 9, 0, 0, TAU); ctx.fill();
-    drawShield(SHX, GY - 52, 60, -.035);
+    ctx.save(); ctx.beginPath(); ctx.rect(-500, -300, W + 1000, GY + 306); ctx.clip(); drawShield(SHX, GY - 36, 60, -.035); ctx.restore(); // owner: dug a bit deeper
     // the sword: gravity fall, a slight lean that settles, lands tip-first, half the blade buried, a short wobble
     const fall = clamp((k - .3) / .1, 0, 1), landed = fall * fall;
     if (fall > 0) {
@@ -1219,7 +1219,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.translate(640 + shx, 360 + shy); ctx.rotate(rot); ctx.scale(fx.zoom, fx.zoom); ctx.translate(-640 - fx.camX, -360 - fx.camY);
     drawArena(s);
-    if (s.phase === 'clash') drawClashWorld(s);
+    if (s.clash) drawClashWorld(s); // also while a clash story beat is paused
     drawHazards(s);
     const heroFirst = h.y < b.y + 30;
     if (s.phase !== 'finisher') for (const tr of h.trail) drawHero(s, tr.x, tr.y, tr.life * 2, tr.face, true);
