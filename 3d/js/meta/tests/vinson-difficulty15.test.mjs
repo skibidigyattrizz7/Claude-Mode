@@ -48,7 +48,7 @@ for (const [difficulty, seconds] of [['normal', 35], ['hard', 20]]) {
 }
 
 // Normal boxes expose a safe rectangle for each actual pattern and retain prototype13 aimed fans.
-// Hard preserves fans, shortens main-wave cadence, and remains seeded/deterministic.
+// Both modes now preserve the exact prototype13 box cadence, and remains seeded/deterministic.
 for (const pattern of ['lanes', 'vertical', 'radial', 'beams']) {
   const normal = ready({ seed: 715, openingAttack: 'box', boxPattern: pattern });
   const hard = ready({ seed: 715, difficulty: 'hard', openingAttack: 'box', boxPattern: pattern });
@@ -85,7 +85,7 @@ for (const pattern of ['lanes', 'vertical', 'radial', 'beams']) {
   }
   assert.ok(sawRect, `${pattern} shows a safe rectangle`);
   assert.ok(firstNormalWave !== null && firstHardWave !== null);
-  assert.ok(firstHardWave < firstNormalWave, `${pattern} hard wave arrives sooner`);
+  assert.equal(firstHardWave, firstNormalWave, `${pattern} both modes preserve prototype13 box timing`);
   assert.ok(sawNormalFan, `${pattern} normal restores prototype13 side shots`);
   assert.ok(sawFan, `${pattern} hard box retains aimed fans`);
 }

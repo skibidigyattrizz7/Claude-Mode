@@ -308,16 +308,16 @@ export function vinsonBoxSafeRect(box){
  return {x:gap.x-12,y:gap.y-9,w:24,h:18};
 }
 function beginBox(state,{bonus=false}={}) {
-  state.sequence=null;state.comboOffer=0;
-  const maxY = state.compact ? 485 : 600;state.boxClock=0;state.boxRounds++;
-  state.box = { minX: 260, maxX: 1020, minY: state.compact ? 270 : 300,
-    maxY, heroRadius: 7, bonus, pattern: ['lanes', 'vertical', 'radial', 'beams'][bonus?(state.boxRounds-1)%4:state.thresholdIndex%4],
-    elapsed: 0, duration: (state.difficulty==='hard'?11:9) + nextRandom(state) * 2, wave: 0, bullets: [], spawnTimer: state.difficulty==='hard'?.85:1.15,
+  state.sequence=null;state.comboOffer=0;state.boxClock=0;state.boxRounds++;
+  const maxY = state.compact ? 470 : 580;
+  state.box = { minX: 320, maxX: 960, minY: state.compact ? 300 : 320,
+    maxY, heroRadius: 7, bonus, pattern: ['lanes', 'vertical', 'radial', 'beams'][state.thresholdIndex%4],
+    elapsed: 0, duration: 9 + nextRandom(state) * 2, wave: 0, bullets: [], spawnTimer: 0.65,
     pressureTimer: 1.25, pressureWave: 0, mainWaves: [], preview: null };
-  state.projectiles = []; state.hazards = []; state.handQueue = []; state.hero.x = clamp(state.hero.x, 290, 990);
+  state.projectiles = []; state.hazards = []; state.handQueue = []; state.hero.x = clamp(state.hero.x, 350, 930);
   state.hero.y = clamp(state.hero.y, state.box.minY + 44, maxY - 18);
   setPhase(state, 'dodgebox');
-  event(state, 'boxStart', { threshold: state.thresholdIndex + 1, bonus, duration: state.box.duration });
+  event(state, 'boxStart', { threshold: state.thresholdIndex + 1, duration: state.box.duration });
 }
 function beginTiming(state, input) {
   const bonus=!!state.box?.bonus;state.box = null;
@@ -329,7 +329,7 @@ function updateBox(state, dt, input) {
   const box = state.box;box.mainWaves??=[];
   moveHero(state, dt, input, box);
   box.elapsed += dt; box.spawnTimer -= dt;
-  if (box.spawnTimer < (state.difficulty==='hard'?.55:1.1) && !box.preview) {
+  if (box.spawnTimer < 0.35 && !box.preview) {
     const safe = Math.floor(nextRandom(state) * 5);
     box.preview = { wave: box.wave, safe, remaining: Math.max(0, box.spawnTimer), pattern: box.pattern };
   }
@@ -337,13 +337,14 @@ function updateBox(state, dt, input) {
   if (box.spawnTimer <= 0 && box.elapsed < box.duration - 0.8) {
     const lanes = 5, laneHeight = (box.maxY - box.minY) / lanes;
     const safe = box.preview?.safe ?? Math.floor(nextRandom(state) * lanes);
-    const fromRight = box.wave % 2 === 0;box.mainWaves.push({safe,wave:box.wave,pattern:box.pattern});
+    const fromRight = box.wave % 2 === 0;
+    box.mainWaves.push({safe,wave:box.wave,pattern:box.pattern});
     if (box.pattern === 'radial') {
       const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
       for (let lane = 0; lane < 16 && box.bullets.length < 64; lane++) {
-        const gap=vinsonBoxGap(box,{safe,wave:box.wave,pattern:box.pattern}).gap;
+        const gap=Math.round(safe*16/5);
         if ((lane-gap+16)%16<=2) continue;
-        const angle = lane * Math.PI / 8 + box.wave*.19, speed = 170 + state.thresholdIndex*18+(state.difficulty==='hard'?25:0);
+        const angle = lane * Math.PI / 8 + box.wave*.19, speed = 170 + state.thresholdIndex*18;
         box.bullets.push({ x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
           radius: 8, wave: box.wave, kind: 'radial', age:0, telegraph:.65 });
       }
@@ -355,13 +356,13 @@ function updateBox(state, dt, input) {
         box.bullets.push({ x: vertical ? box.minX + (box.maxX - box.minX) * (lane + .5) / lanes :
             fromRight ? box.maxX + 18 : box.minX - 18,
           y: vertical ? (fromRight ? box.minY - 18 : box.maxY + 18) : box.minY + laneHeight * (lane + .5),
-          vx: vertical ? 0 : (fromRight?-1:1)*(beam ? 440 : 400)*(state.difficulty==='hard'?1.12:1),
-          vy: vertical ? (fromRight ? 250 : -250)*(state.difficulty==='hard'?1.12:1) : 0,
+          vx: vertical ? 0 : fromRight ? -(beam ? 440 : 400) : beam ? 440 : 400,
+          vy: vertical ? (fromRight ? 250 : -250) : 0,
           radius: beam ? 13 : vertical ? 10 : 11, wave: box.wave, age:0, telegraph:.55,
           kind: beam ? 'beam' : vertical ? 'vertical' : 'lane' });
       }
     }
-    box.wave++; box.preview = null;box.spawnTimer += (box.pattern==='radial'?.95:.85)*(state.difficulty==='hard'?.85:1);
+    box.wave++; box.preview = null; box.spawnTimer += box.pattern === 'radial' ? .95 : .85;
   }
   // A second, independent layer targets a snapshot of the player's position.
   // Its warning is visible before motion; the fan never homes after launch.
