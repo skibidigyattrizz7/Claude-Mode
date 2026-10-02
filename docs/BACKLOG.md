@@ -309,3 +309,4 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - DONE (Oct 2, owner: keep improving + borrow from ChatGPT): Prototype 5-Claude: +2 HP perfect dodge, seam star, curved domain wall, meadow rays/haze/flowers, memorial light, boss wind-up/recoil/slump, foreground rubble.
 - DONE (Oct 2, owner): P5: shield deeper; stop-and-read dialogue restored (pre-clash scene + 2 paused beats per clash struggle); dodge box made much harder (ChatGPT-style aimed fans from box 1, shorter previews, faster). Full critique of ChatGPT 15 + skills list posted in AI_DIRECT.
 - DONE (Oct 2, owner): merged ChatGPT prototype 15 into the live game (versions bumped; all suites pass).
+- (Oct 2) Reviewed ChatGPT hud-15 (8.4/10, FPS solved, chains prompt regression); copied 8 skills to docs/skills-for-chatgpt for ChatGPT. Not merged yet (waiting on the chains fix).
