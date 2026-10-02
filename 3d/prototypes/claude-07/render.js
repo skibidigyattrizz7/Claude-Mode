@@ -242,6 +242,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     // skyline (parallax) and ruins
     ctx.fillStyle = pal.ruin[0];
     for (let i = 0; i < 18; i++) { const x = (i * 83 - fx.camX * 0.2) % (W + 200) - 100, h = 80 + (i * 37 % 110); ctx.fillRect(x, 330 - h, 54, h); }
+    // a few windows still lit in the far ruins (P7 arena depth)
+    ctx.fillStyle = f === 2 ? 'rgba(255,106,58,.22)' : f === 3 ? 'rgba(255,255,255,.12)' : 'rgba(255,208,138,.16)';
+    for (let i = 1; i < 18; i += 3) { const x = (i * 83 - fx.camX * 0.2) % (W + 200) - 100, h = 80 + (i * 37 % 110); for (let r = 0; r < Math.floor((h - 20) / 22); r++) for (let c = 0; c < 2; c++) if (((i * 7 + r * 13 + c * 5) % 5) < 2) ctx.fillRect(x + 12 + c * 22, 330 - h + 12 + r * 22, 8, 10); }
+    ctx.fillStyle = pal.ruin[0];
     ctx.fillStyle = pal.ruin[1];
     for (let i = 0; i < 9; i++) { const x = (i * 157 - fx.camX * 0.5) % (W + 260) - 130; ctx.fillRect(x, 230 + (i % 3) * 20, 26, 140); ctx.fillRect(x - 14, 222 + (i % 3) * 20, 54, 14); }
     if (f === 3) { ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1; for (let i = 0; i < 9; i++) { const x = (i * 157 - fx.camX * 0.5) % (W + 260) - 130; ctx.strokeRect(x, 230 + (i % 3) * 20, 26, 140); } }
@@ -1018,7 +1022,11 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.fillStyle = field; ctx.fillRect(-500, 418, W + 1000, 400);
     // grass behind the keepsakes first, so no blade ever draws over the shield (owner)
     for (const g of grass) { if (g.y >= 600) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 4; ctx.strokeStyle = `rgba(${secret ? '200,230,150' : '190,200,110'},${.4 + (g.y - 420) / 500})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.quadraticCurveTo(g.x + sw * .5, g.y - g.h * .5, g.x + sw, g.y - g.h); ctx.stroke(); }
-    ctx.fillStyle = secret ? '#2f4a22' : '#223014'; ctx.fillRect(-500, 632, W + 1000, 200);
+    { // the near bank: a rolling edge instead of a straight band, darker toward the viewer
+      const nb = ctx.createLinearGradient(0, 624, 0, H);
+      nb.addColorStop(0, secret ? '#2f4a22' : '#24331a'); nb.addColorStop(1, secret ? '#1d3016' : '#141d0c'); ctx.fillStyle = nb;
+      ctx.beginPath(); ctx.moveTo(-500, H + 120); for (let x = -500; x <= W + 500; x += 30) ctx.lineTo(x, 634 + Math.sin(x * .011) * 9 + Math.sin(x * .043 + 1) * 4); ctx.lineTo(W + 500, H + 120); ctx.closePath(); ctx.fill();
+    }
     ctx.strokeStyle = secret ? '#b8d888' : '#a8b860'; ctx.lineWidth = 2;
     for (const g of grass) { if (g.y < 600 || (g.x > 500 && g.x < 790)) continue; const sw = Math.sin(fx.clock * 1.6 + g.ph) * 5; ctx.beginPath(); ctx.moveTo(g.x, g.y + 40); ctx.quadraticCurveTo(g.x + sw * .5, g.y + 20, g.x + sw, g.y + 40 - g.h); ctx.stroke(); }
     for (const [x, y, col] of [[160, 612, '#f2d68a'], [300, 650, '#e8a8b0'], [395, 600, '#f6e7b0'], [880, 640, '#f2d68a'], [1010, 606, '#e8a8b0'], [1150, 660, '#f6e7b0'], [240, 690, '#e8a8b0'], [960, 690, '#f2d68a']]) { const sw = Math.sin(fx.clock * 1.6 + x) * 2; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x + sw, y, 3, 0, TAU); ctx.fill(); }
@@ -1098,14 +1106,14 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.save(); ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
     ctx.fillStyle = 'rgba(5,8,10,.85)'; ctx.fillRect(px, py, pw, ph);
     ctx.globalCompositeOperation = 'lighter'; glow(px + pw / 2, py + ph / 2, 160, hero ? 'rgba(160,240,255,.25)' : 'rgba(255,120,80,.25)'); ctx.globalCompositeOperation = 'source-over';
-    if (hero) { const sc = 2; ctx.translate(px + pw / 2, py + ph * .97); ctx.scale(sc, sc); drawHero(s, 0, 0, 1, 1); }
-    else { const b = s.boss, sc = .8; ctx.translate(px + pw / 2, py + ph / 2); ctx.scale(sc, sc); ctx.translate(-b.x, -(b.y - 170)); drawBoss(s); }
+    // bust shots: the speaker's head and shoulders fill the frame
+    if (hero) { const sc = 2.5; ctx.translate(px + pw / 2 - 4, py + ph * 1.12); ctx.scale(sc, sc); drawHero(s, 0, 0, 1, 1); }
+    else { const b = s.boss, sc = 1.02; ctx.translate(px + pw / 2, py + ph / 2); ctx.scale(sc, sc); ctx.translate(-b.x, -(b.y - 150)); drawBoss(s); }
     ctx.restore();
     ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.strokeRect(px, py, pw, ph);
     // the line itself
     const bx = 120, by = 566, bw = W - 240, bh = 108, shown = Math.floor(k.t * TALK_CPS), full = shown >= line.text.length;
     ctx.fillStyle = 'rgba(5,8,10,.92)'; ctx.fillRect(bx, by, bw, bh); ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = col; ctx.fillRect(hero ? bx : bx + bw - 6, by, 6, bh);
     ctx.font = font(22); const nw = ctx.measureText(line.name).width + 28;
     ctx.fillStyle = col; ctx.fillRect(hero ? bx + 24 : bx + bw - 24 - nw, by - 18, nw, 30);
     text(line.name, hero ? bx + 38 : bx + bw - 10 - nw + 0, by + 4, 22, '#05070a', 'left', false);
@@ -1142,9 +1150,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     text(touch ? 'HEALS' : 'H  HEAL', 356, hy + 40, 14, '#c8d0d6', 'left', false, 600);
     // ability dock: six specials of the current form
     fx.dock = [];
-    const size = touch ? 64 : 52, gap = touch ? 80 : 70, dx0 = touch ? 640 - gap * 2.5 : 1240 - size / 2 - gap * 5, dy = touch ? 630 : 640;
-    if (!touch && s.t < 22) text('J SLASH   K CAST   Q / E SWITCH   SPACE DODGE', 1240, dy - 46, 15, '#c8d0d6', 'right', true, 600); // hides after the first 20 s
-    if (!(touch && s.phase !== 'fight')) ABIL_ORDER.forEach((name, i) => { // phone: the centred dock would sit on the box
+    const size = touch ? 64 : 52, gap = touch ? 80 : 78, dx0 = touch ? 640 - gap * 2.5 : 1240 - size / 2 - gap * 5, dy = touch ? 630 : 640;
+    if (!touch && s.t < 22 && s.phase !== 'box') text('J SLASH   K CAST   Q / E SWITCH   SPACE DODGE', 1240, dy - 46, 15, '#c8d0d6', 'right', true, 600); // hides after the first 20 s
+    if (!(touch && s.phase !== 'fight') && s.phase !== 'box') ABIL_ORDER.forEach((name, i) => { // phone: the centred dock would sit on the box
       const a = ABIL[name], x = dx0 + i * gap, sel = h.sel === name, cd = (h.cds[name] || 0) / a.cd[s.stage];
       fx.dock.push({ x: x - size / 2, y: dy - size / 2, w: size, h: size, key: a.key });
       ctx.save(); ctx.translate(x, dy - (sel ? 6 : 0));
