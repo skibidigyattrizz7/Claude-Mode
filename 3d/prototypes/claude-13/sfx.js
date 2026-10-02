@@ -78,6 +78,11 @@ export function createSfx() {
       case 'sukkahBuilt': [0, 0.09, 0.18].forEach((d) => tone(190, 150, 0.06, 'square', 0.07, d)); break;
       case 'starLaunch': tone(380, 1250, 0.25, 'sine', 0.05); break;
       case 'starBomb': boom(0.85); noise(0.5, 700, 0.25); break;
+      case 'dlBlink': tone(900 + (e.i || 0) * 180, 2600, 0.12, 'square', 0.05); noise(0.1, 5000, 0.12, 1, 'highpass'); break;
+      case 'dlFire': tone(220, 200, 1.2, 'sawtooth', 0.07); tone(440, 420, 1.2, 'square', 0.03); noise(1.2, 2500, 0.12, 1, 'bandpass'); break;
+      case 'dlLink': [392, 494, 587, 784].forEach((f, i) => tone(f, f * 1.01, 0.7, 'sawtooth', 0.04, i * 0.03)); noise(0.5, 3000, 0.12, 1, 'bandpass'); break;
+      case 'dlSpin': tone(160, 2400, 1.7, 'sawtooth', 0.06); tone(80, 1200, 1.7, 'square', 0.03); break;
+      case 'dlBoom': boom(1.4); noise(1.6, 400, 0.4, 1, 'lowpass', 0, 50); tone(70, 25, 1.6, 'sine', 0.2); noise(0.4, 7000, 0.2, 1, 'highpass', 0.02); break;
       case 'starBombBig': boom(1.3); noise(1.4, 500, 0.35, 1, 'lowpass', 0, 60); tone(90, 30, 1.4, 'sine', 0.18); break;
       case 'pressure': tone(240, 200, 0.05, 'square', 0.02); break;
       case 'invertOn': tone(700, 200, 0.35, 'sawtooth', 0.08); break;

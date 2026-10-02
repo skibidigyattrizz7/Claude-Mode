@@ -4,7 +4,7 @@
 export const SCRIPT = {
   // P11: the finisher's on-screen name (owner: set this to whatever you like) and its three versions
   finisherName: 'STAR OF DAVID STRIKE',
-  finisherVariants: ['STAR PATH', 'SIX POINTS', 'RISING STAR', 'SUKKAH'],
+  finisherVariants: ['STAR PATH', 'SIX POINTS', 'RISING STAR', 'SUKKAH', '', ''],
   intro: [
     { who: 'boss', name: 'THE ECLIPSE', text: 'Another warden. The sky still remembers how the last one fell.' },
     { who: 'hero', name: 'WARDEN', text: 'Then let it remember this one standing.' },

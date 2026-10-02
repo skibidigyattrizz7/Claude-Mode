@@ -90,7 +90,7 @@
 <button id="skipBtn" type="button" hidden>SKIP ▸</button>
 <div class="screen" id="title">
   <h1>THE ECLIPSE</h1>
-  <div class="sub">PROTOTYPE 13-CLAUDE · 3X BOSS HP · CHAOTIC FIGHTS · FOUR STAR OF DAVID FINISHERS</div>
+  <div class="sub">PROTOTYPE 13-CLAUDE · 3X BOSS HP · CHAOTIC FIGHTS · SIX STAR OF DAVID FINISHERS</div>
   <div class="keys">
     <b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b><span>Move</span>
     <b><kbd>J</kbd> hold</b><span>Slash · also the counter and the clash mash</span>
@@ -98,7 +98,7 @@
     <b><kbd>1</kbd>–<kbd>6</kbd> <kbd>Q</kbd><kbd>E</kbd></b><span>Pick a special (six per form)</span>
     <b><kbd>SPACE</kbd></b><span>Dodge · just before a hit = PERFECT</span>
     <b><kbd>H</kbd></b><span>Heal · 1 per phase, +1 per SURVIVE · works in the box too</span>
-    <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its 7 keys (four versions in turn, the SUKKAH first)</span>
+    <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its 7 keys (six versions in turn, newest first)</span>
     <b><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd></b><span>Clash key moments: type them in order, mashing is ignored</span>
     <b>CLICK · ENTER · J</b><span>Next dialogue line · X skips</span>
     <b>ON SCREEN KEYS</b><span>Rune Lock and chain escapes</span>
@@ -119,9 +119,9 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H } from './sim.js?v=13';
-import { createRenderer } from './render.js?v=13';
-import { createSfx } from './sfx.js?v=13';
+import { createFight, step, W, H } from './sim.js?v=13b';
+import { createRenderer } from './render.js?v=13b';
+import { createSfx } from './sfx.js?v=13b';
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
 const canvas = document.getElementById('c');
@@ -214,9 +214,9 @@ function start(from = 1) {
   document.body.classList.add('playing');
   try { localStorage.setItem('p13mode', mode); } catch {}
   // P13 owner: "I don't see the sukkot finisher": the four finishers now rotate across fights (saved), and a new
-  // player gets the SUKKAH first. ?fin=0..3 picks one for testing.
-  let fin = 3; try { const f = localStorage.getItem('p13fin'); if (f != null) fin = Number(f) % 4 || 0; } catch {}
-  if (q.get('fin') != null) fin = Number(q.get('fin')) % 4 || 0;
+  // player gets the newest first (DAVID LASER, Oct 2). ?fin=0..5 picks one for testing.
+  let fin = 4; try { const f = localStorage.getItem('p13fin6'); if (f != null) fin = Number(f) % 6 || 0; } catch {}
+  if (q.get('fin') != null) fin = Number(q.get('fin')) % 6 || 0;
   fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1, fin });
   if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   if (q.get('act')) fight.forceAct = q.get('act');
@@ -257,7 +257,7 @@ function frame(now) {
     // held state (move, J held) applies to every sub-step; presses only to the first
     let inp = acc >= 1 / 120 ? input() : null; // no step this frame (high refresh): keep the presses for the next one
     while (acc >= 1 / 120) { step(fight, 1 / 120, inp); acc -= 1 / 120; inp = { ...empty, mx: inp.mx, my: inp.my, attack: inp.attack, jump: inp.jump }; }
-    if (fight.stats.finishers !== fight.finSaved) { fight.finSaved = fight.stats.finishers; if (fight.finSaved) try { localStorage.setItem('p13fin', String((fight.fin0 + fight.finSaved) % 4)); } catch {} }
+    if (fight.stats.finishers !== fight.finSaved) { fight.finSaved = fight.stats.finishers; if (fight.finSaved) try { localStorage.setItem('p13fin6', String((fight.fin0 + fight.finSaved) % 6)); } catch {} }
     syncTouchUi(); sfx.update(fight); $('skipBtn').hidden = fight.phase !== 'talk';
     if (!fight.force && fight.stage > (fight.savedStage || 1)) { fight.savedStage = fight.stage; ckSave(mode, fight.stage); } // a new phase reached: save it
     if ((fight.phase === 'victory' && fight.phaseT > 1.6) || (fight.phase === 'defeat' && fight.phaseT > 1.4)) showEnd();
