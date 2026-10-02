@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, FLOOR, BOX, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=8';
+import { W, H, FLOOR, BOX, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=9';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -782,7 +782,19 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       ctx.restore();
     }
     ctx.save(); ctx.beginPath(); ctx.rect(BOX.minX, BOX.minY, BOX.maxX - BOX.minX, BOX.maxY - BOX.minY); ctx.clip();
+    if (b.mode === 'purple') { ctx.strokeStyle = 'rgba(192,92,255,.75)'; ctx.lineWidth = 2; for (let i = 0; i < 3; i++) { const y = BOX.minY + (BOX.maxY - BOX.minY) * (i + 1) / 4; ctx.beginPath(); ctx.moveTo(BOX.minX, y); ctx.lineTo(BOX.maxX, y); ctx.stroke(); } } // Muffet's strings
+    const BONE = { white: '#f4f1ea', blue: '#3f8cff', orange: '#ff9d2e' };
     for (const z of b.beams) {
+      if (z.kind === 'swipe') { // Asgore's sweep: a full-height band, colour says the rule
+        const c = BONE[z.col]; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .25; ctx.fillStyle = c; ctx.fillRect(z.x - 26 - Math.sign(z.vx) * 30, BOX.minY, 52, BOX.maxY - BOX.minY);
+        ctx.globalAlpha = 1; ctx.fillRect(z.x - 7, BOX.minY, 14, BOX.maxY - BOX.minY); ctx.restore(); continue;
+      }
+      if (z.kind === 'bone') { // Papyrus bones: a shaft with knobbed ends; colour says the rule
+        const c = BONE[z.col], top = Math.max(z.y1, BOX.minY - 4), bot = Math.min(z.y2, BOX.maxY + 4);
+        ctx.fillStyle = c; ctx.fillRect(z.x - 5, top + 5, 10, bot - top - 10);
+        for (const yy of [top + 5, bot - 5]) { ctx.beginPath(); ctx.arc(z.x - 5, yy, 6, 0, TAU); ctx.arc(z.x + 5, yy, 6, 0, TAU); ctx.fill(); }
+        continue;
+      }
       if (z.kind === 'sweep' && z.t < 0) continue;
       if (z.kind === 'sweep') { // wall of light with one gap
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,90,70,.35)'; ctx.fillRect(z.x - 14, BOX.minY, 28, BOX.maxY - BOX.minY);
@@ -796,18 +808,52 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     }
     for (const p of b.bullets) {
       const ready = p.age >= p.tele;
+      if (p.spear) continue; // drawn outside the clip below, so you see them coming
+      if (p.fire) { ctx.fillStyle = '#ff9d4a'; ctx.beginPath(); ctx.moveTo(p.x, p.y - 12); ctx.quadraticCurveTo(p.x + 8, p.y, p.x, p.y + 7); ctx.quadraticCurveTo(p.x - 8, p.y, p.x, p.y - 12); ctx.fill(); ctx.fillStyle = '#fff1c8'; ctx.beginPath(); ctx.arc(p.x, p.y + 2, 3, 0, TAU); ctx.fill(); continue; }
+      if (p.spider) { // a spider on its string
+        ctx.save(); ctx.translate(p.x, p.y); ctx.strokeStyle = '#d9a8ff'; ctx.lineWidth = 2; const wig = Math.sin(fx.clock * 30 + p.x * .05) * 3;
+        for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sd * (8 + k * 2), -10 + k * 6 + (k % 2 ? wig : -wig)); ctx.lineTo(sd * (12 + k * 3), -4 + k * 6); ctx.stroke(); }
+        ctx.fillStyle = '#2a0f3a'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = '#e6c2ff'; ctx.stroke(); ctx.fillStyle = '#ff5ac8'; ctx.fillRect(-4, -2, 2.5, 2.5); ctx.fillRect(1.5, -2, 2.5, 2.5); ctx.restore(); continue;
+      }
+      if (p.missile) { // Mad Dummy's missile: a nose, a body and a short smoke trail
+        const a2 = Math.atan2(p.vy, p.vx); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a2); ctx.globalAlpha = ready ? 1 : .4;
+        ctx.fillStyle = 'rgba(200,200,200,.35)'; for (let k = 1; k <= 3; k++) { ctx.beginPath(); ctx.arc(-10 - k * 8, 0, 4 - k * .8, 0, TAU); ctx.fill(); }
+        ctx.fillStyle = '#ffd9c8'; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, -7); ctx.lineTo(-8, 7); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ff5a46'; ctx.fillRect(-10, -4, 4, 8); ctx.restore(); continue;
+      }
+      if (p.donut) { ctx.strokeStyle = ready ? '#ffb0e6' : 'rgba(255,176,230,.3)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(p.x, p.y, p.r - 3, 0, TAU); ctx.stroke(); continue; }
       if (p.bounce) { ctx.fillStyle = ready ? '#ff8a5a' : 'rgba(255,140,90,.3)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill(); ctx.strokeStyle = '#ffe2d0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 4, fx.clock * 6, fx.clock * 6 + 4); ctx.stroke(); continue; }
       if (p.wall) { ctx.fillStyle = ready ? '#ff5a46' : 'rgba(255,90,70,.25)'; if (p.vertical) ctx.fillRect(p.x - p.r, p.y - 12, p.r * 2, 24); else ctx.fillRect(p.x - 12, p.y - p.r, 24, p.r * 2); }
       else if (!ready) { ctx.fillStyle = `rgba(255,200,170,${(.15 + .45 * p.age / p.tele).toFixed(2)})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * .7, 0, TAU); ctx.fill(); // just a dim spawn, no aim line
       } else { ctx.fillStyle = '#ffd9c8'; ctx.shadowColor = '#ff5a46'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; }
     }
     ctx.restore();
-    const so = b.soul, inv = s.hero.inv > 0 && Math.floor(fx.clock * 16) % 2;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; davidStar(so.x, so.y, 9, 0, P[f].hero, inv ? .35 : 1, .8, inv ? null : 'rgba(127,188,255,.45)'); ctx.restore(); // the soul is a small star
-    if (b.line && b.line.t < 3.6) { // her line, in the strip under the box (Undertale-style); click / Enter clears it
+    for (const p of b.bullets) if (p.spear) { // Undyne's spears; the yellow ones jump to the far side just before they land
+      const a2 = Math.atan2(p.vy, p.vx); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a2); ctx.fillStyle = p.rev && !p.flipped ? '#ffe14a' : '#5fd0ff';
+      ctx.fillRect(-34, -2, 30, 4); ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+    for (const tu of b.turrets || []) { // Mad Dummy's ring: little star turrets that blink when they fire
+      ctx.save(); ctx.translate(tu.x, tu.y); ctx.fillStyle = '#1a2026'; ctx.strokeStyle = tu.flash > 0 ? '#ffffff' : '#8a96a0'; ctx.lineWidth = 2;
+      ctx.beginPath(); for (let k = 0; k < 6; k++) { const a2 = k / 6 * TAU; ctx.lineTo(Math.cos(a2) * 14, Math.sin(a2) * 14); } ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = tu.flash > 0 ? '#ffffff' : '#ff5a46'; ctx.beginPath(); ctx.arc(0, 0, 4 + tu.flash * 12, 0, TAU); ctx.fill(); ctx.restore();
+    }
+    const so = b.soul, soulCol = b.mode === 'blue' ? '#3f8cff' : b.mode === 'purple' ? '#c05cff' : b.mode === 'green' ? '#3fe08a' : P[f].hero, inv = s.hero.inv > 0 && Math.floor(fx.clock * 16) % 2;
+    if (b.mode === 'green') { // Undyne's shield: an arc on the side you point at, and a ring you can't leave
+      const A = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 }[so.shield];
+      ctx.save(); ctx.strokeStyle = 'rgba(63,224,138,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(so.x, so.y, 26, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = '#3fe08a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(so.x, so.y, 26, A - .7, A + .7); ctx.stroke(); ctx.restore();
+    }
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; davidStar(so.x, so.y, 9, 0, soulCol, inv ? .35 : 1, .8, inv ? null : 'rgba(127,188,255,.45)'); ctx.restore(); // the soul is a small star
+    // the strip for her lines and the one-time soul hints: a fixed place under every box shape, clear of the HP panel
+    const SX = 430, SW = 580, SY = 640, fit = (str, px, maxW, wt = 600) => { ctx.font = font(px, wt); const w = ctx.measureText(str).width; return w > maxW ? Math.max(13, Math.floor(px * maxW / w)) : px; };
+    if (b.hint && b.hint.t < 4.5) { // first time a soul colour shows up, the strip explains it once
+      const a2 = clamp(b.hint.t / .2, 0, 1) * (1 - clamp((b.hint.t - 4.1) / .4, 0, 1)), col2 = b.mode === 'blue' ? '#7fb2ff' : b.mode === 'green' ? '#6fe8a6' : '#d79bff';
+      ctx.save(); ctx.globalAlpha = a2; ctx.fillStyle = 'rgba(5,8,10,.92)'; ctx.fillRect(SX, SY, SW, 46); ctx.strokeStyle = col2; ctx.lineWidth = 1; ctx.strokeRect(SX, SY, SW, 46);
+      text(b.hint.text, SX + SW / 2, SY + 29, fit(b.hint.text, 18, SW - 24, 700), col2, 'center', false, 700); ctx.restore();
+    } else if (b.line && b.line.t < 3.6) { // her line (Undertale-style); click / Enter clears it
       const a2 = clamp(b.line.t / .2, 0, 1) * (1 - clamp((b.line.t - 3.2) / .4, 0, 1)), shown2 = b.line.text.slice(0, Math.floor(b.line.t * 48));
-      ctx.save(); ctx.globalAlpha = a2; ctx.fillStyle = 'rgba(5,8,10,.9)'; ctx.fillRect(BOX.minX, BOX.maxY + 16, BOX.maxX - BOX.minX, 46); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1; ctx.strokeRect(BOX.minX, BOX.maxY + 16, BOX.maxX - BOX.minX, 46);
-      text(STAGES[s.stage].boss, BOX.minX + 16, BOX.maxY + 45, 15, P[f].name, 'left', false, 700); text(shown2, BOX.minX + 200, BOX.maxY + 46, 22, '#f2ede2', 'left', false, 600); ctx.restore();
+      ctx.save(); ctx.globalAlpha = a2; ctx.fillStyle = 'rgba(5,8,10,.9)'; ctx.fillRect(SX, SY, SW, 46); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1; ctx.strokeRect(SX, SY, SW, 46);
+      const nm = STAGES[s.stage].boss; text(nm, SX + 14, SY + 28, 14, P[f].name, 'left', false, 700); ctx.font = font(14, 700); const nx = SX + 28 + ctx.measureText(nm).width;
+      text(shown2, nx, SY + 30, fit(b.line.text, 21, SX + SW - 14 - nx), '#f2ede2', 'left', false, 600); ctx.restore();
     }
     ctx.restore();
   }
