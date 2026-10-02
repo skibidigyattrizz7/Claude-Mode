@@ -14,7 +14,7 @@ import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { syncRemote, remoteDue, wipeLocalProfile, DELETED_MESSAGE } from '../core/remote.js';
-import { startVinsonExperience } from './vinson.js?v=vinson17';
+import { startVinsonExperience } from './vinson.js?v=vinson18';
 import { cursedPack, enforceLock, isOwner, hasDoomEffects } from '../core/vinson.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */

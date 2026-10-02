@@ -1,4 +1,5 @@
-import {vinsonEarthPosition} from '../core/vinsonbattle.js?v=vinson26';
+import {vinsonEarthPosition,vinsonBoxGap} from '../core/vinsonbattle.js?v=vinson31';
+import {vinsonRenderCache} from './vinsonrendercache.js';
 // Source-image pieces, bounded boss effects and readable challenge overlays.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 const mix=(a,b,p)=>a+(b-a)*p;
@@ -20,10 +21,11 @@ export function maskWorldPieces(ctx,frame,hidden){
 }
 function piece(ctx,image,key,x,y,scale,rotation=0,alpha=1){
   if(!image?.complete||!image.naturalWidth)return;
-  const w=image.naturalWidth,h=image.naturalHeight,p=WORLD_PIECES[key];
-  ctx.save();ctx.translate(x,y);ctx.rotate(rotation);ctx.scale(scale,scale);ctx.translate(-p.anchor[0]*w,-p.anchor[1]*h);
-  ctx.globalAlpha=alpha;ctx.beginPath();trace(ctx,p,w,h);ctx.clip();
-  ctx.shadowBlur=10/Math.max(.05,scale);ctx.shadowColor='#ff342c';ctx.drawImage(image,0,0,w,h);ctx.restore();
+  const p=WORLD_PIECES[key],crop=vinsonRenderCache.get(image,key,p);
+  if(!crop)return;
+  const drawScale=scale/crop.factor;
+  ctx.save();ctx.translate(x,y);ctx.rotate(rotation);ctx.scale(drawScale,drawScale);ctx.translate(-crop.anchorX,-crop.anchorY);
+  ctx.globalAlpha=alpha;ctx.drawImage(crop.canvas,0,0,crop.width,crop.height);ctx.restore();
 }
 export function activeWorldPieces(hazards){
   const result=new Set();
@@ -70,16 +72,18 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
   ctx.fillStyle='#f5e9dc';ctx.font='bold 23px monospace';ctx.textAlign='center';ctx.fillText(`SURVIVE  ${Math.max(0,Math.ceil(b.duration-b.elapsed))}`,640,b.minY-20);
   ctx.font='14px monospace';ctx.fillStyle='#b5c5d0';ctx.fillText('MOVE / DODGE · NO ATTACKS IN THE BOX',640,b.maxY+28);
   if(b.preview){
-    const preview=b.preview,laneHeight=(b.maxY-b.minY)/5,laneWidth=(b.maxX-b.minX)/5;
+    const preview=b.preview,gapPoint=vinsonBoxGap(b,preview),laneHeight=(b.maxY-b.minY)/5,laneWidth=(b.maxX-b.minX)/5;
     ctx.save();ctx.strokeStyle='#98bbcf';ctx.fillStyle='#aecddd';ctx.globalAlpha=.75;ctx.lineWidth=2;ctx.setLineDash([7,7]);
-    if(preview.pattern==='vertical'){const x=b.minX+laneWidth*preview.safe;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
+    if(preview.pattern==='vertical'){const x=gapPoint.x-laneWidth/2;ctx.strokeRect(x+8,b.minY+4,laneWidth-16,b.maxY-b.minY-8);}
     else if(preview.pattern==='radial'){
       // Point at the real escape gap: the skipped spokes are gap..gap+2 (core spawn), centred on gap+1.
-      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,gap=Math.round(preview.safe*16/5),mid=(gap+1)*Math.PI/8+preview.wave*.19,half=Math.PI/8*1.4,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
+      const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,mid=gapPoint.angle,half=gapPoint.half,r=Math.max(b.maxX-b.minX,b.maxY-b.minY);
       ctx.save();ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
       ctx.fillStyle='#aecddd';ctx.globalAlpha=.16;ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,r,mid-half,mid+half);ctx.closePath();ctx.fill();
       ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid-half)*r,y+Math.sin(mid-half)*r);ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(mid+half)*r,y+Math.sin(mid+half)*r);ctx.stroke();ctx.restore();}
-    else{const y=b.minY+laneHeight*preview.safe;ctx.strokeRect(b.minX+4,y+4,b.maxX-b.minX-8,laneHeight-8);}
+    else{const y=gapPoint.y-laneHeight/2;ctx.strokeRect(b.minX+4,y+4,b.maxX-b.minX-8,laneHeight-8);}
+    ctx.setLineDash([]);ctx.globalAlpha=1;ctx.strokeStyle='#d9f7ff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(gapPoint.x,gapPoint.y,10,0,Math.PI*2);ctx.stroke();
+    ctx.font='12px monospace';ctx.fillStyle='#d9f7ff';ctx.textAlign='center';ctx.fillText('NEXT MAIN WAVE GAP · DODGE AIMED SHOTS',640,b.maxY+46);
     ctx.restore();
   }
   ctx.beginPath();ctx.rect(b.minX,b.minY,b.maxX-b.minX,b.maxY-b.minY);ctx.clip();
@@ -94,7 +98,7 @@ export function drawDodgeBox(ctx,state,images,t,drawSprite,drawBeam){
       drawBeam(ctx,p.x-(p.vx||0)*.065,p.y-(p.vy||0)*.065,p.x,p.y,'#ff514b',p.radius*1.6,.75);
     }else if(p.type==='laser'||p.type==='lane'){
       const ray=p.segment||p;drawBeam(ctx,ray.x1??p.x,ray.y1??b.minY,ray.x2??p.x,ray.y2??b.maxY,ready?'#ff3436':'#ba7976',ready?8:2,ready?.85:.35);
-    }else{ctx.globalAlpha=1;ctx.fillStyle='#ffb4a0';ctx.shadowColor='#f7372e';ctx.shadowBlur=9;ctx.beginPath();ctx.arc(p.x,p.y,p.radius||7,0,Math.PI*2);ctx.fill();}
+    }else{ctx.globalAlpha=1;ctx.fillStyle='#ffb4a0';ctx.beginPath();ctx.arc(p.x,p.y,p.radius||7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f7372e';ctx.globalAlpha=.2;ctx.beginPath();ctx.arc(p.x,p.y,(p.radius||7)*1.55,0,Math.PI*2);ctx.fill();}
   }
   ctx.shadowBlur=0;
   // Same source character at a smaller box scale, with a precise visible hurtbox.
@@ -119,10 +123,10 @@ export function drawClash(ctx,shot,t,reducedMotion,drawBeam,drawStar,eyePosition
   const wiggle=reducedMotion?0:Math.sin(t*24)*power*5;
   for(const eye of eyePositions(shot.villain,980,470))drawBeam(ctx,eye.x,eye.y,x,y+wiggle,'#ff3426',10+power*12,shot.beams);
   for(const eye of eyePositions(shot.hero,300,470))drawBeam(ctx,eye.x,eye.y,x,y+wiggle,'#278cff',9+power*11,shot.beams);
-  drawStar(ctx,x,y,25+power*27,reducedMotion?0:t*1.4,shot.beams);
+  if(!(shot.hero==='captain'&&shot.domainPower))drawStar(ctx,x,y,25+power*27,reducedMotion?0:t*1.4,shot.beams);
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=shot.beams;ctx.strokeStyle='#ffedd3';ctx.lineWidth=2;
   for(let i=0;i<18;i++){const a=i*2.39996+(reducedMotion?0:t*.75),r=25+((t*140+i*17)%100)*power;ctx.beginPath();ctx.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r);ctx.lineTo(x+Math.cos(a)*(r+12+power*22),y+Math.sin(a)*(r+12+power*22));ctx.stroke();}
-  ctx.fillStyle='#fffbe9';ctx.shadowBlur=32+power*40;ctx.shadowColor='#fff3c7';ctx.beginPath();ctx.arc(x,y,8+power*19,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.fillStyle='#fffbe9';ctx.beginPath();ctx.arc(x,y,shot.domainPower?5+power*9:8+power*19,0,Math.PI*2);ctx.fill();ctx.restore();
 }
 export function drawArrival(ctx,shot,t,reducedMotion,drawStar){
   if(!shot.arrival&&!shot.skyBeam&&!shot.arrivalStar)return;

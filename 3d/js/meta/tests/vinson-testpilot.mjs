@@ -111,7 +111,7 @@ export function pilotInput(state, tick = 0) {
       .sort(([a,sa],[b,sb]) => (sb.damage*priority[b]/sb.cooldown)-(sa.damage*priority[a]/sa.cooldown)||a.localeCompare(b));
     if (ready.length) {weapon=ready[0][0];attack=true;}
   }
-  return {x:chosen.x,y:chosen.y,dodge:urgent,heal,attack,weapon};
+  return {x:chosen.x*(hero.invertedTime>0?-1:1),y:chosen.y*(hero.invertedTime>0?-1:1),dodge:urgent,heal,attack,weapon,sequenceKey:state.sequence?.keys[state.sequence.index],combo:state.comboOffer>0};
 }
 
 // Standalone integration check; the main test may also import pilotInput directly.
@@ -124,7 +124,7 @@ if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).
     assert.deepEqual(battle.state,before,'pilot reads state without mutating it');
     battle.step(.05,input);
     assert.equal(battle.state.hero.hp,92);
-    assert.equal(battle.state.hero.heals,2);
+    assert.equal(battle.state.hero.heals,0);
   }
   for (const seed of [1,2,3]) {
     const battle=createVinsonBattle({seed,stage:1});

@@ -1,5 +1,15 @@
 .vb-screen { position:fixed; inset:0; z-index:25000; background:#050607; color:#f3f1e7; display:flex; flex-direction:column; font-family:system-ui,sans-serif; isolation:isolate; }
 .vb-screen * { box-sizing:border-box; }
+.vb-sequence-keys{display:flex;gap:6px}.vb-sequence-keys[hidden],.vb-combo-button[hidden]{display:none}
+.vb-sequence-keys button,.vb-combo-button{min-height:52px;min-width:52px;border:1px solid #b88e67;background:#221922;color:#f8e5c5;font:900 16px system-ui;cursor:pointer}
+.vb-combo-button{padding:8px 12px;position:absolute;bottom:calc(100% + 8px);left:12px}
+.vb-controls{position:relative}
+.vb-controls.vb-has-sequence .vb-weapons{display:none}
+.vb-sequence-keys{order:-1;width:200px;justify-content:center}
+.vb-controls.vb-ending{opacity:0;pointer-events:none;position:absolute;bottom:0;transition:opacity .3s}
+.vb-panel.vb-memorial-panel{top:5%;bottom:auto;transform:translate(-50%,0);background:transparent}
+.vb-panel.vb-memorial-panel h2{white-space:nowrap;font-size:clamp(22px,4.5vw,52px);line-height:1;margin-bottom:8px;text-shadow:0 2px 8px #28180f}
+@media(prefers-reduced-motion:reduce){.vb-controls.vb-ending{transition:none}}
 .vb-stage { position:relative; flex:1; min-height:0; overflow:hidden; display:grid; place-items:center; }
 .vb-stage > canvas { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:contain; touch-action:none; }
 .vb-top { position:absolute; z-index:2; top:max(14px,env(safe-area-inset-top)); left:24px; right:24px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
@@ -22,9 +32,9 @@
 .vb-touch button[data-action="dodge"] { width:74px; }
 .vb-rewards { display:flex; justify-content:center; gap:16px; margin:20px 0; }
 .vb-reward { display:flex; flex-direction:column; align-items:center; width:145px; gap:8px; font-size:12px; font-weight:700; text-transform:uppercase; }
-.vb-reward img { width:100%; height:155px; object-fit:contain; background:#14181b; }
+.vb-reward img { width:100%; height:155px; object-fit:contain; background:transparent; }
 .vb-fight-button { pointer-events:auto; position:absolute; left:50%; bottom:max(26px,env(safe-area-inset-bottom)); transform:translateX(-50%); cursor:pointer; border:0; padding:16px 26px; color:#ffe9df; background:#581512; font:900 24px 'Barlow Condensed',Impact,sans-serif; letter-spacing:.06em; box-shadow:0 5px 0 #240605; }
-@media(max-width:600px) { .vb-top { left:12px; right:12px; }.vb-hint { display:none; }.vb-panel { bottom:5%; }.vb-panel p { font-size:14px; }.vb-controls { padding:6px; }.vb-touch { gap:3px; }.vb-touch button { width:35px; }.vb-touch button[data-action="attack"] { width:64px; }.vb-touch button[data-action="dodge"] { width:60px; }.vb-rewards { gap:8px; }.vb-reward { width:90px; }.vb-reward img { height:105px; } }
+@media(max-width:600px) { .vb-top { left:12px; right:12px; }.vb-hint { display:none; }.vb-panel { bottom:5%; }.vb-panel p { font-size:14px; }.vb-controls { padding:6px; }.vb-touch { gap:3px; }.vb-touch button { width:35px; }.vb-touch button[data-action="attack"] { width:64px; }.vb-touch button[data-action="dodge"] { width:60px; }.vb-rewards { gap:8px; }.vb-reward { width:90px; }.vb-reward img { height:105px; }.vb-panel.vb-memorial-panel h2{font-size:clamp(20px,6vw,30px)} }
 .vb-weapons { display:flex; gap:5px; flex-wrap:wrap; }
 .vb-weapons button { border:1px solid #4f4845; color:#d9d2c7; background:#171619; padding:8px 10px; min-height:40px; font:700 12px system-ui; cursor:pointer; }
 .vb-weapons button.on { background:#ddd4bc; color:#15120f; border-color:#ddd4bc; }
@@ -96,3 +106,9 @@
 /* Cooldown text must not resize the dock and move the arena while firing. */
 @media(min-width:901px){.vb-weapons{flex-wrap:nowrap}.vb-weapons button:not(.vb-cycle){width:78px;min-width:78px;white-space:nowrap;padding:8px 4px}.vb-hint{max-width:160px}}
 @media(min-width:901px) and (max-width:1200px){.vb-hint{display:none}}
+
+.vb-clash-keys{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);display:flex;gap:10px;z-index:8}.vb-clash-keys[hidden]{display:none}.vb-clash-keys button{width:56px;height:56px;background:#132837;border:2px solid #8daec2;color:#effaff;font:900 24px monospace;cursor:pointer}.vb-clash-keys button:disabled{opacity:.4;cursor:default}
+@media(max-height:450px){.vb-clash-keys{bottom:2%;gap:8px}.vb-clash-keys button{width:52px;height:52px}}
+
+.vb-weapons button.on{transform:translateY(-3px);box-shadow:0 3px 0 #050709}
+.vb-weapons button:not(.vb-cycle)::after{left:auto;right:3px;bottom:3px;width:14px;height:14px;transform:none;border-radius:50%;background:conic-gradient(#94c6de calc(var(--recharge,0)*1turn),#24313a 0)}

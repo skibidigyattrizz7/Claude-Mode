@@ -1,4 +1,4 @@
-import {vinsonGravityRadius} from '../core/vinsonbattle.js?v=vinson26';
+import {vinsonGravityRadius} from '../core/vinsonbattle.js?v=vinson31';
 const clamp=n=>Math.max(0,Math.min(1,n));
 // All danger geometry is taken from the seeded simulation, never random render data.
 export function drawPhonkHazard(ctx,h,t,reducedMotion,beam){

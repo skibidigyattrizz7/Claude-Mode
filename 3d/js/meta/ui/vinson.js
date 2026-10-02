@@ -452,7 +452,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (!s || (!['banned','freed','warn','consequence','locked'].includes(s.vinson?.phase) && !resumeRewards)) return false;
       battleOpening = true;
       try {
-        const { launchVinsonBattle } = await import('./vinsonbattle.js?v=vinson28');
+        const { launchVinsonBattle } = await import('./vinsonbattle.js?v=vinson31');
         if (experienceClosed || battleExperience || online?.identityId?.() !== identity || !state()) return false;
         battleExperience = launchVinsonBattle({ online, resumeRewards,
           seed: `${identity || 'guest'}:${s.vinson.doomUntil || 0}`,
