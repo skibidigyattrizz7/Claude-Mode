@@ -1,5 +1,5 @@
 // Health, telegraphs, subtitles and four attacks share the same fixed-step encounter.
-import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson34';
+import { createVinsonBattle, battleEyePositions, vinsonAbilityStats } from '../core/vinsonbattle.js?v=vinson35';
 import { sampleVinsonCinematic, VINSON_CINEMATIC_DURATION } from './vinsoncinematic.js?v=15g';
 import { WORLD_PIECES, maskWorldPieces, activeWorldPieces, drawSourceHands, drawEarthThrow, drawDodgeBox, drawTimingStrike, drawClash, drawArrival } from './vinsonfightfx.js?v=15h';
 import {drawPhonkHazard,drawStarAbility} from './vinsonphasefx.js?v=15g';
@@ -177,6 +177,10 @@ function field(ctx,t,stage=0) {
     ctx.fillStyle='#40313a';ctx.fillRect(x+8,420-h+40,3,h-40);
   }
   ctx.fillStyle=stage?'#24151c':'#26313a';ctx.beginPath();ctx.moveTo(0,250);ctx.lineTo(W,250);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+  // Borrow Claude07's lit ruins and horizon framing without covering movement lanes.
+  ctx.strokeStyle=stage?'#be6570':'#98b4c2';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,250);ctx.lineTo(W,250);ctx.stroke();
+  ctx.fillStyle=stage?'#ff9b6244':'#ecd19b44';
+  for(let i=0;i<9;i+=2){const x=i*165-28,h=180+(i*97%130);for(let r=0;r<3;r++)ctx.fillRect(x+12,420-h+36+r*24,8,10);}
   ctx.strokeStyle=stage?'#76505a':'#61717b';ctx.lineWidth=1;
   for(let i=-6;i<14;i++){ctx.beginPath();ctx.moveTo(640+i*80,250);ctx.lineTo(640+i*200,H);ctx.stroke();}
   for(let i=0;i<7;i++){const y=250+Math.pow(i/6,1.7)*470;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
