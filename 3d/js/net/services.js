@@ -914,6 +914,14 @@ export function createOnline(deps) {
         if (r.ok) pokeAfter('vinson_lift', { p_player: playerId });
         return r.ok ? { ok: true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
       },
+      /** Owner only (migration 023): wipe one player's Vinson record, immunity included, so their next pull curses again. */
+      async reset(playerId) {
+        const a = readAcc();
+        if (!a || a.role !== 'owner') return fail('not_allowed');
+        const r = dataOr(await rpc('vinson_reset', { p_id: a.id, p_secret: a.token, p_player: playerId }));
+        if (r.ok) pokeAfter('vinson_reset', { p_player: playerId });
+        return r.ok ? { ok: true, reset: r.reset === true, player: sanitizeModPlayer(r.player) } : fail(r.error || 'server_error');
+      },
     },
 
     // ---------------------------------------------------------------- owner powers (migration 003)
@@ -1606,7 +1614,7 @@ const unavailable = () => {
     moderation: { role: null, canModerate: () => false, search: f, player: f, ban: f, unban: f, adjustCoins: f, setRole: f },
     owner: { giveCoins: f, gift: f, gifts: f, cancelGift: f, clearGifts: f, allPlayers: f, playerDetail: f, patchPlayer: f, setUsername: f, giveAdmin: f, revokeAdmin: f, revokeAllAdmin: f, restrict: f, message: f, reset: f, deletePlayer: f, deleteGuests: f, broadcast: f, clearBroadcast: f, setConfig: f, setInfinite: f, players: f, listPlayers: f, resetEveryone: f, resetAllEconomy: f },
     cloud: { get: f, put: f, rev: f, notify() {}, onRemote: () => () => {} },
-    vinson: { status: f, pull: f, lock: f, unban: f, lift: f, battleStart: f, battleWin: f, claimBattleRewards: f },
+    vinson: { status: f, pull: f, lock: f, unban: f, lift: f, reset: f, battleStart: f, battleWin: f, claimBattleRewards: f },
     config: { get: async () => ({ ok: false, error: 'offline', version: 0, config: {} }), value: (p, d) => d, current: {}, version: 0, set: f, onChange: () => () => {} },
     presence: { start() {}, stop() {}, tick: async () => null, last: null, count: f, onUpdate: () => () => {}, onBroadcast: () => () => {}, broadcasts: f },
     gifts: { inbox: f, claim: f },

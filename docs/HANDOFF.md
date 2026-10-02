@@ -57,6 +57,7 @@ Owner videos/screens: extract frames with
 ## 6. Supabase (project `baxzjrueelirgcstjbdc`)
 - All game data goes through SECURITY DEFINER RPCs named `pitchside_*`. RLS on, no table grants, fixed search_path, and a privileges block re-run at the end of each migration. Admin codes are stored bcrypt-hashed only.
 - New server change = **new migration file**. Apply with the Supabase MCP `apply_migration`, then **rename the file to the version Supabase recorded** (`list_migrations`), so the GitHub Supabase Preview check passes. Never edit an applied one.
+- Pending draft: 023 vinson_reset in supabase/drafts/ (owner-only Reset Vinson), not applied yet.
 - Applied: 001 `20260925140338`, 002 `20260926000000`, 003 `20260926000100`, 004 `20260926070546`, 005 `20260927005601`, 006 `20260927010300`, 007 `20260927160223`, 009 `20260928204017` (owner account = Owner Access). 008 is parked in `supabase/drafts/`.
 - Test gifts used to stay claimable; expired with `update pitchside_gifts set expires_at = now() where expires_at > now()`.
 

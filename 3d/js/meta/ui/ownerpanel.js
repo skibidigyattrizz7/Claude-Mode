@@ -127,6 +127,7 @@ export function playersPanel(app) {
             : [btn('Timeout', null, () => quick('Timeout (1 day)', () => mod.ban(u.id, 'Timeout', new Date(Date.now() + 1440 * 60000)), `Time out ${name} for 1 day?`, true)),
               btn('Ban', 'ban', () => { const reason = (prompt(`Ban ${name}. Reason (shown to the player):`, 'Owner decision') || '').trim(); if (reason) quick('Ban', () => mod.ban(u.id, reason, null)); }, 'pm-btn--danger')],
           u.vinsonPhase && u.role !== 'owner' ? btn('Lift Vinson curse', null, () => quick('Lift Vinson curse', () => app.online.vinson.lift(u.id)), 'pm-btn--vinson') : null,
+          u.role !== 'owner' && app.online?.vinson?.reset ? btn('Reset Vinson', null, () => quick('Reset Vinson', () => app.online.vinson.reset(u.id), `Reset ${name}'s Vinson history (curse, immunity, battle)? Their next Vinson pull starts the whole curse again.`, true)) : null,
           btn('Manage', null, open, 'pm-btn--accent'),
           u.role === 'owner' ? null : btn('Delete', null, () => quick('Delete player', () => svc.deletePlayer(u.id), `Delete ${name} completely? Their club, coins, saves and messages are gone for good.`, true), 'pm-btn--danger')));
     }));
@@ -327,7 +328,8 @@ export function playerDetailView(id, summary = null) {
               },
             }, 'Ban / timeout'),
             p.banned ? h('button', { class: 'pm-btn', onclick: async () => { const r = await run(app, 'Unban', () => mod.unban(id)); if (r && r.ok) reload(); } }, 'Unban') : null,
-            p.vinsonPhase ? h('button', { class: 'pm-btn pm-btn--vinson', onclick: async () => { const r = await run(app, 'Lift Vinson curse', () => app.online.vinson.lift(id)); if (r && r.ok) reload(); } }, 'Lift Vinson curse') : null),
+            p.vinsonPhase ? h('button', { class: 'pm-btn pm-btn--vinson', onclick: async () => { const r = await run(app, 'Lift Vinson curse', () => app.online.vinson.lift(id)); if (r && r.ok) reload(); } }, 'Lift Vinson curse') : null,
+            p.role !== 'owner' && app.online?.vinson?.reset ? h('button', { class: 'pm-btn', title: 'Wipes their Vinson curse, immunity and battle so the next Vinson pull curses them again (for testing)', onclick: async () => { const r = await run(app, 'Reset Vinson', () => app.online.vinson.reset(id), { confirm: `Reset ${p.username || p.name}'s Vinson history? Their next Vinson pull starts the whole curse again.`, danger: true }); if (r && r.ok) reload(); } }, 'Reset Vinson') : null),
           h('div', { class: 'pm-admin-results' }, RESTRICTIONS.map(([k, label]) => {
             // length: number + unit like the ban above (blank = permanent); DURATIONS was removed in a refactor
             // but this row still used it, which crashed the whole Manage screen

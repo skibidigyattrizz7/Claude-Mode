@@ -830,6 +830,19 @@ export function createMockBackend(store, { now = () => Date.now(), rand = Math.r
       audit(db, p.id, 'vinson_lift', { byId: actor.id }); store.save(db);
       return { ok: true, player: modRow(p) };
     },
+    vinson_reset({ p_id, p_secret, p_player }) { // 023: owner wipes one player's Vinson record so the next pull curses again
+      const db = load(), actor = auth(db, p_id, p_secret), p = db.profiles[p_player];
+      if (!actor || actor.role !== 'owner') return err('not_allowed');
+      if (!p || p.id === actor.id || p.role === 'owner') return err('not_found');
+      if (!p.vinson) return { ok: true, reset: false, player: modRow(p) };
+      if (p.vinson.phase === 'locked') {
+        for (const key of ['admin', 'codes', 'market', 'sbc']) delete p.restrictions[key];
+        Object.assign(p.restrictions, p.vinson.priorRestrictions || {});
+      }
+      if (p.banReason === "YOU'VE BEEN STRUCK BY THE WRATH OF VINSON") Object.assign(p, { banned: false, banReason: null, bannedUntil: null, bannedAt: null, bannedBy: null });
+      delete p.vinson; audit(db, p.id, 'vinson_reset', { byId: actor.id }); store.save(db);
+      return { ok: true, reset: true, player: modRow(p) };
+    },
     // ---------------------------------------------------------------- Vinson battle (020): nonce -> win -> rewards
     vinson_battle_start({ p_id, p_secret }) {
       const db = load(), p = authBattle(db, p_id, p_secret);

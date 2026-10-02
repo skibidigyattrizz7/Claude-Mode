@@ -1761,6 +1761,26 @@ test('vinson battle: happy path start -> win -> claim, status reconciles, never 
   assert.equal((await w.A.c.vinson.battleStart()).error, 'already_immune');
 });
 
+test('vinson reset (023): owner wipes an immune or lifted player so the next pull curses again; owner only', async () => {
+  const w = await vinsonWorld();
+  await vCursedAndLocked(w, w.A);
+  const s = await w.A.c.vinson.battleStart(); w.tick(61000);
+  assert.equal((await w.A.c.vinson.battleWin({ nonce: s.nonce })).immune, true);
+  assert.deepEqual([(await w.A.c.vinson.pull()).phase, (await w.A.c.vinson.status()).immune], ['lifted', true]); // the bug the owner hit: no second curse
+  assert.equal((await w.B.c.vinson.reset(w.A.id)).error, 'not_allowed');                  // players can't reset anyone
+  const r = await w.O.c.vinson.reset(w.A.id);
+  assert.deepEqual([r.ok, r.reset], [true, true]);
+  const st = await w.A.c.vinson.status();
+  assert.deepEqual([st.phase, st.immune, st.battleWon], [null, false, false]);
+  await vCurse(w.A);                                                                        // the next pull runs the whole curse again
+  // a lifted (not immune) player resets the same way; a player with no record is a no-op
+  await vCurse(w.B); assert.equal((await w.O.c.vinson.lift(w.B.id)).ok, true);
+  assert.equal((await w.B.c.vinson.pull()).phase, 'lifted');
+  assert.equal((await w.O.c.vinson.reset(w.B.id)).reset, true); await vCurse(w.B);
+  const C = await (async () => { const c = mk3(w.be); const q = await c.account.signup({ username: 'Clean One', password: 'Pitch-pass1', confirm: 'Pitch-pass1' }); return { c, id: q.id }; })();
+  assert.deepEqual([(await w.O.c.vinson.reset(C.id)).ok, (await w.O.c.vinson.reset(C.id)).reset], [true, false]);
+});
+
 test('vinson battle: win without start, bad nonce, never cursed, claim before win', async () => {
   const w = await vinsonWorld();
   await vCursedAndLocked(w, w.A);

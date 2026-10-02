@@ -406,6 +406,12 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
         const pulled = await online.vinson.pull();
         if (pulled.ok) remote = pulled;
       }
+      // Owner reset (migration 023): the server has no Vinson record any more, so a finished local curse (lifted /
+      // immune / squad lock / warnings) is dropped and the next pull curses again. doom / banned keep the
+      // offline-pull path above.
+      else if (remote.ok && !remote.phase && !remote.immune && s.vinson && !['doom', 'banned'].includes(s.vinson.phase)) {
+        delete s.vinson; persist(s); if (app && !app.destroyed) app.refresh(); draw(); // restrictions come back through presence, not from here
+      }
       if (remote.ok && remote.phase === 'released' && s.vinson?.phase === 'locked') {
         const locked = await online.vinson.lock();
         if (locked.ok) remote = { ...remote, phase: 'locked' };
