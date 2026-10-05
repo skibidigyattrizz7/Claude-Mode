@@ -116,6 +116,8 @@ export function createSfx() {
       case 'hellAlgol': tone(220, 230, 1.0, 'sawtooth', 0.08); tone(330, 320, 1.0, 'square', 0.04); break;
       case 'hellVert': boom(1); tone(900, 100, 0.6, 'sawtooth', 0.08); break;
       case 'hellSpin': tone(50, 3200, 3.2, 'sawtooth', 0.07); tone(100, 4400, 3.2, 'square', 0.03); noise(3.2, 200, 0.1, 1, 'bandpass', 0, 4000); break;
+      case 'hellEye': tone(160 + (e.i || 0) * 40, 90, 0.35, 'sawtooth', 0.07); noise(0.2, 900, 0.12, 1, 'bandpass'); break;
+      case 'hellCrack': noise(0.5, 3500, 0.3, 1, 'highpass'); tone(80, 40, 0.5, 'square', 0.08); break;
       case 'hellAlgol2': tone(330, 340, 1.2, 'sawtooth', 0.08); boom(0.6); break;
       case 'ssBoom': boom(1.3); noise(0.9, 4000, 0.3, 1, 'bandpass', 0, 300); break;
       case 'rcBoom': boom(1.3); noise(1.0, 3000, 0.3, 1, 'bandpass', 0, 200); break;

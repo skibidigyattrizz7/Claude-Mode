@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13r';
+import { SCRIPT } from './script.js?v=13t';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -277,14 +277,14 @@ function castAbility(s, name) {
     case 'burst1': shot({ kind: 'burst', vx: ax * 520, vy: ay * 520, r: 24, splash: 120, popEnd: true }); break; // big spinning star, explodes on impact
     case 'eyes1': s.hazards.push({ kind: 'heroBeam', x: ox, y: oy - 30, a: ang, t: 0, tele: .14, len: .22, dmg, hit: false }); break;
     case 'lattice1': { const [tx, ty, mn] = tgt(s, h.x, h.y); for (let i = 0; i < 6; i++) s.heroShots.push({ kind: 'fall', x: tx + (i - 2.5) * 44 + (s.R() - .5) * 20, y: -60 - i * 70, vx: 0, vy: 950, r: 14, dmg, life: 2.5, age: 0, gy: (mn ? ty + 60 : b.y + 10) + (s.R() - .5) * 50 }); } break; // stars fall from the sky and explode
-    case 'nova1': shot({ kind: 'nova', vx: ax * 380, vy: ay * 380, r: 58, life: 3, pierce: true, splash: 180 }); break; // the biggest star
+    case 'nova1': shot({ kind: 'nova', vx: ax * 380, vy: ay * 380, r: 58, life: 3, splash: 180 }); break; // the biggest star; owner: it stops on her and detonates (it used to fly on through, and the blast looked smaller than the star)
     // form 2 · REBORN: every special works differently from form 1
     case 'star2': shot({ kind: 'shield', vx: ax * 900, vy: ay * 900, r: 18, life: 2.2, ret: true }); break;
     case 'spinner2': h.orbit = { t: 5, fire: .5, n: 6, dmg }; break;
     case 'burst2': s.heroShots.push({ kind: 'wave', x: h.x, y: h.y, vx: (tgt(s, h.x, h.y)[0] >= h.x ? 1 : -1) * 640, vy: 0, r: 30, dmg, life: 2.2, age: 0, ground: true, pierce: true }); break;
     case 'eyes2': { const d = Math.sign(b.x - h.x) || 1; h.lance = { t: 0, len: .5, fx: h.x, fy: h.y, tx: clamp(b.x - 120 * d, FLOOR.minX, FLOOR.maxX), ty: clamp(b.y + 30, FLOOR.minY, FLOOR.maxY), hit: false, dmg }; h.inv = Math.max(h.inv, .6); break; }
     case 'lattice2': s.hazards.push({ kind: 'seal', t: 0, tele: 1.1, dmg, hit: false }); break;
-    case 'nova2': shot({ kind: 'nova', vx: ax * 460, vy: ay * 460, r: 52, life: 3, pierce: true, splash: 160 }); h.field = { t: 4, r: 210 }; break;
+    case 'nova2': shot({ kind: 'nova', vx: ax * 460, vy: ay * 460, r: 52, life: 3, splash: 160 }); h.field = { t: 4, r: 210 }; break;
     // form 3 · ASCENDED
     case 'star3': for (let i = -1; i <= 1; i++) { const r = ang + i * .55; shot({ kind: 'shard', vx: Math.cos(r) * 700, vy: Math.sin(r) * 700, r: 12, life: 2.4, homing: true }); } break;
     case 'spinner3': s.hazards.push({ kind: 'halo', x: h.x, y: h.y - 45, t: 0, len: .55, r: 0, dmg, hit: false }); h.inv = Math.max(h.inv, .45); break;
@@ -319,7 +319,7 @@ function moveHero(s, dt, inp) {
   }
   if (h.charge) { // SUPERNOVA: rooted while it charges
     h.charge.t += dt; h.vx = h.vy = 0;
-    if (h.charge.t >= h.charge.len) { const ox = h.x + h.face * 30, oy = h.y - 55, [ax, ay] = aimAt(s, ox, oy); s.heroShots.push({ kind: 'nova', x: ox, y: oy, vx: ax * 560, vy: ay * 560, r: 74, dmg: h.charge.dmg, life: 3, age: 0, pierce: true, splash: 240, supernova: true }); ev(s, 'cast', { name: 'nova', x: ox, y: oy, big: true }); h.charge = null; }
+    if (h.charge.t >= h.charge.len) { const ox = h.x + h.face * 30, oy = h.y - 55, [ax, ay] = aimAt(s, ox, oy); s.heroShots.push({ kind: 'nova', x: ox, y: oy, vx: ax * 560, vy: ay * 560, r: 74, dmg: h.charge.dmg, life: 3, age: 0, splash: 240, supernova: true }); ev(s, 'cast', { name: 'nova', x: ox, y: oy, big: true }); h.charge = null; }
     return;
   }
   let mx = inp.mx, my = inp.my; if (h.invert > 0) { mx = -mx; my = -my; }
@@ -1072,6 +1072,8 @@ function updateFinisher(s, dt) {
       if (at(L.boom1)) { ev(s, 'hellBoom', { x: b.x, y: b.y - 100, big: false }); s.hitstop = .12; }
       if (at(L.algol)) ev(s, 'hellAlgol', { x: b.x, y: b.y - 120 });
       if (at(L.algol + .1)) { ev(s, 'hellAlgol2', { x: b.x, y: b.y - 120 }); s.hitstop = .06; }
+      for (let i = 1; i < 5; i++) if (at(L.algol + i * .012)) ev(s, 'hellEye', { i }); // the five eyes open one by one (the first rides hellAlgol)
+      if (at(L.vert - .03)) ev(s, 'hellCrack', { x: b.x, y: 60 });
       if (at(L.vert)) { ev(s, 'hellVert', { x: b.x, y: b.y - 120 }); s.hitstop = .08; }
       if (at(L.spin)) ev(s, 'hellSpin', { x: b.x, y: b.y - 150 });
       if (k >= L.spin && k < L.boom2) { const u2 = (k - L.spin) / (L.boom2 - L.spin); c.w = .6 * Math.exp(u2 * 4.6); c.rot += c.w * dt; }

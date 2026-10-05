@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13r';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13t';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -77,7 +77,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'fire': part(e.x, e.y, 4, pal.hero, 160, 0.3, 2.5, 0); break;
         case 'cast': part(e.x, e.y, e.name === 'nova' ? 26 : 10, e.name === 'nova' ? '#ffe0a0' : pal.hero, e.name === 'nova' ? 360 : 220, 0.4, 3, 0); ring(e.x, e.y, pal.hero, 6, e.name === 'nova' ? 90 : 46, 0.3, 3); if (e.name === 'nova') shake(0.25); break;
         case 'splash':
-          if (e.kind === 'nova') { blast('nova', e.x, e.y, e.big ? 90 : 70); shake(e.big ? 1 : .8); flash('#ffffff', e.big ? .5 : .35); negative(.06); s.hitstop = Math.max(s.hitstop, .1); part(e.x, e.y, 40, '#ffe7b8', 620, .9, 4); }
+          if (e.kind === 'nova') { const R = e.big ? 230 : 170; blast('nova', e.x, e.y, R); impact(e.big ? .22 : .14); shake(1); flash('#ffffff', e.big ? .7 : .5); negative(.07); fx.chroma = .5; s.hitstop = Math.max(s.hitstop, .14); // NOVA: a HUGE version of its explosion, bigger than the star that hit
+            ring(e.x, e.y, '#ffffff', 40, R * 5, 1, 12); ring(e.x, e.y, GOLD, 30, R * 3.6, .9, 8); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .45, size: R * 2.4, color: '255,255,255' }); part(e.x, e.y, 90, '#ffffff', 1100, 1.2, 5); part(e.x, e.y, 50, '#ffe7b8', 900, 1.1, 4); addScar(e.x, s.boss.y + 30); }
           else if (e.kind === 'fall') { blast('fall', e.x, e.y); shake(.18); part(e.x, e.y - 10, 10, '#e8dcc0', 300, .5, 3); addScar(e.x, e.y); }
           else if (e.kind === 'burst') { blast(e.fizzle ? 'fizzle' : 'burst', e.x, e.y, e.r); shake(e.fizzle ? .15 : .45); part(e.x, e.y, 22, '#ffe7b8', 420, .6, 3.5); }
           else { ring(e.x, e.y, pal.hero, 10, e.r, 0.45, 6); part(e.x, e.y, 18, '#ffe7b8', 380, 0.6, 3.5); }
@@ -159,6 +160,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'hellFire': flash('#ff5020', .3); shake(.5); break;
         case 'hellBoom': impact(e.big ? .42 : .16); shake(1); flash(e.big ? '#fff0e0' : '#ff6030', e.big ? 1 : .6); negative(e.big ? .12 : .06); fx.chroma = e.big ? .9 : .4; ring(e.x, e.y, '#ff5030', 30, e.big ? 1400 : 700, e.big ? 1.4 : 1, e.big ? 18 : 10); if (e.big) ring(e.x, e.y, '#ffd0a0', 20, 1000, 1.2, 10); part(e.x, e.y, e.big ? 160 : 60, '#ff9a50', e.big ? 1400 : 800, 1.4, 5); if (e.big) { part(e.x, e.y, 60, '#ffffff', 1200, 1, 4); addScar(s.boss.x, s.boss.y + 30); } break;
         case 'hellAlgol': shake(.6); flash('#ff3020', .3); break;
+        case 'hellEye': shake(.25); break;
+        case 'hellCrack': shake(.5); flash('#ff6a3a', .15); break;
         case 'hellAlgol2': shake(.8); flash('#ffd0b0', .35); part(e.x, e.y, 40, '#ff7a40', 700, .8, 4); break;
         case 'hellVert': shake(.9); flash('#ffd0b0', .5); part(e.x, e.y, 50, '#ff7a40', 800, .8, 4); break;
         case 'hellSpin': shake(.2); break;
@@ -1076,13 +1079,45 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     text('GOOD', x0 + w * 0.5, y + 46, 14, '#c5e9ff', 'center', false, 600);
     ctx.restore();
   }
-  function keycap(x, y, label, state, size = 54) {
+  // P13 owner: a key you've pressed burns out, cracks, then breaks and falls away like glass
+  const keyT = new WeakMap();
+  function keyAge(o, i, done) { if (!o) return -1; let a = keyT.get(o); if (!a) { a = []; keyT.set(o, a); } if (done && a[i] == null) a[i] = fx.clock; return done && a[i] != null ? fx.clock - a[i] : -1; }
+  function keycap(x, y, label, state, size = 54, age = -1) {
+    if (state === 'done' && age >= 0 && !reducedMotion) { shatterCap(x, y, label, size, age); return; }
     const col = { todo: '#2a333b', now: '#f2ede2', done: '#7fe0b0', bad: '#ff5a46' }[state];
     ctx.save(); ctx.translate(x, y); if (state === 'now' && !reducedMotion) { const p = 1 + Math.sin(fx.clock * 10) * 0.05; ctx.scale(p, p); }
     ctx.fillStyle = '#0b1014'; ctx.fillRect(-size / 2, -size / 2 + 5, size, size);
     ctx.fillStyle = col; ctx.fillRect(-size / 2, -size / 2, size, size);
     ctx.fillStyle = state === 'todo' ? '#9aa6b0' : '#0b1014'; ctx.font = font(size * 0.55); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, 0, 2); ctx.restore(); ctx.textBaseline = 'alphabetic';
+  }
+  function shatterCap(x, y, label, size, age) {
+    const h2 = size / 2, seed = label.charCodeAt(0) * 7 + Math.round(x);
+    const R = (i) => { const v = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return v - Math.floor(v); };
+    ctx.save(); ctx.translate(x, y);
+    if (age < .44) { // flash, then it burns: green to charcoal, an ember rim, the letter going dark, then cracks
+      const b = clamp((age - .08) / .26, 0, 1), sc = age < .08 ? 1 + age * 2 : 1.16 - b * .16;
+      ctx.scale(sc, sc);
+      if (age < .08) { ctx.fillStyle = '#ffffff'; ctx.fillRect(-h2, -h2, size, size); }
+      else {
+        const c0 = [127, 224, 176], c1 = [26, 14, 10], c = c0.map((v, i) => Math.round(v + (c1[i] - v) * b));
+        ctx.fillStyle = `rgb(${c})`; ctx.fillRect(-h2, -h2, size, size);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,${Math.round(150 - b * 60)},40,${(.4 + b * .5).toFixed(2)})`; ctx.lineWidth = 3 + b * 2; ctx.strokeRect(-h2, -h2, size, size);
+        for (let i = 0; i < 5; i++) { const ex = (R(i) - .5) * size, ey = h2 - b * size * (.4 + R(i + 9) * .8); glow(ex, ey, 3 + R(i + 3) * 3, 'rgba(255,140,50,.9)', 1 - b * .5); } ctx.restore(); // embers lifting off it
+        ctx.fillStyle = `rgba(11,16,20,${(1 - b * .6).toFixed(2)})`; ctx.font = font(size * 0.55); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, 0, 2);
+        if (age > .34) { ctx.strokeStyle = 'rgba(255,230,200,.9)'; ctx.lineWidth = 1.5; for (let i = 0; i < 4; i++) { let a = R(i + 20) * TAU, px = 0, py = 0; ctx.beginPath(); ctx.moveTo(0, 0); for (let j = 0; j < 3; j++) { a += (R(i * 3 + j) - .5) * 1.2; px += Math.cos(a) * h2 * .45; py += Math.sin(a) * h2 * .45; ctx.lineTo(px, py); } ctx.stroke(); } }
+      }
+    } else if (age < 1.4) { // it breaks: wedges of charred glass fall and spin away
+      const t = age - .44, pts = [[-h2, -h2], [0, -h2], [h2, -h2], [h2, 0], [h2, h2], [0, h2], [-h2, h2], [-h2, 0]];
+      for (let i = 0; i < 8; i++) {
+        const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % 8], mx = (ax + bx) / 3, my = (ay + by) / 3, dir = Math.atan2(my, mx);
+        const dx = Math.cos(dir) * (40 + R(i) * 80) * t, dy = Math.sin(dir) * (30 + R(i + 1) * 40) * t + 900 * t * t, rot = (R(i + 2) - .5) * 9 * t;
+        ctx.save(); ctx.globalAlpha = clamp(1 - t / .9, 0, 1); ctx.translate(mx + dx, my + dy); ctx.rotate(rot); ctx.translate(-mx, -my);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ax, ay); ctx.lineTo(bx, by); ctx.closePath(); ctx.fillStyle = i % 2 ? '#1a0e0a' : '#2a1610'; ctx.fill(); ctx.strokeStyle = 'rgba(255,200,150,.7)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+      }
+      if (t < .12) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(0, 0, size * (1 + t * 8), 'rgba(255,190,120,.7)', 1 - t / .12); ctx.restore(); }
+    }
+    ctx.restore(); ctx.textBaseline = 'alphabetic';
   }
   function drawRune(s) {
     const r = s.rune; if (!r) return;
@@ -1096,7 +1131,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.save(); ctx.globalAlpha = k;
     const warm = r.warn > 0; // P11: a GET READY beat first; keys pressed now are ignored
     text(warm ? `RUNE LOCK · GET READY ${r.warn.toFixed(1)}` : r.done === 'fail' ? 'RUNE BROKEN' : r.done === 'win' ? 'REFLECTED!' : 'TYPE THE RUNES IN ORDER', cx, cy - 64, 28, warm ? '#ffffff' : '#ffe2a6');
-    r.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, warm ? 'todo' : r.done === 'fail' && i === Math.max(0, r.wrong) ? 'bad' : i < r.i ? 'done' : i === r.i && !r.done ? 'now' : 'todo', 52));
+    r.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, warm ? 'todo' : r.done === 'fail' && i === Math.max(0, r.wrong) ? 'bad' : i < r.i ? 'done' : i === r.i && !r.done ? 'now' : 'todo', 52, keyAge(r, i, !warm && i < r.i)));
     const left = clamp(1 - r.t / r.limit, 0, 1);
     ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 200, cy + 48, 400, 8); ctx.fillStyle = left < 0.3 ? '#ff5a46' : '#ffcf7a'; ctx.fillRect(cx - 200, cy + 48, 400 * left, 8);
     text('WRONG KEY OR TOO SLOW = CONTROLS INVERTED', cx, cy + 84, 17, '#c8d0d6', 'center', true, 600);
@@ -1109,20 +1144,21 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     drawChain(s.boss.x + 30, s.boss.y - 40, h.x + 10, h.y - 30, 0.8);
     const n = c.keys.length, gap = 70, cx = clamp(h.x, 200, 1080), cy = h.y - 170, x0 = cx - (n - 1) * gap / 2;
     ctx.save(); text('BREAK FREE!', cx, cy - 50, 26, '#ffffff');
-    c.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, i < c.i ? 'done' : i === c.i ? (c.wrong > 0 ? 'bad' : 'now') : 'todo', 54));
+    c.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, i < c.i ? 'done' : i === c.i ? (c.wrong > 0 ? 'bad' : 'now') : 'todo', 54, keyAge(c, i, i < c.i)));
     const left = clamp(1 - c.t / c.limit, 0, 1); ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 110, cy + 42, 220, 7); ctx.fillStyle = '#ff7a5a'; ctx.fillRect(cx - 110, cy + 42, 220 * left, 7);
     ctx.restore();
   }
   function drawFinisherQte(s) {
     const q = s.fq; if (!q) return;
     const cx = 640, cy = 250, n = q.keys.length, gap = 64, x0 = cx - (n - 1) * gap / 2, k = clamp((q.t + 1 - Math.max(0, q.ready ?? 0)) / .25, 0, 1);
-    ctx.save(); ctx.fillStyle = `rgba(0,0,0,${.55 * k})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
+    ctx.save(); ctx.fillStyle = `rgba(0,0,0,${.72 * k})`; ctx.fillRect(-500, -300, W + 1000, H + 600);
     const hell = q.hell, ready = q.ready > 0 && !q.done; // P13: a 1 s GET READY first; STAR OF HELL is all red
     if (hell) { ctx.fillStyle = `rgba(90,0,0,${(.35 * k).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600); }
-    ctx.globalCompositeOperation = 'lighter'; hexagram(cx, cy, 230, fx.clock * (hell ? 1.2 : .4), k, hell ? 'rgba(255,50,30,.8)' : 'rgba(255,224,138,.6)', 2); ctx.globalCompositeOperation = 'source-over';
+    if (hell) { hellPent(cx, cy + 10, 200, fx.clock * .5, .85 * k, k, .2); ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, 300, 'rgba(255,30,10,.25)', k); ctx.restore(); for (let i = 0; i < 9; i++) flame(cx - 360 + i * 90, cy + 300, 30, 70 + (i % 3) * 30, fx.clock + i, .6 * k); }
+    else { ctx.globalCompositeOperation = 'lighter'; hexagram(cx, cy, 230, fx.clock * .4, k, 'rgba(255,224,138,.6)', 2); ctx.globalCompositeOperation = 'source-over'; }
     text(FIN_NAMES[finNext(s)], cx, cy - 92, 46, hell ? '#ff3b3b' : '#ffffff');
     text(q.done === 'win' ? 'UNLEASHED' : q.done === 'fail' ? 'BROKEN' : ready ? `GET READY · ${q.ready.toFixed(1)}` : `TYPE ALL ${n} KEYS IN ORDER`, cx, cy - 52, 22, q.done === 'fail' ? '#ff8a6b' : hell ? '#ffb0a0' : '#ffffff', 'center', true, 600);
-    q.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, ready ? 'todo' : q.done === 'fail' && i === q.wrong ? 'bad' : i < q.i ? 'done' : i === q.i && !q.done ? 'now' : 'todo', 50));
+    q.keys.forEach((key, i) => keycap(x0 + i * gap, cy, key, ready ? 'todo' : q.done === 'fail' && i === q.wrong ? 'bad' : i < q.i ? 'done' : i === q.i && !q.done ? 'now' : 'todo', 50, keyAge(q, i, !ready && i < q.i)));
     const left = ready ? 1 : clamp(1 - q.t / q.limit, 0, 1); ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 220, cy + 46, 440, 8); ctx.fillStyle = ready ? '#5a6670' : left < .3 ? '#ff5a46' : hell ? '#ff3b3b' : '#ffe08a'; ctx.fillRect(cx - 220, cy + 46, 440 * left, 8);
     ctx.restore();
   }
@@ -1342,24 +1378,61 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.restore();
   }
   function redBeam(x0, y0, x1, y1, w, a = 1) { if (w <= 0 || a <= 0) return; ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,30,10,.45)'; ctx.lineWidth = w * 3.2; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.strokeStyle = '#ff3a20'; ctx.lineWidth = w; ctx.stroke(); ctx.strokeStyle = '#fff0e0'; ctx.lineWidth = Math.max(1.5, w * .35); ctx.stroke(); ctx.restore(); }
+  // a twisting fire beam: wavy edges in three heat layers, spiral rings sliding down it, sparks pouring off it
+  function vortexBeam(x, y0, y1, w, t, a = 1) {
+    if (a <= 0 || w <= 0 || y1 <= y0) return; ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter';
+    const layer = (ww, col, ph) => { ctx.fillStyle = col; ctx.beginPath(); for (let y = y0; y <= y1; y += 12) ctx.lineTo(x - ww * (1 + .22 * Math.sin(y * .035 + t * 18 + ph)), y); for (let y = y1; y >= y0; y -= 12) ctx.lineTo(x + ww * (1 + .22 * Math.sin(y * .03 - t * 16 + ph * 2)), y); ctx.closePath(); ctx.fill(); };
+    layer(w * 1.8, 'rgba(160,0,0,.35)', 0); layer(w * 1.15, 'rgba(255,70,20,.55)', 1.3); layer(w * .55, 'rgba(255,200,120,.8)', 2.1); layer(w * .2, 'rgba(255,255,240,.95)', 3);
+    for (let i = 0; i < 7; i++) { const yy = y0 + ((t * 700 + i * (y1 - y0) / 7) % (y1 - y0)); ctx.strokeStyle = 'rgba(255,160,80,.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, yy, w * 1.6, w * .35, 0, 0, TAU); ctx.stroke(); }
+    ctx.restore();
+    if (!reducedMotion) for (let i = 0; i < 2; i++) fx.particles.push({ x: x + (Math.random() - .5) * w * 2, y: y0 + Math.random() * (y1 - y0), vx: (Math.random() - .5) * 300, vy: 200 + Math.random() * 300, life: .5, max: .5, size: 3, color: Math.random() < .5 ? '#ffd060' : '#ff6a20', grav: 300 });
+  }
+  // a laser with a crackling lightning core (re-jagged every frame) and a hot spark at its head
+  function crackBeam(x0, y0, x1, y1, w, a = 1) {
+    if (a <= 0 || w <= 0) return; redBeam(x0, y0, x1, y1, w, a);
+    const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.floor(L / 26)), nx = -(y1 - y0) / (L || 1), ny = (x1 - x0) / (L || 1);
+    ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,245,230,.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, y0);
+    for (let i = 1; i < n; i++) { const f = i / n, j = (Math.random() - .5) * w * 1.4; ctx.lineTo(lerp(x0, x1, f) + nx * j, lerp(y0, y1, f) + ny * j); } ctx.lineTo(x1, y1); ctx.stroke();
+    glow(x1, y1, w * 2.6, 'rgba(255,220,180,.95)'); ctx.restore();
+  }
+  // the hell portal: a black eye in the sky ringed with turning runes
+  function hellPortal(x, y, r, t, a = 1) {
+    if (a <= 0 || r <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y);
+    ctx.globalCompositeOperation = 'lighter'; glow(0, 0, r * 2.4, 'rgba(255,30,10,.5)'); ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#080000'; ctx.beginPath(); ctx.arc(0, 0, r * .62, 0, TAU); ctx.fill();
+    for (const [rr, dir, n] of [[r * 1.32, 1, 18], [r * 1.5, -1, 24]]) { ctx.save(); ctx.rotate(t * .9 * dir); ctx.strokeStyle = '#ff5a20'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.stroke();
+      for (let i = 0; i < n; i++) { ctx.save(); ctx.rotate(i / n * TAU); ctx.fillStyle = i % 3 ? '#ff7a30' : '#ffd0a0'; ctx.fillRect(rr - 4, -3, 8 + (i % 2) * 5, 6); ctx.restore(); } ctx.restore(); }
+    ctx.restore();
+  }
   function drawHell(s, c, k) {
     const L = HELLT, b = s.boss, cx = b.x, cy = b.y - 120, gy = b.y + 30, u = (a, b2) => ku(k, a, b2), T = c.t;
     ctx.fillStyle = `rgba(${Math.round(40 + 30 * u(L.spin, L.boom2))},0,0,${(.45 + .35 * u(0, L.boom2)).toFixed(2)})`; ctx.fillRect(-500, -300, W + 1000, H + 600); // the sky bleeds red
     if (!reducedMotion) for (let i = 0; i < 3; i++) fx.particles.push({ x: Math.random() * W, y: H + 10, vx: (Math.random() - .5) * 40, vy: -120 - Math.random() * 200, life: 2.5, max: 2.5, size: 2 + Math.random() * 2, color: Math.random() < .5 ? '#ff5a20' : '#ffb040', grav: -20 }); // embers everywhere
     if (k > L.fire + .05) { const g = u(L.fire + .05, L.boom1), pul = .6 + .4 * Math.sin(T * 9); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,${Math.round(80 + 100 * pul)},30,${(.8 * g * (k > L.boom2 + .06 ? 1 - u(L.boom2 + .06, 1) : 1)).toFixed(2)})`; ctx.lineWidth = 3; // ground cracks
       for (let i = 0; i < 9; i++) { let a = i / 9 * TAU, x = cx, y = gy; ctx.beginPath(); ctx.moveTo(x, y); for (let j = 0; j < 5 * g; j++) { a += ((i * 7 + j * 3) % 5 - 2) * .22; x += Math.cos(a) * 60; y += Math.sin(a) * 18; ctx.lineTo(x, y); } ctx.stroke(); } ctx.restore(); }
-    if (k >= L.draw && k < L.boom1 + .03) { const pr = u(L.draw, L.draw + .07), sx = cx, sy = b.y - 290, rr = 82 + 18 * u(L.fire, L.boom1); // the devil star burns into the sky
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(sx, sy, rr * 2.4, 'rgba(255,40,10,.55)'); ctx.restore(); hellPent(sx, sy, rr, T * .8, 1, pr, u(L.fire, L.boom1));
-      if (k > L.fire) { const f = u(L.fire, L.fire + .03), w = 70 + 60 * u(L.fire, L.boom1); // the column of hellfire
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createLinearGradient(cx - w, 0, cx + w, 0); gr.addColorStop(0, 'rgba(120,0,0,0)'); gr.addColorStop(.3, 'rgba(255,50,10,.55)'); gr.addColorStop(.5, 'rgba(255,200,120,.9)'); gr.addColorStop(.7, 'rgba(255,50,10,.55)'); gr.addColorStop(1, 'rgba(120,0,0,0)');
-        ctx.fillStyle = gr; ctx.fillRect(cx - w, sy, w * 2, (gy - sy) * f); ctx.restore();
-        for (let i = 0; i < 9; i++) flame(cx + (i - 4) * 34, gy, 26, 120 + (i % 3) * 50, T + i, f); } }
-    if (k >= L.algol && k < L.spin) { const g = easeOut(u(L.algol, L.algol + .05)), hot = u(L.algol + .1, L.vert), fade = 1 - u(L.vert + .05, L.spin), R = 290, rot = T * .25, pts = [0, 1, 2, 3, 4].map((i) => { const [x, y] = PENT(R, rot, i); return [cx + x, cy + y * .9]; }), order = [0, 2, 4, 1, 3, 0], fl = 1 + Math.sin(fx.clock * 50) * .12;
-      for (let i = 0; i < 5; i++) { const [x0, y0] = pts[order[i]], [x1, y1] = pts[order[i + 1]]; redBeam(x0, y0, lerp(x0, x1, g), lerp(y0, y1, g), (9 + hot * 10) * fl, fade); } // the pentagram of lasers
-      if (k > L.algol + .1) for (const [x, y] of pts) redBeam(x, y, cx, cy, (5 + hot * 8) * fl, fade);                                                            // every point fires into her
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, (80 + hot * 160) * fade, 'rgba(255,230,200,.9)'); ctx.strokeStyle = `rgba(255,60,20,${(.6 * fade).toFixed(2)})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(cx, cy, R * 1.1, R * .99, 0, 0, TAU * g); ctx.stroke(); ctx.restore(); }
-    if (k >= L.vert && k < L.spin + .02) { const f = u(L.vert, L.vert + .02), fade = 1 - u(L.spin - .03, L.spin + .02), w = (34 + Math.sin(fx.clock * 60) * 5) * fade; redBeam(cx, -300, cx, lerp(-300, gy + 10, f), w, fade); // the vertical laser
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, gy, 160 * fade, 'rgba(255,120,60,.8)'); ctx.restore(); for (let i = 0; i < 6; i++) flame(cx + (i - 2.5) * 40, gy, 18, 90 * fade, T * 1.3 + i, fade); }
+    if (k >= L.draw && k < L.boom1 + .03) { // the devil star burns into the sky around a portal; hellfire pours out of it as a vortex
+      const pr = u(L.draw, L.draw + .07), sx = cx, sy = b.y - 290, rr = 82 + 18 * u(L.fire, L.boom1), out = k > L.boom1 ? 1 - u(L.boom1, L.boom1 + .03) : 1;
+      hellPortal(sx, sy, rr * pr, T, out); hellPent(sx, sy, rr, T * .8, out, pr, u(L.fire, L.boom1));
+      if (k > L.fire) { const f = easeOut(u(L.fire, L.fire + .025)), w = 46 + 40 * u(L.fire, L.boom1);
+        vortexBeam(cx, sy, sy + (gy - sy) * f, w, T, out);
+        if (f >= 1) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, gy, w * 4, 'rgba(255,120,40,.85)', out); for (let j = 0; j < 3; j++) { const rr2 = ((T * 1.6 + j / 3) % 1); ctx.strokeStyle = `rgba(255,${Math.round(180 - rr2 * 120)},60,${((1 - rr2) * .8 * out).toFixed(2)})`; ctx.lineWidth = 6 * (1 - rr2) + 1; ctx.beginPath(); ctx.ellipse(cx, gy, 60 + rr2 * 360, (60 + rr2 * 360) * .26, 0, 0, TAU); ctx.stroke(); } ctx.restore();
+          for (let j = 0; j < 12; j++) { const a = j / 12 * TAU, r2 = 70 + (j % 3) * 30; flame(cx + Math.cos(a) * r2, gy + Math.sin(a) * r2 * .26, 22, 80 + (j % 4) * 40, T + j, out); } } } }
+    if (k >= L.algol && k < L.spin) { // five demon eyes spawn one by one round her, orbit, and fire crackling lasers point to point, then into her
+      const hot = u(L.algol + .1, L.vert), fade = 1 - u(L.vert + .05, L.spin), R = 280, rot = T * .35 * (1 + hot * 2), order = [0, 2, 4, 1, 3, 0];
+      const born = (i) => L.algol + i * .012, pts = [0, 1, 2, 3, 4].map((i) => { const [x, y] = PENT(R, rot, i); return [cx + x, cy + y * .9]; });
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, (100 + hot * 220) * fade, 'rgba(255,220,190,.9)'); ctx.restore();
+      for (let i = 0; i < 5; i++) { const go = u(born(i) + .015, born(i) + .05); if (go <= 0) continue; const [x0, y0] = pts[order[i]], [x1, y1] = pts[order[i + 1]]; crackBeam(x0, y0, lerp(x0, x1, easeOut(go)), lerp(y0, y1, easeOut(go)), (8 + hot * 12), fade); }
+      if (k > L.algol + .1) for (const [x, y] of pts) crackBeam(x, y, lerp(x, cx, u(L.algol + .1, L.algol + .13)), lerp(y, cy, u(L.algol + .1, L.algol + .13)), 5 + hot * 9, fade);
+      for (let i = 0; i < 5; i++) { const sp = u(born(i), born(i) + .02); if (sp <= 0) continue; const [x, y] = pts[i]; // the eyes
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (sp < 1) glow(x, y, 120 * (1 - sp) + 20, 'rgba(255,255,255,1)'); glow(x, y, 46 + hot * 20, 'rgba(255,40,10,.8)', fade); ctx.restore();
+        ctx.save(); ctx.globalAlpha = fade; ctx.translate(x, y); ctx.fillStyle = '#1a0000'; ctx.beginPath(); ctx.ellipse(0, 0, 22 * sp, 13 * sp, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#ff3a10'; ctx.beginPath(); ctx.ellipse(0, 0, 5 * sp, 12 * sp, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = '#ff9a50'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 22 * sp, 13 * sp, 0, 0, TAU); ctx.stroke(); ctx.restore(); } }
+    if (k >= L.vert - .03 && k < L.spin + .02) { // the sky splits open, then the beam crashes down through her
+      const crack = u(L.vert - .03, L.vert), f = easeOut(u(L.vert, L.vert + .015)), fade = 1 - u(L.spin - .03, L.spin + .02), skyY = 60;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,200,160,${(fade).toFixed(2)})`; ctx.lineWidth = 3 + crack * 8; ctx.beginPath(); let px = cx, py = skyY - 120; ctx.moveTo(px, py); for (let j = 0; j < 6; j++) { px = cx + ((j * 37) % 5 - 2) * 14 * crack; py += 28; ctx.lineTo(px, py); } ctx.stroke(); glow(cx, skyY, 160 * crack * fade, 'rgba(255,90,40,.8)'); ctx.restore();
+      if (k >= L.vert) { vortexBeam(cx, skyY - 100, lerp(skyY - 100, gy + 10, f), (40 + Math.sin(fx.clock * 60) * 4) * fade + 10, T * 1.4, fade);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, gy, 220 * fade, 'rgba(255,140,70,.9)'); for (let j = 0; j < 3; j++) { const rr2 = ((T * 2.2 + j / 3) % 1); ctx.strokeStyle = `rgba(255,220,180,${((1 - rr2) * fade).toFixed(2)})`; ctx.lineWidth = 8 * (1 - rr2) + 1; ctx.beginPath(); ctx.ellipse(cx, gy, 40 + rr2 * 520, (40 + rr2 * 520) * .25, 0, 0, TAU); ctx.stroke(); } ctx.restore();
+        for (let i = 0; i < 8; i++) flame(cx + (i - 3.5) * 46, gy, 20, 110 * fade + (i % 3) * 30, T * 1.3 + i, fade);
+        if (!reducedMotion && Math.random() < .6) fx.particles.push({ x: cx + (Math.random() - .5) * 120, y: gy, vx: (Math.random() - .5) * 900, vy: -300 - Math.random() * 600, life: .9, max: .9, size: 4 + Math.random() * 4, color: '#2a1410', grav: 1400 }); } }
     if (k >= L.spin && k < L.boom2) { const f = u(L.spin, L.boom2), shk = f * f * 14, R = 80 + f * 70; // the second devil star spins up and overcharges
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, R * (2 + f * 2.5), `rgba(255,${Math.round(40 + f * 180)},${Math.round(20 + f * 160)},${(.4 + f * .5).toFixed(2)})`); ctx.restore();
       for (let j = Math.min(6, Math.floor(c.w / 3)); j >= 0; j--) hellPent(cx + (Math.random() - .5) * shk, cy + (Math.random() - .5) * shk, R, c.rot - j * .07, j ? .22 : 1, 1, f);
@@ -1692,7 +1765,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       ctx.save(); ctx.fillStyle = 'rgba(5,7,10,.72)'; ctx.fillRect(cx - 260, cy - 92, 520, 168); ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.strokeRect(cx - 260, cy - 92, 520, 168);
       if (q.warn > 0) { text('GET READY', cx, cy - 46, 40, '#ffe08a'); text(`KEYS IN ${q.warn.toFixed(1)}s · MASHING IS IGNORED`, cx, cy - 12, 18, '#c8d0d6', 'center', true, 600); }
       else text(q.stun > 0 ? 'STUNNED' : 'TYPE THE KEYS IN ORDER', cx, cy - 46, q.stun > 0 ? 36 : 28, q.stun > 0 ? '#ff8a6b' : '#ffffff');
-      q.keys.forEach((key, i) => keycap(cx - (q.keys.length - 1) * 35 + i * 70, cy + 20, key, q.warn > 0 ? 'todo' : i < q.i ? 'done' : i === q.i ? (q.stun > 0 ? 'bad' : 'now') : 'todo', 54));
+      q.keys.forEach((key, i) => keycap(cx - (q.keys.length - 1) * 35 + i * 70, cy + 20, key, q.warn > 0 ? 'todo' : i < q.i ? 'done' : i === q.i ? (q.stun > 0 ? 'bad' : 'now') : 'todo', 54, keyAge(q, i, q.warn <= 0 && i < q.i)));
       if (q.warn <= 0) { const left = clamp(1 - q.t / q.limit, 0, 1); ctx.fillStyle = '#23303a'; ctx.fillRect(cx - 200, cy + 60, 400, 7); ctx.fillStyle = left < .3 ? '#ff5a46' : '#ffe08a'; ctx.fillRect(cx - 200, cy + 60, 400 * left, 7); }
       ctx.restore();
     }
