@@ -143,6 +143,8 @@ export function createSfx() {
       case 'invertOn': tone(700, 200, 0.35, 'sawtooth', 0.08); break;
       case 'block': if (gate('block', 50)) tone(1400, 1800, 0.05, 'square', 0.04); break;
       case 'lanceHit': noise(0.12, 5000, 0.3, 1, 'highpass'); boom(0.5); break;
+      case 'domainTick': tone(e.last ? 392 : 659, e.last ? 98 : 330, e.last ? .5 : .18, 'triangle', .1); if (e.last) { boom(.8); noise(.4, 1200, .3, 1); } else noise(.08, 3000, .12, 1, 'highpass'); break;
+      case 'shardLoose': tone(1800, 2600, .06, 'sine', .04); break;
       case 'sealBoom': [523, 784, 1046].forEach((f, i) => tone(f, f * 0.5, 0.4, 'sawtooth', 0.08, i * 0.03)); boom(0.7); break;
       case 'judgement': tone(1600, 200, 0.6, 'sawtooth', 0.1); boom(0.8); break;
       case 'totalityHit': boom(1); tone(80, 30, 1.4, 'sawtooth', 0.2); noise(1, 8000, 0.25, 1, 'lowpass', 0, 300); break;

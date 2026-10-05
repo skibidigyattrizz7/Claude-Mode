@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13v';
+import { SCRIPT } from './script.js?v=13w';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -51,7 +51,7 @@ export const MODES = {
 const SLASH = { cd: 0.24, dmg: [0, 4, 6, 8], speed: 1000, r: 24 };
 // six specials per form (index = stage); "strongest normal attack" = nova of the current form
 export const ABIL = {
-  star:    { key: '1', names: ['', 'STAR', 'SHIELD', 'SUNSHARD'],      cd: [0, .45, .7, .6],  dmg: [0, 9, 12, 10] },
+  star:    { key: '1', names: ['', 'STAR', 'SHIELD', 'SUNSHARD'],      cd: [0, .45, .7, .9],  dmg: [0, 9, 12, 7] },
   spinner: { key: '2', names: ['', 'SPIN', 'ORBIT', 'HALO'],           cd: [0, .9, 6, 5],     dmg: [0, 4, 7, 12] },
   burst:   { key: '3', names: ['', 'BURST', 'SHOCKWAVE', 'SUPERNOVA'], cd: [0, 1.9, 2.4, 3.2], dmg: [0, 18, 24, 60] },
   eyes:    { key: '4', names: ['', 'EYES', 'LANCE', 'JUDGEMENT'],      cd: [0, 1.3, 2.2, 2],  dmg: [0, 14, 30, 36] },
@@ -284,9 +284,9 @@ function castAbility(s, name) {
     case 'burst2': s.heroShots.push({ kind: 'wave', x: h.x, y: h.y, vx: (tgt(s, h.x, h.y)[0] >= h.x ? 1 : -1) * 640, vy: 0, r: 30, dmg, life: 2.2, age: 0, ground: true, pierce: true }); break;
     case 'eyes2': { const d = Math.sign(b.x - h.x) || 1; h.lance = { t: 0, len: .5, fx: h.x, fy: h.y, tx: clamp(b.x - 120 * d, FLOOR.minX, FLOOR.maxX), ty: clamp(b.y + 30, FLOOR.minY, FLOOR.maxY), hit: false, dmg }; h.inv = Math.max(h.inv, .6); break; }
     case 'lattice2': s.hazards.push({ kind: 'seal', t: 0, tele: 1.1, dmg, hit: false }); break;
-    case 'nova2': shot({ kind: 'nova', vx: ax * 460, vy: ay * 460, r: 52, life: 3, splash: 160 }); h.field = { t: 4, r: 210 }; break;
+    case 'nova2': { const [tx, ty, mn] = tgt(s, h.x, h.y); s.hazards.push({ kind: 'domain', t: 0, n: 0, x: tx, y: mn ? ty + 60 : b.y, mn: !!mn, dmg }); h.field = { t: 4, r: 210 }; break; } // DOMAIN: a gold sun-dial opens under her and strikes 4 times (phase 1's NOVA is a thrown star)
     // form 3 · ASCENDED
-    case 'star3': for (let i = -1; i <= 1; i++) { const r = ang + i * .55; shot({ kind: 'shard', vx: Math.cos(r) * 700, vy: Math.sin(r) * 700, r: 12, life: 2.4, homing: true }); } break;
+    case 'star3': for (let i = 0; i < 6; i++) { const a2 = i / 6 * TAU - Math.PI / 2; shot({ kind: 'shard', ox: Math.cos(a2) * 64, oy: Math.sin(a2) * 44, x: h.x + Math.cos(a2) * 64, y: h.y - 50 + Math.sin(a2) * 44, vx: 0, vy: 0, hold: .26 + i * .05, r: 12, life: 2.8, homing: true }); } break; // SUNSHARD: a corona of 6 crescents forms round him, then they loose one by one (not phase 1's 3-star SPIN)
     case 'spinner3': s.hazards.push({ kind: 'halo', x: h.x, y: h.y - 45, t: 0, len: .55, r: 0, dmg, hit: false }); h.inv = Math.max(h.inv, .45); break;
     case 'burst3': h.charge = { t: 0, len: .55, dmg }; break;
     case 'eyes3': s.hazards.push({ kind: 'judgement', t: 0, tele: .4, len: .35, dmg, hit: false }); break;
@@ -302,10 +302,10 @@ function blockShots(s, x, y, r, inner = 0) {
 function updateHeroPowers(s, dt) {
   const h = s.hero, b = s.boss;
   if (h.orbit) { const o = h.orbit; o.t -= dt; o.fire -= dt; blockShots(s, h.x, h.y - 50, 70);
-    if (o.fire <= 0 && o.n > 0) { o.fire = .55; o.n--; const a = fxAngle(s, o.n), sx = h.x + Math.cos(a) * 48, sy = h.y - 50 + Math.sin(a) * 18, [ax, ay] = aimAt(s, sx, sy); s.heroShots.push({ kind: 'spin', x: sx, y: sy, vx: ax * 900, vy: ay * 900, r: 10, dmg: o.dmg, life: 1.5, age: 0 }); }
+    if (o.fire <= 0 && o.n > 0) { o.fire = .55; o.n--; const a = fxAngle(s, o.n), sx = h.x + Math.cos(a) * 48, sy = h.y - 50 + Math.sin(a) * 18, [ax, ay] = aimAt(s, sx, sy); s.heroShots.push({ kind: 'ember', x: sx, y: sy, vx: ax * 980, vy: ay * 980, r: 10, dmg: o.dmg, life: 1.5, age: 0 }); } // P13 owner: "phase 2 abilities are the same": ORBIT fires gold ember darts, not phase 1's SPIN stars
     if (o.t <= 0 || o.n <= 0 && o.fire <= -.3) h.orbit = null; }
   if (h.field) { h.field.t -= dt; blockShots(s, h.x, h.y - 40, h.field.r); if (h.field.t <= 0) h.field = null; }
-  if (h.starfall) { const f = h.starfall; f.t -= dt; if (f.t <= 0 && f.n < f.total) { f.t = .11; f.n++; s.heroShots.push({ kind: 'fall', x: b.x + (s.R() - .5) * 200, y: -60, vx: (s.R() - .5) * 80, vy: 1100, r: 13, dmg: f.dmg, life: 2.5, age: 0, gy: b.y + 10 + (s.R() - .5) * 60 }); } if (f.n >= f.total) h.starfall = null; }
+  if (h.starfall) { const f = h.starfall; f.t -= dt; if (f.t <= 0 && f.n < f.total) { f.t = .11; f.n++; const side = f.n % 2 ? -1 : 1, gy = b.y + 10 + (s.R() - .5) * 60, lx = b.x + (s.R() - .5) * 200, T = (gy + 80) / 1050; s.heroShots.push({ kind: 'fall', meteor: true, x: lx - side * 620 * T, y: -80, vx: side * 620, vy: 1050, r: 13, dmg: f.dmg, life: 2.5, age: 0, gy }); } if (f.n >= f.total) h.starfall = null; } // STARFALL: black-sun meteors crossing in from both sides (phase 1's SIXFOLD drops straight down)
 }
 const fxAngle = (s, n) => s.t * 2.4 + n / 6 * Math.PI * 2;
 function moveHero(s, dt, inp) {
@@ -439,6 +439,7 @@ function updateHeroShots(s, dt) {
   const b = s.boss, h = s.hero;
   for (let i = s.heroShots.length - 1; i >= 0; i--) {
     const p = s.heroShots[i]; p.age += dt;
+    if (p.hold > 0) { p.hold -= dt; p.x = h.x + p.ox; p.y = h.y - 50 + p.oy; if (p.hold <= 0) { const [ax, ay] = aimAt(s, p.x, p.y); p.vx = ax * 820; p.vy = ay * 820; p.age = 0; ev(s, 'shardLoose', { x: p.x, y: p.y }); } continue; } // SUNSHARD corona
     // P13 owner: "the star bugs out sometimes": lerping the velocity vector could shrink it to nothing, so a star that
     // missed (she sidestepped) hung shaking on her. Now it turns at a capped rate, keeps its speed, and stops homing
     // once it has flown past her.
@@ -450,7 +451,7 @@ function updateHeroShots(s, dt) {
     }
     if (p.kind === 'fall' && p.gy != null && p.y + p.vy * dt >= p.gy) { // a falling star bursts on the ground near her
       for (const m of s.minions) if (Math.hypot(m.x - p.x, m.y - (p.gy - 60)) < 130) { m.hp -= p.dmg; m.hurt = .15; ev(s, 'minionHit', { x: m.x, y: m.y }); }
-      const near = Math.abs(p.x - b.x) < 130 && b.dodgeT <= 0; if (near) landHit(s, p, p.dmg, p.x, p.gy - 60); ev(s, 'splash', { x: p.x, y: p.gy, r: 90, kind: 'fall' }); s.heroShots.splice(i, 1); continue; }
+      const near = Math.abs(p.x - b.x) < 130 && b.dodgeT <= 0; if (near) landHit(s, p, p.dmg, p.x, p.gy - 60); ev(s, 'splash', { x: p.x, y: p.gy, r: 90, kind: 'fall', meteor: !!p.meteor }); s.heroShots.splice(i, 1); continue; }
     if (p.ret && p.age > .55 && !p.turned) { p.turned = true; p.hitBoss = false; } // the shield hits again on the way back
     if (p.ret && p.age > .55) { const dx = h.x - p.x, dy = (h.y - 50) - p.y, d = Math.hypot(dx, dy) || 1; p.vx = lerp(p.vx, dx / d * 900, .08); p.vy = lerp(p.vy, dy / d * 900, .08); if (d < 30 && p.age > .8) { s.heroShots.splice(i, 1); continue; } }
     p.x += p.vx * dt; p.y += p.vy * dt;
@@ -566,6 +567,15 @@ function updateHazards(s, dt) {
         z.y = lerp(FLOOR.minY - 40, FLOOR.maxY + 40, k);
         if (!z.hit && z.t >= z.tele && Math.abs(h.y - 30 - z.y) < 26 && Math.abs(h.y - 30 - z.gap) > 70 && h.dodgeT <= 0) { z.hit = true; hurtHero(s, 16, 'corona'); }
         if (z.t > z.tele + z.len) done(); break;
+      }
+      case 'domain': { // DOMAIN: a sun-dial under the target; four strikes, the last one the biggest
+        if (!z.mn) z.x = lerp(z.x, b.x, .12);
+        const at = [.5, .9, 1.3, 1.85];
+        while (z.n < 4 && z.t >= at[z.n]) { const last = z.n === 3, d = Math.round(z.dmg * (last ? .4 : .2)); z.n++;
+          if (z.mn) { for (const m of s.minions) if (Math.hypot(m.x - z.x, m.y - (z.y - 60)) < 150) { m.hp -= d; m.hurt = .15; ev(s, 'minionHit', { x: m.x, y: m.y }); } }
+          else if (Math.abs(b.x - z.x) < 170) landHit(s, { kind: 'domain' }, d, b.x, b.y - 90);
+          ev(s, 'domainTick', { x: z.x, y: z.y, n: z.n, last }); }
+        if (z.t > 2.3) done(); break;
       }
       case 'seal': { // six-point seal on the boss, then a big blast
         z.x = b.x; z.y = b.y - 105;

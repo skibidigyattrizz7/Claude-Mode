@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13v';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13w';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -59,7 +59,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       if (onEvent) onEvent(e, s);
       switch (e.type) {
         case 'bossHit': { // P10 owner: "the effects of hitting aren't dramatic enough". Three tiers, all loud.
-          const BIG = ['finisher', 'nova', 'counter', 'judgement', 'totality', 'seal', 'reflect'], MID = ['burst', 'eyes', 'lance', 'wave', 'shield', 'halo', 'break', 'star', 'fall', 'shard', 'spin'];
+          const BIG = ['finisher', 'nova', 'counter', 'judgement', 'totality', 'seal', 'reflect'], MID = ['burst', 'eyes', 'lance', 'wave', 'shield', 'halo', 'break', 'star', 'fall', 'shard', 'spin', 'domain', 'ember'];
           const tier = BIG.includes(e.kind) ? 3 : MID.includes(e.kind) ? 2 : 1;
           fx.bossKick = Math.min(1.4, (fx.bossKick || 0) + [0, .35, .8, 1.3][tier]);
           part(e.x, e.y, [0, 10, 24, 46][tier], tier > 1 ? '#ffffff' : pal.hero, [0, 300, 520, 760][tier], [0, .45, .6, .9][tier], [0, 2.5, 3.5, 5][tier]);
@@ -77,8 +77,11 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'fire': part(e.x, e.y, 4, pal.hero, 160, 0.3, 2.5, 0); break;
         case 'cast': part(e.x, e.y, e.name === 'nova' ? 26 : 10, e.name === 'nova' ? '#ffe0a0' : pal.hero, e.name === 'nova' ? 360 : 220, 0.4, 3, 0); ring(e.x, e.y, pal.hero, 6, e.name === 'nova' ? 90 : 46, 0.3, 3); if (e.name === 'nova') shake(0.25); break;
         case 'splash':
-          if (e.kind === 'nova') { const R = e.big ? 230 : 170; blast('nova', e.x, e.y, R); impact(e.big ? .22 : .14); shake(1); flash('#ffffff', e.big ? .7 : .5); negative(.07); fx.chroma = .5; s.hitstop = Math.max(s.hitstop, .14); // NOVA: a HUGE version of its explosion, bigger than the star that hit
+          if (e.kind === 'nova' && e.big) { const R = 250; blast('eclipse', e.x, e.y, R); impact(.4, 'void', e.x, e.y); shake(1); flash('#000000', .55); fx.chroma = .7; s.hitstop = Math.max(s.hitstop, .16); // SUPERNOVA (phase 3): a black sun bursts its corona, not NOVA's star
+            ring(e.x, e.y, '#ffffff', 60, R * 5.5, 1.1, 5); ring(e.x, e.y, '#ffffff', 20, R * 2.2, .5, 14); part(e.x, e.y, 120, '#ffffff', 1400, 1, 2.5); for (let i = 0; i < 18; i++) fx.flares.push({ x: e.x + Math.cos(i / 18 * TAU) * R * 1.3, y: e.y + Math.sin(i / 18 * TAU) * R, t: -i * .02, life: .4, size: 50, color: '255,255,255' }); addScar(e.x, s.boss.y + 30); }
+          else if (e.kind === 'nova') { const R = e.big ? 230 : 170; blast('nova', e.x, e.y, R); impact(e.big ? .22 : .14); shake(1); flash('#ffffff', e.big ? .7 : .5); negative(.07); fx.chroma = .5; s.hitstop = Math.max(s.hitstop, .14); // NOVA: a HUGE version of its explosion, bigger than the star that hit
             ring(e.x, e.y, '#ffffff', 40, R * 5, 1, 12); ring(e.x, e.y, GOLD, 30, R * 3.6, .9, 8); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .45, size: R * 2.4, color: '255,255,255' }); part(e.x, e.y, 90, '#ffffff', 1100, 1.2, 5); part(e.x, e.y, 50, '#ffe7b8', 900, 1.1, 4); addScar(e.x, s.boss.y + 30); }
+          else if (e.kind === 'fall' && e.meteor) { blast('meteor', e.x, e.y, 110); shake(.3); flash('#ffffff', .06); for (let i = 0; i < 14; i++) fx.particles.push({ x: e.x, y: e.y, vx: (Math.random() - .5) * 700, vy: -200 - Math.random() * 500, life: .7, max: .7, size: 3, color: i % 3 ? '#ffffff' : '#20242a', grav: 1400 }); addScar(e.x, e.y); } // STARFALL meteor crater
           else if (e.kind === 'fall') { blast('fall', e.x, e.y); shake(.18); part(e.x, e.y - 10, 10, '#e8dcc0', 300, .5, 3); addScar(e.x, e.y); }
           else if (e.kind === 'burst') { blast(e.fizzle ? 'fizzle' : 'burst', e.x, e.y, e.r); shake(e.fizzle ? .15 : .45); part(e.x, e.y, 22, '#ffe7b8', 420, .6, 3.5); }
           else { ring(e.x, e.y, pal.hero, 10, e.r, 0.45, 6); part(e.x, e.y, 18, '#ffe7b8', 380, 0.6, 3.5); }
@@ -113,9 +116,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'dlFire': shake(.6); flash('#ffffff', .3); fx.chroma = .3; ring(e.x, e.y, '#ffffff', 20, 300, .5, 8); break;
         case 'dlLink': shake(.7); flash('#ffffff', .35); negative(.05); part(e.x, e.y, 40, '#cfe0ff', 600, .8, 4); break;
         case 'dlSpin': shake(.3); break;
-        case 'dlBoom': if (e.v === 4) { blast('nova', e.x, e.y, 320); impact(.22); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1.1, 14); ring(e.x, e.y, '#7aa8ff', 20, 700, .9, 8); part(e.x, e.y, 90, '#ffffff', 1100, 1.3, 5); part(e.x, e.y, 40, GOLD, 900, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); } // DAVID LASER: the original blow-up, gold sparks in it
+        case 'dlBoom': if (e.v === 4) { blast('nova', e.x, e.y, 320); impact(.6, 'blue', e.x, e.y); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1.1, 14); ring(e.x, e.y, '#7aa8ff', 20, 700, .9, 8); part(e.x, e.y, 90, '#ffffff', 1100, 1.3, 5); part(e.x, e.y, 40, GOLD, 900, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); } // DAVID LASER: the original blow-up, gold sparks in it
           else { shake(.8); flash('#bff4ff', .5); fx.chroma = .4; ring(e.x, e.y, '#7fe8ff', 30, 700, .7, 8); } break; // SPINNING STAR: the points break off (they come back: ssBoom)
-        case 'ssBoom': blast('nova', e.x, e.y, 300, '#7fe8ff'); impact(.24); shake(1); flash('#ffffff', .8); fx.chroma = .7; ring(e.x, e.y, '#7fe8ff', 30, 1100, 1.1, 14); ring(e.x, e.y, '#ffffff', 20, 800, .9, 8); part(e.x, e.y, 90, '#bff4ff', 1200, 1.2, 4); part(e.x, e.y, 30, GOLD, 900, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'ssBoom': blast('nova', e.x, e.y, 300, '#7fe8ff'); impact(.6, 'spin', e.x, e.y); shake(1); flash('#ffffff', .8); fx.chroma = .7; ring(e.x, e.y, '#7fe8ff', 30, 1100, 1.1, 14); ring(e.x, e.y, '#ffffff', 20, 800, .9, 8); part(e.x, e.y, 90, '#bff4ff', 1200, 1.2, 4); part(e.x, e.y, 30, GOLD, 900, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
         case 'sukkahHammer': shake(.2 + e.n * .06); part(e.x, e.y, 10, '#ffe7a8', 260, .35, 3); ring(e.x, e.y + 4, '#ffe7a8', 6, 60, .25, 3); break;
         case 'sukkahWalls': shake(.15); break;
         case 'sukkahBranch': part(e.x, e.y, 6, '#7fbf5a', 200, .4, 3); break;
@@ -123,10 +126,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'mdRaise': flash('#cfe0ff', .2); ring(e.x, e.y, '#ffffff', 20, 220, .4, 5); part(e.x, e.y, 20, '#ffffff', 400, .5, 3); break;
         case 'mdAbsorb': shake(.15 + e.n * .03); ring(e.x, e.y, '#cfe0ff', 40, 200 + e.n * 12, .3, 4); part(e.x, e.y, 10, '#ffe7b8', 380, .4, 3); break;
         case 'mdCharge': flash('#ffffff', .3); shake(.4); break;
-        case 'mdSlam': impact(.2); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; fx.bossKick = 1.4; ring(e.x, e.y, '#ffffff', 30, 900, 1, 14); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 30, GOLD, 800, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'mdSlam': impact(.55, 'shield', e.x, e.y); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; fx.bossKick = 1.4; ring(e.x, e.y, '#ffffff', 30, 900, 1, 14); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 30, GOLD, 800, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
         case 'scLock': shake(.8); flash('#ffffff', .5); ring(e.x, e.y, '#ffffff', 280, 420, .4, 8); part(e.x, e.y, 40, '#cfe0ff', 600, .6, 4); break;
-        case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); impact(.06 + e.n * .02); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
-        case 'scShatter': blast('nova', e.x, e.y, 260, '#bff4ff'); impact(.22); shake(1); flash('#dff8ff', .8); ring(e.x, e.y, '#bff4ff', 60, 520, .8, 6); part(e.x, e.y, 90, '#dff8ff', 1100, 1.2, 3, 500); break; // STAR CAGE: ice
+        case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); impact(.1 + e.n * .04, 'ice', e.x, e.y); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
+        case 'scShatter': blast('nova', e.x, e.y, 260, '#bff4ff'); impact(.6, 'ice', e.x, e.y); shake(1); flash('#dff8ff', .8); ring(e.x, e.y, '#bff4ff', 60, 520, .8, 6); part(e.x, e.y, 90, '#dff8ff', 1100, 1.2, 3, 500); break; // STAR CAGE: ice
         case 'spikeUp': shake(.12); break;
         case 'dmPlace': if (e.i % 2 === 0) shake(.06); break;
         case 'dmFlick': shake(.2); part(e.x, e.y, 10, '#ffffff', 300, .3, 3); break;
@@ -135,27 +138,27 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'cmLaunch': shake(.6); flash('#ffffff', .25); ring(e.x, e.y, '#ffffff', 10, 260, .4, 5, .3); part(e.x, e.y, 40, '#d8e6ff', 500, .7, 4); break;
         case 'cmGleam': break;
         case 'cmDive': shake(.4); fx.chroma = .3; break;
-        case 'cmImpact': blast('nova', e.x, e.y - 60, 340, GOLD); impact(.28); shake(1); flash('#ffffff', 1); negative(.1); fx.chroma = .7; ring(e.x, e.y, '#ffffff', 40, 1200, 1.2, 16, .35); ring(e.x, e.y, GOLD, 30, 800, 1, 10, .35); part(e.x, e.y - 20, 80, '#ffffff', 1200, 1.2, 5, 900); for (let i = 0; i < 40; i++) fx.particles.push({ x: e.x + (Math.random() - .5) * 200, y: e.y, vx: (Math.random() - .5) * 900, vy: -400 - Math.random() * 900, life: 1.6, max: 1.6, size: 5 + Math.random() * 5, color: '#3a3430', grav: 1600 }); addScar(e.x, e.y + 30); break; // STAR COMET: the crater
+        case 'cmImpact': blast('nova', e.x, e.y - 60, 340, GOLD); impact(.7, 'gold', e.x, e.y - 60); shake(1); flash('#ffffff', 1); negative(.1); fx.chroma = .7; ring(e.x, e.y, '#ffffff', 40, 1200, 1.2, 16, .35); ring(e.x, e.y, GOLD, 30, 800, 1, 10, .35); part(e.x, e.y - 20, 80, '#ffffff', 1200, 1.2, 5, 900); for (let i = 0; i < 40; i++) fx.particles.push({ x: e.x + (Math.random() - .5) * 200, y: e.y, vx: (Math.random() - .5) * 900, vy: -400 - Math.random() * 900, life: 1.6, max: 1.6, size: 5 + Math.random() * 5, color: '#3a3430', grav: 1600 }); addScar(e.x, e.y + 30); break; // STAR COMET: the crater
         case 'rcFinal': shake(1); flash('#ffe9a8', .5); part(e.x, e.y, 50, '#ffe9a8', 900, .8, 3); break;
-        case 'rcBoom': blast('nova', e.x, e.y, 320, GOLD); impact(.22); shake(1); flash('#ffffff', .9); negative(.08); fx.chroma = .6; ring(e.x, e.y, GOLD, 30, 1100, 1.1, 14); ring(e.x, e.y, '#ffffff', 20, 800, .9, 8); part(e.x, e.y, 90, '#ffe9a8', 1200, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); break; // STAR RICOCHET: the path snaps in and detonates
+        case 'rcBoom': blast('nova', e.x, e.y, 320, GOLD); impact(.6, 'rico', e.x, e.y); shake(1); flash('#ffffff', .9); negative(.08); fx.chroma = .6; ring(e.x, e.y, GOLD, 30, 1100, 1.1, 14); ring(e.x, e.y, '#ffffff', 20, 800, .9, 8); part(e.x, e.y, 90, '#ffe9a8', 1200, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); break; // STAR RICOCHET: the path snaps in and detonates
         case 'rcHit': fx.flares.push({ x: e.x, y: e.y, t: 0, life: .3, size: 70 + e.i * 8, color: '255,233,168' }); shake(.25 + e.i * .03); break;
         case 'rcBounce': ring(e.x, e.y, '#cfe0ff', 6, 70, .25, 3); part(e.x, e.y, 8, '#ffffff', 300, .3, 2); break;
         case 'clDraw': shake(.2); break;
-        case 'clCollapse': shake(.5); flash('#000000', .4); impact(.1); break;
-        case 'clNova': blast('nova', e.x, e.y, 360); impact(.34); shake(1); flash('#ffffff', 1); negative(.12); fx.chroma = .8; ring(e.x, e.y, '#ffffff', 30, 1300, 1.2, 16); ring(e.x, e.y, GOLD, 20, 900, 1, 10); part(e.x, e.y, 120, '#ffffff', 1300, 1.3, 5); part(e.x, e.y, 60, GOLD, 900, 1.3, 4); addScar(s.boss.x, s.boss.y + 30); break; // STAR COLLAPSE: supernova with black & white impact frames
+        case 'clCollapse': shake(.5); flash('#000000', .4); impact(.2, 'void', e.x, e.y); break;
+        case 'clNova': blast('nova', e.x, e.y, 360); impact(.8, 'void', e.x, e.y); shake(1); flash('#ffffff', 1); negative(.12); fx.chroma = .8; ring(e.x, e.y, '#ffffff', 30, 1300, 1.2, 16); ring(e.x, e.y, GOLD, 20, 900, 1, 10); part(e.x, e.y, 120, '#ffffff', 1300, 1.3, 5); part(e.x, e.y, 60, GOLD, 900, 1.3, 4); addScar(s.boss.x, s.boss.y + 30); break; // STAR COLLAPSE: supernova with black & white impact frames
         case 'codeKey': fx.keyFlash = fx.keyFlash || {}; fx.keyFlash[e.k] = 1; break;
         case 'codeOk': shake(1); flash('#ffffff', .8); negative(.08); ring(s.boss.x, s.boss.y - 120, '#ffffff', 40, 900, 1, 12); part(640, 110, 80, '#ffffff', 700, 1.2, 4); break;
         case 'sbShot': if (e.i % 3 === 0) shake(.08); break;
         case 'sbImpact': ring(e.x, e.y, '#9fd8ff', 6, 46, .22, 3); for (let j = 0; j < 4; j++) fx.particles.push({ x: e.x, y: e.y, vx: 120 + Math.random() * 260, vy: (Math.random() - .5) * 260, life: .3, max: .3, size: 2.5, color: j % 2 ? GOLD : '#ffffff', grav: 0 }); break;
         case 'sbCharge': flash('#cfe0ff', .15); break;
-        case 'sbFinal': blast('burst', e.x, e.y, 260); impact(.16); shake(1); flash('#ffffff', .8); negative(.08); ring(e.x, e.y, '#ffffff', 30, 800, .9, 12); part(e.x, e.y, 70, '#ffffff', 900, 1, 4); for (let i = 0; i < 50; i++) fx.particles.push({ x: e.x, y: e.y, vx: (Math.random() - .5) * 700, vy: -300 - Math.random() * 800, life: 1.2, max: 1.2, size: 4, color: GOLD, grav: 1300 }); break; // STAR BARRAGE: the original burst + a gold fountain
+        case 'sbFinal': blast('burst', e.x, e.y, 260); impact(.5, 'barrage', e.x, e.y); shake(1); flash('#ffffff', .8); negative(.08); ring(e.x, e.y, '#ffffff', 30, 800, .9, 12); part(e.x, e.y, 70, '#ffffff', 900, 1, 4); for (let i = 0; i < 50; i++) fx.particles.push({ x: e.x, y: e.y, vx: (Math.random() - .5) * 700, vy: -300 - Math.random() * 800, life: 1.2, max: 1.2, size: 4, color: GOLD, grav: 1300 }); break; // STAR BARRAGE: the original burst + a gold fountain
         case 'dbGrow': flash('#cfe0ff', .2); part(e.x, e.y, 20, '#ffffff', 300, .6, 3, -100); break;
         case 'dbCut': shake(.35); flash('#ffffff', .12); fx.slashes.push({ y: e.y, a: [Math.PI / 3, -Math.PI / 3, 0, -Math.PI / 3, Math.PI / 3, 0][e.n] || 0, t: 0 }); part(e.x, e.y, 16, '#ffffff', 600, .4, 3); part(e.x, e.y, 8, GOLD, 500, .4, 3); break;
         case 'dbSheathe': shake(.2); flash('#ffffff', .1); break;
-        case 'dbSplit': blast('nova', e.x, e.y, 300, '#e8f0ff'); impact(.26); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1100, 1.1, 14); ring(e.x, e.y, GOLD, 20, 800, .9, 8); part(e.x, e.y, 90, '#e8f0ff', 1200, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); break; // DAVID'S BLADE: the star of cuts detonates
+        case 'dbSplit': blast('nova', e.x, e.y, 300, '#e8f0ff'); impact(.65, 'silver', e.x, e.y); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1100, 1.1, 14); ring(e.x, e.y, GOLD, 20, 800, .9, 8); part(e.x, e.y, 90, '#e8f0ff', 1200, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); break; // DAVID'S BLADE: the star of cuts detonates
         case 'stRise': shake(.3); break;
         case 'stCollapse': shake(.6); flash('#cfe0ff', .3); break;
-        case 'stBurst': blast('nova', e.x, e.y, 320, '#6fe8d0'); impact(.2); shake(1); flash('#ffffff', .85); fx.chroma = .5; ring(e.x, e.y, '#6fe8d0', 30, 1000, 1, 12); ring(e.x, e.y, '#ffffff', 20, 700, .8, 6); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 40, '#6fe8d0', 900, 1.1, 4, -400); addScar(s.boss.x, s.boss.y + 30); break; // STAR TORNADO: it explodes
+        case 'stBurst': blast('nova', e.x, e.y, 320, '#6fe8d0'); impact(.6, 'teal', e.x, e.y); shake(1); flash('#ffffff', .85); fx.chroma = .5; ring(e.x, e.y, '#6fe8d0', 30, 1000, 1, 12); ring(e.x, e.y, '#ffffff', 20, 700, .8, 6); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 40, '#6fe8d0', 900, 1.1, 4, -400); addScar(s.boss.x, s.boss.y + 30); break; // STAR TORNADO: it explodes
         case 'hellStar': flash('#ff2a1a', .35); shake(.4); break;
         case 'hellFire': flash('#ff5020', .3); shake(.5); break;
         case 'hellBoom': impact(e.big ? 1.25 : .55, 'hell', e.x, e.y); shake(1); flash(e.big ? '#fff0e0' : '#ff6030', e.big ? 1 : .6); negative(e.big ? .12 : .06); fx.chroma = e.big ? .9 : .4; ring(e.x, e.y, '#ff5030', 30, e.big ? 1400 : 700, e.big ? 1.4 : 1, e.big ? 18 : 10); if (e.big) ring(e.x, e.y, '#ffd0a0', 20, 1000, 1.2, 10); part(e.x, e.y, e.big ? 160 : 60, '#ff9a50', e.big ? 1400 : 800, 1.4, 5); if (e.big) { part(e.x, e.y, 60, '#ffffff', 1200, 1, 4); addScar(s.boss.x, s.boss.y + 30); } break;
@@ -169,9 +172,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'minionHit': part(e.x, e.y, 6, '#ffd7a1', 240, .3, 3); break;
         case 'minionDie': shake(e.last ? .6 : .3); blast('hit', e.x, e.y, 70); part(e.x, e.y, 24, '#ff9a5a', 500, .6, 4); if (e.last) flash('#7fe0b0', .25); break;
         case 'shielded': num(e.x, e.y, 'SHIELDED', '#ff6a5a'); break;
-        case 'starBombBig': impact(.26); blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
+        case 'starBombBig': impact(.6, 'sukkah', e.x, e.y); blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
         case 'finisherStar': shake(.9); flash('#ffffff', .5); negative(.07); ring(e.x, e.y - 100, '#ffffff', 20, 520, .7, 10); part(e.x, e.y - 100, 50, '#ffffff', 700, 1, 4); fx.finStarT = 0; break;
-        case 'finisherBeam': shake(1); flash('#ffffff', .6); impact(.18); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); part(e.x, e.y, 30, GOLD, 700, 1, 4, -200); break;
+        case 'finisherBeam': shake(1); flash('#ffffff', .6); impact(.45, 'blue', e.x, e.y); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); part(e.x, e.y, 30, GOLD, 700, 1, 4, -200); break;
         case 'finisherSlash': if (e.star) { shake(.3); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .5, size: 90, color: '255,236,180' }); part(e.x, e.y, 16, GOLD, 360, .6, 3, -200); blast('hit', e.x, e.y, 60); fx.blasts[fx.blasts.length - 1].tier = 2; part(e.x, e.y, 14, '#ffffff', 420, .5, 3); break; }
           shake(0.35); flash('#ffffff', 0.2); fx.slashes.push({ t: 0, a: -0.45 + e.n * 1.6, y: 260 + e.n * 160 }); if (s.stage === 3) negative(0.05); break;
         case 'finisherHit': { const ac = FIN_ACCENT[e.v] || '#ffffff', x = s.boss.x, y = s.boss.y - 110; shake(.8); sig(e.v, x, y, ac); break; }
@@ -186,6 +189,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'miss': num(e.x, e.y - 30, 'MISS', '#c8d0d6'); break;
         case 'block': if (Math.random() < .5) part(e.x, e.y, 5, pal.hero, 200, .3, 2.5, 0); break;
         case 'lanceHit': blast('lance', e.x, e.y); shake(0.5); flash('#ffffff', 0.15); ring(e.x, e.y, pal.hero, 10, 160, .35, 6); part(e.x, e.y, 26, pal.hero, 520, .6, 3.5); fx.slashes.push({ t: 0, a: -0.2, y: e.y, world: true }); break;
+        case 'domainTick': blast('domain', e.x, e.y, e.last ? 200 : 130); shake(e.last ? .8 : .35); flash(e.last ? '#fff0c8' : '#ffe08a', e.last ? .3 : .1); ring(e.x, e.y, GOLD, 20, e.last ? 420 : 240, e.last ? .7 : .4, e.last ? 10 : 5, .36); part(e.x, e.y - 40, e.last ? 50 : 18, GOLD, e.last ? 800 : 420, .7, 4, -300); if (e.last) { part(e.x, e.y - 60, 30, '#ff7a3a', 700, .8, 4, -500); addScar(e.x, e.y); } break; // DOMAIN strikes
+        case 'shardLoose': ring(e.x, e.y, '#ffffff', 4, 34, .2, 3); part(e.x, e.y, 5, '#ffffff', 240, .25, 2); break;
         case 'sealBoom': shake(0.7); flash(pal.hero, 0.18); ring(e.x, e.y, pal.hero, 20, 260, .5, 8); part(e.x, e.y, 40, '#ffffff', 600, .8, 4); break;
         case 'judgement': shake(0.8); flash('#ffffff', 0.3); negative(0.05); ring(e.x, e.y, '#ffffff', 20, 300, .5, 8, .36); part(e.x, e.y - 100, 40, '#ffffff', 600, .8, 4); break;
         case 'totalityHit': shake(1); flash('#ffffff', 0.7); negative(0.1); ring(e.x, e.y - 110, '#ffffff', 20, 900, 1, 12); part(e.x, e.y - 110, 80, pal.hero, 900, 1.2, 5, 40); break;
@@ -293,26 +298,70 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(2, r * .2); triPath(r, -Math.PI / 2); ctx.stroke(); triPath(r, Math.PI / 2); ctx.stroke(); ctx.restore();
   }
   // star-shaped explosions, one look per move
-  const blast = (kind, x, y, r = 120, tint = null) => { fx.blasts.push({ kind, x, y, r, tint, t: 0, rot: Math.random() * TAU, life: { bomb: 1.3, hit: .45, nova: 1.5, burst: .85, fall: .5, eyes: .55, lance: .5, fizzle: .4, shard: .35 }[kind] || .5 }); if (fx.blasts.length > 24) fx.blasts.shift(); };
+  const blast = (kind, x, y, r = 120, tint = null) => { fx.blasts.push({ kind, x, y, r, tint, t: 0, rot: Math.random() * TAU, life: { bomb: 1.3, hit: .45, nova: 1.5, domain: .5, eclipse: 1.1, meteor: .6, burst: .85, fall: .5, eyes: .55, lance: .5, fizzle: .4, shard: .35 }[kind] || .5 }); if (fx.blasts.length > 24) fx.blasts.shift(); };
   // four-point light flares (the ricochet's hits)
   // impact frames (owner: "black and white impact frames"): the whole frame re-drawn as hard black & white, flipping
   // impact frames: the whole frame redrawn as hard black & white, flipping. style 'hell' (STAR OF HELL) cycles through
   // black & white, inverted, and blood red-black, punches the zoom in and out, and throws speed lines at the focus point
-  function impact(len = .22, style = 'bw', x = null, y = null) { if (!reducedMotion) fx.impact = { t: 0, len, style, x, y }; }
+  function impact(len = .22, style = 'bw', x = null, y = null) { if (!reducedMotion) fx.impact = { t: 0, len, style, x, y, seed: Math.random() * 100 }; }
+  // P13 owner: "make the other finishers impact frames cooler too": every finisher gets its own impact frames - its own
+  // colour duotone, its own zoom punch and its own line pattern (STAR OF HELL keeps the red/black/white set)
+  const BWF = 'grayscale(1) contrast(900%)', INVF = BWF + ' invert(1)', duo = (h, sat = 900) => `grayscale(1) contrast(700%) sepia(1) saturate(${sat}%) hue-rotate(${h}deg)`;
+  const IMPACT = {
+    bw:      { f: [BWF, INVF], step: .055 },
+    hell:    { f: [BWF, INVF, duo(-38)], step: .075, z: .045, lines: 'radial', n: 70, ac: '20,0,0' },
+    blue:    { f: [BWF, duo(175), INVF], step: .065, z: .035, lines: 'radial', n: 46, ac: '190,220,255' }, // STAR PATH, DAVID LASER
+    shield:  { f: [duo(180), BWF, INVF], step: .07, z: .03, lines: 'hex', ac: '255,255,255' },               // MAGEN DAVID
+    ice:     { f: [duo(150, 300), INVF, BWF], step: .06, z: .03, lines: 'crack', ac: '235,252,255' },        // STAR CAGE
+    gold:    { f: [BWF, duo(6, 500), INVF], step: .065, z: .05, lines: 'rain', ac: '255,240,190' },          // STAR COMET
+    barrage: { f: [duo(6, 500), BWF, INVF], step: .05, z: .025, lines: 'horiz', ac: '255,236,170' },         // STAR BARRAGE
+    spin:    { f: [duo(150), INVF, BWF], step: .06, z: .035, lines: 'pinwheel', ac: '200,250,255' },         // SPINNING STAR
+    silver:  { f: [BWF, INVF], step: .07, z: .02, lines: 'slash', slice: true },                             // DAVID'S BLADE
+    teal:    { f: [duo(128), BWF, INVF], step: .065, z: .035, lines: 'spiral', ac: '200,255,240' },          // STAR TORNADO
+    rico:    { f: [duo(6, 500), INVF, BWF], step: .055, z: .04, lines: 'zig', ac: '255,240,190' },           // STAR RICOCHET
+    void:    { f: [INVF, BWF, INVF], step: .08, z: -.05, lines: 'rings' },                                    // STAR COLLAPSE: pulls IN
+    sukkah:  { f: [duo(62, 500), BWF, INVF], step: .065, z: .03, lines: 'bars', ac: '240,255,200' },        // SUKKAH
+  };
+  const hs = (n) => { const q = Math.sin(n * 127.1 + 311.7) * 43758.5453; return q - Math.floor(q); };
   function drawImpact(dt) {
     const I = fx.impact; if (!I) return; I.t += dt; if (I.t >= I.len) { fx.impact = null; return; }
-    const v = fx.view || { scale: 1, ox: 0, oy: 0 }, cw = ctx.canvas.width, ch = ctx.canvas.height;
-    const hell = I.style === 'hell', step = hell ? .075 : .055, fr = Math.floor(I.t / step);
-    const F = hell ? ['grayscale(1) contrast(900%)', 'grayscale(1) contrast(900%) invert(1)', 'grayscale(1) contrast(700%) sepia(1) saturate(900%) hue-rotate(-38deg)'][fr % 3]
-                   : (fr % 2 ? 'grayscale(1) contrast(900%) invert(1)' : 'grayscale(1) contrast(900%)');
-    const z = hell ? 1 + (fr % 2 ? .045 : .015) * (1 - I.t / I.len) : 1;
+    const v = fx.view || { scale: 1, ox: 0, oy: 0 }, cw = ctx.canvas.width, ch = ctx.canvas.height, S = IMPACT[I.style] || IMPACT.bw;
+    const fr = Math.floor(I.t / S.step), fi = fr % S.f.length, F = S.f[fi], k = I.t / I.len, sc = v.scale;
+    const z = S.z ? 1 + (fr % 2 ? S.z : S.z * .33) * (1 - k) : 1;
     const fxp = I.x == null ? cw / 2 : (640 + (I.x - 640 - fx.camX) * fx.zoom) * v.scale + v.ox, fyp = I.y == null ? ch / 2 : (360 + (I.y - 360 - fx.camY) * fx.zoom) * v.scale + v.oy;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.filter = F;
-    ctx.drawImage(ctx.canvas, fxp - fxp * z, fyp - fyp * z, cw * z, ch * z); ctx.filter = 'none';
-    if (hell) { // speed lines rushing in on her, colour flipping with the frame
-      ctx.strokeStyle = fr % 3 === 1 ? 'rgba(255,255,255,.9)' : fr % 3 === 2 ? 'rgba(20,0,0,.9)' : 'rgba(0,0,0,.85)'; const R0 = Math.max(cw, ch) * .9;
-      for (let i = 0; i < 70; i++) { const a = (i / 70) * TAU + fr * .37, r1 = R0 * (.18 + ((i * 37 + fr * 13) % 23) / 60), wdt = 2 + ((i * 7) % 5) * 1.6 * v.scale;
-        ctx.lineWidth = wdt; ctx.beginPath(); ctx.moveTo(fxp + Math.cos(a) * R0, fyp + Math.sin(a) * R0); ctx.lineTo(fxp + Math.cos(a) * r1, fyp + Math.sin(a) * r1); ctx.stroke(); }
+    if (S.slice) { // DAVID'S BLADE: the frame is cut in two along the slash and the halves slide apart
+      const off = 34 * sc * (1 - k) * (fr % 2 ? 1 : -1);
+      ctx.drawImage(ctx.canvas, 0, 0, cw, fyp, off, 0, cw, fyp); ctx.drawImage(ctx.canvas, 0, fyp, cw, ch - fyp, -off, fyp, cw, ch - fyp);
+    } else ctx.drawImage(ctx.canvas, fxp - fxp * z, fyp - fyp * z, cw * z, ch * z);
+    ctx.filter = 'none';
+    // line colour flips with the frame: black on white frames, white on inverted ones, the accent on the colour frame
+    const col = F === INVF ? '255,255,255' : F === BWF ? '0,0,0' : (S.ac || '0,0,0'), R0 = Math.max(cw, ch) * .9, sd = I.seed;
+    ctx.strokeStyle = ctx.fillStyle = `rgba(${col},.88)`; ctx.lineCap = 'round';
+    const line = (x0, y0, x1, y1, w) => { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
+    switch (S.lines) {
+      case 'radial': for (let i = 0; i < S.n; i++) { const a = (i / S.n) * TAU + fr * .37, r1 = R0 * (.18 + ((i * 37 + fr * 13) % 23) / 60);
+        line(fxp + Math.cos(a) * R0, fyp + Math.sin(a) * R0, fxp + Math.cos(a) * r1, fyp + Math.sin(a) * r1, 2 + ((i * 7) % 5) * 1.6 * sc); } break;
+      case 'hex': for (let j = 0; j < 3; j++) { const r = ((I.t * 1.6 + j / 3) % 1) * R0 * .9 + 30 * sc; ctx.lineWidth = (10 - j * 2) * sc;
+        for (let t2 = 0; t2 < 2; t2++) { ctx.beginPath(); for (let q = 0; q <= 3; q++) { const a = -Math.PI / 2 + t2 * Math.PI + q / 3 * TAU + I.t; ctx[q ? 'lineTo' : 'moveTo'](fxp + Math.cos(a) * r, fyp + Math.sin(a) * r); } ctx.stroke(); } } break;
+      case 'crack': { const grow = Math.min(1, k * 3.2); for (let i = 0; i < 11; i++) { let a = i / 11 * TAU + sd, x = fxp, y = fyp; ctx.lineWidth = (5 - (i % 3)) * sc; ctx.beginPath(); ctx.moveTo(x, y);
+          for (let q = 1; q <= 14 * grow; q++) { a += (hs(sd + i * 19 + q) - .5) * .9; const L = (30 + hs(sd + i * 7 + q * 3) * 50) * sc; x += Math.cos(a) * L; y += Math.sin(a) * L; ctx.lineTo(x, y);
+            if (q % 4 === 2) { ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a + 1) * L * .7, y + Math.sin(a + 1) * L * .7); ctx.moveTo(x, y); } } ctx.stroke(); } break; }
+      case 'rain': for (let i = 0; i < 56; i++) { const x = hs(sd + i) * cw, near = 1 - Math.min(1, Math.abs(x - fxp) / (cw * .5)), y1 = ((hs(sd + i * 3) + I.t * 3.4) % 1) * ch * 1.3;
+        line(x, y1 - (120 + near * 380) * sc, x, y1, (2 + near * 9) * sc); } break;
+      case 'horiz': for (let i = 0; i < 44; i++) { const y = hs(sd + i) * ch, d = i % 2 ? 1 : -1, L = (160 + hs(sd + i * 5) * 520) * sc, x = ((hs(sd + i * 9) + I.t * 4 * d) % 1 + 1) % 1 * cw * 1.4 - cw * .2;
+        line(x, y, x - L * d, y, (2 + (i % 4) * 2) * sc); } break;
+      case 'pinwheel': { ctx.globalAlpha = .42; const n = 10, rot = I.t * 9; for (let i = 0; i < n; i += 2) { const a0 = rot + i / n * TAU, a1 = rot + (i + 1) / n * TAU;
+          ctx.beginPath(); ctx.moveTo(fxp, fyp); ctx.arc(fxp, fyp, R0 * 1.6, a0, a1); ctx.closePath(); ctx.fill(); } ctx.globalAlpha = 1; break; }
+      case 'slash': { const L = R0 * 1.5, a = -.62; ctx.lineWidth = 3 * sc; line(fxp - Math.cos(a) * L, fyp - Math.sin(a) * L, fxp + Math.cos(a) * L, fyp + Math.sin(a) * L, 16 * sc * (1 - k) + 3);
+        line(fxp - Math.cos(-a) * L, fyp - Math.sin(-a) * L, fxp + Math.cos(-a) * L, fyp + Math.sin(-a) * L, 10 * sc * (1 - k) + 2); line(0, fyp, cw, fyp, 5 * sc); break; }
+      case 'spiral': for (let i = 0; i < 12; i++) { ctx.lineWidth = (3 + (i % 3) * 2) * sc; ctx.beginPath(); for (let q = 0; q <= 26; q++) { const r = q / 26 * R0, a = i / 12 * TAU + r / R0 * 3.4 - I.t * 7;
+          ctx[q ? 'lineTo' : 'moveTo'](fxp + Math.cos(a) * r, fyp + Math.sin(a) * r * .8); } ctx.stroke(); } break;
+      case 'zig': for (let i = 0; i < 7; i++) { let x = fxp, y = fyp; const a = i / 7 * TAU + fr * .9; ctx.lineWidth = (6 - (i % 3) * 1.5) * sc; ctx.beginPath(); ctx.moveTo(x, y);
+          for (let q = 0; q < 9; q++) { const L = R0 / 7, b2 = a + (q % 2 ? .7 : -.7) * (hs(sd + fr * 11 + i * 5 + q) + .3); x += Math.cos(b2) * L; y += Math.sin(b2) * L; ctx.lineTo(x, y); } ctx.stroke(); } break;
+      case 'rings': for (let j = 0; j < 6; j++) { const r = (1 - ((I.t * 1.8 + j / 6) % 1)) * R0; ctx.lineWidth = (3 + j * 1.5) * sc; ctx.beginPath(); ctx.arc(fxp, fyp, Math.max(1, r), 0, TAU); ctx.stroke(); } break;
+      case 'bars': { const n = 9, drop = Math.min(1, k * 5); for (let i = 0; i <= n; i++) { const x = i / n * cw; line(x, 0, x, ch * drop, (8 + (i % 2) * 6) * sc); }
+        line(0, ch * .12, cw * drop, ch * .12, 12 * sc); break; }
     }
     ctx.restore();
   }
@@ -379,6 +428,20 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       } else if (bl.kind === 'eyes') { // the star on the beam bursts into a flare where it lands
         davidStar(x, y, 14 + o * 70, bl.rot + o * 2, col, 1 - k, .5, 'rgba(255,255,255,.6)');
         ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 1 - k; ctx.fillRect(x - 120 * (1 - k), y - 1.5, 240 * (1 - k), 3); ctx.fillRect(x - 1.5, y - 80 * (1 - k), 3, 160 * (1 - k)); ctx.globalAlpha = 1;
+      } else if (bl.kind === 'domain') { // a gold sun-flare bursting up off the dial
+        ctx.strokeStyle = GOLD; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3;
+        for (let i = 0; i < 12; i++) { const a2 = -Math.PI / 2 + (i - 5.5) * .16, L = bl.r * (.4 + o * 1.4) * (i % 2 ? .7 : 1); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a2) * L * .5, y + Math.sin(a2) * L); ctx.stroke(); }
+        ctx.globalAlpha = 1; if (k < .3) glow(x, y - 40, bl.r * .8, 'rgba(255,224,138,.9)', 1 - k / .3);
+      } else if (bl.kind === 'eclipse') { // SUPERNOVA: the black sun's corona tears outward in white spikes, the dark core shrinks away
+        const R = bl.r; if (k < .1) glow(x, y, R * 3.2, 'rgba(255,255,255,1)', 1 - k / .1);
+        ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 1 - k;
+        for (let i = 0; i < 30; i++) { const a2 = bl.rot + i / 30 * TAU, r0 = R * (.8 + o * 1.4), r1 = r0 + R * (.6 + (i % 3) * .5) * (1 - k); ctx.lineWidth = i % 3 ? 2 : 5; ctx.beginPath(); ctx.moveTo(x + Math.cos(a2) * r0, y + Math.sin(a2) * r0); ctx.lineTo(x + Math.cos(a2) * r1, y + Math.sin(a2) * r1); ctx.stroke(); }
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = `rgba(3,4,10,${(1 - k).toFixed(2)})`; ctx.beginPath(); ctx.arc(x, y, R * .9 * (1 - o), 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 6 * (1 - k) + 1; ctx.globalAlpha = 1 - k; ctx.beginPath(); ctx.arc(x, y, R * (.9 + o * 2.6), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+      } else if (bl.kind === 'meteor') { // STARFALL crater: a dark scorch with a white rim and thrown rays
+        ctx.save(); ctx.translate(x, y); ctx.scale(1, .36); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = `rgba(5,6,10,${(.8 * (1 - k)).toFixed(2)})`; ctx.beginPath(); ctx.arc(0, 0, bl.r * (.4 + o * .5), 0, TAU); ctx.fill();
+        ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 1 - k; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, bl.r * (.45 + o * .7), 0, TAU); ctx.stroke(); ctx.restore();
+        if (k < .25) glow(x, y - 20, 80, 'rgba(255,255,255,.9)', 1 - k * 4);
       } else if (bl.kind === 'lance' || bl.kind === 'shard') {
         davidStar(x, y, 10 + o * (bl.kind === 'lance' ? 110 : 40), bl.rot, col, 1 - k, .3);
       } else if (bl.kind === 'nova') { // the finale of the moveset: a star imprint, a double star that opens,
@@ -597,7 +660,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   function drawHeroPowers(s, x, y) {
     const h = s.hero, pal = P[form(s)];
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    if (h.orbit) for (let i = 0; i < h.orbit.n; i++) { const a = s.t * 2.4 + i / 6 * TAU; davidStar(x + Math.cos(a) * 52, y - 50 + Math.sin(a) * 20, 10, fx.clock * 4, pal.hero, Math.sin(a) > 0 ? 1 : .5, .5); } // ORBIT: six stars circle him
+    if (h.orbit) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < h.orbit.n; i++) { const a = s.t * 2.4 + i / 6 * TAU, ex = x + Math.cos(a) * 52, ey = y - 50 + Math.sin(a) * 20, al = Math.sin(a) > 0 ? 1 : .5; // ORBIT: six gold embers circle him, each with a flame tail (phase 1 has no orbit)
+      for (let q = 1; q <= 4; q++) { const aq = a - q * .16; glow(x + Math.cos(aq) * 52, y - 50 + Math.sin(aq) * 20, 12 - q * 2, 'rgba(255,120,50,.6)', al * (1 - q / 5)); }
+      glow(ex, ey, 16, 'rgba(255,224,138,.9)', al); ctx.fillStyle = '#fff6dc'; ctx.globalAlpha = al; ctx.beginPath(); ctx.arc(ex, ey, 4, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; } ctx.restore(); }
     ctx.globalAlpha = 1;
     if (h.field) { const a = Math.min(1, h.field.t * 2) * (0.6 + 0.2 * Math.sin(fx.clock * 6)); hexagram(x, y - 20, h.field.r * .9, fx.clock * .5, 1, pal.hero, 2, .5, a * .7); ctx.globalAlpha = a * .25; ctx.fillStyle = pal.hero; ctx.beginPath(); ctx.ellipse(x, y - 20, h.field.r, h.field.r * .5, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
     if (h.charge) { const k = h.charge.t / h.charge.len; glow(x + h.face * 30, y - 55, 30 + k * 90, 'rgba(255,255,255,.9)', .6 + k * .4); hexagram(x + h.face * 30, y - 55, 30 + k * 40, -fx.clock * 4, k, '#ffffff', 2);
@@ -806,6 +871,17 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
           }
           ctx.restore(); break;
         }
+        case 'domain': { // DOMAIN: a gold sun-dial opens on the ground under her, its hand sweeps and strikes four times
+          const x = z.x, y = z.y, op = easeOut(clamp(z.t / .4, 0, 1)), out = clamp((z.t - 1.95) / .35, 0, 1), al = 1 - out, R = 170 * op;
+          ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(x, y); ctx.scale(1, .36);
+          ctx.fillStyle = `rgba(255,170,70,${(.12 * al).toFixed(2)})`; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+          ctx.strokeStyle = GOLD; ctx.globalAlpha = al; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R * .72, 0, TAU); ctx.stroke();
+          for (let i = 0; i < 12; i++) { const a2 = i / 12 * TAU - Math.PI / 2, lit = i < z.n * 3; ctx.strokeStyle = lit ? '#ffffff' : GOLD; ctx.lineWidth = lit ? 6 : 3; ctx.beginPath(); ctx.moveTo(Math.cos(a2) * R * .78, Math.sin(a2) * R * .78); ctx.lineTo(Math.cos(a2) * R * .96, Math.sin(a2) * R * .96); ctx.stroke(); }
+          const hand = -Math.PI / 2 + Math.min(1, z.t / 1.85) * TAU; ctx.strokeStyle = '#fff3d0'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(hand) * R * .9, Math.sin(hand) * R * .9); ctx.stroke();
+          ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          const since = z.n ? z.t - [.5, .9, 1.3, 1.85][z.n - 1] : 9; if (since < .3) { const kk = since / .3, w = (z.n === 4 ? 70 : 34) * (1 - kk); const g = ctx.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(255,120,40,0)'); g.addColorStop(.5, 'rgba(255,240,200,.95)'); g.addColorStop(1, 'rgba(255,120,40,0)'); ctx.fillStyle = g; ctx.fillRect(x - w, -300, w * 2, y + 300); } // a gold pillar on each strike
+          ctx.restore(); break;
+        }
         case 'seal': {
           const k = clamp(z.t / z.tele, 0, 1), boom = z.t >= z.tele, x = s.boss.x, y = s.boss.y - 105;
           ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -927,6 +1003,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         const pu = 1 + Math.sin(p.age * 30) * 0.08;
         glow(0, 0, 70 * pu, f === 3 ? 'rgba(255,255,255,.6)' : 'rgba(255,210,140,.55)');
         davidStar(0, 0, (p.r + 26) * pu, p.age * 3, pal.hero, 1, .55); davidStar(0, 0, (p.r + 6) * pu, -p.age * 5, '#ffffff', .7, .2);
+      } else if (p.kind === 'fall' && p.meteor) { // STARFALL (phase 3): a black-sun meteor slanting in on a white tail
+        ctx.rotate(a); const g3 = ctx.createLinearGradient(-200, 0, 0, 0); g3.addColorStop(0, 'rgba(255,255,255,0)'); g3.addColorStop(1, 'rgba(255,255,255,.9)'); ctx.fillStyle = g3; ctx.beginPath(); ctx.moveTo(-200, 0); ctx.lineTo(0, -13); ctx.lineTo(0, 13); ctx.closePath(); ctx.fill();
+        glow(0, 0, 34, 'rgba(255,255,255,.8)'); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#05060a'; ctx.beginPath(); ctx.arc(0, 0, 11, 0, TAU); ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const near = clamp(1 - (p.gy - p.y) / 500, 0, 1); ctx.strokeStyle = `rgba(255,255,255,${(near * .8).toFixed(2)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x + p.vx * (p.gy - p.y) / p.vy, p.gy, 30 - near * 12, (30 - near * 12) * .36, 0, 0, TAU); ctx.stroke(); // where it will land
       } else if (p.kind === 'fall') { // SIXFOLD / STARFALL: stars dropping out of the sky on a light trail
         const g = ctx.createLinearGradient(0, -110, 0, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, pal.hero); ctx.fillStyle = g; ctx.fillRect(-3, -110, 6, 110);
         davidStar(0, 0, p.r + 7, p.age * 3, pal.hero, 1, .5, 'rgba(255,255,255,.4)');
@@ -940,9 +1020,26 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(-4, -40, 22 * pu, 64 * pu, 0, -Math.PI / 2, Math.PI / 2); ctx.stroke();
         if (Math.random() < .7) part(p.x - Math.sign(p.vx) * 20, p.y, 2, '#d8c8a8', 160, .4, 3);
         davidStar(0, -40, 26 * pu, p.age * 3, pal.hero, .95, .3); hexagram(-50, 0, 30, p.age * 5, 1, pal.hero, 2, .36, .7); // SHOCKWAVE: a star rides the wave, stars burn into the ground behind it
+      } else if (p.kind === 'ember') { // ORBIT dart: a gold ember with a red-orange flame tail
+        ctx.rotate(a); const g2 = ctx.createLinearGradient(-90, 0, 0, 0); g2.addColorStop(0, 'rgba(255,60,20,0)'); g2.addColorStop(.6, 'rgba(255,110,40,.6)'); g2.addColorStop(1, 'rgba(255,224,138,1)');
+        ctx.fillStyle = g2; ctx.beginPath(); ctx.moveTo(-90, 0); ctx.quadraticCurveTo(-30, -9, 6, 0); ctx.quadraticCurveTo(-30, 9, -90, 0); ctx.fill();
+        glow(0, 0, 26, 'rgba(255,224,138,.8)'); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-6, -4); ctx.lineTo(-6, 4); ctx.closePath(); ctx.fill();
+      } else if (p.kind === 'shard' && f === 3) { // SUNSHARD (phase 3): white crescents of the eclipse corona, black-cored
+        const pre = p.hold > 0, sp = Math.hypot(p.vx, p.vy) || 1; ctx.rotate(pre ? Math.atan2(p.oy, p.ox) : a);
+        if (!pre) { ctx.globalAlpha = .5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(-14 - sp * .07, 0); ctx.stroke(); ctx.globalAlpha = 1; }
+        glow(0, 0, pre ? 22 + Math.sin(fx.clock * 30) * 4 : 26, 'rgba(255,255,255,.75)');
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 15, -1.35, 1.35); ctx.arc(-7, 0, 13, 1.2, -1.2, true); ctx.closePath(); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#05060a'; ctx.beginPath(); ctx.arc(-5, 0, 6, 0, TAU); ctx.fill();
       } else if (p.kind === 'shard') { // SUNSHARD: homing stars of light
         const sp = Math.hypot(p.vx, p.vy) || 1; ctx.globalAlpha = .4; ctx.strokeStyle = pal.hero; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-p.vx / sp * 50, -p.vy / sp * 50); ctx.stroke(); ctx.globalAlpha = 1;
         davidStar(0, 0, p.r + 7, p.age * 5, pal.hero, 1, .5, 'rgba(160,250,255,.5)');
+      } else if (p.kind === 'nova' && p.supernova) { // SUPERNOVA (phase 3): a black sun with a writhing white corona
+        const R = p.r, sp = Math.hypot(p.vx, p.vy) || 1, tx = -p.vx / sp, ty = -p.vy / sp;
+        for (let i = 1; i <= 5; i++) glow(tx * i * R * .5, ty * i * R * .5, R * (1.3 - i * .18), 'rgba(255,255,255,.4)', (6 - i) / 6);
+        glow(0, 0, R * 2.8, 'rgba(255,255,255,.7)'); ctx.strokeStyle = '#ffffff';
+        for (let i = 0; i < 24; i++) { const a2 = i / 24 * TAU + p.age * (i % 2 ? 1.4 : -1), L = R * (1.15 + .35 * Math.sin(p.age * 9 + i * 1.7)); ctx.lineWidth = i % 3 ? 2 : 4; ctx.beginPath(); ctx.moveTo(Math.cos(a2) * R * .95, Math.sin(a2) * R * .95); ctx.lineTo(Math.cos(a2) * L, Math.sin(a2) * L); ctx.stroke(); }
+        ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#03040a'; ctx.beginPath(); ctx.arc(0, 0, R * .92, 0, TAU); ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, R * .7, p.age * 3, p.age * 3 + 2); ctx.stroke();
       } else if (p.kind === 'nova') { // NOVA / DOMAIN / SUPERNOVA: the biggest star - two counter-spinning stars,
         // six satellites riding its points and a comet tail
         const R = p.r, sp = Math.hypot(p.vx, p.vy) || 1, tx = -p.vx / sp, ty = -p.vy / sp, col = pal.hero;
@@ -2030,16 +2127,16 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       case 'lattice1': for (let i = 0; i < 3; i++) { ctx.globalAlpha = alpha * .5; ctx.fillRect(-13 + i * 11, -16 + i * 4, 2, 12); ctx.globalAlpha = alpha; D(-12 + i * 11, 2 + i * 4, 5, .7); } break;
       case 'nova1': D(0, 2, 17, .25); D(0, 2, 9, .5, '#ffffff', Math.PI / 6); break;          // the big double star
       case 'star2': ctx.restore(); drawShield(0, 2, 14, 0, alpha); return;                       // shield (its face is a star)
-      case 'spinner2': for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; D(Math.cos(a) * 13, 2 + Math.sin(a) * 13, 4.5, .7); } break;
+      case 'spinner2': ctx.beginPath(); ctx.ellipse(0, 2, 16, 8, 0, 0, TAU); ctx.stroke(); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; ctx.beginPath(); ctx.arc(Math.cos(a) * 16, 2 + Math.sin(a) * 8, 3.2, 0, TAU); ctx.fill(); } break; // gold embers on an orbit
       case 'burst2': ctx.beginPath(); ctx.ellipse(0, 4, 8, 16, 0, -Math.PI / 2, Math.PI / 2); ctx.stroke(); D(-8, 4, 7, .5); break;
       case 'eyes2': ctx.beginPath(); ctx.moveTo(-16, 12); ctx.lineTo(8, -4); ctx.stroke(); D(10, -6, 8, .6); break;   // lance with a star tip
       case 'lattice2': ctx.save(); ctx.scale(1, .55); D(0, 14, 17, .2); ctx.restore(); D(0, -4, 6, .6); break;        // a seal on the ground
-      case 'nova2': D(0, 2, 15, .3); ctx.beginPath(); ctx.arc(0, 2, 19, 0, TAU); ctx.stroke(); break;
-      case 'star3': D(-10, 6, 6, .7); D(0, -6, 7, .7); D(10, 6, 6, .7); break;
+      case 'nova2': ctx.save(); ctx.translate(0, 8); ctx.scale(1, .5); ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.stroke(); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 13, Math.sin(a) * 13); ctx.lineTo(Math.cos(a) * 17, Math.sin(a) * 17); ctx.stroke(); } ctx.restore(); ctx.fillRect(-2, -16, 4, 22); break; // the sun-dial and its pillar
+      case 'star3': for (let i = 0; i < 6; i++) { const a = i / 6 * TAU - Math.PI / 2; ctx.save(); ctx.translate(Math.cos(a) * 13, 2 + Math.sin(a) * 11); ctx.rotate(a); ctx.beginPath(); ctx.arc(0, 0, 5, -1.3, 1.3); ctx.arc(-2.5, 0, 4.4, 1.15, -1.15, true); ctx.closePath(); ctx.fill(); ctx.restore(); } break; // a corona of crescents
       case 'spinner3': ctx.beginPath(); ctx.ellipse(0, 2, 17, 12, 0, 0, TAU); ctx.stroke(); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; D(Math.cos(a) * 17, 2 + Math.sin(a) * 12, 3.5, .8); } break;
-      case 'burst3': D(0, 2, 17, .5); D(0, 2, 17, 0, '#ffffff', Math.PI / 6); break;
+      case 'burst3': for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 11, 2 + Math.sin(a) * 11); ctx.lineTo(Math.cos(a) * (i % 2 ? 16 : 20), 2 + Math.sin(a) * (i % 2 ? 16 : 20)); ctx.stroke(); } ctx.fillStyle = '#05060a'; ctx.beginPath(); ctx.arc(0, 2, 10, 0, TAU); ctx.fill(); ctx.stroke(); break; // the black sun
       case 'eyes3': ctx.globalAlpha = alpha * .6; ctx.fillRect(-4, -18, 8, 26); ctx.globalAlpha = alpha; ctx.save(); ctx.scale(1, .45); D(0, 30, 15, .3); ctx.restore(); break;
-      case 'lattice3': for (let i = 0; i < 4; i++) D(-12 + i * 8, -6 + (i % 2) * 12, 5, .7); break;
+      case 'lattice3': for (let i = 0; i < 3; i++) { const x0 = -16 + i * 11, y0 = -14 + i * 9; ctx.globalAlpha = alpha * .5; ctx.beginPath(); ctx.moveTo(x0 - 10, y0 - 10); ctx.lineTo(x0, y0); ctx.stroke(); ctx.globalAlpha = alpha; ctx.beginPath(); ctx.arc(x0, y0, 4, 0, TAU); ctx.stroke(); } break; // slanting meteors
       case 'nova3': D(0, 2, 18, .2); D(0, 2, 12, .3, '#ffffff', Math.PI / 6); D(0, 2, 6, .8); break;
     }
     ctx.restore();
