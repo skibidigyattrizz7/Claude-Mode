@@ -28,7 +28,7 @@
   .keys b kbd { display: inline-block; min-width: 22px; text-align: center; padding: 1px 8px; margin-left: 4px; font: 700 16px 'Barlow Condensed', sans-serif;
     color: var(--ink); background: #1e262c; border: 1px solid #3a4650; border-bottom-width: 3px; border-radius: 4px; }
   button.big { font: 700 24px 'Barlow Condensed', sans-serif; letter-spacing: .08em; color: #0b1014; background: var(--gold); border: 0; padding: 14px 40px; cursor: pointer; }
-  button.big:focus-visible, button.ghost:focus-visible, .tbtn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  button.big, button.ghost, .tog, .devTab { outline: none; } button.big:focus, button.ghost:focus, .tog:focus, .devTab:focus { outline: 3px solid #fff; outline-offset: 2px; } .tbtn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   button.ghost { font: 700 20px 'Barlow Condensed', sans-serif; color: var(--ink); background: #1e262c; border: 0; padding: 12px 28px; cursor: pointer; }
   .rewards { list-style: none; padding: 0; margin: 0 auto 18px; display: grid; gap: 8px; min-width: min(420px, 80vw); }
@@ -84,11 +84,9 @@
   .mi .mt { font: 700 34px/1 'Barlow Condensed', sans-serif; letter-spacing: .06em; }
   .mi small { grid-column: 2; font-size: 16px; color: #8d99a3; letter-spacing: .03em; margin-top: 4px; display: none; }
   .mi.sm .mt { font-size: 24px; }
-  .mi:hover, .mi:focus-visible { color: #fff; outline: none; }
-  .mi:hover::before, .mi:focus-visible::before { background: var(--gold); }
-  .mi:hover small, .mi:focus-visible small { display: block; }
-  .mi.hard:hover::before, .mi.hard:focus-visible::before { background: #ff6a5a; }
-  .mi.extreme:hover::before, .mi.extreme:focus-visible::before { background: #ff2a2a; }
+  .mi { outline: none; } .mi:focus { color: #fff; }
+  .mi:focus::before { background: var(--gold); }
+  .mi:focus small { display: block; }
   .mi.extreme .mt { color: #ff6a6a; }
   .msep { height: 14px; }
   .mfoot { position: absolute; left: max(24px, 8vw); bottom: max(18px, 4vh); color: #6f7c86; font-size: 16px; letter-spacing: .08em; }
@@ -139,7 +137,7 @@
   .ttag { margin: 0 0 clamp(4px, 1.4vh, 12px); font-size: clamp(15px, 2.4vh, 19px); color: #c8d0d6; }
   .tiles { display: grid; gap: clamp(5px, 1.1vh, 9px); }
   .tile { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 12px; text-align: left; cursor: pointer;
-    border: 0; padding: clamp(7px, 1.5vh, 13px) 16px clamp(7px, 1.5vh, 13px) 20px; background: #101823; color: #eef3f9; font-family: inherit; transition: transform .12s ease-out; }
+    border: 0; padding: clamp(7px, 1.5vh, 13px) 16px clamp(7px, 1.5vh, 13px) 20px; background: #101823; color: #eef3f9; font-family: inherit; outline: none; }
   .tile::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--mc, #ffd7a1); }
   .tile .tn { font: 700 clamp(24px, 4.6vh, 36px)/1 'Barlow Condensed', sans-serif; letter-spacing: .05em; }
   .tile .td { grid-column: 1; font-size: clamp(13px, 2.1vh, 16px); color: #a8b5c7; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -148,14 +146,16 @@
   .tile .tk { font-size: 20px; color: var(--mc); }
   .tile.normal { --mc: #ffd7a1; } .tile.hard { --mc: #ff6a5a; } .tile.extreme { --mc: #ff2a2a; } .tile.cont { --mc: #34d987; }
   .tile.extreme { background: #12080a; } .tile.extreme .tn { color: #ff6a6a; }
-  .tile:hover, .tile:focus-visible { background: var(--mc); color: #0a0f14; transform: translateX(10px); outline: none; }
-  .tile:hover .td, .tile:focus-visible .td { color: #1b2430; } .tile:hover .tn, .tile:focus-visible .tn { color: #0a0f14; }
-  .tile:hover .pips i, .tile:focus-visible .pips i { background: rgba(10,15,20,.25); } .tile:hover .pips i.on, .tile:focus-visible .pips i.on { background: #0a0f14; }
-  .tile:hover .tk, .tile:focus-visible .tk { color: #0a0f14; }
-  .tile.extreme:hover, .tile.extreme:focus-visible { background: #ff2a2a; }
+  /* one selected item at a time: the mouse moves the selection (focus), it never adds a second highlight */
+  .tile:focus { background: var(--mc); color: #0a0f14; }
+  .tile:focus::before { background: #0a0f14; }
+  .tile:focus .td { color: #1b2430; } .tile:focus .tn { color: #0a0f14; }
+  .tile:focus .pips i { background: rgba(10,15,20,.25); } .tile:focus .pips i.on { background: #0a0f14; }
+  .tile:focus .tk { color: #0a0f14; }
+  .tile.extreme:focus { background: #ff2a2a; }
   .tlinks { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-top: clamp(2px, 1vh, 10px); }
   .tl { background: none; border: 0; padding: 4px 0; font: 700 clamp(17px, 2.8vh, 21px) 'Barlow Condensed', sans-serif; letter-spacing: .1em; color: #a8b5c7; cursor: pointer; border-bottom: 2px solid transparent; }
-  .tl:hover, .tl:focus-visible { color: #fff; border-bottom-color: #ff6a1f; outline: none; }
+  .tl { outline: none; } .tl:focus { color: #fff; border-bottom-color: #ff6a1f; }
   .tboss { position: absolute; right: max(20px, 4vw); bottom: clamp(52px, 10vh, 84px); text-align: right; display: grid; gap: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.9); }
   .tboss .tbp { font-size: 15px; letter-spacing: .2em; color: #ff8447; font-weight: 700; } .tboss .tbn { font-size: clamp(26px, 4.6vh, 38px); font-weight: 700; letter-spacing: .04em; color: #fff; } .tboss .tbh { font-size: 17px; color: #c8d0d6; letter-spacing: .08em; }
   .tbar { position: absolute; left: 0; right: 0; bottom: 0; height: clamp(34px, 6vh, 44px); background: #05080c; border-top: 1px solid #223146; display: flex; align-items: center; justify-content: flex-end; gap: 26px; padding: 0 max(20px, 4vw); font-size: 15px; letter-spacing: .1em; color: #a8b5c7; }
@@ -164,6 +164,7 @@
   @media (max-width: 720px) { .tside { width: 100%; clip-path: none; padding-right: 20px; } .tside::after, .tboss { display: none; } }
   @media (max-height: 460px) { .ttag, .tile .td, .tbrand { display: none; } .tlogo { font-size: clamp(34px, 12vh, 54px); } .tile { padding-top: 6px; padding-bottom: 6px; } .tile .tn { font-size: clamp(20px, 6vh, 28px); } }
   body:not(.playing) #pauseBtn { display: none; }
+  .pitch { display: none !important; } body.embed .pitch { display: inline-block !important; } body.embed .mi.pitch { display: grid !important; } body.embed .tl.dev, body.embed .tag { display: none !important; }
   @media (min-width: 1500px) { .tside { width: min(680px, 42vw); } }
 </style>
 </head>
@@ -202,6 +203,7 @@
       <button class="tl" id="openSettings" type="button">SETTINGS</button>
       <button class="tl" id="openControls" type="button">CONTROLS</button>
       <button class="tl dev" id="openDev" type="button">DEV MODE</button>
+      <button class="tl pitch" id="backPitch" type="button">RETURN TO PITCHSIDE</button>
     </nav>
   </div>
   <div class="tboss" aria-live="polite"><span class="tbp" id="demoPhase">PHASE 1</span><span class="tbn" id="demoName">THE ECLIPSE</span><span class="tbh" id="demoHp">4,500 HP</span></div>
@@ -245,6 +247,7 @@
       <button class="mi" id="restart1" type="button"><span class="mt">RESTART</span></button>
       <button class="mi sm" id="pauseSettings" type="button"><span class="mt">SETTINGS</span></button>
       <button class="mi sm" id="quitTitle" type="button"><span class="mt">QUIT TO TITLE</span></button>
+      <button class="mi sm pitch" id="quitPitch" type="button"><span class="mt">RETURN TO PITCHSIDE</span></button>
     </nav>
   </div>
 </div>
@@ -257,11 +260,15 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H, aligned, STAGES } from './sim.js?v=13z';
-import { createRenderer } from './render.js?v=13z';
-import { createSfx } from './sfx.js?v=13z';
-import { applyDev, openDev } from './dev.js?v=13z';
-applyDev(); // DEV MODE overrides (pictures, colours, dialogue, numbers)
+import { createFight, step, W, H, aligned, STAGES } from './sim.js?v=14a';
+import { createRenderer } from './render.js?v=14a';
+import { createSfx } from './sfx.js?v=14a';
+import { applyDev, openDev } from './dev.js?v=14a';
+// owner (Oct 5): the football game's ban screen opens this page in a frame (?embed=1, eclipsebattle.js). There the dev
+// overrides are off (no cheating the curse), RETURN TO PITCHSIDE replaces DEV MODE, and a win is reported to the game.
+const EMBED = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;
+const toPitch = (type, extra = {}) => { if (EMBED) window.parent.postMessage({ type, ...extra }, location.origin); };
+if (EMBED) document.body.classList.add('embed'); else applyDev(); // DEV MODE overrides (pictures, colours, dialogue, numbers)
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
 const canvas = document.getElementById('c');
@@ -291,6 +298,7 @@ addEventListener('keydown', (e) => {
   const sub = ['settings', 'controls', 'dev'].find((id) => !$(id).hidden);
   if (sub) { if (k === 'Escape' && sub !== 'dev') { closeSub(sub); e.preventDefault(); } else if (sub !== 'dev') menuNav(e, k); return; }
   if ((!running || paused || ended) && menuNav(e, k)) return;
+  if ((!running || paused || ended) && (k === ' ' || k === 'Enter') && document.activeElement?.tagName === 'BUTTON' && openMenu()?.contains(document.activeElement)) { e.preventDefault(); if (!e.repeat) document.activeElement.click(); return; }
   if (k === 'Escape' || (k === 'P' && !typing)) { togglePause(); e.preventDefault(); return; }
   if (k === 'M' && !typing) { toggleMute(); return; }
   if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
@@ -355,7 +363,8 @@ function refreshContinue() {
   const c = ckLoad(), m = c.extreme ? 'extreme' : c.hard ? 'hard' : c.normal ? 'normal' : null;
   $('cont').hidden = !m; if (m) { $('contInfo').textContent = `${phaseName(c[m])}, ${m.toUpperCase()}`; $('cont').onclick = () => { mode = m; start(c[m]); }; }
 }
-function start(from = 1) {
+function start(from = 1) { try { startFight(from); } catch (err) { console.error(err); showError(err.message); } }
+function startFight(from = 1) {
   document.body.classList.add('playing');
   try { localStorage.setItem('p13mode', mode); } catch {}
   // P13 owner: "I don't see the sukkot finisher": the four finishers now rotate across fights (saved), and a new
@@ -363,7 +372,7 @@ function start(from = 1) {
   // P13 final: each phase has its own finishers, taken in turn (saved per phase). ?fin=0..9 forces one (9 = STAR OF HELL)
   let fin = null; try { fin = JSON.parse(localStorage.getItem('p13finIdx') || 'null'); } catch {}
   if (q.get('fin') != null) fin = (Number(q.get('fin')) || 0) % 13;
-  applyDev();
+  if (!EMBED) applyDev();
   fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1, fin });
   if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
   if (q.get('act')) fight.forceAct = q.get('act');
@@ -382,6 +391,12 @@ let readyOn = false; try { readyOn = localStorage.getItem('p13ready') === '1'; }
 const readyLabel = () => syncSettings();
 $('readyBtn').onclick = () => { readyOn = !readyOn; try { localStorage.setItem('p13ready', readyOn ? '1' : '0'); } catch {} if (fight) fight.readyTime = readyOn; readyLabel(); }; readyLabel(); $('startHard').onclick = () => { mode = 'hard'; start(); }; $('startExtreme').onclick = () => { mode = 'extreme'; start(); }; $('again').onclick = start;
 $('swapMode').onclick = () => { mode = mode === 'normal' ? 'hard' : mode === 'hard' ? 'extreme' : 'normal'; start(); }; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
+// owner: "some buttons don't work / hovering looks bad": the mouse moves the selection (one highlight only);
+// ENTER or SPACE press the selected button; any error shows on screen instead of silently doing nothing
+document.addEventListener('pointerover', (e) => { if (e.pointerType !== 'mouse') return; const b = e.target.closest && e.target.closest('button'); if (b && !b.closest('#touch') && b.id !== 'pauseBtn' && document.activeElement !== b && !b.closest('.devBody')) b.focus({ preventScroll: true }); });
+function showError(msg) { let t = $('errToast'); if (!t) { t = document.createElement('div'); t.id = 'errToast'; t.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:20;background:#3a0b10;color:#ffd6d6;border:1px solid #ff5a6a;padding:8px 14px;font:600 15px Barlow Condensed,sans-serif;max-width:90vw'; document.body.append(t); } t.textContent = 'Something broke: ' + msg + ' (screenshot this for Claude)'; clearTimeout(t._h); t._h = setTimeout(() => t.remove(), 9000); }
+addEventListener('error', (e) => showError(e.message || 'unknown error'));
+addEventListener('unhandledrejection', (e) => showError(String(e.reason && e.reason.message || e.reason)));
 // ---- menus (P13 remake): arrows move between the items of the open menu, ENTER/SPACE press the focused one
 const openMenu = () => ['dev', 'settings', 'controls', 'paused', 'end', 'title'].map($).find((el) => !el.hidden);
 function menuNav(e, k) {
@@ -404,6 +419,7 @@ $('openSettings').onclick = $('pauseSettings').onclick = () => openSub('settings
 $('openControls').onclick = () => openSub('controls'); $('closeControls').onclick = () => closeSub('controls');
 $('openDev').onclick = () => { $('title').hidden = true; openDev(() => { $('title').hidden = false; focusFirst('title'); }); };
 $('quitTitle').onclick = () => { running = false; paused = false; ended = false; fight = null; document.body.classList.remove('playing'); $('paused').hidden = true; refreshContinue(); $('title').hidden = false; focusFirst('title'); canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); };
+$('backPitch').onclick = $('quitPitch').onclick = () => toPitch('p13-close');
 syncSettings(); focusFirst('title');
 function showEnd() {
   ended = true;
@@ -424,6 +440,7 @@ function showEnd() {
   $('secretHint').hidden = !(win && !secret);
   $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, A KEYBOARD APPEARS IN THE SKY. PLAY IT THE WAY IT LIGHTS UP, THEN LAND THE FINISHER.';
   $('end').hidden = false; focusFirst('end');
+  if (win) toPitch('p13-victory', { tier: fight.result.tier, mode }); // the game confirms it with the server
 }
 // title backdrop: a demo fight that never attacks, drawn with no HUD; it swaps between phase 1 and 2 every 9 s
 let demo = null, demoT = 0, demoStage = 0;

@@ -458,9 +458,11 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       if (!s || (!['banned','freed','warn','consequence','locked'].includes(s.vinson?.phase) && !resumeRewards)) return false;
       battleOpening = true;
       try {
-        const { launchVinsonBattle } = await import('./vinsonbattle.js?v=vinson35');
+        // owner (Oct 5): the ban screen opens the new boss fight (Prototype 13). ?oldfight=1 keeps the previous one.
+        const oldFight = new URLSearchParams(location.search).get('oldfight') === '1';
+        const launch = oldFight ? (await import('./vinsonbattle.js?v=vinson35')).launchVinsonBattle : (await import('./eclipsebattle.js?v=1')).launchEclipseBattle;
         if (experienceClosed || battleExperience || online?.identityId?.() !== identity || !state()) return false;
-        battleExperience = launchVinsonBattle({ online, resumeRewards,
+        battleExperience = launch({ online, resumeRewards,
           seed: `${identity || 'guest'}:${s.vinson.doomUntil || 0}`,
           onWin: async ({ nonce }) => {
             if (experienceClosed || online?.identityId?.() !== identity || !state()) return { ok: false };
