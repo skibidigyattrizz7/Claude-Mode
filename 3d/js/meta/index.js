@@ -1,6 +1,6 @@
 // Pitchside 3D — meta layer public API (Career Mode + Pitchside Ultimate Team).
 // See docs/3D_CONTRACT.md. No DOM access happens at import time.
-import { MetaApp } from './ui/app.js?v=vinson36';
+import { MetaApp } from './ui/app.js?v=vinson37';
 import { getNationalTeams as buildNationalTeams } from './core/teams.js';
 import { loadUT, utTeam } from './core/ut.js';
 // Admin Given Codes: the shared verifier (3d/js/shared/adminauth.js) is the one source of truth — it knows

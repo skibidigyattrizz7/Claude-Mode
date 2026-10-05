@@ -1353,3 +1353,32 @@ rings out), 3 beam-clash losses reset the level (TRIES dots), heal (H) everywher
 spaced spears. Bug worth checking in the live fight: a "perfect dodge" check without a position test turns dodge spam
 into permanent i-frames (ours was on lasers: dangerNear() returned true for any dodge during any laser).
 Force flags: ?force=spikes | minions (with ?mode=extreme) | finisher, ?fin=0..9 (9 = STAR OF HELL).
+
+## Claude -> ChatGPT (Oct 5): the Pitchside boss fight is yours to restyle
+
+The owner wants you to change the boss fight to their liking inside Pitchside. There are now TWO copies:
+
+- `3d/pitchside-boss/`: THE ONE YOU EDIT. Opened from the ban screen's Fight Suppression button. Always HARD, title has
+  only FIGHT / CONTINUE / SETTINGS / RETURN TO PITCHSIDE. Saves under `pb*` localStorage keys.
+- `3d/prototypes/claude-13/`: the full standalone game (all modes, dev mode). Do NOT edit it; Claude owns it.
+
+How the copy is built (plain ES modules, no build step):
+- `sim.js` rules and numbers (fixed 1/120 s steps). Tunables: `STAGES` (boss HP/damage/speed per phase), `MODES.hard`,
+  `ABIL` (hero abilities), `FIN`/`FIN_NAMES`/`FIN_POOLS` (finishers), `TUNE` (hero HP, heals, camera zoom, Star of Hell chance).
+- `render.js` all drawing (Canvas2D). Palettes per phase: `P` at the top. Boss: `drawBoss`, hero: `drawHero`,
+  finishers: `drawFinisherWorld` + one draw function each, impact frames: `IMPACT` table + `drawImpact`.
+  Picture swaps: put an Image in `CUSTOM.boss[phase]` / `CUSTOM.hero[phase]` and it is drawn instead of the built-in art.
+- `script.js` every dialogue line (cast names are stand-ins: change them here and in `STAGES[n].boss/hero`).
+- `sfx.js` synthesized sounds by event name. `index.html` menus, input, settings, the embed bridge.
+
+Rules so it keeps working in the game:
+1. Bump the cache tag on every change: all imports use `?v=pb2`; sed them together (sim.js, render.js, sfx.js, index.html),
+   e.g. `sed -i "s/?v=pb2'/?v=pb3'/g" 3d/pitchside-boss/{sim,render,sfx}.js 3d/pitchside-boss/index.html`.
+2. Keep the bridge: on a win `index.html` posts `{type:'p13-victory'}` to the parent; RETURN TO PITCHSIDE posts
+   `{type:'p13-close'}`. `3d/js/meta/ui/eclipsebattle.js` turns the win into the server unban (battleWin) and rewards.
+   Don't rename those messages or the folder (the URL is in eclipsebattle.js).
+3. Watch `//` comments on the long one-line statements: a comment placed before code on the same line swallows it
+   (has broken the game twice). Put comments after the code or use `/* */`.
+4. Syntax-check each file: `node --input-type=module --check < 3d/pitchside-boss/sim.js` (same for render.js).
+5. Test: open `/3d/pitchside-boss/` directly (works standalone too), or the game's ban screen.
+Claude reviews and merges your branch, and can keep fixing the copy after your changes.

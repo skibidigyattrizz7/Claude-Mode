@@ -1,5 +1,5 @@
 // Owner (Oct 5): "plug it into the football game from the ban screen". The ban screen's Fight Suppression button now
-// opens the Prototype 13 boss fight (3d/prototypes/claude-13, ?embed=1) in a full-screen frame. The account flow is
+// opens the Pitchside boss fight (3d/pitchside-boss, ?embed=1: always HARD; the full game is 3d/prototypes/claude-13) in a full-screen frame. The account flow is
 // the same one the old fight used (migrations 020/021): a battleStart nonce before the fight, battleWin on victory
 // (lifts the ban, makes the account immune), then claimBattleRewards. The frame talks back with postMessage:
 //   { type: 'p13-victory', tier }  the boss is beaten   { type: 'p13-close' }  the player chose Return to Pitchside
@@ -24,7 +24,7 @@ export function launchEclipseBattle({ parent = document.body, online, onWin, onC
   const screen = document.createElement('section'); screen.className = 'eb-screen';
   screen.setAttribute('role', 'dialog'); screen.setAttribute('aria-modal', 'true'); screen.setAttribute('aria-label', 'Boss fight');
   const frame = document.createElement('iframe');
-  frame.src = new URL('../../../prototypes/claude-13/?embed=1', import.meta.url).href;
+  frame.src = new URL('../../../pitchside-boss/?embed=1', import.meta.url).href;
   frame.title = 'Boss fight'; frame.allow = 'autoplay; fullscreen';
   const panel = document.createElement('div'); panel.className = 'eb-panel'; panel.hidden = true;
   screen.append(frame, panel); parent.append(screen);
