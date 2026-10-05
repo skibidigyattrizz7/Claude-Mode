@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13w';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13x';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -82,11 +82,11 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
           else if (e.kind === 'nova') { const R = e.big ? 230 : 170; blast('nova', e.x, e.y, R); impact(e.big ? .22 : .14); shake(1); flash('#ffffff', e.big ? .7 : .5); negative(.07); fx.chroma = .5; s.hitstop = Math.max(s.hitstop, .14); // NOVA: a HUGE version of its explosion, bigger than the star that hit
             ring(e.x, e.y, '#ffffff', 40, R * 5, 1, 12); ring(e.x, e.y, GOLD, 30, R * 3.6, .9, 8); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .45, size: R * 2.4, color: '255,255,255' }); part(e.x, e.y, 90, '#ffffff', 1100, 1.2, 5); part(e.x, e.y, 50, '#ffe7b8', 900, 1.1, 4); addScar(e.x, s.boss.y + 30); }
           else if (e.kind === 'fall' && e.meteor) { blast('meteor', e.x, e.y, 110); shake(.3); flash('#ffffff', .06); for (let i = 0; i < 14; i++) fx.particles.push({ x: e.x, y: e.y, vx: (Math.random() - .5) * 700, vy: -200 - Math.random() * 500, life: .7, max: .7, size: 3, color: i % 3 ? '#ffffff' : '#20242a', grav: 1400 }); addScar(e.x, e.y); } // STARFALL meteor crater
-          else if (e.kind === 'fall') { blast('fall', e.x, e.y); shake(.18); part(e.x, e.y - 10, 10, '#e8dcc0', 300, .5, 3); addScar(e.x, e.y); }
-          else if (e.kind === 'burst') { blast(e.fizzle ? 'fizzle' : 'burst', e.x, e.y, e.r); shake(e.fizzle ? .15 : .45); part(e.x, e.y, 22, '#ffe7b8', 420, .6, 3.5); }
+          else if (e.kind === 'fall') { blast('fall', e.x, e.y); if (form(s) === 1) { ring(e.x, e.y, '#9fd0ff', 10, 150, .35, 5, .36); fx.flares.push({ x: e.x, y: e.y - 20, t: 0, life: .22, size: 50, color: '200,230,255' }); } shake(.18); part(e.x, e.y - 10, 10, '#e8dcc0', 300, .5, 3); addScar(e.x, e.y); }
+          else if (e.kind === 'burst') { blast(e.fizzle ? 'fizzle' : 'burst', e.x, e.y, e.r); shake(e.fizzle ? .15 : .45); part(e.x, e.y, 22, '#ffe7b8', 420, .6, 3.5); if (!e.fizzle && form(s) === 1) { ring(e.x, e.y, '#9fd0ff', 20, e.r * 2.4, .45, 8); ring(e.x, e.y, '#ffffff', 10, e.r * 1.5, .3, 4); part(e.x, e.y, 30, '#bfe0ff', 700, .7, 3); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .3, size: e.r * 1.4, color: '190,225,255' }); flash('#cfe6ff', .12); } }
           else { ring(e.x, e.y, pal.hero, 10, e.r, 0.45, 6); part(e.x, e.y, 18, '#ffe7b8', 380, 0.6, 3.5); }
           break;
-        case 'eyesHit': blast('eyes', e.x, e.y); shake(.3); part(e.x, e.y, 16, '#ffffff', 420, .5, 3); break;
+        case 'eyesHit': blast('eyes', e.x, e.y); shake(.3); part(e.x, e.y, 16, '#ffffff', 420, .5, 3); if (form(s) === 1) { ring(e.x, e.y, '#9fd0ff', 16, 200, .4, 7); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .3, size: 90, color: '200,230,255' }); part(e.x, e.y, 20, '#8fc4ff', 600, .6, 3); } break;
         case 'heroBeam': shake(0.2); break;
         case 'bossDodge': num(e.x, e.y - 250, 'DODGED', '#c8d0d6'); for (let i = 0; i < 3; i++) fx.rings.push({ x: e.x, y: e.y - 90, color: pal.boss, r0: 60, r1: 140, t: i * 0.05, life: 0.35, w: 2, flat: 1.4 }); break;
         case 'dodge': ring(e.x, e.y - 40, '#d7f3ff', 8, 46, 0.25, 2); break;
@@ -279,6 +279,13 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   // as the colour get the secondary look: a white outline only, for inner / counter-rotating stars.
   const FLAG_BLUE = '#0038b8';
   const triPath = (r, off) => { ctx.beginPath(); for (let i = 0; i < 3; i++) { const a = off + i / 3 * TAU; i ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); };
+  const trails = new WeakMap(); // phase 1 shots leave tapered light ribbons
+  function ribbon(tr, hx, hy, w, rgb) {
+    if (!w || tr.length < 2) return; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; const n = tr.length;
+    for (let i = 1; i < n; i++) { const k = i / n; ctx.strokeStyle = `rgba(${rgb},${(k * .55).toFixed(2)})`; ctx.lineWidth = w * k; ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(i === n - 1 ? hx : tr[i].x, i === n - 1 ? hy : tr[i].y); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${(k * .5).toFixed(2)})`; ctx.lineWidth = w * k * .3; ctx.stroke(); }
+    ctx.restore();
+  }
   function davidStar(x, y, r, rot, color, alpha = 1, fill = .35, glowCol = null) {
     if (alpha <= 0 || r <= 0) return;
     ctx.save();
@@ -913,8 +920,11 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         }
         case 'heroBeam': {
           const x2 = z.x + Math.cos(z.a) * 1600, y2 = z.y + Math.sin(z.a) * 1600;
-          if (z.t < z.tele) dashedLine(z.x, z.y, x2, y2, pal.hero, 0.6, 2, [8, 6]);
-          else { const k = (z.t - z.tele) / z.len; beam(z.x, z.y, x2, y2, 22 * (1 - k * 0.6) + s.stage * 4, pal.hero, '#ffffff', 1);
+          if (z.t < z.tele) { const kc = z.t / z.tele; dashedLine(z.x, z.y, x2, y2, pal.hero, 0.6, 2, [8, 6]); ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(z.x, z.y, 20 + kc * 40, 'rgba(140,200,255,.8)'); davidStar(z.x, z.y, 8 + kc * 18, fx.clock * 8, pal.hero, kc, .5); ctx.restore(); } // EYES charges a star at the muzzle
+          else { const k = (z.t - z.tele) / z.len, bw = 22 * (1 - k * 0.6) + s.stage * 4; beam(z.x, z.y, x2, y2, bw, pal.hero, '#ffffff', 1);
+            if (s.stage === 1) { const L = z.ix != null ? Math.hypot(z.ix - z.x, z.iy - z.y) + 60 : 1600, nx = -Math.sin(z.a), ny = Math.cos(z.a); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 2.5; // a double helix of light winds round the beam
+              for (let h2 = 0; h2 < 2; h2++) { ctx.strokeStyle = h2 ? 'rgba(255,255,255,.85)' : 'rgba(120,200,255,.9)'; ctx.beginPath(); for (let d2 = 0; d2 <= L; d2 += 14) { const o2 = Math.sin(d2 * .035 - fx.clock * 34 + h2 * Math.PI) * bw * 1.1 * (1 - k * .5); ctx[d2 ? 'lineTo' : 'moveTo'](z.x + Math.cos(z.a) * d2 + nx * o2, z.y + Math.sin(z.a) * d2 + ny * o2); } ctx.stroke(); }
+              for (let r2 = 0; r2 < 3; r2++) { const rk = (k * 2 + r2 / 3) % 1; ctx.strokeStyle = `rgba(200,235,255,${(1 - rk).toFixed(2)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(z.x + Math.cos(z.a) * rk * 140, z.y + Math.sin(z.a) * rk * 140, 8 + rk * 10, (24 + rk * 30), z.a, 0, TAU); ctx.stroke(); } ctx.restore(); } // muzzle rings rolling out
             // EYES: a Star of David rides the laser out to where it lands
             const reach = z.ix != null ? Math.hypot(z.ix - z.x, z.iy - z.y) : 1100, d = Math.min(reach, easeOut(clamp(k * 2.2, 0, 1)) * reach);
             ctx.save(); ctx.globalCompositeOperation = 'lighter'; davidStar(z.x + Math.cos(z.a) * d, z.y + Math.sin(z.a) * d, 28, fx.clock * 3, pal.hero, 1, .6, 'rgba(255,255,255,.6)'); davidStar(z.x, z.y, 16, -fx.clock * 3, pal.hero, 1 - k, .5); ctx.restore(); }
@@ -988,6 +998,9 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     }
     for (const p of s.heroShots) {
       const a = Math.atan2(p.vy, p.vx);
+      if (f === 1 && p.hold == null) { let tr = trails.get(p); if (!tr) trails.set(p, tr = []); const lt = tr[tr.length - 1]; if (!lt || Math.hypot(lt.x - p.x, lt.y - p.y) > 6) { tr.push({ x: p.x, y: p.y }); if (tr.length > (p.kind === 'fall' ? 16 : p.kind === 'burst' ? 22 : 26)) tr.shift(); }
+        ribbon(tr, p.x, p.y, p.kind === 'burst' ? 40 : p.kind === 'nova' ? 0 : p.kind === 'spin' ? 12 : p.kind === 'fall' ? 14 : 18, p.kind === 'spin' ? '140,230,255' : '110,170,255');
+        if (Math.random() < (p.kind === 'burst' ? .9 : .45)) part(p.x + (Math.random() - .5) * p.r, p.y + (Math.random() - .5) * p.r, 1, Math.random() < .5 ? '#ffffff' : '#9fd0ff', 70, .45, 2.5); }
       ctx.save(); ctx.translate(p.x, p.y); ctx.globalCompositeOperation = 'lighter';
       if (p.kind === 'slash') {
         ctx.rotate(a); ctx.strokeStyle = pal.hero; ctx.lineWidth = 5; ctx.shadowColor = pal.hero; ctx.shadowBlur = 12;
@@ -995,20 +1008,28 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       } else if (p.kind === 'star') { // STAR: a thrown, spinning Star of David with a short afterimage trail
         const sp = Math.hypot(p.vx, p.vy) || 1, col = f === 3 ? '#fff6d8' : pal.hero;
         for (let i = 3; i >= 1; i--) davidStar(-p.vx / sp * i * 20, -p.vy / sp * i * 20, p.r + 8 - i * 2, -p.age * 4 - i * .15, col, .22 * (4 - i) / 3, 0);
+        if (f === 1) { glow(0, 0, 46, 'rgba(110,170,255,.55)'); ctx.save(); ctx.rotate(-p.age * 9); ctx.strokeStyle = 'rgba(200,235,255,.7)'; ctx.lineWidth = 2; for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.arc(0, 0, p.r + 17, i * Math.PI, i * Math.PI + 1.3); ctx.stroke(); } ctx.restore(); } // phase 1 STAR: a blue comet - glow, a ribbon tail, spinning light arcs
         davidStar(0, 0, p.r + 10, -p.age * 4, col, 1, .45, f === 3 ? 'rgba(255,250,220,.55)' : 'rgba(160,240,255,.5)');
+        if (f === 1) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, TAU); ctx.fill(); }
       } else if (p.kind === 'spin') { // SPIN: three small stars that curve in on her
         const col = pal.hero; ctx.strokeStyle = col; ctx.globalAlpha = .35; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, p.r + 9, p.age * 22, p.age * 22 + 2.2); ctx.stroke(); ctx.globalAlpha = 1;
-        davidStar(0, 0, p.r + 7, p.age * 6, col, 1, .5, 'rgba(160,240,255,.35)');
+        glow(0, 0, 34, 'rgba(140,230,255,.5)'); davidStar(0, 0, p.r + 7, p.age * 6, col, 1, .5, 'rgba(160,240,255,.35)'); davidStar(0, 0, p.r - 2, -p.age * 10, '#ffffff', .8, .2); // SPIN: each star cuts a curved cyan ribbon
       } else if (p.kind === 'burst') { // BURST: a big spinning star, its points flaring, about to blow
         const pu = 1 + Math.sin(p.age * 30) * 0.08;
         glow(0, 0, 70 * pu, f === 3 ? 'rgba(255,255,255,.6)' : 'rgba(255,210,140,.55)');
         davidStar(0, 0, (p.r + 26) * pu, p.age * 3, pal.hero, 1, .55); davidStar(0, 0, (p.r + 6) * pu, -p.age * 5, '#ffffff', .7, .2);
+        if (f === 1) { // BURST: unstable - lightning crackles point to point, sparks orbit, the core throbs
+          const R2 = (p.r + 26) * pu, pts = []; for (let i = 0; i < 6; i++) { const a2 = p.age * 3 - Math.PI / 2 + i / 6 * TAU; pts.push([Math.cos(a2) * R2, Math.sin(a2) * R2]); }
+          ctx.strokeStyle = 'rgba(210,240,255,.9)'; ctx.lineWidth = 1.6; for (let i = 0; i < 6; i++) { if (Math.random() < .35) continue; const [x0, y0] = pts[i], [x1, y1] = pts[(i + 2) % 6]; ctx.beginPath(); ctx.moveTo(x0, y0); for (let q = 1; q < 6; q++) ctx.lineTo(lerp(x0, x1, q / 6) + (Math.random() - .5) * 14, lerp(y0, y1, q / 6) + (Math.random() - .5) * 14); ctx.lineTo(x1, y1); ctx.stroke(); }
+          for (let i = 0; i < 10; i++) { const a2 = -p.age * 6 + i / 10 * TAU, rr = R2 * (1.25 + .1 * Math.sin(p.age * 20 + i)); ctx.fillStyle = i % 2 ? '#ffffff' : '#8fc4ff'; ctx.beginPath(); ctx.arc(Math.cos(a2) * rr, Math.sin(a2) * rr, 2.6, 0, TAU); ctx.fill(); }
+          glow(0, 0, 26 + Math.sin(p.age * 40) * 8, 'rgba(255,255,255,.95)'); }
       } else if (p.kind === 'fall' && p.meteor) { // STARFALL (phase 3): a black-sun meteor slanting in on a white tail
         ctx.rotate(a); const g3 = ctx.createLinearGradient(-200, 0, 0, 0); g3.addColorStop(0, 'rgba(255,255,255,0)'); g3.addColorStop(1, 'rgba(255,255,255,.9)'); ctx.fillStyle = g3; ctx.beginPath(); ctx.moveTo(-200, 0); ctx.lineTo(0, -13); ctx.lineTo(0, 13); ctx.closePath(); ctx.fill();
         glow(0, 0, 34, 'rgba(255,255,255,.8)'); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#05060a'; ctx.beginPath(); ctx.arc(0, 0, 11, 0, TAU); ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5; ctx.stroke();
         ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const near = clamp(1 - (p.gy - p.y) / 500, 0, 1); ctx.strokeStyle = `rgba(255,255,255,${(near * .8).toFixed(2)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x + p.vx * (p.gy - p.y) / p.vy, p.gy, 30 - near * 12, (30 - near * 12) * .36, 0, 0, TAU); ctx.stroke(); // where it will land
       } else if (p.kind === 'fall') { // SIXFOLD / STARFALL: stars dropping out of the sky on a light trail
         const g = ctx.createLinearGradient(0, -110, 0, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, pal.hero); ctx.fillStyle = g; ctx.fillRect(-3, -110, 6, 110);
+        if (f === 1) { const g4 = ctx.createLinearGradient(0, -260, 0, 0); g4.addColorStop(0, 'rgba(110,170,255,0)'); g4.addColorStop(1, 'rgba(190,225,255,.55)'); ctx.fillStyle = g4; ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(0, -260); ctx.lineTo(16, 0); ctx.closePath(); ctx.fill(); glow(0, 0, 40, 'rgba(120,180,255,.6)'); } // SIXFOLD: a wide falling-star wake
         davidStar(0, 0, p.r + 7, p.age * 3, pal.hero, 1, .5, 'rgba(255,255,255,.4)');
         if (p.gy != null) { ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const near = clamp(1 - (p.gy - p.y) / 500, 0, 1); hexagram(p.x, p.gy, 16 + near * 14, fx.clock * 3, near, pal.hero, 1.5, .36, near * .7); } // where it will land
       } else if (p.kind === 'shield') {
