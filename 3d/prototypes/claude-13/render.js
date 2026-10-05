@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13y';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13z';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -2310,7 +2310,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     drawCineScreen(s);
     drawTalk(s);
     if (s.phase === 'clash') drawClashHud(s);
-    else if (!['finisher', 'cine', 'victory', 'intro', 'talk', 'finisherQte'].includes(s.phase)) drawHud(s, !!view.touch);
+    else if (!view.menu && !['finisher', 'cine', 'victory', 'intro', 'talk', 'finisherQte'].includes(s.phase)) drawHud(s, !!view.touch); // the title screen's live backdrop has no HUD
     if (s.phase === 'cine' || s.phase === 'clash') drawBanner(s);
     if (fx.flash > 0) { ctx.globalAlpha = Math.min(1, fx.flash); ctx.fillStyle = fx.flashColor; ctx.fillRect(-500, -300, W + 1000, H + 600); ctx.globalAlpha = 1; fx.flash = Math.max(0, fx.flash - dt * 4); }
     if (fx.invert > 0) { // photo-negative frame for the heaviest beats (off with reduced motion)

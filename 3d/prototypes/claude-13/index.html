@@ -126,6 +126,45 @@
   .devStatus { color: #9ff0c4; font-size: 16px; margin-left: 6px; }
   body.touch .mfoot { display: none; } body.touch .logo { font-size: clamp(40px, 12vh, 72px); } body.touch .tagline { margin-bottom: 14px; } body.touch .mi .mt { font-size: 26px; } body.touch .mi.sm .mt { font-size: 20px; }
   @media (max-height: 520px) { .tagline { margin-bottom: 12px; } .mi { padding: 3px 0; } .msep { height: 6px; } }
+  /* P13 title v2 (owner: "looks very minimalistic dull and boring"): the real arena and boss run live behind it
+     (a demo fight with no HUD), a solid side panel with an angled edge, big mode tiles with difficulty pips,
+     a console-style hint bar. */
+  #title { background: transparent; place-content: stretch; padding: 0; text-align: left; display: block; overflow: hidden; }
+  .tside { position: absolute; left: 0; top: 0; bottom: 0; width: min(560px, 50vw); background: #070b11; clip-path: polygon(0 0, 100% 0, 86% 100%, 0 100%);
+    padding: clamp(14px, 4vh, 40px) clamp(56px, 7vw, 96px) clamp(48px, 9vh, 80px) max(20px, 4vw); box-sizing: border-box; display: flex; flex-direction: column; gap: clamp(6px, 1.6vh, 14px); overflow: hidden; }
+  .tside::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 100%; background: #ff6a1f; clip-path: polygon(calc(100% - 4px) 0, 100% 0, calc(86% + 0px) 100%, calc(86% - 4px) 100%); pointer-events: none; }
+  .tbrand { display: flex; align-items: center; gap: 10px; font-size: 15px; letter-spacing: .18em; color: #a8b5c7; }
+  .tbrand .tgame { color: #eef3f9; font-weight: 700; } .tbrand .tsep { width: 18px; height: 2px; background: #ff6a1f; } .tbrand .tmode { color: #ff8447; font-weight: 700; }
+  .tlogo { font-size: clamp(46px, min(11vh, 8vw), 104px); line-height: .86; letter-spacing: .01em; color: #ffd7a1; margin: 0; }
+  .ttag { margin: 0 0 clamp(4px, 1.4vh, 12px); font-size: clamp(15px, 2.4vh, 19px); color: #c8d0d6; }
+  .tiles { display: grid; gap: clamp(5px, 1.1vh, 9px); }
+  .tile { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 12px; text-align: left; cursor: pointer;
+    border: 0; padding: clamp(7px, 1.5vh, 13px) 16px clamp(7px, 1.5vh, 13px) 20px; background: #101823; color: #eef3f9; font-family: inherit; transition: transform .12s ease-out; }
+  .tile::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--mc, #ffd7a1); }
+  .tile .tn { font: 700 clamp(24px, 4.6vh, 36px)/1 'Barlow Condensed', sans-serif; letter-spacing: .05em; }
+  .tile .td { grid-column: 1; font-size: clamp(13px, 2.1vh, 16px); color: #a8b5c7; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .pips, .tile .tk { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 4px; }
+  .tile .pips i { width: 9px; height: 22px; background: #223146; transform: skewX(-14deg); } .tile .pips i.on { background: var(--mc, #ffd7a1); }
+  .tile .tk { font-size: 20px; color: var(--mc); }
+  .tile.normal { --mc: #ffd7a1; } .tile.hard { --mc: #ff6a5a; } .tile.extreme { --mc: #ff2a2a; } .tile.cont { --mc: #34d987; }
+  .tile.extreme { background: #12080a; } .tile.extreme .tn { color: #ff6a6a; }
+  .tile:hover, .tile:focus-visible { background: var(--mc); color: #0a0f14; transform: translateX(10px); outline: none; }
+  .tile:hover .td, .tile:focus-visible .td { color: #1b2430; } .tile:hover .tn, .tile:focus-visible .tn { color: #0a0f14; }
+  .tile:hover .pips i, .tile:focus-visible .pips i { background: rgba(10,15,20,.25); } .tile:hover .pips i.on, .tile:focus-visible .pips i.on { background: #0a0f14; }
+  .tile:hover .tk, .tile:focus-visible .tk { color: #0a0f14; }
+  .tile.extreme:hover, .tile.extreme:focus-visible { background: #ff2a2a; }
+  .tlinks { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-top: clamp(2px, 1vh, 10px); }
+  .tl { background: none; border: 0; padding: 4px 0; font: 700 clamp(17px, 2.8vh, 21px) 'Barlow Condensed', sans-serif; letter-spacing: .1em; color: #a8b5c7; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tl:hover, .tl:focus-visible { color: #fff; border-bottom-color: #ff6a1f; outline: none; }
+  .tboss { position: absolute; right: max(20px, 4vw); bottom: clamp(52px, 10vh, 84px); text-align: right; display: grid; gap: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.9); }
+  .tboss .tbp { font-size: 15px; letter-spacing: .2em; color: #ff8447; font-weight: 700; } .tboss .tbn { font-size: clamp(26px, 4.6vh, 38px); font-weight: 700; letter-spacing: .04em; color: #fff; } .tboss .tbh { font-size: 17px; color: #c8d0d6; letter-spacing: .08em; }
+  .tbar { position: absolute; left: 0; right: 0; bottom: 0; height: clamp(34px, 6vh, 44px); background: #05080c; border-top: 1px solid #223146; display: flex; align-items: center; justify-content: flex-end; gap: 26px; padding: 0 max(20px, 4vw); font-size: 15px; letter-spacing: .1em; color: #a8b5c7; }
+  .tbar kbd { display: inline-block; min-width: 16px; text-align: center; padding: 0 6px; margin-right: 4px; font: 700 14px 'Barlow Condensed', sans-serif; color: #eef3f9; background: #172232; border: 1px solid #354a66; border-bottom-width: 3px; }
+  body.touch .tbar { display: none; } body.touch .tside { width: min(460px, 56vw); padding-bottom: 16px; } body.touch .tboss { bottom: 16px; }
+  @media (max-width: 720px) { .tside { width: 100%; clip-path: none; padding-right: 20px; } .tside::after, .tboss { display: none; } }
+  @media (max-height: 460px) { .ttag, .tile .td, .tbrand { display: none; } .tlogo { font-size: clamp(34px, 12vh, 54px); } .tile { padding-top: 6px; padding-bottom: 6px; } .tile .tn { font-size: clamp(20px, 6vh, 28px); } }
+  body:not(.playing) #pauseBtn { display: none; }
+  @media (min-width: 1500px) { .tside { width: min(680px, 42vw); } }
 </style>
 </head>
 <body>
@@ -148,23 +187,25 @@
   <button class="tbtn" id="push" type="button" hidden>PUSH!</button>
 </div>
 <button id="skipBtn" type="button" hidden>SKIP ▸</button>
-<div class="screen menu" id="title">
-  <div class="arena" aria-hidden="true"><div class="sun"></div><div class="horizon"></div></div>
-  <div class="menuCol">
-    <h1 class="logo">THE ECLIPSE</h1>
-    <p class="tagline">One boss, three phases, thirteen finishers.</p>
-    <nav class="mlist" aria-label="Main menu">
-      <button class="mi" id="cont" type="button" hidden><span class="mt">CONTINUE</span><small id="contInfo"></small></button>
-      <button class="mi" id="start" type="button" data-mode="normal"><span class="mt">NORMAL</span><small>The full fight, fair and readable.</small></button>
-      <button class="mi hard" id="startHard" type="button" data-mode="hard"><span class="mt">HARD</span><small>Faster, hits harder, more boxes, longer key moments.</small></button>
-      <button class="mi extreme" id="startExtreme" type="button" data-mode="extreme"><span class="mt">EXTREME</span><small>Everything at its hardest. She summons shades you must kill first.</small></button>
-      <div class="msep"></div>
-      <button class="mi sm" id="openSettings" type="button"><span class="mt">SETTINGS</span></button>
-      <button class="mi sm" id="openControls" type="button"><span class="mt">CONTROLS</span></button>
-      <button class="mi sm" id="openDev" type="button"><span class="mt">DEV MODE</span><small>Pictures, colours, dialogue, every number.</small></button>
+<div class="screen" id="title">
+  <div class="tside">
+    <div class="tbrand"><span class="tgame">PITCHSIDE</span><span class="tsep"></span><span class="tmode">BOSS FIGHT</span></div>
+    <h1 class="tlogo">THE<br>ECLIPSE</h1>
+    <p class="ttag">Break her in three phases. Thirteen finishers to find.</p>
+    <nav class="tiles" aria-label="Main menu">
+      <button class="tile cont" id="cont" type="button" hidden><span class="tn">CONTINUE</span><span class="td" id="contInfo"></span><span class="tk">&#9654;</span></button>
+      <button class="tile normal" id="start" type="button" data-mode="normal"><span class="tn">NORMAL</span><span class="td">The full fight, fair and readable.</span><span class="pips" aria-label="Difficulty 1 of 3"><i class="on"></i><i></i><i></i></span></button>
+      <button class="tile hard" id="startHard" type="button" data-mode="hard"><span class="tn">HARD</span><span class="td">Faster, hits harder, more boxes.</span><span class="pips" aria-label="Difficulty 2 of 3"><i class="on"></i><i class="on"></i><i></i></span></button>
+      <button class="tile extreme" id="startExtreme" type="button" data-mode="extreme"><span class="tn">EXTREME</span><span class="td">Everything at its hardest, plus shades.</span><span class="pips" aria-label="Difficulty 3 of 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></button>
+    </nav>
+    <nav class="tlinks" aria-label="More">
+      <button class="tl" id="openSettings" type="button">SETTINGS</button>
+      <button class="tl" id="openControls" type="button">CONTROLS</button>
+      <button class="tl dev" id="openDev" type="button">DEV MODE</button>
     </nav>
   </div>
-  <div class="mfoot">&uarr; &darr; choose &middot; ENTER play</div>
+  <div class="tboss" aria-live="polite"><span class="tbp" id="demoPhase">PHASE 1</span><span class="tbn" id="demoName">THE ECLIPSE</span><span class="tbh" id="demoHp">4,500 HP</span></div>
+  <div class="tbar"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> SELECT</span><span><kbd>ENTER</kbd> PLAY</span><span><kbd>ESC</kbd> BACK</span></div>
 </div>
 <div class="screen panel" id="settings" hidden>
   <div class="pbox">
@@ -216,10 +257,10 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H, aligned } from './sim.js?v=13y';
-import { createRenderer } from './render.js?v=13y';
-import { createSfx } from './sfx.js?v=13y';
-import { applyDev, openDev } from './dev.js?v=13y';
+import { createFight, step, W, H, aligned, STAGES } from './sim.js?v=13z';
+import { createRenderer } from './render.js?v=13z';
+import { createSfx } from './sfx.js?v=13z';
+import { applyDev, openDev } from './dev.js?v=13z';
 applyDev(); // DEV MODE overrides (pictures, colours, dialogue, numbers)
 const q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
@@ -384,6 +425,15 @@ function showEnd() {
   $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, A KEYBOARD APPEARS IN THE SKY. PLAY IT THE WAY IT LIGHTS UP, THEN LAND THE FINISHER.';
   $('end').hidden = false; focusFirst('end');
 }
+// title backdrop: a demo fight that never attacks, drawn with no HUD; it swaps between phase 1 and 2 every 9 s
+let demo = null, demoT = 0, demoStage = 0;
+function makeDemo() {
+  demoStage = demoStage === 1 ? 2 : 1;
+  demo = createFight({ seed: 11 + demoStage, force: demoStage === 2 ? 'stage2' : 'menu', mode: 'normal' }); demo.noTalk = true; demo.phase = 'fight'; demoT = 0;
+  const st = demo.stage;
+  $('demoPhase').textContent = 'PHASE ' + st; $('demoName').textContent = stageName(st); $('demoHp').textContent = `${Math.round(demo.boss.max).toLocaleString('en-US')} HP`;
+}
+const stageName = (st) => STAGES[st].boss;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
   const rotating = !$('rotate').hidden;
@@ -398,6 +448,13 @@ function frame(now) {
     if ((fight.phase === 'victory' && fight.phaseT > 1.6) || (fight.phase === 'defeat' && fight.phaseT > 1.4)) showEnd();
   } else if (fight && (paused || rotating)) input();
   if (fight) renderer.render(fight, (paused || rotating) ? 0 : dt, view);
+  else if (!$('title').hidden || !$('settings').hidden || !$('controls').hidden) { // the live title backdrop
+    if (!demo || (demoT += dt) > 9) makeDemo();
+    demo.boss.attackCd = 99; demo.hero.x = -600; demo.hero.y = 560; // the hero waits off screen: the title shows her demo.hero.hp = 1e6;
+    let a2 = Math.min(dt, .05); while (a2 > 0) { step(demo, 1 / 60, empty); a2 -= 1 / 60; }
+    demo.boss.attackCd = 99; demo.shots.length = 0; demo.hazards.length = 0;
+    renderer.render(demo, dt, { ...view, menu: true });
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
