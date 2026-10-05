@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13u';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13v';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -158,12 +158,12 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'stBurst': blast('nova', e.x, e.y, 320, '#6fe8d0'); impact(.2); shake(1); flash('#ffffff', .85); fx.chroma = .5; ring(e.x, e.y, '#6fe8d0', 30, 1000, 1, 12); ring(e.x, e.y, '#ffffff', 20, 700, .8, 6); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 40, '#6fe8d0', 900, 1.1, 4, -400); addScar(s.boss.x, s.boss.y + 30); break; // STAR TORNADO: it explodes
         case 'hellStar': flash('#ff2a1a', .35); shake(.4); break;
         case 'hellFire': flash('#ff5020', .3); shake(.5); break;
-        case 'hellBoom': impact(e.big ? .42 : .16); shake(1); flash(e.big ? '#fff0e0' : '#ff6030', e.big ? 1 : .6); negative(e.big ? .12 : .06); fx.chroma = e.big ? .9 : .4; ring(e.x, e.y, '#ff5030', 30, e.big ? 1400 : 700, e.big ? 1.4 : 1, e.big ? 18 : 10); if (e.big) ring(e.x, e.y, '#ffd0a0', 20, 1000, 1.2, 10); part(e.x, e.y, e.big ? 160 : 60, '#ff9a50', e.big ? 1400 : 800, 1.4, 5); if (e.big) { part(e.x, e.y, 60, '#ffffff', 1200, 1, 4); addScar(s.boss.x, s.boss.y + 30); } break;
+        case 'hellBoom': impact(e.big ? 1.25 : .55, 'hell', e.x, e.y); shake(1); flash(e.big ? '#fff0e0' : '#ff6030', e.big ? 1 : .6); negative(e.big ? .12 : .06); fx.chroma = e.big ? .9 : .4; ring(e.x, e.y, '#ff5030', 30, e.big ? 1400 : 700, e.big ? 1.4 : 1, e.big ? 18 : 10); if (e.big) ring(e.x, e.y, '#ffd0a0', 20, 1000, 1.2, 10); part(e.x, e.y, e.big ? 160 : 60, '#ff9a50', e.big ? 1400 : 800, 1.4, 5); if (e.big) { part(e.x, e.y, 60, '#ffffff', 1200, 1, 4); addScar(s.boss.x, s.boss.y + 30); } break;
         case 'hellAlgol': shake(.6); flash('#ff3020', .3); break;
         case 'hellEye': shake(.25); break;
-        case 'hellCrack': shake(.5); flash('#ff6a3a', .15); break;
-        case 'hellAlgol2': shake(.8); flash('#ffd0b0', .35); part(e.x, e.y, 40, '#ff7a40', 700, .8, 4); break;
-        case 'hellVert': shake(.9); flash('#ffd0b0', .5); part(e.x, e.y, 50, '#ff7a40', 800, .8, 4); break;
+        case 'hellCrack': impact(.22, 'hell', e.x, s.boss.y - 120); shake(.5); flash('#ff6a3a', .15); break;
+        case 'hellAlgol2': impact(.3, 'hell', e.x, e.y); shake(.8); flash('#ffd0b0', .35); part(e.x, e.y, 40, '#ff7a40', 700, .8, 4); break;
+        case 'hellVert': impact(.35, 'hell', e.x, e.y); shake(.9); flash('#ffd0b0', .5); part(e.x, e.y, 50, '#ff7a40', 800, .8, 4); break;
         case 'hellSpin': shake(.2); break;
         case 'minions': shake(.5); flash('#ff5a46', .2); ring(e.x, e.y, '#ff6a5a', 20, 300, .5, 6); part(e.x, e.y, 30, '#ff9a5a', 500, .7, 4); break;
         case 'minionHit': part(e.x, e.y, 6, '#ffd7a1', 240, .3, 3); break;
@@ -296,11 +296,25 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   const blast = (kind, x, y, r = 120, tint = null) => { fx.blasts.push({ kind, x, y, r, tint, t: 0, rot: Math.random() * TAU, life: { bomb: 1.3, hit: .45, nova: 1.5, burst: .85, fall: .5, eyes: .55, lance: .5, fizzle: .4, shard: .35 }[kind] || .5 }); if (fx.blasts.length > 24) fx.blasts.shift(); };
   // four-point light flares (the ricochet's hits)
   // impact frames (owner: "black and white impact frames"): the whole frame re-drawn as hard black & white, flipping
-  function impact(len = .22) { if (!reducedMotion) fx.impact = { t: 0, len }; }
+  // impact frames: the whole frame redrawn as hard black & white, flipping. style 'hell' (STAR OF HELL) cycles through
+  // black & white, inverted, and blood red-black, punches the zoom in and out, and throws speed lines at the focus point
+  function impact(len = .22, style = 'bw', x = null, y = null) { if (!reducedMotion) fx.impact = { t: 0, len, style, x, y }; }
   function drawImpact(dt) {
     const I = fx.impact; if (!I) return; I.t += dt; if (I.t >= I.len) { fx.impact = null; return; }
-    const flip = Math.floor(I.t / .055) % 2;
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.filter = flip ? 'grayscale(1) contrast(900%) invert(1)' : 'grayscale(1) contrast(900%)'; ctx.drawImage(ctx.canvas, 0, 0); ctx.restore();
+    const v = fx.view || { scale: 1, ox: 0, oy: 0 }, cw = ctx.canvas.width, ch = ctx.canvas.height;
+    const hell = I.style === 'hell', step = hell ? .075 : .055, fr = Math.floor(I.t / step);
+    const F = hell ? ['grayscale(1) contrast(900%)', 'grayscale(1) contrast(900%) invert(1)', 'grayscale(1) contrast(700%) sepia(1) saturate(900%) hue-rotate(-38deg)'][fr % 3]
+                   : (fr % 2 ? 'grayscale(1) contrast(900%) invert(1)' : 'grayscale(1) contrast(900%)');
+    const z = hell ? 1 + (fr % 2 ? .045 : .015) * (1 - I.t / I.len) : 1;
+    const fxp = I.x == null ? cw / 2 : (640 + (I.x - 640 - fx.camX) * fx.zoom) * v.scale + v.ox, fyp = I.y == null ? ch / 2 : (360 + (I.y - 360 - fx.camY) * fx.zoom) * v.scale + v.oy;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.filter = F;
+    ctx.drawImage(ctx.canvas, fxp - fxp * z, fyp - fyp * z, cw * z, ch * z); ctx.filter = 'none';
+    if (hell) { // speed lines rushing in on her, colour flipping with the frame
+      ctx.strokeStyle = fr % 3 === 1 ? 'rgba(255,255,255,.9)' : fr % 3 === 2 ? 'rgba(20,0,0,.9)' : 'rgba(0,0,0,.85)'; const R0 = Math.max(cw, ch) * .9;
+      for (let i = 0; i < 70; i++) { const a = (i / 70) * TAU + fr * .37, r1 = R0 * (.18 + ((i * 37 + fr * 13) % 23) / 60), wdt = 2 + ((i * 7) % 5) * 1.6 * v.scale;
+        ctx.lineWidth = wdt; ctx.beginPath(); ctx.moveTo(fxp + Math.cos(a) * R0, fyp + Math.sin(a) * R0); ctx.lineTo(fxp + Math.cos(a) * r1, fyp + Math.sin(a) * r1); ctx.stroke(); }
+    }
+    ctx.restore();
   }
   function drawFlares(dt) {
     fx.flares = fx.flares || []; ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -2073,7 +2087,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     if (s.phase === 'cine' && s.cine && (s.cine.kind === 'ending' || s.cine.kind === 'trueEnding')) { fx.endKind = s.cine.kind; fx.bossGone = true; fx.meadow = clamp((s.cine.t / s.cine.len - .1) / .02, 0, 1); }
     if (s.phase === 'victory') { fx.meadow = 1; fx.bossGone = true; fx.endKind = s.result?.tier === 'secret' ? 'trueEnding' : 'ending'; }
     consume(s); s.events.length = 0;
-    const { width, height, scale, ox, oy } = view;
+    const { width, height, scale, ox, oy } = view; fx.view = view;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#050708'; ctx.fillRect(0, 0, width, height);
     const h = s.hero, b = s.boss;
