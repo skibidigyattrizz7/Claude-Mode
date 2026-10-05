@@ -100,3 +100,8 @@ Gotcha: never append code after a `//` comment on the same line (it silently dis
 Secret phase-3 code: only its FNV-1a 32-bit hash + length live in claude-13/sim.js (SECRET). To change it, hash the new
 code in UPPERCASE with fnv() from sim.js and replace SECRET.hash/len (and the sky hint order in render.js SKY_ORDER if the
 pattern changes). Never write the code itself into the repo.
+
+## P13 dev mode (Oct 5)
+- `3d/prototypes/claude-13/dev.js`: DEV MODE screen. Overrides live in localStorage `p13dev` ({v: {path: value}, img: {boss1..hero3: dataURL}}) and are applied by `applyDev()` onto the exported objects (STAGES, MODES, ABIL, FIN, FIN_NAMES, MISS, TUNE in sim.js; SCRIPT; P palettes in render.js). Pictures go to `CUSTOM` in render.js (drawBoss/drawHero draw them instead of the built-in art).
+- `TUNE` in sim.js holds what used to be constants (hero max HP, heal, heals per phase, Star of Hell chance, ability damage/cooldown multipliers, camera zoom `view`). Add new tunables there and a field in dev.js `sections()`.
+- dev.js imports must carry the same `?v=` as the other files (the version sed covers it).

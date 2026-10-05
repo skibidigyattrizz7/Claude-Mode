@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13x';
+import { SCRIPT } from './script.js?v=13y';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -39,7 +39,9 @@ export const STAGES = {
   2: { bossHp: 6000, gates: [0.8, 0.6, 0.4, 0.2], gap: 1.45, speed: 1.18, dmg: 1.15, dodge: 0.2, boss: 'THE ECLIPSE · UNBOUND', hero: 'WARDEN · REBORN' },
   3: { bossHp: 7800, gates: [0.75, 0.5, 0.25], gap: 1.0, speed: 1.42, dmg: 1.4, dodge: 0.28, boss: 'TOTALITY', hero: 'WARDEN · ASCENDED' },
 };
-export const HERO_MAX = 100, HEAL = 32;
+// owner (Oct 5): "a dev setting where you can alter everything": the DEV screen (dev.js) edits these live
+export const TUNE = { view: .78, heroMax: 100, heal: 32, heals: 2, healCap: 4, hell: .05, abilDmg: 1, abilCd: 1, slashDmg: 1 };
+export const HERO_MAX = 100, HEAL = 32; // defaults only; the game reads TUNE
 // owner: Normal (what we've been tuning) and Hard ("extremely hard but still beatable"), picked on the title screen
 export const MODES = {
   normal: { key: 'normal', name: 'NORMAL', hp: 1, speed: 1, dmg: 1, dodge: 1, gates6: false, combo: [0, .45, .6, .8], triple: [0, .1, .2, .3], gapMul: .62, pressure: [0, 2.1, 1.7, 1.4], pressN: 3, qte: 1, boxEvery: 24, need: [5.3, 0, 1.1], keyMoments: 3, keyCount: 5, keyTime: .9, stun: 1.1, hardBox: false },
@@ -59,7 +61,7 @@ export const ABIL = {
   nova:    { key: '6', names: ['', 'NOVA', 'DOMAIN', 'TOTALITY'],      cd: [0, 4.8, 7, 8],    dmg: [0, 34, 40, 120] },
 };
 // chance an attack simply misses (owner: "add an error chance of missing")
-const MISS = { slash: .07, star: .08, shield: .05, spin: .1, burst: .05, fall: .1, nova: .04, shard: .06, wave: .06, eyes: .05 };
+export const MISS = { slash: .07, star: .08, shield: .05, spin: .1, burst: .05, fall: .1, nova: .04, shard: .06, wave: .06, eyes: .05 };
 export const ABIL_ORDER = ['star', 'spinner', 'burst', 'eyes', 'lattice', 'nova'];
 export const FIN = { mult: 6, // P12: x3 with the boss HP so a finisher still lands like one
   chance: [0, .08, .08, .06], cooldown: 16, window: 2.6, len: 4.2, keys: 7, qte: [0, 4.2, 3.8, 3.3] };
@@ -85,14 +87,14 @@ export function createFight({ seed = 7, force = null, mode = 'normal', start = 1
   const s = {
     M: MODES[mode] || MODES.normal,
     t: 0, phase: 'intro', phaseT: 0, stage: 1, R: rng(seed), events: [], force, forceUsed: false,
-    minions: [], hero: { x: 300, y: 560, vx: 0, vy: 0, hp: HERO_MAX, chip: HERO_MAX, face: 1, inv: 0, dodgeT: 0, dodgeCd: 0, dodgeDir: [1, 0],
+    minions: [], hero: { x: 300, y: 560, vx: 0, vy: 0, hp: TUNE.heroMax, chip: TUNE.heroMax, face: 1, inv: 0, dodgeT: 0, dodgeCd: 0, dodgeDir: [1, 0],
       slashCd: 0, cds: {}, sel: 'star', heals: 1, invert: 0, squash: 0, hurt: 0, trail: [], cast: null, orbit: null, lance: null, field: null, charge: null, starfall: null },
     boss: null, shots: [], heroShots: [], hazards: [], box: null, timing: null, rune: null, chain: null, clash: null, cine: null,
     finisher: { prompt: 0, cd: 6, cine: null }, fq: null, talk: null, noTalk: !!force, banner: null, hitstop: 0, slowmo: 0, secret: false, result: null, stats: { perfects: 0, finishers: 0, heals: 0 }, finIdx: { 1: 0, 2: 0, 3: 0, ...(typeof fin === 'object' && fin ? fin : {}) }, forceFin: typeof fin === 'number' ? fin : null,
   };
   setupStage(s, 1, true);
   if (start >= 2 && !force) { // P11 owner: "make it save phases": begin at a saved phase checkpoint
-    setupStage(s, start, true); s.hero.heals = 2; s.checkpoint = start; if (start === 3) s.secret = true;
+    setupStage(s, start, true); s.hero.heals = TUNE.heals; s.checkpoint = start; if (start === 3) s.secret = true;
     s.phase = 'fight'; banner(s, start === 3 ? 'TOTALITY' : 'PHASE 2', 'CHECKPOINT', start === 3 ? '#ffffff' : '#ff8a6b'); s.boss.attackCd = 2.5;
   }
   if (force === 'stage2') { setupStage(s, 2, true); }
@@ -113,7 +115,7 @@ function setupStage(s, stage, silent = false) {
     attackCd: 2.2, last: null, tell: 0, tellKind: null, flash: 0, stagger: 0, sway: 0, dodgeCd: 2, dodgeT: 0, dodgeDir: 1,
     cds: { box: M.boxEvery * .6, barrage: 7, slam: 4, chains: 6, rune: 10, catch: 7, earth: 5, laser: 3, cross: 6, doom: 8, gravity: 9, spiral: 5, corona: 7, twin: 12 },
     hands: [{ x: 860, y: 450, busy: false }, { x: 1100, y: 450, busy: false }] };
-  s.hero.heals = 2; // heals never carry into the next phase (P13 owner: was 1, he ran dry; now 2, +1 when a box starts)
+  s.hero.heals = TUNE.heals; // heals never carry into the next phase (P13 owner: was 1, he ran dry; now 2, +1 when a box starts)
   Object.assign(s.hero, { cds: {}, invert: 0, orbit: null, lance: null, field: null, charge: null, starfall: null }); s.shots = []; s.heroShots = []; s.hazards = [];
   if (!silent) { ev(s, 'stage', { stage }); }
 }
@@ -268,8 +270,8 @@ function tgt(s, ox, oy) { if (s.minions.length) { let best = null, bd = 1e9; for
 function aimAt(s, ox, oy) { const [tx, ty] = tgt(s, ox, oy), dx = tx - ox, dy = ty - oy, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; }
 function castAbility(s, name) {
   const h = s.hero, b = s.boss, st = s.stage, a = ABIL[name], ox = h.x + h.face * 30, oy = h.y - 50, [ax, ay] = aimAt(s, ox, oy), ang = Math.atan2(ay, ax);
-  h.cds[name] = a.cd[st]; h.squash = .16; h.face = ax >= 0 ? 1 : -1;
-  const dmg = a.dmg[st], shot = (o) => s.heroShots.push({ x: ox, y: oy, age: 0, life: 2, r: 12, dmg, ...o });
+  h.cds[name] = a.cd[st] * TUNE.abilCd; h.squash = .16; h.face = ax >= 0 ? 1 : -1;
+  const dmg = Math.round(a.dmg[st] * TUNE.abilDmg), shot = (o) => s.heroShots.push({ x: ox, y: oy, age: 0, life: 2, r: 12, dmg, ...o });
   switch (name + st) {
     // form 1 · WARDEN
     case 'star1': shot({ kind: 'star', vx: ax * 820, vy: ay * 820, r: 14, life: 1.6 }); break;
@@ -335,7 +337,7 @@ function moveHero(s, dt, inp) {
   h.x = clamp(h.x, FLOOR.minX, FLOOR.maxX); h.y = clamp(h.y, FLOOR.minY, FLOOR.maxY);
   if (inp.dodge && h.dodgeCd <= 0 && h.dodgeT <= 0) {
     h.dodgeDir = len ? [mx / len, my / len] : [h.face, 0]; h.dodgeT = .24; h.dodgeCd = .55; ev(s, 'dodge', { x: h.x, y: h.y });
-    if (s.t - (s.lastPerfect ?? -9) > 1.1 && dangerNear(s)) { s.lastPerfect = s.t; s.slowmo = .45; h.inv = Math.max(h.inv, .5); s.stats.perfects++; h.hp = Math.min(HERO_MAX, h.hp + 2); ev(s, 'perfect', { x: h.x, y: h.y }); // from ChatGPT 14: a perfect dodge also mends 2 HP s.finisher.cd = Math.max(0, s.finisher.cd - 4);
+    if (s.t - (s.lastPerfect ?? -9) > 1.1 && dangerNear(s)) { s.lastPerfect = s.t; s.slowmo = .45; h.inv = Math.max(h.inv, .5); s.stats.perfects++; h.hp = Math.min(TUNE.heroMax, h.hp + 2); ev(s, 'perfect', { x: h.x, y: h.y }); // from ChatGPT 14: a perfect dodge also mends 2 HP s.finisher.cd = Math.max(0, s.finisher.cd - 4);
     }
   }
 }
@@ -364,11 +366,11 @@ function heroActions(s, dt, inp) {
   if (inp.attack && h.slashCd <= 0 && h.dodgeT <= 0) {
     const ox = h.x + h.face * 30, oy = h.y - 50, [ax, ay] = aimAt(s, ox, oy);
     h.slashCd = SLASH.cd; h.squash = .1; h.face = ax >= 0 ? 1 : -1;
-    s.heroShots.push({ kind: 'slash', x: ox, y: oy, vx: ax * SLASH.speed, vy: ay * SLASH.speed, r: SLASH.r, dmg: SLASH.dmg[s.stage], life: 1.3, age: 0 });
+    s.heroShots.push({ kind: 'slash', x: ox, y: oy, vx: ax * SLASH.speed, vy: ay * SLASH.speed, r: SLASH.r, dmg: SLASH.dmg[s.stage] * TUNE.slashDmg, life: 1.3, age: 0 });
     ev(s, 'fire', { x: ox, y: oy });
   }
   if (inp.cast && (h.cds[h.sel] || 0) <= 0 && h.dodgeT <= 0 && !h.lance && !h.charge) castAbility(s, h.sel);
-  if (inp.heal && h.heals > 0 && h.hp < HERO_MAX) { h.heals--; s.stats.heals++; h.hp = Math.min(HERO_MAX, h.hp + HEAL); ev(s, 'heal', { x: h.x, y: h.y }); }
+  if (inp.heal && h.heals > 0 && h.hp < TUNE.heroMax) { h.heals--; s.stats.heals++; h.hp = Math.min(TUNE.heroMax, h.hp + TUNE.heal); ev(s, 'heal', { x: h.x, y: h.y }); }
   // P13 owner: the 3rd phase opens only with a secret key sequence typed while the eclipse aligns (phase 2, last
   // stretch of her HP). Only a hash is stored here; the game hints it (the sky shows a keyboard and lights it in order).
   if (aligned(s) && !s.codeOk) for (const k of inp.keysPressed) {
@@ -417,7 +419,7 @@ function landHit(s, p, dmg, x, y) {
   if (s.R() < (MISS[p.kind] || 0)) { ev(s, 'miss', { x, y }); return; }
   hurtBoss(s, Math.round(dmg * (.9 + s.R() * .2)), p.kind, x, y);
   // while the eclipse is aligned the random finisher is off: the secret needs a deliberate perfect dodge
-  if (!s.minions.length && !aligned(s) && s.phase === 'fight' && s.finisher.cd <= 0 && s.finisher.prompt <= 0 && b.hp > 0 && s.R() < FIN.chance[s.stage]) { s.finisher.prompt = FIN.window; s.finisher.hell = s.forceFin === HELL || (s.forceFin == null && s.R() < .05); ev(s, 'finisherReady', { hell: s.finisher.hell }); }
+  if (!s.minions.length && !aligned(s) && s.phase === 'fight' && s.finisher.cd <= 0 && s.finisher.prompt <= 0 && b.hp > 0 && s.R() < FIN.chance[s.stage]) { s.finisher.prompt = FIN.window; s.finisher.hell = s.forceFin === HELL || (s.forceFin == null && s.R() < TUNE.hell); ev(s, 'finisherReady', { hell: s.finisher.hell }); }
 }
 function updateMinions(s, dt) { // EXTREME shades: drift around the hero, fire small orbs, die to her shots
   const h = s.hero;
@@ -642,7 +644,7 @@ function beginBox(s, short = false) {
   const mix = pickGate(BOX_MIX[st], g);
   s.box = { t: 0, len, short, hard, gate: g, mix, acts, ai: 0, actT: 0, actLen: al, act: null, trans: null, mode: 'red', moving: false, prevMy: 0,
     soul: { x: 640, y: 411, vx: 0, vy: 0, si: 1, ground: false }, bullets: [], beams: [], emitters: [], turrets: [], wave: 0, next: 1, preview: null, shown: null, aimT: 9, shake: 0, line: null, hint: null };
-  s.hero.heals = Math.min(4, s.hero.heals + 1); ev(s, 'healGain', { heals: s.hero.heals }); // P13: the bonus heal comes AT the start of the box so it can be used inside
+  s.hero.heals = Math.min(TUNE.healCap, s.hero.heals + 1); ev(s, 'healGain', { heals: s.hero.heals }); // P13: the bonus heal comes AT the start of the box so it can be used inside
   Object.assign(BOX, BOX_SHAPES[acts[0]]);
   startAct(s, acts[0]);
   const lines = SCRIPT.boxLines || []; if (lines.length && !short) s.box.line = { text: lines[(s.boxCount = (s.boxCount || 0) + 1) % lines.length], t: 0 };
@@ -750,7 +752,7 @@ function updateBox(s, dt, inp) {
     b.moving = Math.abs(mx) + Math.abs(my) > .15;
   }
   b.prevMy = my;
-  if (inp.heal && h.heals > 0 && h.hp < HERO_MAX) { h.heals--; s.stats.heals++; h.hp = Math.min(HERO_MAX, h.hp + HEAL); ev(s, 'heal', { x: so.x, y: so.y + 40, box: true }); } // P13 owner: heal inside the mini games too
+  if (inp.heal && h.heals > 0 && h.hp < TUNE.heroMax) { h.heals--; s.stats.heals++; h.hp = Math.min(TUNE.heroMax, h.hp + TUNE.heal); ev(s, 'heal', { x: so.x, y: so.y + 40, box: true }); } // P13 owner: heal inside the mini games too
   so.x = clamp(so.x, BOX.minX + 9, BOX.maxX - 9); so.y = clamp(so.y, BOX.minY + 9, BOX.maxY - 9);
   const live = b.actT < b.actLen - .7; // stop spawning a little before the act ends
   const B = b.st;
@@ -1244,8 +1246,8 @@ function updateCine(s, dt, inp) {
   const skip = c.t > 2.5 && inp.confirm && (c.kind === 'ending' || c.kind === 'trueEnding');
   if (c.t < c.len && !skip) return;
   s.cine = null;
-  if (c.kind === 'reborn') { setupStage(s, 2); s.hero.x = 300; s.hero.y = 560; s.hero.heals = 2; /* clash bonus: +1 heal */ startTalk(s, 'reborn', (s2) => { banner(s2, 'PHASE 2', 'BOTH FIGHTERS TRANSFORMED', '#ff8a6b'); toFight(s2); }); }
-  else if (c.kind === 'totality') { setupStage(s, 3); s.hero.x = 300; s.hero.y = 560; s.hero.hp = HERO_MAX; startTalk(s, 'totality', (s2) => { banner(s2, 'TOTALITY', 'SECRET PHASE', '#ffffff'); toFight(s2); }); }
+  if (c.kind === 'reborn') { setupStage(s, 2); s.hero.x = 300; s.hero.y = 560; s.hero.heals = TUNE.heals; /* clash bonus: +1 heal */ startTalk(s, 'reborn', (s2) => { banner(s2, 'PHASE 2', 'BOTH FIGHTERS TRANSFORMED', '#ff8a6b'); toFight(s2); }); }
+  else if (c.kind === 'totality') { setupStage(s, 3); s.hero.x = 300; s.hero.y = 560; s.hero.hp = TUNE.heroMax; startTalk(s, 'totality', (s2) => { banner(s2, 'TOTALITY', 'SECRET PHASE', '#ffffff'); toFight(s2); }); }
   else { setPhase(s, 'victory'); s.result = { tier: c.kind === 'trueEnding' ? 'secret' : 'normal', rewards: REWARDS[c.kind === 'trueEnding' ? 'secret' : 'normal'] }; ev(s, 'victory', { tier: s.result.tier }); }
 }
 
@@ -1284,7 +1286,7 @@ export function step(s, dt, inp) {
   if (s.phase === 'victory' || s.phase === 'defeat') return s;
   // P13 owner: "healing during anything": H works in the clash, the counter bar, the chains, the rune lock and the
   // finisher keys too (the fight and the box have their own heal with its effect at the soul)
-  if (inp.heal && h.heals > 0 && h.hp < HERO_MAX && ['clash', 'timing', 'chained', 'rune', 'finisherQte'].includes(s.phase)) { h.heals--; s.stats.heals++; h.hp = Math.min(HERO_MAX, h.hp + HEAL); ev(s, 'heal', { x: h.x, y: h.y }); }
+  if (inp.heal && h.heals > 0 && h.hp < TUNE.heroMax && ['clash', 'timing', 'chained', 'rune', 'finisherQte'].includes(s.phase)) { h.heals--; s.stats.heals++; h.hp = Math.min(TUNE.heroMax, h.hp + TUNE.heal); ev(s, 'heal', { x: h.x, y: h.y }); }
   if (s.phase === 'clash') { updateClash(s, sdt, inp); return s; }
   if (s.phase === 'cine') { updateCine(s, sdt, inp); return s; }
   if (h.invertIn > 0) { h.invertIn -= sdt; if (h.invertIn <= 0) { h.invertIn = 0; h.invert = h.invertLen; banner(s, 'CONTROLS INVERTED', `${Math.ceil(h.invert)} SECONDS`, '#ff8a6b'); ev(s, 'invertOn'); } }

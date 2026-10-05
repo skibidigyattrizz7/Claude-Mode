@@ -361,3 +361,15 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 
 - Owner (Oct 5): "make the phase 1 abilities look cooler too"
   - DONE (P13 v=13x): phase 1 abilities upgraded: STAR blue comet (ribbon tail, spinning light arcs, white core); SPIN cyan ribbons; BURST lightning crackling between its points, orbiting sparks, throbbing core, bigger blow-up; EYES charges a star at the muzzle, laser wrapped in a double helix with rolling rings, flare on hit; SIXFOLD wide falling-star wakes and landing rings. NOVA left as is (owner liked it).
+
+- Owner (Oct 5) batch:
+  1. Make the NOVA ability look cooler too.
+  2. Split into two games: one "an actual game with actual animations rather than all stars of David" (the current one stays as is).
+  3. Dev settings: upload a picture for each boss stage and for the character; change every dialogue line; change chances of everything, colours, difficulty, "everything changeable about the game".
+  4. The settings UI and the first screen when you open the game "suck so bad": redesign them.
+  5. Boss health bar with a real HP number (or percentage); hero HP bar with whole numbers.
+  6. (mid-batch) The strongest normal ability in phase 2 has no impact frames and does not stand out: make the strongest ability of EACH phase really stand out (not necessarily a remake).
+  7. (mid-batch) Make the BOSS abilities look cool too, not just ours.
+  8. (mid-batch, main pain point) The playing field: the hero and the boss are way too big, so everything is overwhelming and distracting. Make them smaller.
+  - DONE (P13 v=13y): 1 NOVA (blue sun: rays, accretion arms, heartbeat ring, launch flare); 3 DEV MODE (dev.js: LOOK pictures per phase for boss and hero + colours + camera zoom, NAMES, DIALOGUE every line, DIFFICULTY, CHANCES, ABILITIES; saved in localStorage 'p13dev', export/import JSON); 4 title/settings/controls/pause remade as a game menu (arrow keys); 5 boss bar shows "HP / max HP  %", hero shows "hp / max"; 6 NOVA / DOMAIN / TOTALITY get their own impact frames; 7 boss orbs are spiky eclipse orbs with trails, slams crack the ground, meteors burn, lasers twist and charge; 8 camera pulled back (TUNE.view .78) and the boss drawn smaller (1.32 -> 1.12).
+  - OPEN: item 2 (a second game with real animations instead of Stars of David) needs the owner's pick of theme first.
