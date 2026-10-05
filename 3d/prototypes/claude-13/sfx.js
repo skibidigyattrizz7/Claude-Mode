@@ -111,11 +111,11 @@ export function createSfx() {
       case 'stCollapse': tone(1600, 200, 0.4, 'sawtooth', 0.07); break;
       case 'stBurst': boom(1.3); noise(1.0, 3000, 0.25, 1, 'bandpass'); break;
       case 'hellStar': tone(90, 60, 1.0, 'sawtooth', 0.12); noise(0.8, 300, 0.2); break;
-      case 'hellFire': noise(1.0, 900, 0.35, 1, 'lowpass', 0, 200); tone(140, 50, 1.0, 'square', 0.06); break;
+      case 'hellFire': noise(3.2, 200, 0.3, 1, 'lowpass', 0, 1400); tone(60, 180, 3.2, 'sawtooth', 0.06); break; // the roar swells with the beam
       case 'hellBoom': boom(e.big ? 1.6 : 1.1); noise(e.big ? 1.8 : 0.9, 400, 0.4, 1, 'lowpass', 0, 40); if (e.big) tone(60, 20, 1.8, 'sine', 0.25); break;
       case 'hellAlgol': tone(220, 230, 1.0, 'sawtooth', 0.08); tone(330, 320, 1.0, 'square', 0.04); break;
       case 'hellVert': boom(1); tone(900, 100, 0.6, 'sawtooth', 0.08); break;
-      case 'hellSpin': tone(50, 3200, 3.2, 'sawtooth', 0.07); tone(100, 4400, 3.2, 'square', 0.03); noise(3.2, 200, 0.1, 1, 'bandpass', 0, 4000); break;
+      case 'hellSpin': tone(45, 3400, 4.6, 'sawtooth', 0.07); tone(90, 4600, 4.6, 'square', 0.03); noise(4.6, 160, 0.1, 1, 'bandpass', 0, 4200); break;
       case 'hellEye': tone(160 + (e.i || 0) * 40, 90, 0.35, 'sawtooth', 0.07); noise(0.2, 900, 0.12, 1, 'bandpass'); break;
       case 'hellCrack': noise(0.5, 3500, 0.3, 1, 'highpass'); tone(80, 40, 0.5, 'square', 0.08); break;
       case 'hellAlgol2': tone(330, 340, 1.2, 'sawtooth', 0.08); boom(0.6); break;

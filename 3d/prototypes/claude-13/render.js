@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13t';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, HERO_MAX, HEAL, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=13u';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -113,7 +113,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'dlFire': shake(.6); flash('#ffffff', .3); fx.chroma = .3; ring(e.x, e.y, '#ffffff', 20, 300, .5, 8); break;
         case 'dlLink': shake(.7); flash('#ffffff', .35); negative(.05); part(e.x, e.y, 40, '#cfe0ff', 600, .8, 4); break;
         case 'dlSpin': shake(.3); break;
-        case 'dlBoom': if (e.v === 4) { blast('nova', e.x, e.y, 320); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1.1, 14); ring(e.x, e.y, '#7aa8ff', 20, 700, .9, 8); part(e.x, e.y, 90, '#ffffff', 1100, 1.3, 5); part(e.x, e.y, 40, GOLD, 900, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); } // DAVID LASER: the original blow-up, gold sparks in it
+        case 'dlBoom': if (e.v === 4) { blast('nova', e.x, e.y, 320); impact(.22); shake(1); flash('#ffffff', .9); negative(.1); fx.chroma = .6; ring(e.x, e.y, '#ffffff', 30, 1000, 1.1, 14); ring(e.x, e.y, '#7aa8ff', 20, 700, .9, 8); part(e.x, e.y, 90, '#ffffff', 1100, 1.3, 5); part(e.x, e.y, 40, GOLD, 900, 1.2, 4); addScar(s.boss.x, s.boss.y + 30); } // DAVID LASER: the original blow-up, gold sparks in it
           else { shake(.8); flash('#bff4ff', .5); fx.chroma = .4; ring(e.x, e.y, '#7fe8ff', 30, 700, .7, 8); } break; // SPINNING STAR: the points break off (they come back: ssBoom)
         case 'ssBoom': blast('nova', e.x, e.y, 300, '#7fe8ff'); impact(.24); shake(1); flash('#ffffff', .8); fx.chroma = .7; ring(e.x, e.y, '#7fe8ff', 30, 1100, 1.1, 14); ring(e.x, e.y, '#ffffff', 20, 800, .9, 8); part(e.x, e.y, 90, '#bff4ff', 1200, 1.2, 4); part(e.x, e.y, 30, GOLD, 900, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
         case 'sukkahHammer': shake(.2 + e.n * .06); part(e.x, e.y, 10, '#ffe7a8', 260, .35, 3); ring(e.x, e.y + 4, '#ffe7a8', 6, 60, .25, 3); break;
@@ -123,10 +123,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'mdRaise': flash('#cfe0ff', .2); ring(e.x, e.y, '#ffffff', 20, 220, .4, 5); part(e.x, e.y, 20, '#ffffff', 400, .5, 3); break;
         case 'mdAbsorb': shake(.15 + e.n * .03); ring(e.x, e.y, '#cfe0ff', 40, 200 + e.n * 12, .3, 4); part(e.x, e.y, 10, '#ffe7b8', 380, .4, 3); break;
         case 'mdCharge': flash('#ffffff', .3); shake(.4); break;
-        case 'mdSlam': shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; fx.bossKick = 1.4; ring(e.x, e.y, '#ffffff', 30, 900, 1, 14); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 30, GOLD, 800, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
+        case 'mdSlam': impact(.2); shake(1); flash('#ffffff', .85); negative(.09); fx.chroma = .5; fx.bossKick = 1.4; ring(e.x, e.y, '#ffffff', 30, 900, 1, 14); part(e.x, e.y, 80, '#ffffff', 1000, 1.1, 5); part(e.x, e.y, 30, GOLD, 800, 1, 4); addScar(s.boss.x, s.boss.y + 30); break;
         case 'scLock': shake(.8); flash('#ffffff', .5); ring(e.x, e.y, '#ffffff', 280, 420, .4, 8); part(e.x, e.y, 40, '#cfe0ff', 600, .6, 4); break;
-        case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
-        case 'scShatter': shake(1); flash('#dff8ff', .8); ring(e.x, e.y, '#bff4ff', 60, 520, .8, 6); part(e.x, e.y, 90, '#dff8ff', 1100, 1.2, 3, 500); break; // STAR CAGE: ice
+        case 'scSqueeze': shake(.4 + e.n * .15); flash('#cfe0ff', .15 + e.n * .05); impact(.06 + e.n * .02); part(e.x, e.y, 16, '#ffffff', 300, .4, 3); break;
+        case 'scShatter': blast('nova', e.x, e.y, 260, '#bff4ff'); impact(.22); shake(1); flash('#dff8ff', .8); ring(e.x, e.y, '#bff4ff', 60, 520, .8, 6); part(e.x, e.y, 90, '#dff8ff', 1100, 1.2, 3, 500); break; // STAR CAGE: ice
         case 'spikeUp': shake(.12); break;
         case 'dmPlace': if (e.i % 2 === 0) shake(.06); break;
         case 'dmFlick': shake(.2); part(e.x, e.y, 10, '#ffffff', 300, .3, 3); break;
@@ -169,10 +169,10 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'minionHit': part(e.x, e.y, 6, '#ffd7a1', 240, .3, 3); break;
         case 'minionDie': shake(e.last ? .6 : .3); blast('hit', e.x, e.y, 70); part(e.x, e.y, 24, '#ff9a5a', 500, .6, 4); if (e.last) flash('#7fe0b0', .25); break;
         case 'shielded': num(e.x, e.y, 'SHIELDED', '#ff6a5a'); break;
-        case 'starBombBig': blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
+        case 'starBombBig': impact(.26); blast('bomb', e.x, e.y + 10, 260); shake(1); flash('#ffffff', .75); negative(.08); fx.chroma = .5; part(e.x, e.y - 80, 70, '#fff1d0', 900, 1.2, 5, -120); ring(e.x, e.y, '#ffffff', 30, 900, 1, 12, .36); break;
         case 'finisherStar': shake(.9); flash('#ffffff', .5); negative(.07); ring(e.x, e.y - 100, '#ffffff', 20, 520, .7, 10); part(e.x, e.y - 100, 50, '#ffffff', 700, 1, 4); fx.finStarT = 0; break;
-        case 'finisherBeam': shake(1); flash('#ffffff', .6); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); break;
-        case 'finisherSlash': if (e.star) { shake(.3); blast('hit', e.x, e.y, 60); fx.blasts[fx.blasts.length - 1].tier = 2; part(e.x, e.y, 14, '#ffffff', 420, .5, 3); break; }
+        case 'finisherBeam': shake(1); flash('#ffffff', .6); impact(.18); fx.finBeamT = 0; part(e.x, e.y, 60, '#cfe0ff', 800, 1.1, 4, -200); part(e.x, e.y, 30, GOLD, 700, 1, 4, -200); break;
+        case 'finisherSlash': if (e.star) { shake(.3); fx.flares.push({ x: e.x, y: e.y, t: 0, life: .5, size: 90, color: '255,236,180' }); part(e.x, e.y, 16, GOLD, 360, .6, 3, -200); blast('hit', e.x, e.y, 60); fx.blasts[fx.blasts.length - 1].tier = 2; part(e.x, e.y, 14, '#ffffff', 420, .5, 3); break; }
           shake(0.35); flash('#ffffff', 0.2); fx.slashes.push({ t: 0, a: -0.45 + e.n * 1.6, y: 260 + e.n * 160 }); if (s.stage === 3) negative(0.05); break;
         case 'finisherHit': { const ac = FIN_ACCENT[e.v] || '#ffffff', x = s.boss.x, y = s.boss.y - 110; shake(.8); sig(e.v, x, y, ac); break; }
         case 'clashLost': shake(0.7); fx.vignette = 0.8; fx.chroma = 0.4; break;
@@ -1199,15 +1199,12 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       for (const [w, col] of [[26, 'rgba(120,170,255,.3)'], [12, '#0038b8'], [4, '#ffffff']]) { ctx.strokeStyle = col; ctx.lineWidth = w; for (const off of [-Math.PI / 2, Math.PI / 2]) { ctx.beginPath(); for (let i = 0; i < 3; i++) { const a = off + i / 3 * TAU; i ? ctx.lineTo(Math.cos(a) * 400 * g, Math.sin(a) * 400 * g) : ctx.moveTo(Math.cos(a) * 400 * g, Math.sin(a) * 400 * g); } ctx.closePath(); ctx.stroke(); } }
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 440 * g, 0, TAU); ctx.stroke(); ctx.restore();
     }
-    // 3) the beam of light from the sky
+    // 3) the beam of light from the sky: a twisting vortex of light, shock rings rolling out on the ground
     if (k > .7) {
-      const bk = clamp((k - .7) / .3, 0, 1), w = 60 + 120 * easeOut(Math.min(1, bk * 3)) * (1 - bk * .4), gy = b.y + 30;
-      ctx.globalCompositeOperation = 'lighter';
-      const gr = ctx.createLinearGradient(b.x - w, 0, b.x + w, 0); gr.addColorStop(0, 'rgba(0,56,184,0)'); gr.addColorStop(.25, 'rgba(60,120,255,.55)'); gr.addColorStop(.5, 'rgba(255,255,255,.95)'); gr.addColorStop(.75, 'rgba(60,120,255,.55)'); gr.addColorStop(1, 'rgba(0,56,184,0)');
-      ctx.fillStyle = gr; ctx.fillRect(b.x - w, -300, w * 2, gy + 300);
-      glow(b.x, gy, w * 2.2, 'rgba(255,255,255,.8)'); glow(b.x, -40, w * 2, 'rgba(200,220,255,.6)');
-      if (Math.random() < .8) fx.particles.push({ x: b.x + (Math.random() - .5) * w * 1.6, y: gy, vx: (Math.random() - .5) * 300, vy: -300 - Math.random() * 500, life: .6, max: .6, size: 3, color: '#ffffff', grav: 0 });
-      ctx.globalCompositeOperation = 'source-over';
+      const bk = clamp((k - .7) / .3, 0, 1), w = 30 + 90 * easeOut(Math.min(1, bk * 3)) * (1 - bk * .4), gy = b.y + 30;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createLinearGradient(b.x - w * 2, 0, b.x + w * 2, 0); gr.addColorStop(0, 'rgba(0,56,184,0)'); gr.addColorStop(.5, 'rgba(90,150,255,.35)'); gr.addColorStop(1, 'rgba(0,56,184,0)'); ctx.fillStyle = gr; ctx.fillRect(b.x - w * 2, -300, w * 4, gy + 300); ctx.restore();
+      vortexBeam(b.x, -300, gy, w, fx.clock, 1 - bk * .5, 'blue');
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(b.x, gy, w * 3, 'rgba(255,255,255,.8)'); for (let j = 0; j < 3; j++) { const rr2 = ((fx.clock * 1.8 + j / 3) % 1); ctx.strokeStyle = `rgba(${j % 2 ? '255,224,138' : '200,225,255'},${(1 - rr2).toFixed(2)})`; ctx.lineWidth = 6 * (1 - rr2) + 1; ctx.beginPath(); ctx.ellipse(b.x, gy, 50 + rr2 * 520, (50 + rr2 * 520) * .26, 0, 0, TAU); ctx.stroke(); } ctx.restore();
     }
     ctx.restore();
     for (const tr of s.hero.trail) drawHero(s, tr.x, tr.y, tr.life * 2.4, tr.face, true); drawHero(s, s.hero.x, s.hero.y); // he stays on top of his own star
@@ -1379,21 +1376,23 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   }
   function redBeam(x0, y0, x1, y1, w, a = 1) { if (w <= 0 || a <= 0) return; ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,30,10,.45)'; ctx.lineWidth = w * 3.2; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.strokeStyle = '#ff3a20'; ctx.lineWidth = w; ctx.stroke(); ctx.strokeStyle = '#fff0e0'; ctx.lineWidth = Math.max(1.5, w * .35); ctx.stroke(); ctx.restore(); }
   // a twisting fire beam: wavy edges in three heat layers, spiral rings sliding down it, sparks pouring off it
-  function vortexBeam(x, y0, y1, w, t, a = 1) {
+  const BEAM_PAL = { red: ['rgba(160,0,0,.35)', 'rgba(255,70,20,.55)', 'rgba(255,200,120,.8)', 'rgba(255,255,240,.95)', 'rgba(255,160,80,.6)', '#ffd060', '#ff6a20'],
+    blue: ['rgba(0,40,170,.35)', 'rgba(70,130,255,.55)', 'rgba(180,215,255,.8)', 'rgba(255,255,255,.95)', 'rgba(255,224,138,.55)', '#ffe08a', '#cfe0ff'] };
+  function vortexBeam(x, y0, y1, w, t, a = 1, pal = 'red') { const C = BEAM_PAL[pal];
     if (a <= 0 || w <= 0 || y1 <= y0) return; ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter';
     const layer = (ww, col, ph) => { ctx.fillStyle = col; ctx.beginPath(); for (let y = y0; y <= y1; y += 12) ctx.lineTo(x - ww * (1 + .22 * Math.sin(y * .035 + t * 18 + ph)), y); for (let y = y1; y >= y0; y -= 12) ctx.lineTo(x + ww * (1 + .22 * Math.sin(y * .03 - t * 16 + ph * 2)), y); ctx.closePath(); ctx.fill(); };
-    layer(w * 1.8, 'rgba(160,0,0,.35)', 0); layer(w * 1.15, 'rgba(255,70,20,.55)', 1.3); layer(w * .55, 'rgba(255,200,120,.8)', 2.1); layer(w * .2, 'rgba(255,255,240,.95)', 3);
-    for (let i = 0; i < 7; i++) { const yy = y0 + ((t * 700 + i * (y1 - y0) / 7) % (y1 - y0)); ctx.strokeStyle = 'rgba(255,160,80,.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, yy, w * 1.6, w * .35, 0, 0, TAU); ctx.stroke(); }
+    layer(w * 1.8, C[0], 0); layer(w * 1.15, C[1], 1.3); layer(w * .55, C[2], 2.1); layer(w * .2, C[3], 3);
+    for (let i = 0; i < 7; i++) { const yy = y0 + ((t * 700 + i * (y1 - y0) / 7) % (y1 - y0)); ctx.strokeStyle = C[4]; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, yy, w * 1.6, w * .35, 0, 0, TAU); ctx.stroke(); }
     ctx.restore();
-    if (!reducedMotion) for (let i = 0; i < 2; i++) fx.particles.push({ x: x + (Math.random() - .5) * w * 2, y: y0 + Math.random() * (y1 - y0), vx: (Math.random() - .5) * 300, vy: 200 + Math.random() * 300, life: .5, max: .5, size: 3, color: Math.random() < .5 ? '#ffd060' : '#ff6a20', grav: 300 });
+    if (!reducedMotion) for (let i = 0; i < 2; i++) fx.particles.push({ x: x + (Math.random() - .5) * w * 2, y: y0 + Math.random() * (y1 - y0), vx: (Math.random() - .5) * 300, vy: 200 + Math.random() * 300, life: .5, max: .5, size: 3, color: Math.random() < .5 ? C[5] : C[6], grav: 300 });
   }
   // a laser with a crackling lightning core (re-jagged every frame) and a hot spark at its head
-  function crackBeam(x0, y0, x1, y1, w, a = 1) {
-    if (a <= 0 || w <= 0) return; redBeam(x0, y0, x1, y1, w, a);
+  function crackBeam(x0, y0, x1, y1, w, a = 1, pal = 'red') {
+    if (a <= 0 || w <= 0) return; if (pal === 'blue') laser(x0, y0, x1, y1, w, a); else redBeam(x0, y0, x1, y1, w, a);
     const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.floor(L / 26)), nx = -(y1 - y0) / (L || 1), ny = (x1 - x0) / (L || 1);
     ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,245,230,.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, y0);
     for (let i = 1; i < n; i++) { const f = i / n, j = (Math.random() - .5) * w * 1.4; ctx.lineTo(lerp(x0, x1, f) + nx * j, lerp(y0, y1, f) + ny * j); } ctx.lineTo(x1, y1); ctx.stroke();
-    glow(x1, y1, w * 2.6, 'rgba(255,220,180,.95)'); ctx.restore();
+    glow(x1, y1, w * 2.6, pal === 'blue' ? 'rgba(220,235,255,.95)' : 'rgba(255,220,180,.95)'); ctx.restore();
   }
   // the hell portal: a black eye in the sky ringed with turning runes
   function hellPortal(x, y, r, t, a = 1) {
@@ -1411,27 +1410,27 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     if (k > L.fire + .05) { const g = u(L.fire + .05, L.boom1), pul = .6 + .4 * Math.sin(T * 9); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,${Math.round(80 + 100 * pul)},30,${(.8 * g * (k > L.boom2 + .06 ? 1 - u(L.boom2 + .06, 1) : 1)).toFixed(2)})`; ctx.lineWidth = 3; // ground cracks
       for (let i = 0; i < 9; i++) { let a = i / 9 * TAU, x = cx, y = gy; ctx.beginPath(); ctx.moveTo(x, y); for (let j = 0; j < 5 * g; j++) { a += ((i * 7 + j * 3) % 5 - 2) * .22; x += Math.cos(a) * 60; y += Math.sin(a) * 18; ctx.lineTo(x, y); } ctx.stroke(); } ctx.restore(); }
     if (k >= L.draw && k < L.boom1 + .03) { // the devil star burns into the sky around a portal; hellfire pours out of it as a vortex
-      const pr = u(L.draw, L.draw + .07), sx = cx, sy = b.y - 290, rr = 82 + 18 * u(L.fire, L.boom1), out = k > L.boom1 ? 1 - u(L.boom1, L.boom1 + .03) : 1;
+      const pr = u(L.draw, L.draw + .08), sx = cx, sy = b.y - 290, chg = u(L.fire, L.boom1), rr = 70 + 40 * chg, out = k > L.boom1 ? 1 - u(L.boom1, L.boom1 + .03) : 1;
       hellPortal(sx, sy, rr * pr, T, out); hellPent(sx, sy, rr, T * .8, out, pr, u(L.fire, L.boom1));
-      if (k > L.fire) { const f = easeOut(u(L.fire, L.fire + .025)), w = 46 + 40 * u(L.fire, L.boom1);
+      if (k > L.fire) { const f = easeOut(u(L.fire, L.fire + .03)), w = 8 + 90 * chg * chg; // charging: a thread of fire that swells into a torrent
         vortexBeam(cx, sy, sy + (gy - sy) * f, w, T, out);
-        if (f >= 1) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, gy, w * 4, 'rgba(255,120,40,.85)', out); for (let j = 0; j < 3; j++) { const rr2 = ((T * 1.6 + j / 3) % 1); ctx.strokeStyle = `rgba(255,${Math.round(180 - rr2 * 120)},60,${((1 - rr2) * .8 * out).toFixed(2)})`; ctx.lineWidth = 6 * (1 - rr2) + 1; ctx.beginPath(); ctx.ellipse(cx, gy, 60 + rr2 * 360, (60 + rr2 * 360) * .26, 0, 0, TAU); ctx.stroke(); } ctx.restore();
-          for (let j = 0; j < 12; j++) { const a = j / 12 * TAU, r2 = 70 + (j % 3) * 30; flame(cx + Math.cos(a) * r2, gy + Math.sin(a) * r2 * .26, 22, 80 + (j % 4) * 40, T + j, out); } } } }
+        if (f >= 1) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, gy, w * 4, 'rgba(255,120,40,.85)', out * (.3 + .7 * chg)); for (let j = 0; j < 3; j++) { const rr2 = ((T * 1.6 + j / 3) % 1); ctx.strokeStyle = `rgba(255,${Math.round(180 - rr2 * 120)},60,${((1 - rr2) * .8 * out).toFixed(2)})`; ctx.lineWidth = 6 * (1 - rr2) + 1; ctx.beginPath(); ctx.ellipse(cx, gy, 60 + rr2 * 360, (60 + rr2 * 360) * .26, 0, 0, TAU); ctx.stroke(); } ctx.restore();
+          for (let j = 0; j < 12; j++) { const a = j / 12 * TAU, r2 = 50 + (j % 3) * 30 + chg * 60; flame(cx + Math.cos(a) * r2, gy + Math.sin(a) * r2 * .26, 10 + 16 * chg, (30 + (j % 4) * 40) * (.3 + chg), T + j, out); } } } }
     if (k >= L.algol && k < L.spin) { // five demon eyes spawn one by one round her, orbit, and fire crackling lasers point to point, then into her
       const hot = u(L.algol + .1, L.vert), fade = 1 - u(L.vert + .05, L.spin), R = 280, rot = T * .35 * (1 + hot * 2), order = [0, 2, 4, 1, 3, 0];
-      const born = (i) => L.algol + i * .012, pts = [0, 1, 2, 3, 4].map((i) => { const [x, y] = PENT(R, rot, i); return [cx + x, cy + y * .9]; });
+      const born = (i) => L.algol + i * .015, pts = [0, 1, 2, 3, 4].map((i) => { const [x, y] = PENT(R, rot, i); return [cx + x, cy + y * .9]; });
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, (100 + hot * 220) * fade, 'rgba(255,220,190,.9)'); ctx.restore();
-      for (let i = 0; i < 5; i++) { const go = u(born(i) + .015, born(i) + .05); if (go <= 0) continue; const [x0, y0] = pts[order[i]], [x1, y1] = pts[order[i + 1]]; crackBeam(x0, y0, lerp(x0, x1, easeOut(go)), lerp(y0, y1, easeOut(go)), (8 + hot * 12), fade); }
-      if (k > L.algol + .1) for (const [x, y] of pts) crackBeam(x, y, lerp(x, cx, u(L.algol + .1, L.algol + .13)), lerp(y, cy, u(L.algol + .1, L.algol + .13)), 5 + hot * 9, fade);
+      for (let i = 0; i < 5; i++) { const go = u(born(i) + .015, born(i) + .05); if (go <= 0) continue; const [x0, y0] = pts[order[i]], [x1, y1] = pts[order[i + 1]]; crackBeam(x0, y0, lerp(x0, x1, easeOut(go)), lerp(y0, y1, easeOut(go)), (2 + 18 * u(born(i) + .015, L.vert) ** 1.5) * (Math.random() < .08 ? .4 : 1), fade); }
+      if (k > L.algol + .1) for (const [x, y] of pts) crackBeam(x, y, lerp(x, cx, u(L.algol + .1, L.algol + .13)), lerp(y, cy, u(L.algol + .1, L.algol + .13)), 2 + hot * 13, fade);
       for (let i = 0; i < 5; i++) { const sp = u(born(i), born(i) + .02); if (sp <= 0) continue; const [x, y] = pts[i]; // the eyes
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (sp < 1) glow(x, y, 120 * (1 - sp) + 20, 'rgba(255,255,255,1)'); glow(x, y, 46 + hot * 20, 'rgba(255,40,10,.8)', fade); ctx.restore();
         ctx.save(); ctx.globalAlpha = fade; ctx.translate(x, y); ctx.fillStyle = '#1a0000'; ctx.beginPath(); ctx.ellipse(0, 0, 22 * sp, 13 * sp, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#ff3a10'; ctx.beginPath(); ctx.ellipse(0, 0, 5 * sp, 12 * sp, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = '#ff9a50'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 22 * sp, 13 * sp, 0, 0, TAU); ctx.stroke(); ctx.restore(); } }
-    if (k >= L.vert - .03 && k < L.spin + .02) { // the sky splits open, then the beam crashes down through her
-      const crack = u(L.vert - .03, L.vert), f = easeOut(u(L.vert, L.vert + .015)), fade = 1 - u(L.spin - .03, L.spin + .02), skyY = 60;
+    if (k >= L.vert - .04 && k < L.spin + .02) { // the sky splits open, then the beam crashes down through her
+      const crack = u(L.vert - .04, L.vert), f = easeOut(u(L.vert, L.vert + .02)), vch = u(L.vert, L.spin - .02), fade = 1 - u(L.spin - .03, L.spin + .02), skyY = 60;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,200,160,${(fade).toFixed(2)})`; ctx.lineWidth = 3 + crack * 8; ctx.beginPath(); let px = cx, py = skyY - 120; ctx.moveTo(px, py); for (let j = 0; j < 6; j++) { px = cx + ((j * 37) % 5 - 2) * 14 * crack; py += 28; ctx.lineTo(px, py); } ctx.stroke(); glow(cx, skyY, 160 * crack * fade, 'rgba(255,90,40,.8)'); ctx.restore();
-      if (k >= L.vert) { vortexBeam(cx, skyY - 100, lerp(skyY - 100, gy + 10, f), (40 + Math.sin(fx.clock * 60) * 4) * fade + 10, T * 1.4, fade);
+      if (k >= L.vert) { vortexBeam(cx, skyY - 100, lerp(skyY - 100, gy + 10, f), (6 + 58 * vch * vch + Math.sin(fx.clock * 60) * 3 * vch) * fade, T * 1.4, fade); // a pilot thread that swells
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, gy, 220 * fade, 'rgba(255,140,70,.9)'); for (let j = 0; j < 3; j++) { const rr2 = ((T * 2.2 + j / 3) % 1); ctx.strokeStyle = `rgba(255,220,180,${((1 - rr2) * fade).toFixed(2)})`; ctx.lineWidth = 8 * (1 - rr2) + 1; ctx.beginPath(); ctx.ellipse(cx, gy, 40 + rr2 * 520, (40 + rr2 * 520) * .25, 0, 0, TAU); ctx.stroke(); } ctx.restore();
-        for (let i = 0; i < 8; i++) flame(cx + (i - 3.5) * 46, gy, 20, 110 * fade + (i % 3) * 30, T * 1.3 + i, fade);
+        for (let i = 0; i < 8; i++) flame(cx + (i - 3.5) * 46, gy, 8 + 14 * vch, (30 + 110 * vch) * fade + (i % 3) * 30 * vch, T * 1.3 + i, fade);
         if (!reducedMotion && Math.random() < .6) fx.particles.push({ x: cx + (Math.random() - .5) * 120, y: gy, vx: (Math.random() - .5) * 900, vy: -300 - Math.random() * 600, life: .9, max: .9, size: 4 + Math.random() * 4, color: '#2a1410', grav: 1400 }); } }
     if (k >= L.spin && k < L.boom2) { const f = u(L.spin, L.boom2), shk = f * f * 14, R = 80 + f * 70; // the second devil star spins up and overcharges
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, R * (2 + f * 2.5), `rgba(255,${Math.round(40 + f * 180)},${Math.round(20 + f * 160)},${(.4 + f * .5).toFixed(2)})`); ctx.restore();
@@ -1458,6 +1457,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       ctx.save(); ctx.globalAlpha = .55; ctx.fillStyle = '#0a1a40'; ctx.beginPath(); ctx.arc(sx, sy, R * 1.02 * pulse, 0, TAU); ctx.fill(); ctx.restore(); // the shield's face
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4 + ch * 4; ctx.beginPath(); ctx.arc(sx, sy, R * 1.04 * pulse, 0, TAU); ctx.stroke();
       davidStar(sx, sy, R * .92 * pulse, spin, col, 1, 0);
+      if (ch > .45) for (let i = 0; i < 2 + ch * 4; i++) { const a0 = Math.random() * TAU, a1 = a0 + .6 + Math.random(); crackBeam(sx + Math.cos(a0) * R, sy + Math.sin(a0) * R, sx + Math.cos(a1) * R * 1.15, sy + Math.sin(a1) * R * 1.15, 1.5 + ch * 2, .8, 'blue'); } // it's full: lightning crawls over it
       if (k > M.dash[0]) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 1; i <= 4; i++) glow(sx - i * 50, sy, R * .8, 'rgba(160,200,255,.25)', 1 - i / 5); ctx.restore(); } // the charge streak
       drawHero(s, h.x, h.y);
     } else { // the slam: the star punches through her, a ground shockwave rolls out both ways
@@ -1489,6 +1489,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       const sq = c.squeeze + (c.squeeze < 3 ? 0 : u(C.squeeze[2], C.shatter) * .3), R = R0 - sq * 48, shake = (k > C.squeeze[2] ? 6 : 2) * Math.sin(fx.clock * 60);
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, R * 1.6, `rgba(150,190,255,${(.2 + sq * .15).toFixed(2)})`); glow(cx, cy, 60 + sq * 50, 'rgba(255,255,255,.9)'); ctx.restore();
       oneTri(cx + shake, cy, R, 0, -Math.PI / 2); oneTri(cx - shake, cy, R, 0, Math.PI / 2);
+      for (let i = 0; i < 6; i++) if (Math.random() < .35 + sq * .2) { const a0 = -Math.PI / 2 + i * Math.PI / 3, a1 = a0 + Math.PI / 3; crackBeam(cx + Math.cos(a0) * R, cy + Math.sin(a0) * R, cx + Math.cos(a1) * R, cy + Math.sin(a1) * R, 2 + sq, .8, 'blue'); } // arcs crawl round the cage
       ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.globalAlpha = .9; // the cracks
       for (let i = 0; i < c.squeeze * 4; i++) { let a = i * 2.39, x = cx + Math.cos(a) * R * .2, y = cy + Math.sin(a) * R * .2; ctx.beginPath(); ctx.moveTo(x, y);
         for (let j = 0; j < 4; j++) { a += ((i * 7 + j * 3) % 5 - 2) * .25; x += Math.cos(a) * R * .2; y += Math.sin(a) * R * .2; ctx.lineTo(x, y); } ctx.stroke(); }
@@ -1527,7 +1528,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       if (k >= L.fire) {
         const g = easeOut(u(L.fire, L.fire + .03)), fade = 1 - u(L.spin - .02, L.spin + .04);
         const pow = u(L.fire, L.boom), bw = (9 + pow * 14) * fl * fade; // the beams fatten as it charges
-        for (const [x, y] of pts) laser(x, y - 8, lerp(x, cx, g), lerp(y - 8, cy, g), bw, fade);
+        for (const [x, y] of pts) crackBeam(x, y - 8, lerp(x, cx, g), lerp(y - 8, cy, g), bw, fade, 'blue');
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(cx, cy, (80 + 70 * g + pow * 120) * fl * (.4 + fade * .6), 'rgba(255,255,255,.9)'); ctx.restore();
         if (L.link > 1 && g >= 1) { // DAVID LASER: where the six beams meet, the sign burns into her and grows
           ctx.save(); ctx.globalCompositeOperation = 'lighter'; hexagram(cx, cy, 70 + pow * 150, fx.clock * (1 + pow * 4), 1, 'rgba(120,170,255,1)', 10, 1, .5 + pow * .5); ctx.restore();
@@ -1541,7 +1542,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         const spinning = k > L.spin ? Math.min(5, Math.floor(c.w / 7)) : 0;
         for (let j = spinning; j >= 0; j--) { // motion-blur copies once it spins fast
           const back = j * .05, alpha = j ? .22 * (1 - j / 6) : 1, rp = (i) => dlPoint({ ...c, rot: c.rot - back }, i);
-          for (let i = 0; i < 6; i++) { const [x0, y0] = rp(i), [x1, y1] = rp((i + 2) % 6); laser(x0, y0, lerp(x0, x1, g), lerp(y0, y1, g), j ? w * .7 : w, alpha); }
+          for (let i = 0; i < 6; i++) { const [x0, y0] = rp(i), [x1, y1] = rp((i + 2) % 6); if (j) laser(x0, y0, lerp(x0, x1, g), lerp(y0, y1, g), w * .7, alpha); else crackBeam(x0, y0, lerp(x0, x1, g), lerp(y0, y1, g), w, alpha, 'blue'); }
         }
         if (k > L.spin) { // the spin-up: a halo ring, the core heating white, sparks thrown off the points
           const sp = u(L.spin, L.boom);

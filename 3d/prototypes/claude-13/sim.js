@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=13t';
+import { SCRIPT } from './script.js?v=13u';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -392,7 +392,7 @@ function startFinisherCine(s) {
   // P11 owner: the finisher traces the Star of David with a trail, then a beam of light falls from the sky onto a
   // huge spinning star on the ground. Three versions, taken in turn so it is never the same one twice in a row.
   const v = finNext(s); if (v !== HELL && s.forceFin == null) s.finIdx[s.stage] = (s.finIdx[s.stage] || 0) + 1; s.finisher.hell = false; // P13: the rotation carries over between fights (index.html saves it), so all four get seen. P12: a fourth version, the SUKKAH (the hut he builds, then stars rain from it)
-  s.finisher.cine = { t: 0, len: v === 10 ? 5.2 : v === 11 ? 3.9 : v === 12 ? 5.2 : v === HELL ? 12 : v === 6 ? 4.4 : v === 7 ? 4.8 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 6.4 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
+  s.finisher.cine = { t: 0, len: v === 10 ? 5.2 : v === 11 ? 3.9 : v === 12 ? 5.2 : v === HELL ? 20 : v === 6 ? 4.4 : v === 7 ? 4.8 : v === 8 ? 4.8 : v === 1 ? 4.8 : v === 2 ? 4.6 : v === 3 ? SUKKAH.len : v === 4 ? 4.8 : v === 5 ? 6.4 : FIN.len, rot: 0, w: 0, dmg: v === HELL ? Math.round(s.boss.max * .2) : Math.round(ABIL.nova.dmg[s.stage] * FIN.mult * (1 + (s.R() - .5) * .1)), v, trace: 0, cx: s.boss.x, cy: s.boss.y - 105, R: 235, orbs: [], absorbed: 0, squeeze: 0,
     name: FIN_NAMES[v], sub: '', hits: 0, pole: [0, 0, 0, 0], branches: 0,
     hx: clamp(s.boss.x - 430, FLOOR.minX + 120, FLOOR.maxX - 500), hy: clamp(s.boss.y + 40, FLOOR.minY + 160, FLOOR.maxY - 10), bombs: [] };
   if (v === 4 || v === 5) { const c = s.finisher.cine; c.cy = clamp(s.boss.y - 105, 310, 460); c.R = c.R0 = 235; }
@@ -987,7 +987,7 @@ export const BLADE = { grow: .02, cut0: .2, cutEnd: .62, sheathe: .7, split: .8 
 export const BLADE_EDGES = [[0, 2], [2, 4], [4, 0], [1, 3], [3, 5], [5, 1]];
 export const bladePt = (b, i) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [b.x + Math.cos(a) * 230, b.y - 120 + Math.sin(a) * 230 * .82]; };
 export const TORNADO = { rise: .04, collapse: .74, burst: .8 };
-export const HELLT = { draw: .04, fire: .14, boom1: .27, algol: .33, vert: .5, spin: .61, boom2: .88 }; // STAR OF HELL, 12 s: the longest finisher
+export const HELLT = { draw: .03, fire: .12, boom1: .28, algol: .33, vert: .52, spin: .64, boom2: .87 }; // STAR OF HELL, 20 s (owner: slower, every part charging up)
 export const MAGEN = { shots: [.14, .5], n: 8, fly: .32, charge: .56, dash: [.66, .74] }; // MAGEN DAVID timeline
 export const CAGE = { fly: [.08, .4], lock: .4, squeeze: [.47, .54, .61], shatter: .7 };         // STAR CAGE timeline
 // SUKKAH timeline (fractions of the cine) and the hut's shape, built round the boss: back poles higher up the floor
@@ -1072,8 +1072,8 @@ function updateFinisher(s, dt) {
       if (at(L.boom1)) { ev(s, 'hellBoom', { x: b.x, y: b.y - 100, big: false }); s.hitstop = .12; }
       if (at(L.algol)) ev(s, 'hellAlgol', { x: b.x, y: b.y - 120 });
       if (at(L.algol + .1)) { ev(s, 'hellAlgol2', { x: b.x, y: b.y - 120 }); s.hitstop = .06; }
-      for (let i = 1; i < 5; i++) if (at(L.algol + i * .012)) ev(s, 'hellEye', { i }); // the five eyes open one by one (the first rides hellAlgol)
-      if (at(L.vert - .03)) ev(s, 'hellCrack', { x: b.x, y: 60 });
+      for (let i = 1; i < 5; i++) if (at(L.algol + i * .015)) ev(s, 'hellEye', { i }); // the five eyes open one by one (the first rides hellAlgol)
+      if (at(L.vert - .04)) ev(s, 'hellCrack', { x: b.x, y: 60 });
       if (at(L.vert)) { ev(s, 'hellVert', { x: b.x, y: b.y - 120 }); s.hitstop = .08; }
       if (at(L.spin)) ev(s, 'hellSpin', { x: b.x, y: b.y - 150 });
       if (k >= L.spin && k < L.boom2) { const u2 = (k - L.spin) / (L.boom2 - L.spin); c.w = .6 * Math.exp(u2 * 4.6); c.rot += c.w * dt; }
