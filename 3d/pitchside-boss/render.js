@@ -1,6 +1,7 @@
+import {CAST,clipPatel,drawCastBoss,drawPhotoHand,drawEnemyProjectile} from './cast.js?v=pb4';
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=pb3';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=pb4';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -638,7 +639,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   function drawHero(s, x, y, alpha = 1, face = s.hero.face, ghost = false) {
     const h = s.hero, f = form(s), pal = P[f], sq = h.squash > 0 ? 1 + h.squash * 0.8 : 1, bob = ghost ? 0 : Math.sin(fx.clock * 6) * 2;
     ctx.save(); ctx.translate(x, y + bob); ctx.scale(face * (1 / sq), sq); ctx.globalAlpha = alpha; // owner: the hero is small, the boss is a world ruler
-    const ci = CUSTOM.hero[f]; if (ci && ci.naturalWidth) { if (!ghost) { ctx.save(); ctx.scale(face, 1); shadow(0, 2, 28); ctx.restore(); } const ih = 130, iw = ih * ci.naturalWidth / ci.naturalHeight; ctx.drawImage(ci, -iw / 2, -ih + 6, iw, ih); if (h.hurt > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = alpha * .5; ctx.drawImage(ci, -iw / 2, -ih + 6, iw, ih); } ctx.restore(); return; } // DEV: an uploaded hero picture
+    const ci = CUSTOM.hero[f]; if (ci && ci.naturalWidth) { if (!ghost) { ctx.save(); ctx.scale(face, 1); shadow(0, 2, 28); ctx.restore(); } const sy=ci===CAST.patel?ci.naturalHeight*.23:0,sh=ci.naturalHeight-sy,ih=130,iw=ih*ci.naturalWidth/sh;if(ci===CAST.patel)clipPatel(ctx,iw,ih); ctx.drawImage(ci,0,sy,ci.naturalWidth,sh,-iw/2,-ih+6,iw,ih); if (h.hurt > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = alpha * .5; ctx.drawImage(ci,0,sy,ci.naturalWidth,sh,-iw/2,-ih+6,iw,ih); } ctx.restore();if(!ghost&&alpha>=1)drawHeroPowers(s,x,y);return; } // Source hero; powers remain visible
     if (!ghost) { ctx.save(); ctx.scale(face, 1); shadow(0, 2, 28); ctx.restore(); }
     if (f >= 2 && !ghost) { // wings of light shards
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = pal.hero; ctx.lineWidth = 1.5;
@@ -710,7 +711,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
     shadow(x, y + 34, 140, 0.6);
     const kick = fx.bossKick || 0, slump = b.stagger > 0 && s.phase === 'fight' ? 1 : 0;
     ctx.save(); ctx.translate(x + kick * 16 * (s.hero.x < x ? 1 : -1), y - tell * 12 + slump * 10); ctx.rotate(-tell * .05 + kick * .04 * (s.hero.x < x ? 1 : -1) + slump * .06); ctx.scale(sx * 1.12, sy * 1.12); // owner (Oct 5): smaller boss (was 1.32). wind-up lean, hit recoil, stagger slump
-    { const ci = CUSTOM.boss[s.stage]; if (ci && ci.naturalWidth) { const ih = 250, iw = Math.min(330, ih * ci.naturalWidth / ci.naturalHeight); glow(0, -90, 230, pal.bossGlow); ctx.drawImage(ci, -iw / 2, -ih + 30, iw, ih); if (b.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(ci, -iw / 2, -ih + 30, iw, ih); } ctx.restore(); drawHands(s); return; } } // DEV: an uploaded boss picture for this phase
+    { const ci=CUSTOM.boss[f];if(ci?.naturalWidth){glow(0,-90,230,pal.bossGlow);drawCastBoss(ctx,ci,f);if(b.flash>0){ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.3;drawCastBoss(ctx,ci,f);ctx.restore();}ctx.restore();drawHands(s);return;} }
+
     if (f === 3) { drawTotalityBoss(s, b, tell); ctx.restore(); drawHands(s); return; }
     glow(0, -90, 230, pal.bossGlow.replace(/[\d.]+\)$/, f === 2 ? '.4)' : '.2)'));
     ctx.fillStyle = b.flash > 0 ? '#ffffff' : '#07090b'; robePath(f === 2 ? 18 : 12); ctx.fill();
@@ -766,7 +768,8 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
   }
   function drawHands(s) {
     const b = s.boss, f = form(s), pal = P[f];
-    for (const hand of b.hands) {
+    for (const [i,hand] of b.hands.entries()) {
+      if(CAST.world?.naturalWidth){drawPhotoHand(ctx,CAST.world,i?'right':'left',hand.x,hand.y,hand.busy?(i?-.12:.12):0);continue;}
       ctx.save(); ctx.translate(hand.x, hand.y);
       glow(0, 0, 70, f === 3 ? 'rgba(255,255,255,.22)' : pal.bossGlow);
       ctx.fillStyle = b.flash > 0 ? '#fff' : (f === 3 ? '#000' : '#0a0c0f'); ctx.strokeStyle = f === 3 ? '#ffffff' : pal.boss; ctx.lineWidth = 2;
@@ -1021,12 +1024,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
       if (p.age < p.tele) { const k = p.age / p.tele; glow(p.x, p.y, p.r * 1.6, pal.orb, 0.6); ctx.strokeStyle = `rgba(${tf},${(.3 + k * .6).toFixed(2)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (3.2 - k * 2.2), 0, TAU); ctx.stroke(); ctx.restore(); continue; } // charging: a ring closes in
       let tr = trails.get(p); if (!tr) trails.set(p, tr = []); const lt = tr[tr.length - 1]; if (!lt || Math.hypot(lt.x - p.x, lt.y - p.y) > 7) { tr.push({ x: p.x, y: p.y }); if (tr.length > 12) tr.shift(); }
       ctx.restore(); ribbon(tr, p.x, p.y, p.r * 1.3, tf); ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      glow(p.x, p.y, p.r * 2.6, pal.orb);
-      ctx.translate(p.x, p.y); ctx.rotate(p.age * (f === 2 ? 7 : 4)); ctx.fillStyle = pal.orbCore; const n = f === 2 ? 8 : 6;
-      for (let i = 0; i < n; i++) { const a = i / n * TAU, L = p.r * (f === 2 ? 1.9 : 1.5); ctx.beginPath(); ctx.moveTo(Math.cos(a) * L, Math.sin(a) * L); ctx.lineTo(Math.cos(a + .35) * p.r * .8, Math.sin(a + .35) * p.r * .8); ctx.lineTo(Math.cos(a - .35) * p.r * .8, Math.sin(a - .35) * p.r * .8); ctx.closePath(); ctx.fill(); }
-      ctx.beginPath(); ctx.arc(0, 0, p.r * .78, 0, TAU); ctx.fill();
-      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = f === 3 ? '#000' : '#0a0405'; ctx.beginPath(); ctx.arc(0, 0, p.r * .5, 0, TAU); ctx.fill();
-      ctx.restore();
+      ctx.restore();drawEnemyProjectile(ctx,p,p.age,reducedMotion);
     }
     for (const p of s.heroShots) {
       const a = Math.atan2(p.vy, p.vx);

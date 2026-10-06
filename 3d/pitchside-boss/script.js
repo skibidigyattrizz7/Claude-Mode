@@ -6,22 +6,22 @@ export const SCRIPT = {
   finisherName: 'STAR OF DAVID STRIKE',
   finisherVariants: ['STAR PATH', 'SIX POINTS', 'RISING STAR', 'SUKKAH', '', ''],
   intro: [
-    { who: 'boss', name: 'THE ECLIPSE', text: 'Another warden. The sky still remembers how the last one fell.' },
-    { who: 'hero', name: 'WARDEN', text: 'Then let it remember this one standing.' },
-    { who: 'boss', name: 'THE ECLIPSE', text: 'Kneel, and the dark will be gentle with you.' },
-    { who: 'hero', name: 'WARDEN', text: 'Not today.' },
+    { who: 'boss', name: 'WORLD RULER VINSON', text: 'Another warden. The sky still remembers how the last one fell.' },
+    { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: 'Then let it remember this one standing.' },
+    { who: 'boss', name: 'WORLD RULER VINSON', text: 'Kneel, and the dark will be gentle with you.' },
+    { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: 'Not today.' },
   ],
   reborn: [
-    { who: 'boss', name: 'THE ECLIPSE · UNBOUND', text: 'You burned that bright just to lose a little slower?' },
-    { who: 'hero', name: 'WARDEN · REBORN', text: 'I burned that bright so everyone could see.' },
+    { who: 'boss', name: 'PHONK MODE VINSON', text: 'You burned that bright just to lose a little slower?' },
+    { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: 'I burned that bright so everyone could see.' },
   ],
   domain: [
-    { who: 'boss', name: 'THE ECLIPSE · UNBOUND', text: 'Enough. My domain has swallowed a thousand suns.' },
-    { who: 'hero', name: 'WARDEN · REBORN', text: 'Then try to swallow this one.' },
+    { who: 'boss', name: 'PHONK MODE VINSON', text: 'Enough. My domain has swallowed a thousand suns.' },
+    { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: 'Then try to swallow this one.' },
   ],
   totality: [
-    { who: 'boss', name: 'TOTALITY', text: 'You found the hidden dark. Now you will live in it forever.' },
-    { who: 'hero', name: 'WARDEN · ASCENDED', text: 'Light never needed your permission.' },
+    { who: 'boss', name: 'SECRET BOSS', text: 'You found the hidden dark. Now you will live in it forever.' },
+    { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: 'Light never needed your permission.' },
   ],
   // shouted during the mash (one at the start, then one per escalation mark) and during the struggle after it
   push: {
@@ -44,8 +44,8 @@ export const SCRIPT = {
   },
   // stop-and-read beats inside each clash's struggle (the fight pauses until you click)
   clashBeats: {
-    1: [{ who: 'boss', name: 'THE ECLIPSE', text: 'You cannot hold this forever.' }, { who: 'hero', name: 'WARDEN', text: "I don't need forever. Just long enough." }],
-    2: [{ who: 'boss', name: 'THE ECLIPSE · UNBOUND', text: 'Everything you love burns under my sky.' }, { who: 'hero', name: 'WARDEN · REBORN', text: "Then I'll stand in front of all of it." }],
-    3: [{ who: 'boss', name: 'TOTALITY', text: 'There is no dawn here.' }, { who: 'hero', name: 'WARDEN · ASCENDED', text: "Then I'll make one." }],
+    1: [{ who: 'boss', name: 'WORLD RULER VINSON', text: 'You cannot hold this forever.' }, { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: "I don't need forever. Just long enough." }],
+    2: [{ who: 'boss', name: 'PHONK MODE VINSON', text: 'Everything you love burns under my sky.' }, { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: "Then I'll stand in front of all of it." }],
+    3: [{ who: 'boss', name: 'SECRET BOSS', text: 'There is no dawn here.' }, { who: 'hero', name: 'ISRAELI FOREVER PATEL', text: "Then I'll make one." }],
   },
 };
