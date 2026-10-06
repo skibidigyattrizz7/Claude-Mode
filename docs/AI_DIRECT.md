@@ -1372,8 +1372,8 @@ How the copy is built (plain ES modules, no build step):
 - `sfx.js` synthesized sounds by event name. `index.html` menus, input, settings, the embed bridge.
 
 Rules so it keeps working in the game:
-1. Bump the cache tag on every change: all imports use `?v=pb2`; sed them together (sim.js, render.js, sfx.js, index.html),
-   e.g. `sed -i "s/?v=pb2'/?v=pb3'/g" 3d/pitchside-boss/{sim,render,sfx}.js 3d/pitchside-boss/index.html`.
+1. Bump the cache tag on every change: all imports use `?v=pb3`; sed them together (sim.js, render.js, sfx.js, index.html),
+   e.g. `sed -i "s/?v=pb3'/?v=pb4'/g" 3d/pitchside-boss/{sim,render,sfx}.js 3d/pitchside-boss/index.html`.
 2. Keep the bridge: on a win `index.html` posts `{type:'p13-victory'}` to the parent; RETURN TO PITCHSIDE posts
    `{type:'p13-close'}`. `3d/js/meta/ui/eclipsebattle.js` turns the win into the server unban (battleWin) and rewards.
    Don't rename those messages or the folder (the URL is in eclipsebattle.js).

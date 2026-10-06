@@ -1,6 +1,6 @@
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=pb2';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=pb3';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };
@@ -94,7 +94,7 @@ export function createRenderer(canvas, { reducedMotion = false, onEvent = null }
         case 'bossDodge': num(e.x, e.y - 250, 'DODGED', '#c8d0d6'); for (let i = 0; i < 3; i++) fx.rings.push({ x: e.x, y: e.y - 90, color: pal.boss, r0: 60, r1: 140, t: i * 0.05, life: 0.35, w: 2, flat: 1.4 }); break;
         case 'dodge': ring(e.x, e.y - 40, '#d7f3ff', 8, 46, 0.25, 2); break;
         case 'perfect': num(e.x, e.y - 110, 'PERFECT', '#9ff8ff', true); num(e.x + 40, e.y - 70, '+2', '#9ff0c4'); ring(e.x, e.y - 40, '#9ff8ff', 10, 140, 0.5, 3); flash('#bff4ff', 0.16); if (s.stage === 3) negative(0.06); break;
-        case 'heal': part(e.x, e.y - 50, 24, '#9ff0c4', 200, 0.9, 3, -120); ring(e.x, e.y - 40, '#9ff0c4', 20, 90, 0.5, 3); num(e.x, e.y - 120, '+' + HEAL, '#9ff0c4', true); break;
+        case 'heal': part(e.x, e.y - 50, 24, '#9ff0c4', 200, 0.9, 3, -120); ring(e.x, e.y - 40, '#9ff0c4', 20, 90, 0.5, 3); num(e.x, e.y - 120, '+' + TUNE.heal, '#9ff0c4', true); break;
         case 'healGain': num(640, 300, '+1 HEAL', '#9ff0c4', true); break;
         case 'tell': fx.callout = { text: ATTACK_NAMES[e.kind] || '', t: 0 }; break;
         case 'slam': shake(0.55); part(e.x, e.y, 26, '#c9a27a', 380, 0.8, 4); ring(e.x, e.y, pal.tele, 20, 160, 0.45, 6, 0.36); ring(e.x, e.y, '#ffffff', 10, 230, 0.3, 3, 0.36); blast('crack', e.x, e.y, 150, pal.tele); flash(pal.tele, .06); for (let i = 0; i < 16; i++) fx.particles.push({ x: e.x + (Math.random() - .5) * 60, y: e.y, vx: (Math.random() - .5) * 500, vy: -250 - Math.random() * 450, life: .8, max: .8, size: 4 + Math.random() * 4, color: '#2a2220', grav: 1500 }); addScar(e.x, e.y); break;

@@ -385,3 +385,5 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 - Owner (Oct 5): ChatGPT will change the fight to the owner's liking inside Pitchside. Make 2 separate games: the full game (prototypes/claude-13, everything) and the Pitchside one (always HARD, only CONTINUE + normal settings). Claude must still be able to change it later.
   - DONE (Oct 5): split into two games. `3d/pitchside-boss/` = the Pitchside one (always HARD; FIGHT / CONTINUE / SETTINGS with CONTROLS inside / RETURN TO PITCHSIDE; no dev mode; own saves pb*), opened by the ban screen. `3d/prototypes/claude-13/` = the full game. ChatGPT brief in docs/AI_DIRECT.md.
   - FIXED: CONTINUE showed with no save and did nothing (a tile's display:grid beat the hidden attribute). Both games.
+
+- FIXED (Oct 6): pressing H crashed ("HEAL is not defined"): the heal number popup still used the old constant after the dev-mode TUNE change. Both games. (Smoke bots never heal, which is why tests missed it.)

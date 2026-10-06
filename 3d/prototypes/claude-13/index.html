@@ -261,10 +261,10 @@
 </div>
 <div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
 <script type="module">
-import { createFight, step, W, H, aligned, STAGES } from './sim.js?v=14b';
-import { createRenderer } from './render.js?v=14b';
-import { createSfx } from './sfx.js?v=14b';
-import { applyDev, openDev } from './dev.js?v=14b';
+import { createFight, step, W, H, aligned, STAGES } from './sim.js?v=14c';
+import { createRenderer } from './render.js?v=14c';
+import { createSfx } from './sfx.js?v=14c';
+import { applyDev, openDev } from './dev.js?v=14c';
 // owner (Oct 5): the football game's ban screen opens this page in a frame (?embed=1, eclipsebattle.js). There the dev
 // overrides are off (no cheating the curse), RETURN TO PITCHSIDE replaces DEV MODE, and a win is reported to the game.
 const EMBED = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;

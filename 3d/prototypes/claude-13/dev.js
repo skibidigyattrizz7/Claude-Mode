@@ -2,9 +2,9 @@
 // everything, the colors, dialogue, difficulty", plus an uploaded picture for each phase of the boss and the hero.
 // Everything is saved in this browser (localStorage 'p13dev') as overrides on top of the defaults below, and applied
 // before each fight. Empty field = the default.
-import { STAGES, MODES, ABIL, ABIL_ORDER, FIN, FIN_NAMES, MISS, TUNE } from './sim.js?v=14b';
-import { SCRIPT } from './script.js?v=14b';
-import { P, CUSTOM } from './render.js?v=14b';
+import { STAGES, MODES, ABIL, ABIL_ORDER, FIN, FIN_NAMES, MISS, TUNE } from './sim.js?v=14c';
+import { SCRIPT } from './script.js?v=14c';
+import { P, CUSTOM } from './render.js?v=14c';
 
 const KEY = 'p13dev';
 const ROOTS = { STAGES, MODES, ABIL, FIN, FIN_NAMES, MISS, TUNE, SCRIPT, P };
