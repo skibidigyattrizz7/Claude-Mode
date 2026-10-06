@@ -1,7 +1,7 @@
-import {CAST,clipPatel,drawCastBoss,drawPhotoHand} from './cast.js?v=pv1';
+import {CAST,clipPatel,drawCastBoss,drawPhotoHand} from './cast.js?v=vf1';
 // Prototype 7-Claude: renderer. Draws everything from the sim state; VFX live on their own clock so hit-stop
 // and slow-mo freeze the fight but not the sparks. Three looks: NIGHT (phase 1), EMBER (phase 2), TOTALITY (secret).
-import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=pv1';
+import { W, H, HZ, FLOOR, BOX, STAR_PATH, starPoint, DLASER, dlPoint, SUKKAH, sukkahGeom, MAGEN, CAGE, BARRAGE, BLADE, BLADE_EDGES, bladePt, TORNADO, HELLT, HELL, DOMINO, dominoPos, COMET, RICO, ricochetLegs, COLLAPSE, FIN_NAMES, finNext, spikeDots, clamp, lerp, easeOut, STAGES, TUNE, ABIL, ABIL_ORDER, FIN, CLASH, TALK_CPS, aligned } from './sim.js?v=vf1';
 
 const TAU = Math.PI * 2;
 const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1, x = clamp(t, 0, 1) - 1; return 1 + c3 * x * x * x + c1 * x * x; };

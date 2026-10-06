@@ -390,3 +390,5 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
 
 - Oct 6: reviewed chatgpt/pitchside-vinson-cast (0d748bf): cast photos, photo hands, secret boss photo, names; works, no errors, its test passes. NOT merged: its boss projectiles are drawn as swastikas on a real-person boss. Waiting for owner on merging without that part.
   - Oct 6: owner wanted to test it in a browser: preview copy at 3d/pitchside-preview/ (ChatGPT cast branch, boss bullets kept as the red spiky orbs, not wired to the ban screen).
+
+- Oct 6 (owner): THREE versions: Pitchside (3d/pitchside-boss: hard only, cast photos, owner's own dialogue to come), outsider (3d/vinson-fight: full game + cast photos, ChatGPT owns), Claude's (prototypes/claude-13, stand-ins). DONE: ChatGPT cast merged into the first two (orb bullets kept, no swastikas); photos that load late now still appear (owner video showed built-in art). Preview folder removed.

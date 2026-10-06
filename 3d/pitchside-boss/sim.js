@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=pb3';
+import { SCRIPT } from './script.js?v=pb5';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
@@ -35,9 +35,9 @@ export const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 function rng(seed) { let a = (seed >>> 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
 export const STAGES = {
-  1: { bossHp: 4500, gates: [0.8, 0.6, 0.4, 0.2], gap: 1.9, speed: 1, dmg: 1, dodge: 0.1, boss: 'THE ECLIPSE', hero: 'WARDEN' },
-  2: { bossHp: 6000, gates: [0.8, 0.6, 0.4, 0.2], gap: 1.45, speed: 1.18, dmg: 1.15, dodge: 0.2, boss: 'THE ECLIPSE · UNBOUND', hero: 'WARDEN · REBORN' },
-  3: { bossHp: 7800, gates: [0.75, 0.5, 0.25], gap: 1.0, speed: 1.42, dmg: 1.4, dodge: 0.28, boss: 'TOTALITY', hero: 'WARDEN · ASCENDED' },
+  1: { bossHp: 4500, gates: [0.8, 0.6, 0.4, 0.2], gap: 1.9, speed: 1, dmg: 1, dodge: 0.1, boss: 'WORLD RULER VINSON', hero: 'ISRAELI PATEL' },
+  2: { bossHp: 6000, gates: [0.8, 0.6, 0.4, 0.2], gap: 1.45, speed: 1.18, dmg: 1.15, dodge: 0.2, boss: 'PHONK MODE VINSON', hero: 'ISRAELI PATEL' },
+  3: { bossHp: 7800, gates: [0.75, 0.5, 0.25], gap: 1.0, speed: 1.42, dmg: 1.4, dodge: 0.28, boss: 'SECRET BOSS', hero: 'ISRAELI PATEL' },
 };
 // owner (Oct 5): "a dev setting where you can alter everything": the DEV screen (dev.js) edits these live
 export const TUNE = { view: .78, heroMax: 100, heal: 32, heals: 2, healCap: 4, hell: .05, abilDmg: 1, abilCd: 1, slashDmg: 1 };

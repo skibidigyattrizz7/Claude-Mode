@@ -1,4 +1,4 @@
-import { SCRIPT } from './script.js?v=pv1';
+import { SCRIPT } from './script.js?v=vf1';
 // Prototype 7-Claude: simulation (no DOM). Fixed 1/120 s steps; hit-stop/slow-mo scale only this clock.
 // Stand-in cast drawn by render.js ("Warden" vs "The Eclipse") so ChatGPT can swap in the real characters.
 //
