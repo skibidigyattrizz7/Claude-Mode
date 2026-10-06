@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101216">
+<title>Vinson · Isolated Animation QA</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/meta.css">
+<style>
+  :root { color-scheme: dark; }
+  body { min-height: 100vh; margin: 0; background: #101216; color: #f1f2f3; }
+  .qa-toolbar { position: fixed; z-index: 40000; inset: 12px 12px auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border: 1px solid #43464c; border-radius: 12px; background: #15171ddd; box-shadow: 0 8px 32px #0009; backdrop-filter: blur(10px); font: 13px/1.3 system-ui, sans-serif; }
+  .qa-toolbar strong { margin: 0 8px 0 2px; color: #ff6565; letter-spacing: .08em; }
+  .qa-toolbar button { padding: 8px 11px; border: 1px solid #4b4f56; border-radius: 7px; background: #24272d; color: #f4f4f4; cursor: pointer; }
+  .qa-toolbar button:hover { background: #3a2024; border-color: #a83b45; }
+  .qa-toolbar button:focus-visible { outline: 2px solid #f66; outline-offset: 2px; }
+  .qa-status { flex-basis: 100%; color: #b7bbc2; padding: 0 3px; }
+  .qa-status b { color: #ff8b8b; }
+  .pm-root { padding-top: 94px; min-height: 100vh; }
+  .pm-top { background: #191c21; }
+  .pm-main { min-height: calc(100vh - 170px); }
+  .qa-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 14px; }
+  .qa-card { min-height: 150px; padding: 20px; border: 1px solid #353941; border-radius: 12px; background: linear-gradient(145deg,#20242b,#171a1f); }
+  .qa-card h2 { margin-bottom: 8px; }
+  .qa-card p { color: #afb4bd; }
+  .qa-card button { margin: 5px 5px 0 0; padding: 10px 14px; border: 1px solid #555b64; border-radius: 7px; background: #292e36; cursor: pointer; }
+  .qa-card button:hover { background: #3a404a; }
+  .qa-note { color: #aeb3ba; font: 13px/1.55 system-ui,sans-serif; }
+  @media(max-width:640px) { .qa-toolbar { inset: 6px 6px auto; gap: 6px; } .qa-toolbar button { padding: 7px 8px; font-size: 12px; } .pm-root { padding-top: 150px; } }
+</style>
+</head>
+<body>
+<aside class="qa-toolbar" aria-label="Vinson QA fixture controls">
+  <strong>VINSON · QA SANDBOX</strong>
+  <button data-test="pull">One-minute pull</button>
+  <button data-test="last10">Last 10 seconds</button>
+  <button data-test="ban">Ban cinematic</button>
+  <button data-test="unban">Owner unban + squad countdown</button>
+  <button data-test="lock">Lock cursed controls</button>
+  <button data-test="lift">Owner lift</button>
+  <button data-test="restart">Restart scene</button>
+  <button data-test="redraw">Redraw game UI</button>
+  <div class="qa-status" aria-live="polite">Fixture ready · <b>no network, account, or persistence writes</b></div>
+</aside>
+
+<main class="pm-root" aria-label="Mock Ultimate Team screen">
+  <header class="pm-top">
+    <div class="pm-top-title"><h1>Ultimate Team</h1><span class="pm-kicker">Vinson QA Fixture</span></div>
+    <div class="pm-top-right"><span class="pm-coins">10,000 <small>COINS</small></span></div>
+  </header>
+  <nav class="pm-uttabs" aria-label="Ultimate Team sections">
+    <button class="pm-uttab on" role="tab" data-uttab="home">Home</button><button class="pm-uttab" role="tab" data-uttab="squad">Squad</button><button class="pm-uttab" role="tab" data-uttab="club">Club</button><button class="pm-uttab" role="tab" data-uttab="store">Store</button><button class="pm-uttab" role="tab" data-uttab="objectives">Objectives</button>
+  </nav>
+  <div class="pm-main">
+    <section class="pm-section">
+      <h2>Pitchside FC</h2><p class="qa-note">This page runs the production Vinson presentation and curse lifecycle over an in-memory mock squad.</p>
+      <div class="qa-grid">
+        <article class="qa-card"><h2>Squad</h2><p>Formation · 4-3-3</p><button class="qa-action">Edit squad</button><button class="qa-action">Start match</button></article>
+        <article class="qa-card"><h2>Store</h2><p>Available packs · 3</p><button class="qa-action">Open Gold Pack</button><button class="qa-action">Open Premium Pack</button><div class="pm-storeitem"><button data-qa-buy>Buy &amp; open</button></div></article>
+        <article class="qa-card"><h2>Club</h2><p>Players · 23</p><button class="qa-action">Manage players</button><button class="qa-action">Quick sell</button></article>
+        <article class="qa-card"><h2>Match Center</h2><p>Play a game with your active squad.</p><button class="qa-action">Play Rivals</button><button class="qa-action">Play Squad Battles</button></article>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+  import { startVinsonExperience } from './js/meta/ui/vinson.js?v=vinson8';
+  import { confirmBox, h } from './js/meta/ui/dom.js';
+  import { HELL_CARD_ID } from './js/meta/core/secretcard.js';
+
+  // loadUT is intentionally only read by startVinsonExperience; attach immediately swaps in this fixture.
+  const fixture = {
+    v: 1, clubName: 'Pitchside FC', short: 'PFC', coins: 10000, tokens: 0,
+    club: Array.from({length: 23}, (_, i) => `qa-player-${i}`),
+    squad: { formation: '4-3-3', slots: Array(11).fill(null), bench: Array(7).fill(null), manager: null },
+    packs: [{type:'gold'}, {type:'premium'}], vault: [], transferList: [], stats: {}, vinson: null,
+  };
+  let mockPhase = null;
+  let mockDeadline = 0;
+  let role = 'player';
+  const isoDeadline = () => new Date(mockDeadline).toISOString();
+  const online = {
+    identityId: () => 'vinson-qa-player',
+    account: { current: () => ({ role }), onChange: () => () => {} },
+    vinson: {
+      status: async () => ({ok:true, phase:mockPhase, deadline:mockPhase === 'doom' ? isoDeadline() : null, serverNow:new Date().toISOString()}),
+      pull: async () => { mockPhase = 'doom'; if (!mockDeadline || mockDeadline < Date.now()) mockDeadline = Date.now() + 60000; return {ok:true, phase:'doom', deadline:isoDeadline(), serverNow:new Date().toISOString()}; },
+      release: async () => ({ok:true}), lock: async () => ({ok:true}),
+    },
+  };
+  const app = { ut: fixture, root: document.querySelector('.pm-root'), destroyed:false, saveUT(){}, refresh(){}, applyRestrictions(){} };
+  app.root.addEventListener('click', (event) => {
+    if (event.target.closest('[data-uttab="home"]')) show('Ultimate Team Home reached');
+  });
+  const originalUI = app.root.innerHTML;
+  const controller = startVinsonExperience(online, { initialState: fixture, ephemeral: true });
+  controller.attach(app);
+  // Hold the actual production title for visual inspection without changing a real game or its timer.
+  if (new URLSearchParams(location.search).has('titleproof')) {
+    const titleObserver = new MutationObserver(() => {
+      const title = document.querySelector('.vinson-blood-heading');
+      if (!title) return;
+      const proof = title.parentElement.cloneNode(true);
+      proof.style.cssText = 'position:fixed;inset:0;z-index:40001;opacity:1;animation:none;pointer-events:none';
+      proof.classList.remove('vinson-prologue-out');
+      document.body.append(proof); titleObserver.disconnect();
+    });
+    titleObserver.observe(document.body, { childList:true, subtree:true });
+  } // fixture replaces any disk state immediately
+
+  const status = document.querySelector('.qa-status');
+  const show = (label) => { status.innerHTML = `Scene · <b>${label}</b> · in-memory fixture`; };
+  const putCursedCard = () => { fixture.club.push(HELL_CARD_ID); fixture.squad.slots[9] = HELL_CARD_ID; };
+  const setRemote = async (phase) => { mockPhase = phase; await controller.poll(); controller.tick(); };
+  document.querySelector('[data-test="pull"]').onclick = async () => {
+    role='player'; mockPhase=null; mockDeadline=Date.now()+60000; fixture.vinson=null;
+    await controller.onPull(); show('60-second countdown pull');
+  };
+  document.querySelector('[data-test="last10"]').onclick = async () => {
+    role='player'; mockPhase='doom'; mockDeadline=Date.now()+8500;
+    fixture.vinson={phase:'doom', doomUntil:mockDeadline, phaseUntil:0, pin:null};
+    controller.tick(); show('critical last 10 seconds');
+  };
+  document.querySelector('[data-test="ban"]').onclick = async () => {
+    role='player'; mockPhase='banned'; mockDeadline=Date.now()-1;
+    fixture.vinson={phase:'banned', doomUntil:mockDeadline, phaseUntil:0, pin:null};
+    controller.tick(); show('ban cinematic');
+  };
+  document.querySelector('[data-test="unban"]').onclick = async () => {
+    role='player'; mockPhase='released'; mockDeadline=0; fixture.vinson={phase:'banned',doomUntil:Date.now()-1000,phaseUntil:0,pin:null}; putCursedCard();
+    await controller.poll(); controller.onSquadChange(); show('owner unban reconciled · squad countdown');
+  };
+  document.querySelector('[data-test="lock"]').onclick = () => {
+    role='player'; mockPhase='locked'; mockDeadline=0; putCursedCard();
+    fixture.vinson={phase:'locked',doomUntil:0,phaseUntil:0,pin:{area:'slot',idx:9}};
+    controller.tick(); show('curse locked · click game controls to fracture');
+  };
+  document.querySelector('[data-test="lift"]').onclick = async () => {
+    role='player'; mockPhase='lifted'; fixture.vinson={phase:'locked',doomUntil:0,phaseUntil:0,pin:{area:'slot',idx:9}};
+    await controller.poll(); show('owner lifted curse');
+  };
+  document.querySelector('[data-test="restart"]').onclick = () => {
+    role='player'; mockPhase=null; mockDeadline=0; fixture.vinson=null; fixture.squad.slots.fill(null); controller.tick(); show('fixture reset');
+  };
+  document.querySelector('[data-test="redraw"]').onclick = () => { app.root.innerHTML = originalUI; show('UI redrawn · curse damage must remain'); };
+  document.querySelectorAll('.qa-action').forEach((button) => button.addEventListener('click', () => {
+    if (fixture.vinson?.phase === 'locked') show(`fracture interaction · ${button.textContent}`);
+  }));
+  app.root.querySelector('[data-qa-buy]').onclick = async () => {
+    const ok = await confirmBox(app.root, 'Buy pack', 'Fixture pack. No real coins or accounts.', 'Buy & open');
+    show(ok ? 'purchase confirmed · cursed pack entry reached' : 'purchase cancelled · no transaction');
+  };
+  window.addEventListener('pagehide', () => controller.destroy(), {once:true});
+</script>
+</body>
+</html>

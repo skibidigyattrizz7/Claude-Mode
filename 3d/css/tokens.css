@@ -1,0 +1,95 @@
+/* ==================================================================
+   Claude-Mode / Pitchside — design tokens (FC-style menus)
+   Charcoal surfaces + ONE electric-lime accent used sparingly (focus,
+   active tab, primary action, live status). Everything else is white /
+   grey text on charcoal; imagery (cards, packs, kits, stadium) carries
+   the colour. Promo colours live on promo content only.
+   Headings: Barlow Condensed, upright. Body: Inter. Both via Google
+   Fonts with system fallbacks.
+   Loaded before main.css / the landing page / 2D. Token NAMES are kept
+   so older rules keep resolving.
+   ================================================================== */
+:root {
+  color-scheme: dark;
+
+  /* ---- surface: near-black charcoal ramp ---- */
+  --bg: #0b0d10;
+  --bg2: #101317;
+  --panel: rgba(21, 24, 29, .92);
+  --panel-solid: #15181d;
+  --panel2: #1c2027;
+  --panel3: #242933;
+  --line: #262b33;
+  --line2: #353b46;
+
+  /* ---- text ---- */
+  --txt: #f3f5f7;
+  --mut: #a3abb8;   /* 7.5:1 on --panel-solid */
+  --dim: #7b8390;   /* 4.5:1 on --bg — meta info only */
+
+  /* ---- the one accent ---- */
+  --acc: #cdfb3c;
+  --acc-ink: #0b0d10;
+  --acc-soft: rgba(205, 251, 60, .14);
+  /* legacy categorical names: kept, but mapped onto the same restrained system */
+  --acc2: #9fb4c9;   /* secondary / neutral-cool (progress, secondary buttons) */
+  --acc3: #7cc8ff;   /* info (connection states) */
+  --gold: #f2c94c;   /* coins & rewards only */
+  --hot: #ff4d5e;    /* notification badges */
+  --orange: #ff9b3d;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #ff5a6a;
+
+  /* ---- type ---- */
+  --font-display: "Barlow Condensed", "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --step--1: .8125rem;  /* 13px meta */
+  --step-0:  .9375rem;  /* 15px body */
+  --step-1:  1.0625rem;
+  --step-2:  1.375rem;
+  --step-3:  1.875rem;
+  --step-4:  clamp(2.25rem, 1.8rem + 1.8vw, 3.25rem);
+  --step-5:  clamp(2.75rem, 2rem + 3vw, 4.5rem);
+
+  /* ---- spacing (4px base) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- radius: tight, like a console UI ---- */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+  --r: var(--radius-md);
+  --r-sm: var(--radius-sm);
+
+  /* ---- shadow ---- */
+  --shadow-sm: 0 2px 8px -2px rgba(0,0,0,.5);
+  --shadow-md: 0 12px 28px -14px rgba(0,0,0,.85);
+  --shadow-lg: 0 24px 60px -20px rgba(0,0,0,.9);
+  --shadow-glow: 0 0 0 2px var(--acc);
+
+  /* ---- z scale ---- */
+  --z-bar: 20;
+  --z-modal: 2000;
+  --z-toast: 3000;
+
+  /* ---- motion: 120-220ms, ease-out-quart ---- */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+  --ease-out: cubic-bezier(.25, 1, .5, 1);
+  --ease-spring: cubic-bezier(.25, 1, .5, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 1ms; --dur-base: 1ms; --dur-slow: 1ms; }
+}

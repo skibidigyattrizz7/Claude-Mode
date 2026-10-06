@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vinson animation test</title>
+<link rel="stylesheet" href="css/vinsonbattle.css"><style>body{margin:0;background:#080d0e;color:#eee;font:16px system-ui}header{padding:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}button,select,input{font:inherit}canvas{width:100%;max-height:80vh;object-fit:contain}p{padding:0 16px}#caption{text-align:center}</style></head>
+<body><header><strong>Vinson animation preview</strong><button id="play">Play battle</button><select id="scene" aria-label="Preview scene"><option value="fight">Field</option><option value="transition">Phonk arrival and Captain entrance</option><option value="finale">Final laser clash and aftermath</option></select><label>Timeline <input type="range" id="timeline" aria-label="Timeline" min="0" max="28" step=".1" value="0"></label><button id="motion">Play timeline</button><label><input type="checkbox" id="reduced">Reduced motion</label></header><canvas id="preview" width="1280" height="720"></canvas><p id="caption"></p><p>This isolated preview uses no account and cannot grant cards or lift curses.</p>
+<script type="module">
+import { createVinsonBattle } from './js/meta/core/vinsonbattle.js';
+import { drawVinsonBattle,launchVinsonBattle } from './js/meta/ui/vinsonbattle.js';
+import { sampleVinsonCinematic } from './js/meta/ui/vinsoncinematic.js';
+const canvas=document.querySelector('#preview'),ctx=canvas.getContext('2d'),scene=document.querySelector('#scene'),timeline=document.querySelector('#timeline'),caption=document.querySelector('#caption');
+const images={};await Promise.all(['patel','captain','world','phonk'].map(async key=>{const img=new Image();img.src=`assets/vinson/${key}.webp`;images[key]=img;await img.decode().catch(()=>{});}));
+const battle=createVinsonBattle({seed:42});battle.step(0,{advance:true});
+let playing=false,last=0;
+document.querySelector('#motion').onclick=()=>{playing=!playing;document.querySelector('#motion').textContent=playing?'Pause timeline':'Play timeline';};
+document.querySelector('#play').onclick=()=>launchVinsonBattle({seed:42});
+const params=new URLSearchParams(location.search);if(params.has('scene'))scene.value=params.get('scene');if(params.has('t'))timeline.value=params.get('t');
+function frame(now){const dt=last?Math.min(.1,(now-last)/1000):0;last=now;if(playing)timeline.value=(Number(timeline.value)+dt)%28;const t=Number(timeline.value),reducedMotion=document.querySelector('#reduced').checked;const shot=scene.value==='fight'?null:sampleVinsonCinematic(scene.value,t,{reducedMotion});drawVinsonBattle(ctx,battle.state,images,t,{shot,reducedMotion});caption.textContent=shot?.text||`${scene.value.toUpperCase()} · ${t.toFixed(1)} seconds`;requestAnimationFrame(frame);}requestAnimationFrame(frame);
+window.addEventListener('error',e=>{caption.textContent=`ERROR: ${e.message}`;});
+</script></body></html>
