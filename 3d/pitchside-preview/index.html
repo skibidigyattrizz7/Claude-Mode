@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pitchside Boss Fight (preview)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+  :root { --ink: #f2ede2; --muted: #9aa6b0; --gold: #ffd7a1; --bg: #050708; --hero: #9ff8ff; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; touch-action: none;
+    font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; -webkit-user-select: none; user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .screen { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; background: rgba(5,7,8,.9); z-index: 5; padding: 24px; overflow: auto; }
+  .screen[hidden] { display: none !important; }
+  /* victory sits in the sky so the meadow (shield, sword) stays visible underneath */
+  #end { background: linear-gradient(rgba(5,7,8,.62), rgba(5,7,8,.25) 62%, rgba(5,7,8,0)); place-content: start center; padding-top: max(4vh, 16px); }
+  #end .rewards li { background: rgba(14,20,24,.72); }
+  #end h1 { text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+  #end .rewards { gap: 5px; margin-bottom: 12px; } #end .rewards li { padding: 6px 14px; font-size: 19px; } #end .stats { margin-bottom: 10px; } #end .hint { margin: 0 auto 14px; font-size: 15px; } #end .sub { margin: 6px 0 14px; }
+  #end button.ghost { padding: 14px 28px; font-size: 22px; }
+  #end .stats, #end .hint, #end .sub { color: #fff4e4; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+  h1 { font-size: clamp(40px, 7vw, 76px); margin: 0; letter-spacing: .04em; color: var(--gold); line-height: 1; }
+  .sub { color: var(--muted); font-size: 18px; margin: 10px 0 22px; letter-spacing: .08em; }
+  .keys { display: grid; grid-template-columns: auto auto; gap: 5px 22px; justify-content: center; margin: 0 auto 24px; font-size: 18px; text-align: left; }
+  .keys { gap: 8px 22px; font-size: 19px; align-items: center; }
+  .keys b { color: var(--ink); justify-self: end; font-weight: 700; } .keys span { color: #c8d0d6; }
+  .keys b kbd { display: inline-block; min-width: 22px; text-align: center; padding: 1px 8px; margin-left: 4px; font: 700 16px 'Barlow Condensed', sans-serif;
+    color: var(--ink); background: #1e262c; border: 1px solid #3a4650; border-bottom-width: 3px; border-radius: 4px; }
+  button.big { font: 700 24px 'Barlow Condensed', sans-serif; letter-spacing: .08em; color: #0b1014; background: var(--gold); border: 0; padding: 14px 40px; cursor: pointer; }
+  button.big, button.ghost, .tog, .devTab { outline: none; } button.big:focus, button.ghost:focus, .tog:focus, .devTab:focus { outline: 3px solid #fff; outline-offset: 2px; } .tbtn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  button.ghost { font: 700 20px 'Barlow Condensed', sans-serif; color: var(--ink); background: #1e262c; border: 0; padding: 12px 28px; cursor: pointer; }
+  .rewards { list-style: none; padding: 0; margin: 0 auto 18px; display: grid; gap: 8px; min-width: min(420px, 80vw); }
+  .rewards li { background: #0e1418; border: 1px solid #2a333b; padding: 10px 16px; font-size: 22px; font-weight: 700; letter-spacing: .05em; }
+  .rewards li.secret { border-color: #f2ede2; color: #fff; }
+  .stats { color: var(--muted); font-size: 17px; margin-bottom: 18px; letter-spacing: .06em; }
+  .hint { color: #c8d0d6; font-size: 17px; margin: -4px auto 20px; max-width: 58ch; line-height: 1.35; }
+  #touch { position: fixed; inset: 0; z-index: 4; pointer-events: none; display: none; }
+  body.touch #touch { display: block; } body.touch:not(.playing) #touch { display: none; }
+  .stick { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); width: 120px; height: 120px; opacity: .85; border-radius: 50%;
+    background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.18); pointer-events: auto; }
+  .nub { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,237,226,.55); }
+  .pad { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 56px); gap: 8px; pointer-events: auto; opacity: .88; }
+  .tbtn { width: 56px; height: 56px; border-radius: 50%; border: 0; font: 700 13px 'Barlow Condensed', sans-serif; color: #0b1014; background: var(--ink); }
+  .tbtn.atk { background: #bff4ff; } .tbtn.cast { background: #ffd27a; } .tbtn.heal { background: #9ff0c4; } .tbtn.dodge { background: #e8f1ff; } .tbtn.swap { background: #c8d0d6; }
+  .tbtn.fin { background: #ffe08a; grid-column: span 3; width: 100%; border-radius: 10px; height: 52px; font-size: 20px; }
+  .qte { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 8px; pointer-events: auto; }
+  .qte .tbtn { border-radius: 10px; width: 52px; height: 52px; font-size: 22px; background: #2a333b; color: var(--ink); }
+  #push { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(420px, 70vw); height: 72px; border-radius: 12px;
+    font-size: 30px; pointer-events: auto; background: #ffffff; letter-spacing: .1em; }
+  #rotate { z-index: 9; }
+  #skipBtn { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 4; font: 700 18px 'Barlow Condensed', sans-serif;
+    background: rgba(11,16,20,.85); color: var(--ink); border: 1px solid #3a4650; padding: 10px 18px; cursor: pointer; letter-spacing: .08em; }
+  body.playing .tag, #muteBtn { display: none !important; }
+  #muteBtn { position: fixed; top: max(10px, env(safe-area-inset-top)); right: calc(max(10px, env(safe-area-inset-right)) + 84px); z-index: 4; font: 700 15px 'Barlow Condensed', sans-serif;
+    background: rgba(11,16,20,.8); color: var(--ink); border: 1px solid #2a333b; padding: 8px 14px; cursor: pointer; }
+  body.touch #muteBtn { display: none; }
+  #pauseBtn { position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 4; width: 44px; height: 44px; border-radius: 50%;
+    font: 700 16px 'Barlow Condensed', sans-serif; letter-spacing: 1px; background: rgba(11,16,20,.82); color: var(--ink); border: 2px solid #3a4650; cursor: pointer; }
+  #pauseBtn:hover { border-color: var(--gold); }
+  button.big.hard { background: #8e1a26; color: #fff1ec; }
+  button.big.extreme { background: #000; color: #ff4a4a; box-shadow: inset 0 0 0 2px #ff3b3b; }
+  .modeinfo { color: #c8d0d6; font-size: 17px; margin-top: 14px; max-width: 62ch; justify-self: center; line-height: 1.35; }
+  .modeinfo b { color: var(--gold); letter-spacing: .06em; } .modeinfo b.hardtxt { color: #ff9a8a; margin-left: 8px; }
+  .touchkeys { display: none; color: #c8d0d6; font-size: 17px; margin: 0 auto 16px; max-width: 60ch; line-height: 1.4; }
+  body.touch .keys { display: none; } body.touch .touchkeys { display: block; }
+  body.touch h1 { font-size: clamp(32px, 9vh, 60px); } body.touch .sub { margin: 6px 0 12px; font-size: 15px; }
+  .tag { position: fixed; left: max(10px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top)); z-index: 4; font-size: 14px; color: var(--muted); letter-spacing: .08em; }
+  /* P13 title + menus remake (owner, Oct 5: "the setting UI and the interface as soon as you open the game sucks so bad").
+     A game menu, not a web page: a vertical list you drive with the arrows, the arena's eclipse behind it. */
+  .screen.menu { place-content: center start; text-align: left; background: #050708; padding: 0 max(24px, 8vw); }
+  .screen.menu.pause { background: rgba(5,7,8,.86); }
+  .arena { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .arena .sun { position: absolute; right: 9vw; top: 14vh; width: min(46vh, 34vw); aspect-ratio: 1; border-radius: 50%; background: #030405;
+    box-shadow: 0 0 0 2px #ffd7a1, 0 0 70px 14px rgba(255,190,110,.26), 0 0 220px 40px rgba(255,150,80,.10); }
+  .arena .horizon { position: absolute; left: 0; right: 0; top: 80vh; bottom: 0; background: #0b1a1c; border-top: 1px solid rgba(140,240,230,.35); }
+  .menuCol { position: relative; max-width: 560px; }
+  .logo { font-size: clamp(54px, 9vw, 96px); letter-spacing: .02em; color: var(--gold); line-height: .9; margin: 0; }
+  .tagline { margin: 12px 0 34px; font-size: 20px; color: #c8d0d6; letter-spacing: .04em; }
+  .mlist { display: grid; gap: 4px; justify-items: start; }
+  .mi { display: grid; grid-template-columns: 6px auto; column-gap: 14px; align-items: baseline; background: none; border: 0; padding: 6px 0; cursor: pointer; color: #c8d0d6; text-align: left; font-family: inherit; }
+  .mi::before { content: ''; grid-row: span 2; align-self: stretch; width: 6px; background: transparent; }
+  .mi .mt { font: 700 34px/1 'Barlow Condensed', sans-serif; letter-spacing: .06em; }
+  .mi small { grid-column: 2; font-size: 16px; color: #8d99a3; letter-spacing: .03em; margin-top: 4px; display: none; }
+  .mi.sm .mt { font-size: 24px; }
+  .mi { outline: none; } .mi:focus { color: #fff; }
+  .mi:focus::before { background: var(--gold); }
+  .mi:focus small { display: block; }
+  .mi.extreme .mt { color: #ff6a6a; }
+  .msep { height: 14px; }
+  .mfoot { position: absolute; left: max(24px, 8vw); bottom: max(18px, 4vh); color: #6f7c86; font-size: 16px; letter-spacing: .08em; }
+  .screen.panel { background: rgba(5,7,8,.94); place-content: center; text-align: left; }
+  .pbox { width: min(560px, 92vw); background: #0b1014; border: 1px solid #222b32; padding: 26px 28px; }
+  .pbox.wide { width: min(760px, 94vw); }
+  .pbox h2, .dev h2 { margin: 0 0 18px; font-size: 34px; letter-spacing: .06em; color: var(--gold); }
+  .srow { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 14px 0; border-top: 1px solid #1c242a; }
+  .srow b { display: block; font-size: 22px; letter-spacing: .03em; } .srow small { color: #8d99a3; font-size: 16px; }
+  .tog { min-width: 92px; font: 700 18px 'Barlow Condensed', sans-serif; letter-spacing: .08em; padding: 8px 14px; border: 0; cursor: pointer; background: #1e262c; color: #c8d0d6; }
+  .tog.on { background: var(--gold); color: #0b1014; }
+  .prow { justify-content: flex-start; margin-top: 18px; }
+  .pbox .keys { justify-content: start; margin: 0 0 8px; }
+  /* DEV MODE */
+  .screen.dev { place-content: stretch; padding: 0; background: #070a0c; display: grid; grid-template-rows: auto auto 1fr auto; text-align: left; overflow: hidden; }
+  .devHead { padding: 18px max(16px, 4vw) 6px; } .devHead h2 { margin: 0; } .devNote { margin: 6px 0 0; color: #8d99a3; font-size: 16px; }
+  .devTabs { display: flex; gap: 6px; padding: 10px max(16px, 4vw); border-bottom: 1px solid #1c242a; overflow-x: auto; }
+  .devTab { font: 700 18px 'Barlow Condensed', sans-serif; letter-spacing: .08em; padding: 8px 16px; border: 0; background: #11181d; color: #9aa6b0; cursor: pointer; white-space: nowrap; }
+  .devTab.on { background: var(--gold); color: #0b1014; }
+  .devBody { overflow: auto; padding: 8px max(16px, 4vw) 24px; user-select: text; -webkit-user-select: text; }
+  .devGroup { margin-top: 18px; } .devGroup h3 { margin: 0 0 10px; font-size: 17px; letter-spacing: .1em; color: #c8d0d6; }
+  .devGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 18px; }
+  .devField { display: grid; gap: 4px; font-size: 16px; color: #9aa6b0; } .devField.long { grid-column: 1 / -1; }
+  .devField.changed .devLabel { color: var(--gold); }
+  .devField input, .devField textarea { font: 500 17px 'Barlow Condensed', sans-serif; color: var(--ink); background: #10161a; border: 1px solid #2a333b; padding: 7px 9px; width: 100%; box-sizing: border-box; }
+  .devField textarea { resize: vertical; } .devField input[type=color] { height: 38px; padding: 2px; cursor: pointer; }
+  .devField input:focus, .devField textarea:focus { outline: 2px solid var(--gold); outline-offset: 0; }
+  .devImgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .devImg { display: grid; gap: 6px; } .devImgT { font-size: 15px; letter-spacing: .06em; color: #c8d0d6; }
+  .devPic { height: 130px; background: #10161a; border: 1px solid #2a333b; display: grid; place-items: center; color: #56636d; font-size: 15px; letter-spacing: .1em; }
+  .devPic img { max-width: 100%; max-height: 126px; }
+  .devImg .ghost { padding: 7px 10px; font-size: 16px; }
+  .devFoot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px max(16px, 4vw) max(12px, env(safe-area-inset-bottom)); border-top: 1px solid #1c242a; background: #0b1014; }
+  .devFoot .big { padding: 10px 30px; font-size: 22px; } .devFoot .ghost { padding: 10px 18px; font-size: 18px; }
+  .devStatus { color: #9ff0c4; font-size: 16px; margin-left: 6px; }
+  body.touch .mfoot { display: none; } body.touch .logo { font-size: clamp(40px, 12vh, 72px); } body.touch .tagline { margin-bottom: 14px; } body.touch .mi .mt { font-size: 26px; } body.touch .mi.sm .mt { font-size: 20px; }
+  @media (max-height: 520px) { .tagline { margin-bottom: 12px; } .mi { padding: 3px 0; } .msep { height: 6px; } }
+  /* P13 title v2 (owner: "looks very minimalistic dull and boring"): the real arena and boss run live behind it
+     (a demo fight with no HUD), a solid side panel with an angled edge, big mode tiles with difficulty pips,
+     a console-style hint bar. */
+  #title { background: transparent; place-content: stretch; padding: 0; text-align: left; display: block; overflow: hidden; }
+  .tside { position: absolute; left: 0; top: 0; bottom: 0; width: min(560px, 50vw); background: #070b11; clip-path: polygon(0 0, 100% 0, 86% 100%, 0 100%);
+    padding: clamp(14px, 4vh, 40px) clamp(56px, 7vw, 96px) clamp(48px, 9vh, 80px) max(20px, 4vw); box-sizing: border-box; display: flex; flex-direction: column; gap: clamp(6px, 1.6vh, 14px); overflow: hidden; }
+  .tside::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 100%; background: #ff6a1f; clip-path: polygon(calc(100% - 4px) 0, 100% 0, calc(86% + 0px) 100%, calc(86% - 4px) 100%); pointer-events: none; }
+  .tbrand { display: flex; align-items: center; gap: 10px; font-size: 15px; letter-spacing: .18em; color: #a8b5c7; }
+  .tbrand .tgame { color: #eef3f9; font-weight: 700; } .tbrand .tsep { width: 18px; height: 2px; background: #ff6a1f; } .tbrand .tmode { color: #ff8447; font-weight: 700; }
+  .tlogo { font-size: clamp(46px, min(11vh, 8vw), 104px); line-height: .86; letter-spacing: .01em; color: #ffd7a1; margin: 0; }
+  .ttag { margin: 0 0 clamp(4px, 1.4vh, 12px); font-size: clamp(15px, 2.4vh, 19px); color: #c8d0d6; }
+  .tiles { display: grid; gap: clamp(5px, 1.1vh, 9px); }
+  .tile { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 12px; text-align: left; cursor: pointer;
+    border: 0; padding: clamp(7px, 1.5vh, 13px) 16px clamp(7px, 1.5vh, 13px) 20px; background: #101823; color: #eef3f9; font-family: inherit; outline: none; }
+  .tile::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--mc, #ffd7a1); }
+  .tile .tn { font: 700 clamp(24px, 4.6vh, 36px)/1 'Barlow Condensed', sans-serif; letter-spacing: .05em; }
+  .tile .td { grid-column: 1; font-size: clamp(13px, 2.1vh, 16px); color: #a8b5c7; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .pips, .tile .tk { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 4px; }
+  .tile .pips i { width: 9px; height: 22px; background: #223146; transform: skewX(-14deg); } .tile .pips i.on { background: var(--mc, #ffd7a1); }
+  .tile .tk { font-size: 20px; color: var(--mc); }
+  .tile.normal { --mc: #ffd7a1; } .tile.hard { --mc: #ff6a5a; } .tile.extreme { --mc: #ff2a2a; } .tile.cont { --mc: #34d987; }
+  .tile.extreme { background: #12080a; } .tile.extreme .tn { color: #ff6a6a; }
+  /* one selected item at a time: the mouse moves the selection (focus), it never adds a second highlight */
+  .tile:focus { background: var(--mc); color: #0a0f14; }
+  .tile:focus::before { background: #0a0f14; }
+  .tile:focus .td { color: #1b2430; } .tile:focus .tn { color: #0a0f14; }
+  .tile:focus .pips i { background: rgba(10,15,20,.25); } .tile:focus .pips i.on { background: #0a0f14; }
+  .tile:focus .tk { color: #0a0f14; }
+  .tile.extreme:focus { background: #ff2a2a; }
+  .tlinks { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-top: clamp(2px, 1vh, 10px); }
+  .tl { background: none; border: 0; padding: 4px 0; font: 700 clamp(17px, 2.8vh, 21px) 'Barlow Condensed', sans-serif; letter-spacing: .1em; color: #a8b5c7; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tl { outline: none; } .tl:focus { color: #fff; border-bottom-color: #ff6a1f; }
+  .tboss { position: absolute; right: max(20px, 4vw); bottom: clamp(52px, 10vh, 84px); text-align: right; display: grid; gap: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.9); }
+  .tboss .tbp { font-size: 15px; letter-spacing: .2em; color: #ff8447; font-weight: 700; } .tboss .tbn { font-size: clamp(26px, 4.6vh, 38px); font-weight: 700; letter-spacing: .04em; color: #fff; } .tboss .tbh { font-size: 17px; color: #c8d0d6; letter-spacing: .08em; }
+  .tbar { position: absolute; left: 0; right: 0; bottom: 0; height: clamp(34px, 6vh, 44px); background: #05080c; border-top: 1px solid #223146; display: flex; align-items: center; justify-content: flex-end; gap: 26px; padding: 0 max(20px, 4vw); font-size: 15px; letter-spacing: .1em; color: #a8b5c7; }
+  .tbar kbd { display: inline-block; min-width: 16px; text-align: center; padding: 0 6px; margin-right: 4px; font: 700 14px 'Barlow Condensed', sans-serif; color: #eef3f9; background: #172232; border: 1px solid #354a66; border-bottom-width: 3px; }
+  body.touch .tbar { display: none; } body.touch .tside { width: min(460px, 56vw); padding-bottom: 16px; } body.touch .tboss { bottom: 16px; }
+  @media (max-width: 720px) { .tside { width: 100%; clip-path: none; padding-right: 20px; } .tside::after, .tboss { display: none; } }
+  @media (max-height: 460px) { .ttag, .tile .td, .tbrand { display: none; } .tlogo { font-size: clamp(34px, 12vh, 54px); } .tile { padding-top: 6px; padding-bottom: 6px; } .tile .tn { font-size: clamp(20px, 6vh, 28px); } }
+  body:not(.playing) #pauseBtn { display: none; }
+  button[hidden] { display: none !important; } /* owner: "continue doesn't work": a tile's display:grid beat [hidden], so CONTINUE showed with no save and did nothing */
+  .pitch { display: none !important; } body.embed .pitch { display: inline-block !important; } body.embed .mi.pitch { display: grid !important; } body.embed .tl.dev, body.embed .tag { display: none !important; }
+  @media (min-width: 1500px) { .tside { width: min(680px, 42vw); } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="tag">PROTOTYPE 13-CLAUDE</div>
+<button id="pauseBtn" type="button" aria-label="Pause">II</button>
+<button id="muteBtn" type="button" aria-label="Mute sound">SOUND ON</button>
+<div id="touch">
+  <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+  <div class="pad" id="pad">
+    <button class="tbtn fin" data-key="F" id="finBtn" hidden>FINISHER</button>
+    <button class="tbtn heal" data-key="H">HEAL</button>
+    <button class="tbtn swap" data-key="E">SWAP</button>
+    <button class="tbtn cast" data-key="K">CAST</button>
+    <button class="tbtn dodge" data-key=" ">DODGE</button>
+    <span></span>
+    <button class="tbtn atk" data-key="J" data-hold="1">ATTACK</button>
+  </div>
+  <div class="qte" id="qte"></div>
+  <button class="tbtn" id="push" type="button" hidden>PUSH!</button>
+</div>
+<button id="skipBtn" type="button" hidden>SKIP ▸</button>
+<div class="screen" id="title">
+  <div class="tside">
+    <div class="tbrand"><span class="tgame">PITCHSIDE</span><span class="tsep"></span><span class="tmode">BOSS FIGHT</span></div>
+    <h1 class="tlogo">THE<br>ECLIPSE</h1>
+    <p class="ttag">Break the curse. Beat her to win your account back.</p>
+    <nav class="tiles" aria-label="Main menu">
+      <button class="tile cont" id="cont" type="button" hidden><span class="tn">CONTINUE</span><span class="td" id="contInfo"></span><span class="tk">&#9654;</span></button>
+      <button class="tile hard" id="start" type="button" data-mode="hard"><span class="tn">FIGHT</span><span class="td">Hard mode. Three phases, no mercy.</span><span class="pips" aria-label="Hard"><i class="on"></i><i class="on"></i><i></i></span></button>
+    </nav>
+    <nav class="tlinks" aria-label="More">
+      <button class="tl" id="openSettings" type="button">SETTINGS</button>
+      <button class="tl pitch" id="backPitch" type="button">RETURN TO PITCHSIDE</button>
+    </nav>
+  </div>
+  <div class="tboss" aria-live="polite"><span class="tbp" id="demoPhase">PHASE 1</span><span class="tbn" id="demoName">THE ECLIPSE</span><span class="tbh" id="demoHp">4,500 HP</span></div>
+  <div class="tbar"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> SELECT</span><span><kbd>ENTER</kbd> PLAY</span><span><kbd>ESC</kbd> BACK</span></div>
+</div>
+<div class="screen panel" id="settings" hidden>
+  <div class="pbox">
+    <h2>SETTINGS</h2>
+    <div class="srow"><div><b>Sound</b><small>Music and effects.</small></div><button class="tog" id="setSound" type="button"></button></div>
+    <div class="srow"><div><b>Finisher get ready</b><small>A 1 second pause before the finisher keys.</small></div><button class="tog" id="readyBtn" type="button"></button></div>
+    <div class="srow"><div><b>Screen effects</b><small>Shake, flashes and impact frames.</small></div><button class="tog" id="setFx" type="button"></button></div>
+    <div class="srow"><div><b>Controls</b><small>Keys for moving, attacking and finishers.</small></div><button class="tog" id="openControls" type="button">VIEW</button></div>
+    <div class="row prow"><button class="big" id="closeSettings" type="button">BACK</button></div>
+  </div>
+</div>
+<div class="screen panel" id="controls" hidden>
+  <div class="pbox wide">
+    <h2>CONTROLS</h2>
+    <div class="keys">
+      <b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b><span>Move</span>
+      <b><kbd>J</kbd> hold</b><span>Slash, also the counter and the clash mash</span>
+      <b><kbd>K</kbd></b><span>Cast the selected special</span>
+      <b><kbd>1</kbd>-<kbd>6</kbd> <kbd>Q</kbd><kbd>E</kbd></b><span>Pick a special (six per phase)</span>
+      <b><kbd>SPACE</kbd></b><span>Dodge. Just before a hit = PERFECT</span>
+      <b><kbd>H</kbd></b><span>Heal. 2 per phase, +1 when a SURVIVE box starts</span>
+      <b><kbd>F</kbd></b><span>FINISHER when it pops up, then type its keys</span>
+      <b><kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd></b><span>Clash key moments: type them in order</span>
+      <b>CLICK, ENTER, J</b><span>Next dialogue line. X skips</span>
+      <b><kbd>M</kbd> <kbd>P</kbd></b><span>Sound on/off, pause</span>
+    </div>
+    <div class="touchkeys">Left stick moves. ATTACK slashes, CAST fires the selected special, tap a special to pick it. DODGE just before a hit for a PERFECT. In a clash tap PUSH fast, then tap the keys shown.</div>
+    <div class="row prow"><button class="big" id="closeControls" type="button">BACK</button></div>
+  </div>
+</div>
+<div class="screen panel dev" id="dev" hidden></div>
+<div class="screen menu pause" id="paused" hidden>
+  <div class="menuCol">
+    <h1 class="logo">PAUSED</h1>
+    <p class="tagline">P or ESC to resume.</p>
+    <nav class="mlist" aria-label="Pause menu">
+      <button class="mi" id="resume" type="button"><span class="mt">RESUME</span></button>
+      <button class="mi" id="restart1" type="button"><span class="mt">RESTART</span></button>
+      <button class="mi sm" id="pauseSettings" type="button"><span class="mt">SETTINGS</span></button>
+      <button class="mi sm" id="quitTitle" type="button"><span class="mt">QUIT TO TITLE</span></button>
+      <button class="mi sm pitch" id="quitPitch" type="button"><span class="mt">RETURN TO PITCHSIDE</span></button>
+    </nav>
+  </div>
+</div>
+<div class="screen" id="end" hidden>
+  <h1 id="endTitle">VICTORY</h1><div class="sub" id="endSub"></div>
+  <ul class="rewards" id="rewards"></ul>
+  <div class="stats" id="stats"></div>
+  <div class="hint" id="secretHint" hidden></div>
+  <div class="row"><button class="big" id="retry" type="button" hidden>RETRY PHASE 2</button><button class="big" id="again" type="button">FIGHT AGAIN</button><button class="ghost" id="swapMode" type="button">TRY HARD</button></div>
+</div>
+<div class="screen" id="rotate" hidden><h1>ROTATE YOUR PHONE</h1><div class="sub">THE FIGHT WAITS FOR YOU</div></div>
+<script type="module">
+import { createFight, step, W, H, aligned, STAGES } from './sim.js?v=pv1';
+import { createRenderer, CUSTOM } from './render.js?v=pv1';
+import {installCast} from './cast.js?v=pv1';
+await installCast(CUSTOM);
+import { createSfx } from './sfx.js?v=pv1';
+// owner (Oct 5): the football game's ban screen opens this page in a frame (?embed=1, eclipsebattle.js). There the dev
+// overrides are off (no cheating the curse), RETURN TO PITCHSIDE replaces DEV MODE, and a win is reported to the game.
+const EMBED = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;
+const toPitch = (type, extra = {}) => { if (EMBED) window.parent.postMessage({ type, ...extra }, location.origin); };
+if (EMBED) document.body.classList.add('embed');
+const q = new URLSearchParams(location.search);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || q.get('reduced') === '1';
+const canvas = document.getElementById('c');
+const sfx = createSfx();
+let fxReduced = reduced; try { if (localStorage.getItem('pbFx') === 'reduced') fxReduced = true; } catch {}
+const renderer = createRenderer(canvas, { reducedMotion: fxReduced, onEvent: sfx.play });
+let fight = null, running = false, paused = false, last = 0, acc = 0, ended = false, taps = 0;
+const held = new Set(), edges = new Set(), letters = [];
+const view = { width: 0, height: 0, scale: 1, ox: 0, oy: 0, dpr: 1 };
+const $ = (id) => document.getElementById(id);
+function resize() {
+  const dpr = Math.min(2, devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  // contain: the whole 1280x720 play area and HUD stay visible; the arena art runs past it so no black bars
+  const sx = Math.min(w / W, h / H) * dpr;
+  Object.assign(view, { width: canvas.width, height: canvas.height, scale: sx, ox: (canvas.width - W * sx) / 2, oy: (canvas.height - H * sx) / 2, dpr });
+  $('rotate').hidden = !(h > w && matchMedia('(pointer: coarse)').matches);
+}
+addEventListener('resize', resize); resize();
+const isTouch = matchMedia('(pointer: coarse)').matches || q.get('touch') === '1';
+if (isTouch) document.body.classList.add('touch');
+view.touch = isTouch;
+const keyName = (e) => e.key === ' ' ? ' ' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+addEventListener('keydown', (e) => {
+  const k = keyName(e);
+  const typing = fight && running && !paused && fight.phase === 'fight' && aligned(fight) && !fight.codeOk; // the secret code may use P and M
+  const sub = ['settings', 'controls', 'dev'].find((id) => !$(id).hidden);
+  if (sub) { if (k === 'Escape' && sub !== 'dev') { closeSub(sub); e.preventDefault(); } else if (sub !== 'dev') menuNav(e, k); return; }
+  if ((!running || paused || ended) && menuNav(e, k)) return;
+  if ((!running || paused || ended) && (k === ' ' || k === 'Enter') && document.activeElement?.tagName === 'BUTTON' && openMenu()?.contains(document.activeElement)) { e.preventDefault(); if (!e.repeat) document.activeElement.click(); return; }
+  if (k === 'Escape' || (k === 'P' && !typing)) { togglePause(); e.preventDefault(); return; }
+  if (k === 'M' && !typing) { toggleMute(); return; }
+  if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
+  if (!e.repeat) { edges.add(k); if (/^[A-Z0-9]$/.test(k)) letters.push(k); }
+  held.add(k);
+});
+addEventListener('keyup', (e) => held.delete(keyName(e)));
+addEventListener('blur', () => held.clear());
+// canvas taps / clicks: clash mash, cine skip, and the touch ability dock
+canvas.addEventListener('pointerdown', (e) => {
+  if (!fight) return;
+  const x = (e.clientX * view.dpr - view.ox) / view.scale, y = (e.clientY * view.dpr - view.oy) / view.scale;
+  const slot = isTouch && fight.phase === 'fight' && renderer.dock.find((r) => x >= r.x - 6 && x <= r.x + r.w + 6 && y >= r.y - 10 && y <= r.y + r.h + 24);
+  if (slot) { letters.push(slot.key); return; }
+  if (fight.phase === 'clash') taps++;
+  if (['cine', 'timing', 'talk'].includes(fight.phase)) edges.add('Enter');
+});
+const stick = { x: 0, y: 0, id: null };
+const stickEl = $('stick'), nub = $('nub');
+stickEl.addEventListener('pointerdown', (e) => { stick.id = e.pointerId; stickEl.setPointerCapture(e.pointerId); moveStick(e); });
+stickEl.addEventListener('pointermove', (e) => { if (e.pointerId === stick.id) moveStick(e); });
+const endStick = () => { stick.id = null; stick.x = stick.y = 0; nub.style.transform = ''; };
+stickEl.addEventListener('pointerup', endStick); stickEl.addEventListener('pointercancel', endStick);
+function moveStick(e) { const r = stickEl.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), l = Math.hypot(dx, dy), m = Math.min(1, l / 50); stick.x = l ? dx / l * m : 0; stick.y = l ? dy / l * m : 0; nub.style.transform = `translate(${stick.x * 40}px,${stick.y * 40}px)`; }
+function bindTouch(btn) {
+  const k = btn.dataset.key;
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); edges.add(k); if (/^[A-Z0-9]$/.test(k)) letters.push(k); if (btn.dataset.hold) held.add(k); });
+  const up = () => held.delete(k); btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('pointerleave', up);
+}
+document.querySelectorAll('#pad .tbtn').forEach(bindTouch);
+$('push').addEventListener('pointerdown', (e) => { e.preventDefault(); taps++; });
+const qte = $('qte'); let qteSet = '';
+function syncTouchUi() {
+  if (!fight || !isTouch) return;
+  $('finBtn').hidden = !(fight.phase === 'fight' && fight.finisher.prompt > 0);
+  const want = fight.phase === 'rune' ? 'QWERASDF' : fight.phase === 'chained' ? 'JKLUIO' : fight.phase === 'finisherQte' ? 'WASDJKLI' : fight.phase === 'clash' && fight.clash?.seq ? 'QERF' : '';
+  if (want !== qteSet) { qteSet = want; qte.replaceChildren(...[...want].map((k) => { const b = document.createElement('button'); b.className = 'tbtn'; b.dataset.key = k; b.textContent = k; bindTouch(b); return b; })); }
+  const clash = fight.phase === 'clash';
+  $('push').hidden = !clash || !!fight.clash?.seq;
+  $('pad').style.visibility = want || clash || ['cine', 'talk'].includes(fight.phase) ? 'hidden' : 'visible';
+  $('stick').style.visibility = clash || ['cine', 'talk', 'finisherQte'].includes(fight.phase) ? 'hidden' : 'visible';
+}
+function input() {
+  const mx = (held.has('D') || held.has('ArrowRight') ? 1 : 0) - (held.has('A') || held.has('ArrowLeft') ? 1 : 0) + stick.x;
+  const my = (held.has('S') || held.has('ArrowDown') ? 1 : 0) - (held.has('W') || held.has('ArrowUp') ? 1 : 0) + stick.y;
+  const inp = { mx: Math.max(-1, Math.min(1, mx)), my: Math.max(-1, Math.min(1, my)), attack: held.has('J'), attack0: edges.has('J'), cast: edges.has('K'),
+    next: edges.has('E'), prev: edges.has('Q'), dodge: edges.has(' ') || edges.has('Shift'), heal: edges.has('H'), finisher: edges.has('F'), confirm: edges.has('Enter'), jump: held.has(' ') || held.has('W') || held.has('ArrowUp'), skip: edges.has('X') || edges.has('Skip'),
+    taps, keysPressed: letters.splice(0) };
+  edges.clear(); taps = 0;
+  return inp;
+}
+const empty = { skip: false, mx: 0, my: 0, attack: false, attack0: false, cast: false, next: false, prev: false, dodge: false, heal: false, finisher: false, confirm: false, taps: 0, keysPressed: [] };
+let mode = 'hard'; // Pitchside: always HARD (owner, Oct 5)
+// phase checkpoints (owner: "make it save phases"): the furthest phase reached is saved per mode; a loss can retry
+// from it and the title offers CONTINUE. Clearing the fight clears the save.
+const CK = 'pbCheckpoint';
+const ckLoad = () => { try { return JSON.parse(localStorage.getItem(CK) || '{}'); } catch { return {}; } };
+const ckSave = (m, st) => { try { const c = ckLoad(); if (st > 1) c[m] = Math.max(c[m] || 1, st); else delete c[m]; localStorage.setItem(CK, JSON.stringify(c)); } catch {} };
+const phaseName = (st) => st === 3 ? 'TOTALITY' : 'PHASE ' + st;
+function refreshContinue() {
+  const c = ckLoad(), m = c.hard ? 'hard' : null;
+  $('cont').hidden = !m; if (m) { $('contInfo').textContent = `${phaseName(c[m])}, ${m.toUpperCase()}`; $('cont').onclick = () => { mode = m; start(c[m]); }; }
+}
+function start(from = 1) { try { startFight(from); } catch (err) { console.error(err); showError(err.message); } }
+function startFight(from = 1) {
+  document.body.classList.add('playing');
+  try { localStorage.setItem('pbMode', mode); } catch {}
+  // P13 owner: "I don't see the sukkot finisher": the four finishers now rotate across fights (saved), and a new
+  // player gets the newest first (DAVID LASER, Oct 2). ?fin=0..5 picks one for testing.
+  // P13 final: each phase has its own finishers, taken in turn (saved per phase). ?fin=0..9 forces one (9 = STAR OF HELL)
+  let fin = null; try { fin = JSON.parse(localStorage.getItem('pbFinIdx') || 'null'); } catch {}
+  if (q.get('fin') != null) fin = (Number(q.get('fin')) || 0) % 13;
+  fight = createFight({ seed: Number(q.get('seed')) || (Date.now() % 100000), force: q.get('force'), mode, start: typeof from === 'number' ? from : 1, fin });
+  if (q.get('talk') === '1') fight.noTalk = false; // test flag: keep dialogue in forced runs
+  if (q.get('act')) fight.forceAct = q.get('act');
+  fight.readyTime = readyOn; // the option: a 1 s GET READY before the finisher keys (off by default)
+  window.__fight = fight; ended = false; running = true; paused = false;
+  for (const id of ['title', 'end', 'paused', 'settings', 'controls']) $(id).hidden = true;
+  document.activeElement?.blur(); // SPACE (dodge) must never press a menu button
+  last = performance.now();
+}
+function togglePause() { if (!running || ended) return; paused = !paused; $('paused').hidden = !paused; for (const id of ['settings', 'controls']) $(id).hidden = true; if (paused) focusFirst('paused'); else document.activeElement?.blur(); last = performance.now(); }
+let muted = false;
+function toggleMute() { muted = sfx.toggle(); $('muteBtn').textContent = muted ? 'SOUND OFF' : 'SOUND ON'; syncSettings(); }
+$('muteBtn').onclick = toggleMute; $('skipBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); edges.add('Skip'); });
+$('start').onclick = () => { mode = 'hard'; start(); }; $('retry').onclick = () => start(fight.retryFrom || 1); refreshContinue();
+let readyOn = false; try { readyOn = localStorage.getItem('pbReady') === '1'; } catch {}
+const readyLabel = () => syncSettings();
+$('readyBtn').onclick = () => { readyOn = !readyOn; try { localStorage.setItem('pbReady', readyOn ? '1' : '0'); } catch {} if (fight) fight.readyTime = readyOn; readyLabel(); }; readyLabel(); $('again').onclick = start;
+$('swapMode').hidden = true; $('resume').onclick = togglePause; $('restart1').onclick = start; $('pauseBtn').onclick = togglePause;
+// owner: "some buttons don't work / hovering looks bad": the mouse moves the selection (one highlight only);
+// ENTER or SPACE press the selected button; any error shows on screen instead of silently doing nothing
+document.addEventListener('pointerover', (e) => { if (e.pointerType !== 'mouse') return; const b = e.target.closest && e.target.closest('button'); if (b && !b.closest('#touch') && b.id !== 'pauseBtn' && document.activeElement !== b && !b.closest('.devBody')) b.focus({ preventScroll: true }); });
+function showError(msg) { let t = $('errToast'); if (!t) { t = document.createElement('div'); t.id = 'errToast'; t.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:20;background:#3a0b10;color:#ffd6d6;border:1px solid #ff5a6a;padding:8px 14px;font:600 15px Barlow Condensed,sans-serif;max-width:90vw'; document.body.append(t); } t.textContent = 'Something broke: ' + msg + ' (screenshot this for Claude)'; clearTimeout(t._h); t._h = setTimeout(() => t.remove(), 9000); }
+addEventListener('error', (e) => showError(e.message || 'unknown error'));
+addEventListener('unhandledrejection', (e) => showError(String(e.reason && e.reason.message || e.reason)));
+// ---- menus (P13 remake): arrows move between the items of the open menu, ENTER/SPACE press the focused one
+const openMenu = () => ['dev', 'settings', 'controls', 'paused', 'end', 'title'].map($).find((el) => !el.hidden);
+function menuNav(e, k) {
+  const m = openMenu(); if (!m || !['ArrowUp', 'ArrowDown', 'W', 'S'].includes(k)) return false;
+  const items = [...m.querySelectorAll('button')].filter((b) => !b.hidden && b.offsetParent); if (!items.length) return false;
+  const i = items.indexOf(document.activeElement), d = k === 'ArrowUp' || k === 'W' ? -1 : 1;
+  items[(i < 0 ? (d > 0 ? -1 : 0) : i) + d < 0 ? items.length - 1 : ((i < 0 ? (d > 0 ? -1 : 0) : i) + d) % items.length].focus(); e.preventDefault(); return true;
+}
+const focusFirst = (id) => { const b = [...$(id).querySelectorAll('button')].find((x) => !x.hidden); b && b.focus(); };
+let subFrom = 'title';
+function openSub(id) { subFrom = !$('paused').hidden ? 'paused' : 'title'; $(subFrom).hidden = true; $(id).hidden = false; focusFirst(id); }
+function closeSub(id) { $(id).hidden = true; const back = id === 'controls' ? 'settings' : subFrom; $(back).hidden = false; focusFirst(back); } // Pitchside: CONTROLS lives inside SETTINGS
+function syncSettings() {
+  const t = (id, on, a = 'ON', b = 'OFF') => { $(id).textContent = on ? a : b; $(id).classList.toggle('on', on); };
+  t('setSound', !muted); t('readyBtn', readyOn); t('setFx', !fxReduced, 'FULL', 'REDUCED');
+}
+$('setSound').onclick = toggleMute;
+$('setFx').onclick = () => { fxReduced = !fxReduced; renderer.setReduced(fxReduced); try { localStorage.setItem('pbFx', fxReduced ? 'reduced' : 'full'); } catch {} syncSettings(); };
+$('openSettings').onclick = $('pauseSettings').onclick = () => openSub('settings'); $('closeSettings').onclick = () => closeSub('settings');
+$('openControls').onclick = () => { $('settings').hidden = true; $('controls').hidden = false; focusFirst('controls'); }; $('closeControls').onclick = () => closeSub('controls');
+$('quitTitle').onclick = () => { running = false; paused = false; ended = false; fight = null; document.body.classList.remove('playing'); $('paused').hidden = true; refreshContinue(); $('title').hidden = false; focusFirst('title'); canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); };
+$('backPitch').onclick = $('quitPitch').onclick = () => toPitch('p13-close');
+syncSettings(); focusFirst('title');
+function showEnd() {
+  ended = true;
+  const win = fight.phase === 'victory', secret = win && fight.result.tier === 'secret';
+  $('endTitle').textContent = secret ? 'TRUE VICTORY' : win ? 'VICTORY' : 'DEFEATED';
+  $('endTitle').style.color = secret ? '#ffffff' : '';
+  $('endSub').textContent = fight.result?.reset ? 'OVERPOWERED 3 TIMES IN THE CLASH · THE LEVEL RESETS' : (mode !== 'normal' && win ? mode.toUpperCase() + ' CLEAR · ' : '') + (secret ? 'TOTALITY IS OVER' : win ? 'THE ECLIPSE IS BROKEN' : fight.stage === 3 ? 'TOTALITY ENDURES' : 'THE ECLIPSE ENDURES');
+  $('rewards').replaceChildren(...(win ? fight.result.rewards : []).map((r) => { const li = document.createElement('li'); li.textContent = r; if (secret) li.className = 'secret'; return li; }));
+  const st = fight.stats;
+  const secs = Math.round(fight.t), clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  $('stats').textContent = `${fight.M.name}  ·  TIME ${clock}  ·  PERFECT DODGES ${st.perfects}  ·  FINISHERS ${st.finishers}  ·  HEALS USED ${st.heals}`;
+  if (win || fight.result?.reset) ckSave(mode, 1); // cleared, or reset by 3 clash losses: the save is done with
+  fight.retryFrom = !win && !fight.result?.reset && fight.stage > 1 ? fight.stage : 1;
+  $('retry').hidden = fight.retryFrom < 2; $('retry').textContent = `RETRY ${phaseName(fight.retryFrom)}`; $('again').textContent = fight.retryFrom > 1 ? 'START OVER' : 'FIGHT AGAIN';
+  refreshContinue();
+  // the secret phase is hinted only after a normal clear
+  $('secretHint').hidden = !(win && !secret);
+  $('secretHint').textContent = 'A SECRET PHASE EXISTS. WHEN THE ECLIPSE ALIGNS IN PHASE 2, A KEYBOARD APPEARS IN THE SKY. PLAY IT THE WAY IT LIGHTS UP, THEN LAND THE FINISHER.';
+  $('end').hidden = false; focusFirst('end');
+  if (win) toPitch('p13-victory', { tier: fight.result.tier, mode }); // the game confirms it with the server
+}
+// title backdrop: a demo fight that never attacks, drawn with no HUD; it swaps between phase 1 and 2 every 9 s
+let demo = null, demoT = 0, demoStage = 0;
+function makeDemo() {
+  demoStage = demoStage === 1 ? 2 : 1;
+  demo = createFight({ seed: 11 + demoStage, force: demoStage === 2 ? 'stage2' : 'menu', mode: 'normal' }); demo.noTalk = true; demo.phase = 'fight'; demoT = 0;
+  const st = demo.stage;
+  $('demoPhase').textContent = 'PHASE ' + st; $('demoName').textContent = stageName(st); $('demoHp').textContent = `${Math.round(demo.boss.max).toLocaleString('en-US')} HP`;
+}
+const stageName = (st) => STAGES[st].boss;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
+  const rotating = !$('rotate').hidden;
+  if (fight && running && !paused && !rotating && !ended) {
+    acc += dt;
+    // held state (move, J held) applies to every sub-step; presses only to the first
+    let inp = acc >= 1 / 120 ? input() : null; // no step this frame (high refresh): keep the presses for the next one
+    while (acc >= 1 / 120) { step(fight, 1 / 120, inp); acc -= 1 / 120; inp = { ...empty, mx: inp.mx, my: inp.my, attack: inp.attack, jump: inp.jump }; }
+    if (fight.stats.finishers !== fight.finSaved) { fight.finSaved = fight.stats.finishers; if (fight.finSaved && fight.forceFin == null) try { localStorage.setItem('pbFinIdx', JSON.stringify(fight.finIdx)); } catch {} }
+    syncTouchUi(); sfx.update(fight); $('skipBtn').hidden = fight.phase !== 'talk';
+    if (!fight.force && fight.stage > (fight.savedStage || 1)) { fight.savedStage = fight.stage; ckSave(mode, fight.stage); } // a new phase reached: save it
+    if ((fight.phase === 'victory' && fight.phaseT > 1.6) || (fight.phase === 'defeat' && fight.phaseT > 1.4)) showEnd();
+  } else if (fight && (paused || rotating)) input();
+  if (fight) renderer.render(fight, (paused || rotating) ? 0 : dt, view);
+  else if (!$('title').hidden || !$('settings').hidden || !$('controls').hidden) { // the live title backdrop
+    if (!demo || (demoT += dt) > 9) makeDemo();
+    demo.boss.attackCd = 99; demo.hero.x = -600; demo.hero.y = 560; // the hero waits off screen: the title shows her demo.hero.hp = 1e6;
+    let a2 = Math.min(dt, .05); while (a2 > 0) { step(demo, 1 / 60, empty); a2 -= 1 / 60; }
+    demo.boss.attackCd = 99; demo.shots.length = 0; demo.hazards.length = 0;
+    renderer.render(demo, dt, { ...view, menu: true });
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
