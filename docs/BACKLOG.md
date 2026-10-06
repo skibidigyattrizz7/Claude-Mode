@@ -387,3 +387,5 @@ Supersedes PR18. Existing source photos, server fight/rewards and cross-device s
   - FIXED: CONTINUE showed with no save and did nothing (a tile's display:grid beat the hidden attribute). Both games.
 
 - FIXED (Oct 6): pressing H crashed ("HEAL is not defined"): the heal number popup still used the old constant after the dev-mode TUNE change. Both games. (Smoke bots never heal, which is why tests missed it.)
+
+- Oct 6: reviewed chatgpt/pitchside-vinson-cast (0d748bf): cast photos, photo hands, secret boss photo, names; works, no errors, its test passes. NOT merged: its boss projectiles are drawn as swastikas on a real-person boss. Waiting for owner on merging without that part.
