@@ -1043,10 +1043,19 @@ test('SBC storage vault: duplicates auto-vault (capped, allows repeats), usable 
   assert.equal(s.vault.filter((x) => x === bronzes[0]).length, vaultCountBefore - 1);
 });
 
+// Run fn with the calendar pinned to the middle of week `w` (Date.now is what weekNumber() defaults to).
+import { EPOCH as CAL_EPOCH } from '../core/calendar.js';
+function withWeek(w, fn) {
+  const real = Date.now;
+  Date.now = () => CAL_EPOCH + (w - 1) * 7 * 86400000 + 3 * 86400000;
+  try { return fn(); } finally { Date.now = real; }
+}
+
 test('unreleased promo cards never appear in the AI market, packs, draft or objective/SBC rewards', () => {
   const future = PR.PROMOS.find((p) => p.releaseWeek && p.releaseWeek > 1);
   assert.ok(future, 'no promo has a future releaseWeek');
   const before = future.releaseWeek - 1;
+  withWeek(before, () => {
   assert.equal(PR.isPromoReleased(future.id, before), false);
   assert.equal(PR.isPromoReleased(future.id, future.releaseWeek), true);
   // AI market
@@ -1056,6 +1065,7 @@ test('unreleased promo cards never appear in the AI market, packs, draft or obje
   }
   // the dedicated pack never shows in the store before release, and never grants the card as a "drop from any pack" bonus
   assert.ok(!UT.storePacks(Math.min(before, PR.ALL_PACKS_ON_SALE_FROM - 1)).some((p) => p.promo === future.id));
+  // everything here reads the real clock (weekNumber()), so the whole test runs pinned to the week BEFORE release (withWeek); otherwise it fails by itself once the calendar passes the release week
   for (let seed = 0; seed < 200; seed++) {
     const items = UT.openPack('gold', new Set(), new Rng(`unreleased-gold-${seed}`));
     assert.ok(items.every((it) => getPlayer(it.pid).special !== future.id));
@@ -1069,6 +1079,97 @@ test('unreleased promo cards never appear in the AI market, packs, draft or obje
   const d = DR.newDraft('unreleased-draft');
   DR.chooseFormation(d, '4-3-3');
   assert.ok(d.captainOptions.every((id) => getPlayer(id).special !== future.id));
+  });
+});
+
+test('packs: pity guarantees an 88+ at the threshold, resets, survives save/load and old saves', () => {
+  const rated = (items) => Math.max(...items.map((it) => getPlayer(it.pid).ovr));
+  for (const id of ['gold', 'premium', 'rare', 'legend', 'lotg']) {
+    const info = UT.pityInfo(UT.PACK_BY_ID[id], { pity: {} });
+    assert.ok(info && info.threshold > 0, `${id} must have pity`);
+    for (let seed = 0; seed < 40; seed++) {
+      const st = { pity: { [id]: info.threshold } };
+      const items = UT.openPack(id, new Set(), new Rng(`pity-${id}-${seed}`), st);
+      assert.ok(rated(items) >= UT.PITY_OVR, `${id} seed ${seed}: pity pack had no 88+`);
+      assert.equal(st.pity[id], 0, 'counter resets after an 88+');
+    }
+  }
+  // below the threshold a miss just counts up; a hit resets
+  const st = { pity: {} };
+  let misses = 0;
+  for (let i = 0; i < 30; i++) {
+    const before = st.pity.gold || 0;
+    const items = UT.openPack('gold', new Set(), new Rng(`pity-count-${i}`), st);
+    if (rated(items) >= 88) assert.equal(st.pity.gold, 0); else { misses++; assert.equal(st.pity.gold, before + 1); }
+  }
+  assert.ok(misses > 0, 'gold packs should usually miss 88+');
+  // packs with no 88+ possible (bronze/silver) and the admin vault have no pity, and a pack without state is unchanged
+  assert.equal(UT.pityInfo(UT.PACK_BY_ID.bronze, { pity: {} }), null);
+  assert.equal(UT.pityInfo(UT.PACK_BY_ID[UT.ADMIN_VAULT_PACK_ID], { pity: {} }), null);
+  assert.equal(UT.openPack('gold', new Set(), new Rng('pity-nostate')).length, 12);
+  // a promo pack keeps its promo card and still reaches 88+ at the threshold
+  const promo = UT.PACKS.find((p) => p.promo && UT.pityInfo(p, { pity: {} }));
+  if (promo) {
+    const stp = { pity: { [promo.id]: UT.pityInfo(promo, { pity: {} }).threshold } };
+    assert.ok(rated(UT.openPack(promo.id, new Set(), new Rng('pity-promo'), stp)) >= 88);
+  }
+  // save/load: round-trips, and old / corrupt saves get a clean field
+  const s1 = UT.createUTState({ clubName: 'Pity FC' }, new Rng(77));
+  assert.deepEqual(s1.pity, {});
+  s1.pity.gold = 12; s1.pity.legend = 2;
+  const back = UT.migrateUT(JSON.parse(JSON.stringify(s1)));
+  assert.equal(back.pity.gold, 12); assert.equal(back.pity.legend, 2);
+  const old = JSON.parse(JSON.stringify(s1)); delete old.pity;
+  assert.deepEqual(UT.migrateUT(old).pity, {});
+  const bad = JSON.parse(JSON.stringify(s1)); bad.pity = { gold: -3, legend: 'x', nope: 5, rare: 4.7 };
+  assert.deepEqual(UT.migrateUT(bad).pity, { rare: 4 });
+  const arr = JSON.parse(JSON.stringify(s1)); arr.pity = [1, 2];
+  assert.deepEqual(UT.migrateUT(arr).pity, {});
+});
+
+test('packs: a pack never holds the same card twice, and an empty pool never silently becomes gold', () => {
+  for (const id of ['premium', 'rare', 'gold', 'legend', 'lotg', 'totw']) {
+    for (let seed = 0; seed < 150; seed++) {
+      const items = UT.openPack(id, new Set(), new Rng(`nodup-${id}-${seed}`));
+      assert.equal(new Set(items.map((it) => it.pid)).size, items.length, `${id} seed ${seed} repeated a card`);
+    }
+  }
+  const pools = UT.categoryPools();
+  const keep = { legend: pools.legend, lotg: pools.lotg };
+  try {
+    // Legend pool empty -> the next-best special (Legend of the Game), not gold
+    pools.legend = [];
+    assert.equal(UT.fallbackCats('legend')[0], 'lotg');
+    for (let seed = 0; seed < 40; seed++) {
+      const items = UT.openPack('legend', new Set(), new Rng(`empty-${seed}`));
+      // (a live promo card may replace a Legend of the Game 1.5% of the time: the existing promo-drop rule)
+      assert.ok(items.some((it) => it.cat === 'lotg' || it.cat.startsWith('promo_')), 'Legend pack must fall back to a Legend of the Game');
+      assert.ok(!items.some((it) => it.cat === 'gold'), 'never plain gold');
+    }
+    // both empty -> still a special (Hero), never a worse-than-promised gold
+    pools.lotg = [];
+    assert.equal(UT.resolvePool('legend', pools).cat, 'hero');
+    const items = UT.openPack('legend', new Set(), new Rng('empty-both'));
+    assert.equal(getPlayer(items[0].pid).special, 'hero');
+    // a non-empty category is never replaced
+    assert.equal(UT.resolvePool('gold', pools).cat, 'gold');
+    // promo / totw / secret categories fall back to a special too
+    assert.equal(UT.fallbackCats('promo_toty')[0], 'lotg');
+  } finally { pools.legend = keep.legend; pools.lotg = keep.lotg; }
+});
+
+test('packs: real 85+/88+/90+ chances are sane and rise with pack tier', () => {
+  const c = (id, m) => UT.packChanceOvr(UT.PACK_BY_ID[id], m);
+  for (const id of ['bronze', 'gold', 'rare', 'legend']) {
+    assert.ok(c(id, 85) >= c(id, 88) && c(id, 88) >= c(id, 90) && c(id, 85) <= 1 && c(id, 90) >= 0, `${id} monotonic`);
+  }
+  assert.equal(c('bronze', 85), 0);
+  assert.ok(c('rare', 88) > c('gold', 88));
+  assert.ok(c('legend', 88) > 0.3 && c('legend', 85) > 0.99);
+  // agrees with a brute-force count within noise (gold, 88+)
+  const rng = new Rng('odds-check'); let hit = 0; const N = 3000;
+  for (let i = 0; i < N; i++) if (UT.openPack('gold', new Set(), rng).some((it) => getPlayer(it.pid).ovr >= 88)) hit++;
+  assert.ok(Math.abs(hit / N - c('gold', 88)) < 0.02, `gold 88+: sim ${hit / N} vs calc ${c('gold', 88)}`);
 });
 
 test('promo cards job: 20+ campaigns, each with theme, colours, card class and a launch week; unreleased stay hidden', async () => {

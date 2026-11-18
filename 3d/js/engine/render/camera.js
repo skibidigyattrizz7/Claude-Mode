@@ -26,6 +26,7 @@ export class CameraDirector {
     this.replayGoal = 1;
     this.replaySide = 1;
     this.override = null;
+    this.bvx = 0; this.bvz = 0; this.tight = 0; this.sprintN = 0; this.ballN = 0; this.flip = 1;
   }
   setMode(m) {
     if (m !== this.mode) {
@@ -45,6 +46,12 @@ export class CameraDirector {
     const bx = b[0], by = b[1], bz = b[2];
     const bvx = b[3], bvz = b[5];
     const bs = Math.hypot(b[3], b[4], b[5]);
+    // smoothed (never snapping) inputs: ball travel direction, how bunched up play is, sprint and ball speed
+    const sm = (cur, tgt, w) => cur + (tgt - cur) * (1 - Math.exp(-dt * w));
+    this.bvx = sm(this.bvx, bvx, 2.2); this.bvz = sm(this.bvz, bvz, 2.2);
+    this.tight = sm(this.tight, clamp((30 - (ctx.spread ?? 30)) / 16, 0, 1), 0.8);
+    this.sprintN = sm(this.sprintN, clamp(((ctx.ctrlSpeed ?? 0) - 3) / 5, 0, 1), 1.5);
+    this.ballN = sm(this.ballN, clamp((bs - 8) / 20, 0, 1), 1.5);
     let lx, ly, lz, px, py, pz, fov, wLook = 3.2, wPos = 2.2;
     let mode = this.mode;
     // establishing wide shot (shows the bowl, sky and floodlights): start of each half and at the breaks
@@ -64,9 +71,10 @@ export class CameraDirector {
       const d = c.dir;
       const tx = clamp(c.x * 0.75 + bx * 0.25, -HL + 2, HL - 2);
       const tz = c.z * 0.7 + bz * 0.3;
-      lx = tx + d * 9; ly = 0.8; lz = tz * 0.85;
-      px = tx - d * 13; py = 6.2; pz = tz * 0.75;
-      fov = 50; wLook = 3.5; wPos = 2.6;
+      const push = this.sprintN * 0.7 + this.ballN * 0.3; // sprinting / a fast ball: pull back and look further ahead
+      lx = tx + d * (9 + 5 * push); ly = 0.8; lz = tz * 0.85;
+      px = tx - d * (13 + 4 * push); py = 6.2 + 1.6 * push; pz = tz * 0.75;
+      fov = 50 + 5 * push; wLook = 3.5; wPos = 2.2;
     } else if (mode === 'replay' && ctx.replayCam) {
       // scripted replay path (render/replay-cameras.js), smoothed by the springs below
       const rc = ctx.replayCam;
@@ -78,7 +86,7 @@ export class CameraDirector {
       this.replayT += dt;
       if (this.cut) {
         this.replayGoal = ctx.goalSign || Math.sign(bx) || 1;
-        this.replaySide = (Math.sign(bz) || 1) * (Math.random() < 0.5 ? 1 : -1);
+        this.replaySide = (Math.sign(bz) || 1) * (this.flip = -this.flip);
       }
       const g = this.replayGoal;
       px = g * (HL + 3.9 - this.replayT * 0.2);
@@ -90,8 +98,8 @@ export class CameraDirector {
       wLook = 6; wPos = 1.5;
     } else {
       // broadcast tele camera on the near-side gantry
-      const lead = 0.35;
-      let fx = bx + bvx * lead, fz = bz * 0.45 + bvz * lead * 0.3;
+      // lead toward the ball's (smoothed) direction of travel
+      let fx = bx + clamp(this.bvx * 0.55, -14, 14), fz = bz * 0.45 + clamp(this.bvz * 0.12, -4, 4);
       if (view.ph === PHASE.GOAL && ctx.focus) { fx = ctx.focus.x; fz = ctx.focus.z * 0.6; }
       const tx = clamp(fx, -HL + 8, HL - 8);
       const tz = clamp(fz, -HW * 0.55, HW * 0.55);
@@ -99,7 +107,7 @@ export class CameraDirector {
       px = tx * 0.86; py = 21; pz = HW + 33;
       const sp = clamp((bs - 6) / 20, 0, 1);
       const nearGoal = clamp((Math.abs(bx) - 30) / 18, 0, 1);
-      fov = 21 + 7 * sp + 3 * nearGoal - (view.ph === PHASE.SETPIECE ? 1 : 0);
+      fov = 21 + 7 * sp + 3 * nearGoal - 3 * this.tight - (view.ph === PHASE.SETPIECE ? 1 : 0);
       if (view.ph === PHASE.GOAL) fov = 19;
       wLook = 2.6; wPos = 1.6;
     }

@@ -12,6 +12,7 @@ import { getPlayer, quickSellValue, utPrice } from '../core/players.js';
 import { NATIONS, NATION_BY_CODE, LEAGUES, leagueName, clubById, POS_GROUP, POSITIONS } from '../core/data.js';
 import { resolveKitClash, gkKitFor } from '../core/teams.js';
 import { Rng } from '../core/rng.js';
+import { weekNumber } from '../core/calendar.js';
 import { marketView, playerMarketListModal } from './marketview.js';
 import { rivalsTile } from './rivalsview.js';
 import * as M from './modesview.js';
@@ -551,6 +552,27 @@ export function sellModal(app, p, redraw) {
 }
 
 // ---------- store & packs ----------
+const fmtChance = (v) => (v >= 0.995 ? '100%' : v >= 0.1 ? `${(v * 100).toFixed(0)}%` : v >= 0.01 ? `${(v * 100).toFixed(1)}%` : v > 0 ? '<1%' : '0%');
+const _oddsMemo = new Map();
+/** Real chance of a card rated 85+/88+/90+ in one opening (memoised per pack and week). */
+function ratingOdds(pack) {
+  const key = `${pack.id}|${weekNumber()}`;
+  let r = _oddsMemo.get(key);
+  if (!r) { r = [85, 88, 90].map((m) => [m, UT.packChanceOvr(pack, m)]); _oddsMemo.set(key, r); }
+  return r;
+}
+function ratingOddsBlock(app, pack) {
+  const pity = UT.pityInfo(pack, app.ut);
+  return h('div', { class: 'pm-oddsrating' },
+    h('h4', null, 'Chance of a top card per pack'),
+    h('div', { class: 'pm-tablewrap' }, h('table', { class: 'pm-table' },
+      h('thead', null, h('tr', null, ratingOdds(pack).map(([m]) => h('th', null, `${m}+ rated`)))),
+      h('tbody', null, h('tr', null, ratingOdds(pack).map(([, v]) => h('td', null, h('b', null, fmtChance(v)))))))),
+    pity
+      ? h('p', { class: 'pm-dim' }, `Bad-luck protection: ${pity.count} of ${pity.threshold} packs opened since your last 88+ from this pack. ${pity.left > 0 ? `An 88+ is guaranteed after ${pity.left} more without one.` : 'Your next pack is guaranteed to hold an 88+.'}`)
+      : h('p', { class: 'pm-dim' }, 'No bad-luck protection on this pack.'));
+}
+
 export function oddsModal(app, pack) {
   const cats = Object.keys(UT.CATEGORIES).filter((c) => pack.slots.some((sl) => sl.odds[c]));
   const pct = (v) => (v >= 0.1 ? `${(v * 100).toFixed(1)}%` : v >= 0.001 ? `${(v * 100).toFixed(2)}%` : `${(v * 100).toFixed(3)}%`);
@@ -558,6 +580,7 @@ export function oddsModal(app, pack) {
     title: `${pack.name}: odds`, wide: true,
     body: h('div', null,
       h('p', { class: 'pm-dim' }, 'Every item is drawn independently using these published probabilities.'),
+      ratingOddsBlock(app, pack),
       h('div', { class: 'pm-tablewrap' }, h('table', { class: 'pm-table' },
         h('thead', null, h('tr', null, h('th', null, 'Category'), pack.slots.map((sl, i) => h('th', null, `Slot group ${i + 1} (${sl.n}×)`)), h('th', null, 'At least one'))),
         h('tbody', null, cats.map((c) => h('tr', null, h('td', null, UT.CATEGORIES[c].label), pack.slots.map((sl) => h('td', null, sl.odds[c] ? pct(sl.odds[c]) : '-')), h('td', null, h('b', null, pct(UT.packAtLeastOne(pack, c)))))))))),
@@ -578,7 +601,7 @@ export function openPackFlow(app, packType, onDone, count = 1) {
   const curse = cursedPack(s) && !isOwner(app.online);
   let items = [];
   for (let k = 0; k < n; k++) {
-    const got = UT.openPack(packType, owned, rng);
+    const got = UT.openPack(packType, owned, rng, curse ? null : s);
     // admin forced pull: this pack leads with the queued card (walkout) in place of its lead card
     const forced = curse ? null : UT.takeForcedPull(s);
     if (forced) got[0] = { pid: forced, cat: 'forced', dup: owned.has(forced) };
@@ -660,6 +683,7 @@ function storeView() {
         return h('div', { class: `pm-storeitem ${pack.promo ? `is-promo pm-promo--${pack.promo}` : ''}`, style: pack.promo ? { '--pa': PROMO_BY_ID[pack.promo].colors[0], '--pb': PROMO_BY_ID[pack.promo].colors[1], '--pc': PROMO_BY_ID[pack.promo].colors[2] } : null },
           packArt(pack, 'md'),
           h('div', { class: 'pm-storeinfo' }, h('h4', null, pack.name), h('p', { class: 'pm-dim' }, pack.desc),
+            pack.adminOnly ? null : h('p', { class: 'pm-dim' }, ratingOdds(pack).map(([m, v]) => `${m}+ ${fmtChance(v)}`).join(' · ')),
             h('div', { class: 'pm-price' }, h('i', { class: 'pm-coin', 'aria-hidden': 'true' }), fmtNum(price), price !== pack.price ? h('small', { class: 'pm-dim' }, ` (base ${fmtNum(pack.price)})`) : null),
             h('div', { class: 'pm-btnrow' },
               h('button', { class: 'pm-btn pm-btn--ghost pm-btn--sm', onclick: () => oddsModal(app, pack) }, 'View odds'),

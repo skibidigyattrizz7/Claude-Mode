@@ -208,3 +208,37 @@ html[data-ui] .lr-card.lr-card--full::after { display: none; }
   .lr-line-avg { font-size: clamp(36px, 11vw, 64px); }
   .lr-line-lbl { font-size: 10px; letter-spacing: .08em; white-space: nowrap; }
 }
+
+/* ---- fill the screen (Sep 30 UI pass): cards scale with the screen and the line count, labels are readable.
+   A full card is about 9.7em wide and 13.1em tall; --n is the number of cards on the line (set by lineupreveal.js). */
+.lr { --lr-label: #bcc4cf; } /* about 10:1 on the dark background */
+.lr .lr-cards .pm-card {
+  font-size: min(40px, calc((100vh - 320px) / 13.1), calc((100vw - 96px - (var(--n, 4) - 1) * 16px) / (var(--n, 4) * 9.9)));
+}
+.lr .lr-card--full { margin: 0; }
+.lr .lr-kicker, .lr .lr-skip, .lr .lr-line-lbl, .lr .lr-info-lbl, .lr .lr-stat span, .lr .lr-go { color: var(--lr-label); }
+.lr .lr-kicker { font-size: 14px; }
+.lr .lr-skip { font-size: 15px; }
+.lr .lr-line-lbl { font-size: 14px; }
+.lr .lr-pips { gap: var(--sp-3); }
+.lr .lr-pip { max-width: none; gap: 8px; }
+.lr .lr-pip i { height: 6px; }
+.lr .lr-pip span { font-size: 15px; color: var(--lr-label); }
+.lr .lr-pip.on span { color: #fff; }
+@media (orientation: portrait) {
+  .lr .lr-cards .pm-card {
+    font-size: min(40px, calc((100vh - 400px) / 27.5), calc((100vw - 32px - (min(var(--n, 3), 3) - 1) * 12px) / (min(var(--n, 3), 3) * 9.9)));
+  }
+  .lr .lr-line[data-line="gk"] .lr-cards .pm-card { font-size: min(40px, calc((100vh - 330px) / 13.1), calc((100vw - 32px) / 9.9)); }
+  .lr .lr-pip span { font-size: 12px; letter-spacing: .04em; }
+  .lr .lr-pip i { height: 5px; }
+  .lr .lr-line-lbl { font-size: 12px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .lr .lr-cards .pm-card {
+    font-size: min(40px, calc((100vh - 195px) / 13.1), calc((100vw - 64px - (var(--n, 4) - 1) * 12px) / (var(--n, 4) * 9.9)));
+  }
+  .lr .lr-pip span { font-size: 12px; letter-spacing: .06em; }
+  .lr .lr-pip i { height: 4px; }
+  .lr .lr-kicker { font-size: 12px; }
+}

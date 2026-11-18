@@ -64,6 +64,10 @@ export function categoryPools() {
   return _pools;
 }
 
+// Rebalance: Legend / Legend of the Game / Vault packs stay the most expensive packs (above every promo pack); their value
+// comes from richer support slots (Heroes, 86+ golds) rather than a price cut. See the odds table in the store.
+const SUPPORT_ODDS = { goldRare: 0.15, gold83: 0.3, gold86: 0.3, hero: 0.25 };
+const SUPPORT_ODDS_LOTG = { goldRare: 0.3, gold83: 0.35, gold86: 0.25, hero: 0.1 };
 export const PACKS = [
   {
     id: 'bronze', name: 'Bronze Pack', price: 750, look: 'bronze', desc: '12 bronze players incl. 1 rare',
@@ -93,21 +97,21 @@ export const PACKS = [
   },
 
   {
-    id: 'legend', name: 'Legend Pack', price: 250000, look: 'legend', desc: '1 guaranteed Legend + 4 rare golds',
-    slots: [{ n: 1, odds: { legend: 1 } }, { n: 4, odds: { goldRare: 0.7, gold83: 0.25, gold86: 0.05 } }],
+    id: 'legend', name: 'Legend Pack', price: 120000, look: 'legend', desc: '1 guaranteed Legend + 6 strong players (86+ golds and Heroes)',
+    slots: [{ n: 1, odds: { legend: 1 } }, { n: 6, odds: SUPPORT_ODDS }],
   },
   {
-    id: 'lotg', name: 'Legend of the Game Pack', price: 200000, look: 'lotg', desc: '1 guaranteed Legend of the Game (real player) + 4 rare golds',
-    slots: [{ n: 1, odds: { lotg: 1 } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
+    id: 'lotg', name: 'Legend of the Game Pack', price: 150000, look: 'lotg', desc: '1 guaranteed Legend of the Game (real player) + 5 strong players (86+ golds and Heroes)',
+    slots: [{ n: 1, odds: { lotg: 1 } }, { n: 5, odds: SUPPORT_ODDS_LOTG }],
   },
   // Secret card (owner request): one of exactly two packs that can ever contain it (the other is the
   // admin-only Admin Vault pack below, Sep 28), at SECRET_ODDS (0.001) — every other pull from that slot
   // is a guaranteed Legend of the Game instead, so the pack is worth opening on its own merits and the
   // Secret card is a true bonus, not the sole reason to buy it. Publicly on sale, normal odds.
   {
-    id: SECRET_PACK_ID, name: 'The Vault Pack', price: 300000, look: 'secret',
-    desc: `1 guaranteed Legend of the Game (real player) + 4 rare golds, plus a ${SECRET_ODDS * 100}% chance of each Secret card instead`,
-    slots: [{ n: 1, odds: { ...secretOdds(SECRET_ODDS), lotg: 1 - SECRET_TOTAL(SECRET_ODDS) } }, { n: 4, odds: { goldRare: 0.62, gold83: 0.3, gold86: 0.08 } }],
+    id: SECRET_PACK_ID, name: 'The Vault Pack', price: 180000, look: 'secret',
+    desc: `1 guaranteed Legend of the Game (real player) + 5 strong players, plus a ${SECRET_ODDS * 100}% chance of each Secret card instead`,
+    slots: [{ n: 1, odds: { ...secretOdds(SECRET_ODDS), lotg: 1 - SECRET_TOTAL(SECRET_ODDS) } }, { n: 5, odds: SUPPORT_ODDS_LOTG }],
   },
   // Admin Vault (owner request, Sep 28): admin-only (see storePacks' `adminOnly` filter — never on sale,
   // never a reward, never in "My Packs"), 10 random players per opening (adminvault.js),
@@ -167,27 +171,132 @@ export function pickByRating(pool, rng) {
   while (lo < hi) { const mid = (lo + hi) >> 1; if (cw[mid] > r) hi = mid; else lo = mid + 1; }
   return pool[lo];
 }
-export function openPack(packId, ownedSet = new Set(), rng = new Rng()) {
+// ---------- empty-pool fallback (never silently gold) ----------
+// A category whose pool is empty (e.g. no released Legend yet) used to fall back to plain gold, which broke the pack's
+// promise. Now it falls to the nearest NON-empty pool of the same or a better tier first, then the next-best below.
+const TIER_ORDER = ['bronze', 'bronzeRare', 'silver', 'silverRare', 'gold', 'goldRare', 'gold83', 'gold86', 'inform', 'hero', 'legend', 'lotg'];
+const SPECIAL_FALLBACK = ['lotg', 'legend', 'hero', 'inform', 'gold86', 'gold83', 'goldRare', 'gold'];
+/** Categories to try, in order, when `cat` has no cards. */
+export function fallbackCats(cat) {
+  const i = TIER_ORDER.indexOf(cat);
+  if (i < 0) return SPECIAL_FALLBACK; // totw, promo_*, secret_*: another special first, never straight to gold
+  return [...TIER_ORDER.slice(i + 1), ...TIER_ORDER.slice(0, i).reverse()];
+}
+/** -> { cat, pool } for the category, or the best non-empty substitute. */
+export function resolvePool(cat, pools) {
+  if (pools[cat] && pools[cat].length) return { cat, pool: pools[cat] };
+  for (const c of fallbackCats(cat)) if (pools[c] && pools[c].length) return { cat: c, pool: pools[c] };
+  return { cat: 'gold', pool: pools.gold };
+}
+/** Pick a card not in `seen`: random tries first, then an exhaustive pass, so a pool with enough cards never repeats. */
+function pickUnseen(pool, rng, seen) {
+  let p = pickByRating(pool, rng);
+  for (let t = 0; t < 24 && seen.has(p.id); t++) p = pickByRating(pool, rng);
+  if (!seen.has(p.id)) return p;
+  const rest = pool.filter((c) => !seen.has(c.id));
+  return rest.length ? pickByRating(rest, rng) : p;
+}
+
+// ---------- bad-luck protection (pity) ----------
+// state.pity[packId] = packs opened since the last card rated PITY_OVR+ in that pack type. Once it reaches the pack's
+// threshold the next opening is guaranteed one (the counter then resets). Packs that can't reach 88 have no pity.
+export const PITY_OVR = 88;
+const PITY_PROMO_THRESHOLD = 10;
+const PITY_TABLE = {
+  gold: { t: 50, from: ['gold86', 'inform', 'hero'], grp: -1 },
+  premium: { t: 25, from: ['gold86', 'inform', 'hero'], grp: -1 },
+  rare: { t: 10, from: ['gold86', 'inform', 'hero'], grp: -1 },
+  totw: { t: 40, from: ['gold86', 'inform', 'hero'], grp: -1 },
+  legend: { t: 4, from: ['legend'], grp: 0 },
+  lotg: { t: 3, from: ['lotg'], grp: 0 },
+  [SECRET_PACK_ID]: { t: 3, from: ['lotg'], grp: 0 },
+};
+function pitySpec(pack) {
+  if (!pack || pack.adminOnly) return null;
+  if (pack.promo) return { t: PITY_PROMO_THRESHOLD, from: [`promo_${pack.promo}`], grp: 0 };
+  return PITY_TABLE[pack.id] || null;
+}
+function pityPool(spec, pools) { return spec.from.flatMap((c) => pools[c] || []).filter((p) => p.ovr >= PITY_OVR); }
+/** { threshold, count, left } for the odds UI, or null when this pack has no pity (bronze/silver/admin, or no 88+ card exists for it). */
+export function pityInfo(pack, state) {
+  const spec = pitySpec(pack);
+  if (!spec) return null;
+  const pools = categoryPools();
+  if (!pityPool(spec, pools).length) return null;
+  const count = Math.max(0, Math.floor(Number(state && state.pity && state.pity[pack.id]) || 0));
+  return { threshold: spec.t, count, left: Math.max(0, spec.t - count) };
+}
+
+/** Opens a pack -> [{pid, cat, dup}] sorted best first. Pass the club `state` to apply and update pity. */
+export function openPack(packId, ownedSet = new Set(), rng = new Rng(), state = null) {
   const pack = PACK_BY_ID[packId];
   const pools = categoryPools();
   if (pools._week !== weekNumber()) { pools.totw = totwCards(weekNumber()); pools._week = weekNumber(); }
   const promoDrop = pack.promo ? [] : releasedLivePromos().flatMap((id) => pools[`promo_${id}`] || []);
-  const items = [];
+  const entries = [];
   const seen = new Set();
-  for (const slot of pack.slots) {
+  pack.slots.forEach((slot, gi) => {
     for (let i = 0; i < slot.n; i++) {
-      let cat = rng.weighted(Object.entries(slot.odds));
-      let pool = pools[cat] && pools[cat].length ? pools[cat] : pools.gold;
+      const picked = resolvePool(rng.weighted(Object.entries(slot.odds)), pools);
+      let cat = picked.cat, pool = picked.pool;
       if (promoDrop.length && PROMO_DROP_CATS.has(cat) && rng.chance(PROMO_DROP_CHANCE)) pool = promoDrop;
-      let p = pickByRating(pool, rng);
-      for (let t = 0; t < 12 && seen.has(p.id); t++) p = pickByRating(pool, rng);
+      const p = pickUnseen(pool, rng, seen);
       if (pool === promoDrop) cat = `promo_${p.special}`;
-      items.push({ pid: p.id, cat, dup: ownedSet.has(p.id) || seen.has(p.id) });
+      entries.push({ gi, it: { pid: p.id, cat, dup: ownedSet.has(p.id) || seen.has(p.id) } });
       seen.add(p.id);
     }
+  });
+  const spec = state ? pitySpec(pack) : null;
+  if (spec) {
+    if (!state.pity || typeof state.pity !== 'object') state.pity = {};
+    const count = Math.max(0, Math.floor(Number(state.pity[pack.id]) || 0));
+    const hit = () => entries.some((e) => getPlayer(e.it.pid).ovr >= PITY_OVR);
+    if (count >= spec.t && !hit()) {
+      const pool = pityPool(spec, pools);
+      if (pool.length) {
+        const gi = spec.grp < 0 ? pack.slots.length - 1 : spec.grp;
+        const target = entries.find((e) => e.gi === gi) || entries[0];
+        seen.delete(target.it.pid);
+        const p = pickUnseen(pool, rng, seen);
+        const src = spec.from.find((c) => (pools[c] || []).includes(p)) || spec.from[0];
+        target.it = { pid: p.id, cat: src, dup: ownedSet.has(p.id) || seen.has(p.id) };
+        seen.add(p.id);
+      }
+    }
+    state.pity[pack.id] = hit() ? 0 : count + 1;
   }
+  const items = entries.map((e) => e.it);
   items.sort((a, b) => itemScore(getPlayer(b.pid)) - itemScore(getPlayer(a.pid)));
   return items;
+}
+
+/** Share of a pool's pick weight (see pickByRating) on cards rated `min`+. */
+function ratingShare(pool, min) {
+  let lo = Infinity;
+  for (const p of pool) if (p.ovr < lo) lo = p.ovr;
+  let all = 0, hi = 0;
+  for (const p of pool) { const w = Math.pow(RATING_DECAY, Math.max(0, Math.min(40, p.ovr - lo))); all += w; if (p.ovr >= min) hi += w; }
+  return all ? hi / all : 0;
+}
+/** Real chance (0..1) that one opening has at least one card rated `min`+ (before pity). Follows openPack's own rules:
+ * rating-weighted picks, empty-pool fallbacks and the small live-promo upgrade. */
+export function packChanceOvr(pack, min) {
+  const pools = categoryPools();
+  const promoDrop = pack.promo ? [] : releasedLivePromos().flatMap((id) => pools[`promo_${id}`] || []);
+  const dropShare = promoDrop.length ? ratingShare(promoDrop, min) : 0;
+  let none = 1;
+  for (const s of pack.slots) {
+    let pItem = 0;
+    const tot = Object.values(s.odds).reduce((a, b) => a + b, 0) || 1;
+    for (const [c, w] of Object.entries(s.odds)) {
+      const r = resolvePool(c, pools);
+      let q = ratingShare(r.pool, min);
+      if (promoDrop.length && PROMO_DROP_CATS.has(r.cat)) q = (1 - PROMO_DROP_CHANCE) * q + PROMO_DROP_CHANCE * dropShare;
+      pItem += (w / tot) * q;
+    }
+    none *= Math.pow(1 - pItem, s.n);
+  }
+  return 1 - none;
 }
 // ---------- saved cards (owner, Sep 29: "I just lost a Rabbi Patel") ----------
 // A pack card that is not sent anywhere is never quick-sold automatically any more: duplicates left on Done go to
@@ -336,7 +445,7 @@ export function createUTState({ clubName = 'Pitchside FC', short = 'PFC', primar
     sbc: {}, obj: {},
     stats: { matches: 0, wins: 0, draws: 0, losses: 0, goals: 0, packsOpened: 0, sbcDone: 0 },
     battles: { week: 1, points: 0, played: 0, wins: 0, history: [] },
-    log: [],
+    log: [], pity: {},
   };
   autoSquad(state, '4-3-3');
   return state;
@@ -355,6 +464,10 @@ export function migrateUT(state) {
   state.admin = state.admin && typeof state.admin === 'object' ? state.admin : {};
   state.packs = Array.isArray(state.packs) ? state.packs.filter((pk) => pk && PACK_BY_ID[pk.type]) : [];
   state.sbc = state.sbc || {}; state.obj = state.obj || {};
+  // pity counters (see openPack): old saves have none; keep only known packs with whole, non-negative counts
+  const oldPity = state.pity && typeof state.pity === 'object' && !Array.isArray(state.pity) ? state.pity : {};
+  state.pity = {};
+  for (const [id, n] of Object.entries(oldPity)) if (PACK_BY_ID[id] && Number.isFinite(Number(n)) && Number(n) > 0) state.pity[id] = Math.min(1000, Math.floor(Number(n)));
   state.picks = Array.isArray(state.picks) ? state.picks : [];
   state.items = state.items && typeof state.items === 'object' ? state.items : {};
   state.evolved = state.evolved && typeof state.evolved === 'object' ? state.evolved : {};

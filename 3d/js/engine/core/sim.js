@@ -11,7 +11,7 @@ import { normTactics, applyTactic } from './tactics.js';
 import { clamp, lerp, wrapAngle, angleTo, mulberry32, segDist } from './mathx.js';
 const CURSED_SHOT_KINDS = new Set(['shot', 'finesse', 'penalty', 'fk', 'header', 'lowdriven', 'powershot', 'trivela', 'chip']);
 import { createBall, stepBall, classifyBall, keeperCanSave, predictBall, behindLine, setWeather } from './physics.js';
-import { judgeTackle, isFromBehind, isOffside, inOwnPenaltyArea, ShotTracker } from './rules.js';
+import { judgeTackle, isFromBehind, isOffside, offsideCandidates, inOwnPenaltyArea, ShotTracker } from './rules.js';
 import { leadPass, rollSpeedFor, rollTimeTo, solveLob, solveShot, solveShotCurl, groundVel } from './passing.js';
 import { FORMATIONS, assignSlots, roleGroup } from './formations.js';
 import * as AI from './ai.js';
@@ -152,7 +152,7 @@ export class MatchSim {
     this.nextTeamThink = 0;
     this.shotTracker = new ShotTracker(1.0);
     this.pendingPass = null;
-    this.pendingOffside = null;
+    this.pendingOffside = null; this.shotOff = null; this.adv = null;
     this.lastPasser = [null, null];
     this.subs = [];
     this.subsMade = [0, 0];
@@ -416,6 +416,9 @@ export class MatchSim {
     this._interactions();
     if (this.phase !== PHASE.PLAY) return;
     this._contests();
+    if (this.phase !== PHASE.PLAY) return;
+    this._advantage();
+    if (this.phase !== PHASE.PLAY) return;
     const r = this.shotTracker.update(t, false);
     if (r) this._shotResolved(r);
     const o = this.owner();
@@ -687,8 +690,12 @@ export class MatchSim {
       p.windup = 0;
       this.pendingShot[team] = null;
       H.mods = null;
+      if (inp.tackle || pressed('tackle')) H.tkDown = t;
       for (const k of KICK_KEYS) {
         if (!released(k)) continue;
+        // a lob that came from the tackle button (gamepad B is both) or while defending must never be buffered,
+        // otherwise a tackle tap auto-lobs after the ball is won
+        if (k === 'lob' && (oppHas || t - (H.tkDown || -9) < 0.5 || H.armed)) continue;
         if ((k === 'shoot' || k === 'finesse') && t < this.tfBlock[team]) continue;
         this.buffer[team] = { k, power: clamp((H[k] || 0) / 1, 0.1, 1), aim, until: t + 0.9, idx: p.idx, tRel: t };
       }
@@ -716,7 +723,7 @@ export class MatchSim {
         // auto-tackle: poke when the ball comes within reach while defending
         if (gp.autoTackle && oppHas && !H.armed && t > (H.autoTk || 0) && Math.hypot(b.p.x - p.x, b.p.z - p.z) < 1.05) {
           H.autoTk = t + 0.45;
-          if (this.rng() < 0.55) this.startTackle(p);
+          if (this._stealGeo(p, opp) + (this.rng() - 0.5) * 0.2 > 0.38) this.startTackle(p);
         }
       } else if (released('tackle')) H.armed = false;
     }
@@ -1549,6 +1556,20 @@ export class MatchSim {
     } else if (!info.shot) {
       this.pendingPass = null;
     }
+    // untargeted passes / lobs / loose balls: whoever was in an offside position when it was played and then touches
+    // it is flagged; a shot's candidates are kept for a rebound off the woodwork (see _physFx)
+    this.shotOff = null;
+    const spNoOff = wasSetPiece && this.sp && [SP.THROW, SP.CORNER, SP.GOALKICK].includes(this.sp.type);
+    if (!info.noOffside && !spNoOff && !p.isGK && ((info.pass && !(info.target >= 0)) || info.shot) && info.kind !== 'penalty') {
+      const cands = offsideCandidates({
+        attackers: this.teamList[p.team].filter((m) => m !== p && !m.isGK).map((m) => ({ idx: m.idx, x: m.x })),
+        ballX: b.p.x, defenderXs: this.teamList[1 - p.team].map((o) => o.x), dir: this.dir[p.team],
+      });
+      if (cands.length) {
+        if (info.shot) this.shotOff = { team: p.team, cands, t };
+        else this.pendingOffside = { idx: -1, cands, team: p.team, until: t + 5 };
+      }
+    }
     if (info.shot && this.shootout) this.pendingPass = null;
     else if (info.shot) {
       this.pendingPass = null;
@@ -1707,7 +1728,23 @@ export class MatchSim {
     let side = 0, forced = null;
     if (p.act && p.act.type === 'skill') { const sb = this._skillBall(p, p.act); side = sb.side; forced = sb.off; }
     const reach = (p.shieldT > this.t - 0.1 ? 0.5 : 0.42) + sp * 0.05 * (1.3 - p.a.dri / 100) * (p.ctrlSprintT > this.t - 0.1 ? 0.6 : 1);
-    const off = forced != null ? forced : reach + Math.max(0, Math.sin(this.t * (2 + sp * 1.4) + p.idx)) * 0.14 * Math.min(1, sp / 4);
+    let off;
+    if (forced != null) off = forced;
+    else {
+      // touch-based dribbling: at a sprint the ball is knocked ahead in discrete touches (longer for a faster run and a
+      // weaker dribbler), so it briefly leaves the feet and can be won; at a jog it stays in close control
+      const sprintF = clamp((sp - 5) / 2.5, 0, 1) * (p.shieldT > this.t - 0.1 || p.ctrlSprintT > this.t - 0.1 ? 0 : 1);
+      if (sprintF > 0) {
+        const period = 0.5 + p.a.dri * 0.0025;
+        if (!(this.t - (p.tchT || -9) < period)) p.tchT = this.t;
+        const u = clamp((this.t - p.tchT) / period, 0, 1);
+        const knock = (0.8 + sp * 0.12) * (1.5 - p.a.dri / 100) * sprintF;
+        off = reach + knock * (1 - u) * (1 - u);
+      } else {
+        p.tchT = this.t;
+        off = reach + Math.max(0, Math.sin(this.t * (2 + sp * 1.4) + p.idx)) * 0.14 * Math.min(1, sp / 4);
+      }
+    }
     const tx = p.x + fx * off - fz * side, tz = p.z + fz * off + fx * side;
     const k = Math.min(1, dt * 16);
     b.p.x += (tx - b.p.x) * k; b.p.z += (tz - b.p.z) * k; b.p.y = BALL_R;
@@ -1734,6 +1771,9 @@ export class MatchSim {
 
   _physFx() {
     for (const e of this.physEv) {
+      if (e.k === 'post' && this.shotOff && this.t - this.shotOff.t < 3 && !this.pendingOffside) {
+        this.pendingOffside = { idx: -1, cands: this.shotOff.cands, team: this.shotOff.team, until: this.t + 4 };
+      }
       if (e.k === 'post') this.fxPush('post', { s: Math.round(e.s) });
       else if (e.k === 'net') this.fxPush('net', { x: +e.x.toFixed(2), y: +e.y.toFixed(2), z: +e.z.toFixed(2), s: Math.round(e.s) });
     }
@@ -1905,7 +1945,8 @@ export class MatchSim {
   _touch(p, zone) {
     const b = this.ball, t = this.t;
     if (this.pendingOffside) {
-      if (this.pendingOffside.idx === p.idx) return this._offside(p);
+      const po = this.pendingOffside;
+      if (p.team === po.team && (po.idx === p.idx || (po.cands && po.cands.includes(p.idx) && t < po.until))) return this._offside(p);
       this.pendingOffside = null;
     }
     if (zone === 'head') return this._header(p);
@@ -2453,6 +2494,29 @@ export class MatchSim {
     return true;
   }
 
+  // How well placed `d` is to win the ball off carrier `o`, 0..1 (no randomness): goal-side/in front of the
+  // carrier, facing the ball, closing speed on it, and how exposed the ball is right after the carrier's touch.
+  _stealGeo(d, o) {
+    const b = this.ball, t = this.t;
+    const osp = Math.hypot(o.vx, o.vz);
+    let cx = this.dir[o.team], cz = 0;
+    if (osp > 1.2) { cx = o.vx / osp; cz = o.vz / osp; }
+    let dx = d.x - o.x, dz = d.z - o.z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+    const front = dx * cx + dz * cz; // +1 = defender straight ahead of the carrier (goal-side), -1 = behind him
+    let ux = b.p.x - d.x, uz = b.p.z - d.z; const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
+    const fv = faceVec(d);
+    const face = clamp(fv.x * ux + fv.z * uz, 0, 1);
+    const closing = clamp(((d.vx - o.vx) * ux + (d.vz - o.vz) * uz) / 6, 0, 1);
+    const gap = Math.hypot(b.p.x - o.x, b.p.z - o.z);
+    const sinceTouch = t - (o.tchT || -9);
+    const exposure = clamp((gap - 0.4) / 0.9, 0, 1) * (sinceTouch > 0.08 && sinceTouch < 0.7 ? 1 : 0.6);
+    const goalSide = clamp((front + 0.3) / 1.3, 0, 1);
+    let geo = 0.35 * goalSide + 0.25 * face + 0.2 * closing + 0.2 * exposure;
+    // shielding with the defender behind: the body is between him and the ball
+    if (o.shieldT > t - 0.15 && front < 0.1) geo *= 0.3;
+    return clamp(geo, 0, 1);
+  }
+
   _resolveStanding(p) {
     const b = this.ball, t = this.t;
     const f = faceVec(p);
@@ -2474,8 +2538,10 @@ export class MatchSim {
       else if (!victim) won = true;
       else if (p.glitch) won = true; // guaranteed steal, not just a better chance
       else {
-        const pr = clamp(0.5 + (p.a.def - victim.a.dri) * 0.012 + (behind ? -0.2 : 0.12) + (victim.act && victim.act.type === 'skill' ? -0.15 : 0)
-          + ps(p, 'anticipate') * 0.1 + ps(p, 'enforcer') * 0.05 + (p.jockeyT > this.t - 0.4 ? 0.06 : 0) - ps(victim, 'pressproven') * 0.05, 0.1, 0.93);
+        const geo = this._stealGeo(p, victim);
+        const pr = clamp(0.1 + geo * 0.7 * (1 + (p.a.def - victim.a.dri) * 0.008) + (victim.act && victim.act.type === 'skill' ? -0.15 : 0)
+          + ps(p, 'anticipate') * 0.1 + ps(p, 'enforcer') * 0.05 + (p.jockeyT > this.t - 0.4 ? 0.06 : 0) - ps(victim, 'pressproven') * 0.05
+          + (this.rng() - 0.5) * 0.08, 0.05, 0.93);
         // admin defenders win it from anywhere; admin dribblers are nearly impossible to dispossess
         won = this.rng() < (pr + (1 - pr) * bst(p, 'def')) * (1 - 0.92 * bst(victim, 'dri') * (1 - bst(p, 'def')));
       }
@@ -2526,7 +2592,7 @@ export class MatchSim {
       const shielding = o.shieldT > t - 0.1;
       if (bd < 0.8 + bst(d, 'def') * 1.4) {
         d.cool.steal = t + 0.35 * (1 - bst(d, 'def') * 0.7);
-        let pr = clamp(0.2 + (d.a.def - o.a.dri) * 0.007 + (this.fromBehind(d, o) ? -0.12 : 0) + (d.jockeyT > t - 0.3 ? 0.06 : 0) + ps(d, 'jockey') * 0.03 + ps(d, 'enforcer') * 0.03, 0.03, 0.45);
+        let pr = clamp(this._stealGeo(d, o) * 0.5 * (1 + (d.a.def - o.a.dri) * 0.006) + (d.jockeyT > t - 0.3 ? 0.04 : 0) + ps(d, 'jockey') * 0.03 + ps(d, 'enforcer') * 0.03 + (this.rng() - 0.5) * 0.06, 0.01, 0.5);
         if (this.isHumanCtrl(d)) pr *= 0.6;
         if (this.isHumanCtrl(o)) pr *= 0.8;
         pr *= 1 - ps(o, 'pressproven') * 0.25;
@@ -2556,13 +2622,42 @@ export class MatchSim {
   }
 
   // ------------------------------------------------------------------ fouls & stoppages
+  // advantage: hold the whistle ~2 s; if the fouled team keeps the ball play is waved on, otherwise the foul is given
+  // at the original spot
+  _advantage() {
+    const a = this.adv;
+    if (!a) return;
+    const o = this.owner(), t = this.t;
+    if (o && o.team !== a.victimTeam && !this.ball.inHands) { this.adv = null; this._giveFoul(a); return; }
+    if (this.ball.inHands && o && o.team !== a.victimTeam) { this.adv = null; this._giveFoul(a); return; }
+    if (t - a.t >= 2.0) {
+      this.adv = null; // played on
+      this.stats.advantages = (this.stats.advantages || 0) + 1;
+    }
+  }
+
+  _giveFoul(a) {
+    this.fxPush('whistle', { n: 1 });
+    this.stoppage += 0.15;
+    this._stop(SP.FREEKICK, a.victimTeam, a.x, a.z, 1.5);
+  }
+
   _foul(off, victim, card) {
+    this.adv = null;
     off.st.fouls++;
     this.stats.fouls[off.team]++;
     victim.act = { type: 'fall', t0: this.t, dur: 1.4 };
     const pen = inOwnPenaltyArea(victim.x, victim.z, this.dir[off.team]);
     this.emit({ type: 'foul', team: this.sideName(off.team), playerId: off.data.id, playerName: off.data.name, victimId: victim.data.id, minute: this.minute(), penalty: pen });
     this.fxPush('foul', { pi: off.idx, pen: pen ? 1 : 0 });
+    const bl = this.ball, own = this.owner();
+    const keeps = (own && own.team === victim.team && !own.isGK) || (bl.owner < 0 && bl.lastTeam === victim.team);
+    if (!pen && card !== 'red' && !this.shootout && keeps && this.X(victim.team, bl.p.x) > 30 && !bl.inHands) {
+      if (card === 'yellow' && !this._lastMan(victim, off) && this.rng() < 0.55) card = null;
+      if (card) this._card(off, card);
+      this.adv = { victimTeam: victim.team, x: victim.x, z: victim.z, t: this.t };
+      return;
+    }
     this.fxPush('whistle', { n: 1 });
     // referee discretion: most non-last-man bookable fouls only get a warning
     if (card === 'yellow' && !this._lastMan(victim, off) && this.rng() < 0.55) card = null;
@@ -2602,7 +2697,7 @@ export class MatchSim {
     this.pending = { type, team, x, z, ...extra };
     if (b.owner >= 0) { b.owner = -1; b.inHands = false; }
     if (type === SP.FREEKICK || type === SP.PENALTY) { b.v.x *= 0.3; b.v.z *= 0.3; }
-    this.pendingPass = null; this.pendingOffside = null; b.intended = -1;
+    this.pendingPass = null; this.pendingOffside = null; this.shotOff = null; b.intended = -1;
     const r = this.shotTracker.update(this.t, true);
     if (r) this._shotResolved(r);
     for (const p of this.players) { p.run = null; p.gkPlan = null; p.windup = 0; }

@@ -93,6 +93,7 @@ export function createMatch(container, opts = {}) {
   let spCam = false;
   let R = null;
   let raf = 0, last = performance.now(), acc = 0;
+  const capHits = []; let lastResDrop = -1e9;
   const remoteInputs = [null, null];
   const remoteTacSeq = [-1, -1];
   const snaps = [];
@@ -607,7 +608,16 @@ export function createMatch(container, opts = {}) {
         let n = 0;
         const maxSteps = 14 * timeScale;
         while (acc >= DT && n < maxSteps) { sim.step(DT, ins); acc -= DT; n++; }
-        if (n >= maxSteps) acc = 0;
+        if (n >= maxSteps) {
+          acc = 0;
+          // repeated step-cap hits = the machine can't keep up: shed render cost (resolution) instead of only dropping time
+          capHits.push(nowMs);
+          while (capHits.length && nowMs - capHits[0] > 4000) capHits.shift();
+          if (capHits.length >= 3 && nowMs - lastResDrop > 2500 && R && R.setResScale) {
+            lastResDrop = nowMs; capHits.length = 0;
+            try { R.setResScale((R.getResScale ? R.getResScale() : 1) * 0.85); } catch (e) { /* keep playing */ }
+          }
+        }
         for (const e of sim.drainEvents()) safe(onEvent, e);
       }
       view = viewFromSim(sim);

@@ -19,7 +19,7 @@ const CSS = `
 .ps3d-sb .half{background:#0f1422;color:#9fb0d0;font-size:12px;padding:0 8px}
 .ps3d-banner{position:absolute;left:50%;top:18%;transform:translate(-50%,-50%) scale(.6);opacity:0;transition:transform .35s cubic-bezier(.2,1.4,.4,1),opacity .3s;text-align:center;white-space:nowrap}
 .ps3d-banner.show{transform:translate(-50%,-50%) scale(1);opacity:1}
-.ps3d-banner .big{font-size:64px;font-weight:900;font-style:italic;letter-spacing:3px;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 30px rgba(0,0,0,.4);padding:4px 34px;background:linear-gradient(90deg,transparent,rgba(10,16,34,.75) 20%,rgba(10,16,34,.75) 80%,transparent)}
+.ps3d-banner .big{font-size:64px;font-weight:900;letter-spacing:3px;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 30px rgba(0,0,0,.4);padding:4px 34px;background:linear-gradient(90deg,transparent,rgba(10,16,34,.75) 20%,rgba(10,16,34,.75) 80%,transparent)}
 .ps3d-banner .sub{font-size:20px;font-weight:600;margin-top:6px;text-shadow:0 2px 6px rgba(0,0,0,.8)}
 .ps3d-banner.goal .big{color:#ffe14d}
 .ps3d-banner.yellow .big{color:#ffd400}.ps3d-banner.red .big{color:#ff4444}
@@ -39,7 +39,7 @@ const CSS = `
 .ps3d-radar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);border-radius:6px;background:rgba(18,60,30,.55);box-shadow:0 2px 10px rgba(0,0,0,.4)}
 .ps3d-hint{position:absolute;left:50%;bottom:170px;transform:translateX(-50%);background:rgba(10,16,34,.82);padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;white-space:nowrap;display:none;text-align:center}
 .ps3d-hint b{color:#ffe14d}
-.ps3d-replay{position:absolute;right:20px;top:18px;display:none;font-weight:900;font-style:italic;font-size:22px;letter-spacing:2px;background:#c8102e;padding:4px 14px;border-radius:4px}
+.ps3d-replay{position:absolute;right:20px;top:18px;display:none;font-weight:900;font-size:22px;letter-spacing:2px;background:#c8102e;padding:4px 14px;border-radius:4px}
 .ps3d-replay small{display:block;font-size:11px;font-style:normal;font-weight:600;letter-spacing:0;opacity:.85}
 .ps3d-fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s}
 .ps3d-stats{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);background:rgba(10,16,34,.88);border-radius:8px;padding:14px 22px;min-width:320px;display:none;font-weight:700}
@@ -107,7 +107,7 @@ const CSS = `
 .ps3d-contact{position:absolute;right:24px;bottom:150px;width:92px;height:118px;display:none;text-align:center;font-size:10px;font-weight:800;color:#cfd8ea}
 .ps3d-contact .ball{position:relative;width:78px;height:78px;margin:0 auto 4px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8dde6 60%,#9aa3b3);box-shadow:0 2px 10px rgba(0,0,0,.5)}
 .ps3d-contact .dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#ff4d4d;box-shadow:0 0 0 2px #fff}
-.ps3d-ticker{position:absolute;left:18px;bottom:84px;max-width:46%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;font-style:italic;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps3d-ticker{position:absolute;left:18px;bottom:84px;max-width:46%;background:rgba(10,16,34,.72);padding:5px 14px;border-radius:14px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ps3d-ticker.show{opacity:1}
 .ps3d-pens{position:absolute;left:18px;top:56px;background:rgba(10,16,34,.82);border-radius:5px;padding:5px 10px;font-size:12px;font-weight:800;display:none}
 .ps3d-pens .row{display:flex;align-items:center;gap:5px;margin:2px 0}

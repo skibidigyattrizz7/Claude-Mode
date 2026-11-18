@@ -898,21 +898,28 @@ function settingsScreen(tab = 'general') {
   const volOut = h('output', { for: 'set-volume' }, `${s.volume}%`);
   vol.addEventListener('input', () => { volOut.textContent = `${vol.value}%`; });
   vol.addEventListener('change', () => upd('volume')(Number(vol.value)));
+  const sec = (title, ...kids) => h('section', { class: 'set-section', 'aria-label': title }, h('h3', null, title), ...kids);
   const general = h('div', { class: 'panel settings', id: 'settings-general' },
-    segmented('Default difficulty', DIFFICULTIES, s.difficulty, upd('difficulty'), 'set-diff'),
-    segmented('Default half length', HALF_LENGTHS.map((m) => [m, `${m} min`]), s.halfMinutes, upd('halfMinutes'), 'set-half'),
-    segmented('Default stadium', STADIUMS, s.stadium, upd('stadium'), 'set-stadium'),
-    segmented('Weather', WEATHERS, s.weather, upd('weather'), 'set-weather'),
-    segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
-    segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality'),
-    segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); s.uiPicked = true; upd('ui')(v); }, 'set-ui'),
-    accentPicker({ onChange: (patch) => { Object.assign(s, patch); } }),
-    segmented('Online lineup reveal', LINEUP_STYLES, s.lineupCards, upd('lineupCards'), 'set-lineup'),
-    segmented('Starting XI at the end', LINEUP_XI, s.lineupXI, upd('lineupXI'), 'set-lineup-xi'),
-    h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut)),
-    h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
-    h('p', { class: 'hint' }, 'Player and manager photos are from Wikimedia Commons. ', h('a', { href: 'credits.html', target: '_blank', rel: 'noopener' }, 'Photo credits')),
-    adminCodesField());
+    sec('Match',
+      segmented('Default difficulty', DIFFICULTIES, s.difficulty, upd('difficulty'), 'set-diff'),
+      segmented('Default half length', HALF_LENGTHS.map((m) => [m, `${m} min`]), s.halfMinutes, upd('halfMinutes'), 'set-half'),
+      segmented('Default stadium', STADIUMS, s.stadium, upd('stadium'), 'set-stadium'),
+      segmented('Weather', WEATHERS, s.weather, upd('weather'), 'set-weather')),
+    sec('Camera and graphics',
+      segmented('Camera', CAMERAS, s.camera, upd('camera'), 'set-cam'),
+      segmented('Graphics quality', QUALITIES, s.quality, upd('quality'), 'set-quality')),
+    sec('Look',
+      segmented('Interface style', UI_STYLES, s.ui, (v) => { applyUiStyle(v); s.uiPicked = true; upd('ui')(v); }, 'set-ui'),
+      accentPicker({ onChange: (patch) => { Object.assign(s, patch); } })),
+    sec('Online lineup reveal',
+      segmented('Reveal style', LINEUP_STYLES, s.lineupCards, upd('lineupCards'), 'set-lineup'),
+      segmented('Starting XI at the end', LINEUP_XI, s.lineupXI, upd('lineupXI'), 'set-lineup-xi')),
+    sec('Sound',
+      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'set-volume' }, 'Sound volume'), h('div', { class: 'range-row' }, vol, volOut))),
+    sec('About',
+      h('p', { class: 'hint' }, 'Settings apply to the next match. Career and Ultimate Team keep their own difficulty settings.'),
+      h('p', { class: 'hint' }, 'Player and manager photos are from Wikimedia Commons. ', h('a', { href: 'credits.html', target: '_blank', rel: 'noopener' }, 'Photo credits')),
+      adminCodesField()));
   const gameplay = h('div', { class: 'gp-wrap', id: 'settings-gameplay' });
   let gpPlayer = 'p1';
   const renderGameplay = () => {

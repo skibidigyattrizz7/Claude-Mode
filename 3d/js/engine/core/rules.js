@@ -61,6 +61,16 @@ export function isOffside({ receiverX, ballX, defenderXs, dir, margin = 0.1 }) {
 }
 
 /**
+ * Every attacker who is in an offside position at this moment (used for untargeted passes, lobs and shots/rebounds,
+ * where nobody is the named receiver). attackers: [{ idx, x }] excluding the kicker (and keepers).
+ */
+export function offsideCandidates({ attackers, ballX, defenderXs, dir, margin = 0.1 }) {
+  const out = [];
+  for (const a of attackers) if (isOffside({ receiverX: a.x, ballX, defenderXs, dir, margin })) out.push(a.idx);
+  return out;
+}
+
+/**
  * Tracks the outcome of a shot so a goal and a save are never both reported for it.
  * A keeper touch only counts as a save if the ball had not wholly crossed the line,
  * and the save is only confirmed after `confirmDelay` seconds without a goal.

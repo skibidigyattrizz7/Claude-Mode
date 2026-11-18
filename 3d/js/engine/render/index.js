@@ -208,6 +208,19 @@ export function createRenderer(container, opts = {}) {
     camera.updateProjectionMatrix();
   };
   resize();
+  // adaptive resolution (index.js lowers it when the sim keeps hitting its step cap); never below half
+  const basePR = renderer.getPixelRatio();
+  let resScale = 1;
+  const setResScale = (f) => {
+    if (destroyed) return resScale;
+    const n = Math.max(0.5, Math.min(1, f));
+    if (n === resScale) return resScale;
+    resScale = n;
+    renderer.setPixelRatio(basePR * n);
+    if (n <= 0.6 && renderer.shadowMap.enabled) renderer.shadowMap.enabled = false;
+    resize();
+    return resScale;
+  };
 
   const tmpV = new THREE.Vector3();
   const updateRefs = (view, dt) => {
@@ -345,7 +358,12 @@ export function createRenderer(container, opts = {}) {
         replayCam = fn(replayPath.frames, view.rt, { scorerIndex: scorer >= 0 ? scorer : 0, goalSign: goalSign || Math.sign(view.b[0]) || 1 });
         replayCam.fov = replayPath.kind === 'scorerOrbit' ? 42 : replayPath.kind === 'goalLine' ? 30 : 24;
       }
-      director.update(view, dt, { ctrlPos, goalSign, focus, replayCam });
+      // how bunched up play is (mean distance of the 22 players to the ball) and the controlled player's speed
+      let spread = 0, ns = 0;
+      for (let i = 0; i < 22; i++) { const px = p[i * STRIDE]; if (!(px > -500)) continue; spread += Math.hypot(px - b[0], p[i * STRIDE + 1] - b[2]); ns++; }
+      spread = ns ? spread / ns : 30;
+      const ctrlSpeed = ctrlPos ? p[(c[ci]) * STRIDE + 6] || 0 : 0;
+      director.update(view, dt, { ctrlPos, goalSign, focus, replayCam, spread, ctrlSpeed });
       overlays.update(view, rigs, t, c);
       if (nightShadows) {
         for (let i = 0; i < 25; i++) {
@@ -476,7 +494,7 @@ export function createRenderer(container, opts = {}) {
   }
 
   return {
-    render, setCamera, setControlled, resize, destroy, project, getCameraYaw, warmup, setReplayPath, domElement: dom,
+    render, setCamera, setControlled, resize, setResScale, getResScale: () => resScale, destroy, project, getCameraYaw, warmup, setReplayPath, domElement: dom,
     // dev-only hooks (harness / debugging)
     _debug: {
       set noDraw(v) { dbg.noDraw = v; },

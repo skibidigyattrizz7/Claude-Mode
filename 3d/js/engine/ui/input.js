@@ -1,6 +1,14 @@
 // Local input devices -> raw InputState (screen-relative: mx +1 = screen right, my +1 = screen up).
 // Keyboard (+ 'Mouse0'/'Mouse2' binds), Gamepad API (standard mapping) and a touch overlay
 // (virtual joystick + action buttons) when 'ontouchstart' in window.
+// radial deadzone + rescale for an analogue stick: returns the stick vector (y not flipped) and its magnitude m (0..1)
+export function stickRadial(x, y, dz = 0.15, outer = 0.95) {
+  const m = Math.hypot(x, y);
+  if (m <= dz) return { x: 0, y: 0, m: 0 };
+  const k = Math.min(1, (m - dz) / (outer - dz));
+  return { x: (x / m) * k, y: (y / m) * k, m: k };
+}
+
 const ACTIONS = ['sprint', 'pass', 'through', 'lob', 'shoot', 'finesse', 'switchP', 'tackle', 'skill', 'jockey', 'keeper', 'power'];
 // engine-side fallbacks for binds that older saved keybinds (or shared defaults) lack
 // power = the power-shot modifier (hold with the shoot key); on a gamepad it is LB + RB together
@@ -24,6 +32,7 @@ export class InputManager {
     this.padPrev = [{}, {}];
     this.touchState = null;
     this.holdStart = { p1: {}, p2: {} };
+    this.kbMove = { p1: { t0: null, last: 0 }, p2: { t0: null, last: 0 } };
     this.power = { p1: 0, p2: 0 };
     this.heldKick = { p1: null, p2: null };
     this.enabled = true;
@@ -108,6 +117,7 @@ export class InputManager {
     const b = this.binds[slot];
     const out = emptyInput();
     if (this.enabled) {
+      let padMove = null, kbOnly = true;
       const d = (k) => this._isDown(b[k], latch);
       out.mx = (d('right') ? 1 : 0) - (d('left') ? 1 : 0);
       out.my = (d('up') ? 1 : 0) - (d('down') ? 1 : 0);
@@ -115,13 +125,18 @@ export class InputManager {
       // gamepad
       const pad = this.pads[slot === 'p1' ? 0 : 1];
       if (pad) {
+        kbOnly = false;
         const ax = (i) => { const v = pad.axes[i] || 0; return Math.abs(v) < 0.2 ? 0 : v; };
+        // left stick: radial deadzone with rescale, so speed is analogue (a gentle push = a walk/jog) and a
+        // slightly worn stick drifts nothing; magnitude is kept, direction stays smooth through the deadzone edge
+        const rs = stickRadial(pad.axes[0] || 0, pad.axes[1] || 0);
+        padMove = rs.m > 0 ? rs : null;
         const btn = (k) => !!(pad.buttons[k] && (pad.buttons[k].pressed || pad.buttons[k].value > 0.4));
-        if (ax(0) || ax(1)) { out.mx = ax(0); out.my = -ax(1); }
+        if (padMove) { out.mx = padMove.x; out.my = -padMove.y; }
         // d-pad: ball contact point at set pieces (kx/ky); moves the player only when the stick is idle
         const dx = (btn(15) ? 1 : 0) - (btn(14) ? 1 : 0), dy = (btn(12) ? 1 : 0) - (btn(13) ? 1 : 0);
         out.kx = dx; out.ky = dy;
-        if (!ax(0) && !ax(1) && (dx || dy) && !btn(4)) { out.mx = dx; out.my = dy; }
+        if (!padMove && (dx || dy) && !btn(4)) { out.mx = dx; out.my = dy; }
         // right stick: crosshair at penalties / free kicks (cx, cy), flick = skill move in play
         const rx = ax(2), ry = ax(3);
         out.cx = rx; out.cy = -ry;
@@ -136,12 +151,23 @@ export class InputManager {
       // touch (player 1 only)
       if (slot === 'p1' && this.touchState) {
         const t = this.touchState;
-        if (t.mx || t.my) { out.mx = t.mx; out.my = t.my; }
+        if (t.mx || t.my) { out.mx = t.mx; out.my = t.my; kbOnly = false; }
         for (const a of ACTIONS) out[a] ||= !!t[a];
         out.power ||= !!t.powerArmed; // touch POWER is a toggle: tap to arm, then shoot
       }
       const l = Math.hypot(out.mx, out.my);
       if (l > 1) { out.mx /= l; out.my /= l; }
+      // keyboard soft-start: the first ~0.14 s of a key press ramps from a gentle push to full instead of snapping
+      if (kbOnly && consumer === 'frame') {
+        const now = performance.now();
+        const ks = this.kbMove[slot];
+        if (l > 0) {
+          if (ks.t0 == null || now - ks.last > 120) ks.t0 = now;
+          ks.last = now;
+          const k = 0.4 + 0.6 * Math.min(1, (now - ks.t0) / 140);
+          out.mx *= k; out.my *= k;
+        } else ks.t0 = null;
+      }
       // mouse movement also moves the set-piece crosshair (player 1)
       if (slot === 'p1' && consumer === 'frame' && (this.mouse.dx || this.mouse.dy)) {
         const k = 1 / 18;
