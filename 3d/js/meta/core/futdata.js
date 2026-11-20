@@ -2,6 +2,7 @@
 // A row is turned into a plain card object (see futCard). Hand-written players (Icons, Stars, regulars) look their card up with
 // futFor(person, kind) and take the real ratings / stats; rows with `isNew` become new cards (realplayers.js).
 import { FUT_ROWS, FUT_GAME, FUT_ASOF } from './futplayers.js';
+import { FUT_LATE_ROWS } from './futplayers_late.js';
 
 export { FUT_GAME, FUT_ASOF };
 
@@ -16,9 +17,19 @@ export function futCard(r) {
 
 export const FUT_CARDS = FUT_ROWS.map(futCard);
 
+/** LATE base cards (core/futplayers_late.js, tools/fetch_futgg_late.py): appended at the very end of the card database (players.js `futLate`)
+ * so no existing card, promo or saved club changes. They are NOT in FUT_CARDS (club strength ranking and promo sources ignore them). */
+export const FUT_LATE_CARDS = FUT_LATE_ROWS.map(futCard);
+
 /** person slug -> { b, i, h } (base card / Icon / Hero) */
 export const FUT_BY_PERSON = new Map();
 for (const c of FUT_CARDS) {
+  let e = FUT_BY_PERSON.get(c.slug);
+  if (!e) FUT_BY_PERSON.set(c.slug, (e = {}));
+  if (!e[c.kind]) e[c.kind] = c;
+}
+
+for (const c of FUT_LATE_CARDS) { // late people are new slugs (never a hand-written or earlier person): bios / photos / promos can look them up
   let e = FUT_BY_PERSON.get(c.slug);
   if (!e) FUT_BY_PERSON.set(c.slug, (e = {}));
   if (!e[c.kind]) e[c.kind] = c;

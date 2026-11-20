@@ -28,8 +28,8 @@ export function launchEclipseBattle({ parent = document.body, online, onWin, onC
   frame.title = 'Boss fight'; frame.allow = 'autoplay; fullscreen';
   const panel = document.createElement('div'); panel.className = 'eb-panel'; panel.hidden = true;
   screen.append(frame, panel); parent.append(screen);
-  const oldFocus = document.activeElement, oldOverflow = document.documentElement.style.overflow;
-  document.documentElement.style.overflow = 'hidden';
+  const oldFocus = document.activeElement, root = document.documentElement, oldOverflow = root?.style?.overflow;
+  if (root?.style) root.style.overflow = 'hidden';
   let nonce = null, busy = false, closed = false, confirmed = false;
 
   function show(title, text, actions) {
@@ -91,11 +91,11 @@ export function launchEclipseBattle({ parent = document.body, online, onWin, onC
     if (t === 'p13-close') close();
     else if (t === 'p13-victory') confirmVictory();
   }
-  addEventListener('message', onMessage);
+  globalThis.addEventListener?.('message', onMessage);
   function close() {
     if (closed) return; closed = true;
-    removeEventListener('message', onMessage);
-    screen.remove(); style.remove(); document.documentElement.style.overflow = oldOverflow;
+    globalThis.removeEventListener?.('message', onMessage);
+    screen.remove(); style.remove(); if (root?.style) root.style.overflow = oldOverflow;
     oldFocus?.focus?.(); onClose?.();
   }
   void begin();

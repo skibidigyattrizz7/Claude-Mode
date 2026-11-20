@@ -459,7 +459,7 @@ export function startVinsonExperience(online, { initialState = loadUT(), ephemer
       battleOpening = true;
       try {
         // owner (Oct 5): the ban screen opens the new boss fight (Prototype 13). ?oldfight=1 keeps the previous one.
-        const oldFight = new URLSearchParams(location.search).get('oldfight') === '1';
+        const oldFight = new URLSearchParams(globalThis.location?.search || '').get('oldfight') === '1';
         const launch = oldFight ? (await import('./vinsonbattle.js?v=vinson35')).launchVinsonBattle : (await import('./eclipsebattle.js?v=2')).launchEclipseBattle;
         if (experienceClosed || battleExperience || online?.identityId?.() !== identity || !state()) return false;
         battleExperience = launch({ online, resumeRewards,

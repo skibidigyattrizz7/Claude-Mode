@@ -14,7 +14,7 @@ import { userMatchStats, recordObjectiveMatch } from '../core/objectives.js';
 import { recordEvoMatch } from '../core/evolutions.js';
 import { recordSeasonMatch } from '../core/seasons.js';
 import { syncRemote, remoteDue, wipeLocalProfile, DELETED_MESSAGE } from '../core/remote.js';
-import { startVinsonExperience } from './vinson.js?v=vinson37';
+import { startVinsonExperience } from './vinson.js?v=vinson38';
 import { cursedPack, enforceLock, isOwner, hasDoomEffects } from '../core/vinson.js';
 
 /** Normalise a coin response ({coins}|{balance}|number) to a number (NaN when unknown). */
@@ -383,8 +383,6 @@ export class MetaApp {
   topRefresh() {
     const v = this.stack[this.stack.length - 1];
     if (v) this.renderTop(v);
-    const note = this.main.querySelector('.pm-walletnote');
-    if (note) note.textContent = this.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.';
   }
   coinSourceLabel() { return this.wallet.mode === 'online' ? 'online balance' : 'local balance'; }
 

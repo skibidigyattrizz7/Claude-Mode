@@ -5,7 +5,7 @@
 import { Rng, clamp, hashStr } from './rng.js';
 import { CLUBS } from './data.js';
 import { parseStyles, genPhysique, styleCountRange, maxPlus, PLAYSTYLES, PS_TIER, assignPlus, bestPlaystylesFor } from './physique.js';
-import { futFor, FUT_CARDS, FUT_NEW_BASE, FUT_NEW_ICONS } from './futdata.js';
+import { futFor, FUT_CARDS, FUT_NEW_BASE, FUT_NEW_ICONS, FUT_LATE_CARDS } from './futdata.js';
 import { REG_ROWS, LATE_REG_ROWS } from './realregulars.js';
 import { bioFor } from './bios.js';
 import { PLAYER_PHOTOS, PHOTO_VER } from './playerphotos.js';
@@ -587,7 +587,12 @@ export function buildRealPlayers(helpers) {
   };
   const futBase = FUT_NEW_BASE.map(makeFutBase);
   const futIcons = FUT_NEW_ICONS.map(makeFutIcon);
+  const futLate = FUT_LATE_CARDS.map((c) => { // body model range 162..210 (a 156 cm player keeps his real height in `realHeight`)
+    const p = makeFutBase(c);
+    if (p.height < 162 || p.height > 210) { p.realHeight = p.height; p.height = clamp(p.height, 162, 210); }
+    return p;
+  }); // fut.gg late base cards: appended last by players.js (futplayers_late.js)
   const playing = new Set(stars.concat(regulars, futBase).map((p) => p.person));
   for (const ic of icons.concat(lateIcons, futIcons)) if (playing.has(ic.person)) ic.stillPlaying = true;
-  return { icons, stars, regulars, lateIcons, futBase, futIcons, buildLate };
+  return { icons, stars, regulars, lateIcons, futBase, futIcons, futLate, buildLate };
 }

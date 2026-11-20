@@ -205,17 +205,17 @@ export class InputManager {
     wrap.innerHTML = `
       <div class="ps3d-joy"><div class="ps3d-knob"></div></div>
       <div class="ps3d-btns">
-        <button data-a="shoot" class="big">SHOOT</button>
-        <button data-a="pass">PASS</button>
-        <button data-a="through">THRU</button>
-        <button data-a="lob">LOB</button>
-        <button data-a="finesse">CURL</button>
-        <button data-a="tackle">TACKLE</button>
-        <button data-a="switchP">SWITCH</button>
-        <button data-a="skill">SKILL</button>
-        <button data-a="jockey">JOCKEY</button>
-        <button data-a="power">POWER</button>
-        <button data-a="sprint" class="wide">SPRINT</button>
+        <button data-a="shoot" class="pri big">SHOOT</button>
+        <button data-a="pass" class="pri">PASS</button>
+        <button data-a="through" class="pri">THRU</button>
+        <button data-a="tackle" class="pri">TACKLE</button>
+        <button data-a="sprint" class="pri">SPRINT</button>
+        <button data-a="switchP" class="sec">SWITCH</button>
+        <button data-a="lob" class="sec">LOB</button>
+        <button data-a="finesse" class="sec">CURL</button>
+        <button data-a="skill" class="sec">SKILL</button>
+        <button data-a="jockey" class="sec">JOCKEY</button>
+        <button data-a="power" class="sec">POWER</button>
       </div>
       <button class="ps3d-tpause" data-cmd="pause">II</button>`;
     r.appendChild(wrap);
