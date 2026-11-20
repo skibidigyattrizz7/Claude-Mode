@@ -383,8 +383,6 @@ export class MetaApp {
   topRefresh() {
     const v = this.stack[this.stack.length - 1];
     if (v) this.renderTop(v);
-    const note = this.main.querySelector('.pm-walletnote');
-    if (note) note.textContent = this.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.';
   }
   coinSourceLabel() { return this.wallet.mode === 'online' ? 'online balance' : 'local balance'; }
 

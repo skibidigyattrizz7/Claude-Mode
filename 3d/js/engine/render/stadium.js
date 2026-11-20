@@ -493,14 +493,14 @@ export function buildStadium(scene, opts, q, track, schedule) {
   }
   // distant skyline ring (day & night) — low boxes beyond stands
   {
-    const bm = stdMat(night ? 0x0c0f16 : 0x8793a0, { roughness: 1 });
+    const bm = stdMat(night ? 0x0c0f16 : 0xa9b9c8, { roughness: 1 });
     const bg = track(new THREE.BoxGeometry(1, 1, 1));
     const cnt = 90;
     const inst = new THREE.InstancedMesh(bg, bm, cnt);
     for (let i = 0; i < cnt; i++) {
       const a = (i / cnt) * Math.PI * 2 + rnd() * 0.05;
       const r = 330 + rnd() * 160;
-      const h = 15 + rnd() * 60, w = 20 + rnd() * 30;
+      const h = 12 + rnd() * 34, w = 18 + rnd() * 26;
       tmpM.compose(tmpV.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r), tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a), tmpS.set(w, h, w * 0.8));
       inst.setMatrixAt(i, tmpM);
     }

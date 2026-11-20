@@ -24,6 +24,8 @@ const CSS = `
 .ps3d-banner.goal .big{color:#ffe14d}
 .ps3d-banner.yellow .big{color:#ffd400}.ps3d-banner.red .big{color:#ff4444}
 .ps3d-card{display:inline-block;width:22px;height:30px;border-radius:3px;vertical-align:middle;margin-right:12px;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.ps3d-adv{position:absolute;left:50%;top:76px;transform:translateX(-50%);padding:6px 22px;background:rgba(10,16,34,.86);border-left:4px solid #46d17a;border-right:4px solid #46d17a;font-weight:900;font-size:20px;letter-spacing:.2em;color:#fff;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+.ps3d-adv.show{opacity:1}
 .ps3d-toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:rgba(10,16,34,.82);border-left:4px solid #3fa9ff;padding:7px 18px;font-weight:700;font-size:16px;letter-spacing:1px;opacity:0;transition:opacity .25s;white-space:nowrap}
 .ps3d-toast.show{opacity:1}
 .ps3d-panel{position:absolute;bottom:18px;min-width:190px;background:rgba(10,16,34,.78);border-radius:6px;padding:7px 12px;font-size:14px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.4)}
@@ -36,8 +38,11 @@ const CSS = `
 .ps3d-pow{position:absolute;z-index:3;transform:translate(-50%,0);width:84px;height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.7);border-radius:5px;overflow:hidden;display:none}
 .ps3d-pow>div{height:100%;width:0;background:linear-gradient(90deg,#46d17a 0%,#f5c542 70%,#ff4d4d 90%);background-size:84px 100%}
 .ps3d-pow>i{position:absolute;left:85%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.8)}
-.ps3d-radar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);border-radius:6px;background:rgba(18,60,30,.55);box-shadow:0 2px 10px rgba(0,0,0,.4)}
-.ps3d-hint{position:absolute;left:50%;bottom:170px;transform:translateX(-50%);background:rgba(10,16,34,.82);padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;white-space:nowrap;display:none;text-align:center}
+.ps3d-radar{position:absolute;right:18px;bottom:18px;--rs:.6;transform:scale(var(--rs));transform-origin:100% 100%;border-radius:6px;background:rgba(18,60,30,.55);box-shadow:0 2px 10px rgba(0,0,0,.4);opacity:.92;pointer-events:none}
+.ps3d-hud.two .ps3d-radar{bottom:84px}
+.ps3d-hud.radar-lg .ps3d-radar{--rs:.85}
+.ps3d-hud.radar-off .ps3d-radar{display:none}
+.ps3d-hint{position:absolute;left:50%;bottom:110px;transform:translateX(-50%);background:rgba(10,16,34,.82);padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;white-space:nowrap;display:none;text-align:center}
 .ps3d-hint b{color:#ffe14d}
 .ps3d-replay{position:absolute;right:20px;top:18px;display:none;font-weight:900;font-size:22px;letter-spacing:2px;background:#c8102e;padding:4px 14px;border-radius:4px}
 .ps3d-replay small{display:block;font-size:11px;font-style:normal;font-weight:600;letter-spacing:0;opacity:.85}
@@ -64,24 +69,36 @@ const CSS = `
 .ps3d-touch{position:absolute;inset:0;pointer-events:none;z-index:4}
 .ps3d-joy{position:absolute;left:28px;bottom:28px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
 .ps3d-knob{position:absolute;left:42px;top:42px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:none}
-.ps3d-btns{position:absolute;right:18px;bottom:18px;display:grid;grid-template-columns:repeat(3,64px);gap:9px;pointer-events:auto;touch-action:none}
-.ps3d-btns button{width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(20,30,55,.55);color:#fff;font-weight:800;font-size:11px;touch-action:none}
-.ps3d-btns button.big{background:rgba(200,16,46,.6)}.ps3d-btns button.wide{grid-column:span 2;width:100%;border-radius:32px;height:64px}
+.ps3d-btns{position:absolute;right:18px;bottom:18px;width:270px;height:270px;pointer-events:none;touch-action:none}
+.ps3d-btns button{position:absolute;width:42px;height:42px;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(20,30,55,.5);color:#fff;font-weight:800;font-size:9px;letter-spacing:.02em;touch-action:none;pointer-events:auto}
+.ps3d-btns button.pri{width:68px;height:68px;font-size:12px;border-color:rgba(255,255,255,.55);background:rgba(20,30,55,.62)}
+.ps3d-btns button.big{width:84px;height:84px;font-size:14px;background:rgba(200,16,46,.66)}
 .ps3d-btns button.on{background:rgba(63,169,255,.8)}
+.ps3d-btns [data-a=shoot]{right:10px;bottom:10px}
+.ps3d-btns [data-a=pass]{right:98px;bottom:0}
+.ps3d-btns [data-a=through]{right:2px;bottom:104px}
+.ps3d-btns [data-a=tackle]{right:85px;bottom:85px;width:66px;height:66px}
+.ps3d-btns [data-a=sprint]{right:167px;bottom:21px;width:58px;height:58px}
+.ps3d-btns [data-a=switchP]{right:214px;bottom:65px}
+.ps3d-btns [data-a=lob]{right:191px;bottom:111px}
+.ps3d-btns [data-a=finesse]{right:159px;bottom:153px}
+.ps3d-btns [data-a=skill]{right:119px;bottom:186px}
+.ps3d-btns [data-a=jockey]{right:73px;bottom:211px}
+.ps3d-btns [data-a=power]{right:22px;bottom:225px}
 .ps3d-tpause{position:absolute;right:max(16px,calc(env(safe-area-inset-right) + 8px));top:max(14px,calc(env(safe-area-inset-top) + 6px));width:48px;height:44px;border-radius:6px;border:0;background:rgba(10,16,34,.7);color:#fff;font-weight:900;pointer-events:auto;touch-action:manipulation}
 
-.ps3d-hud.compact .ps3d-radar{transform:translateX(-50%) scale(.62);transform-origin:50% 100%}
-.ps3d-hud.compact .ps3d-hint{bottom:100px;font-size:11px;padding:5px 10px}
+.ps3d-hud.compact .ps3d-radar{--rs:.5}
+.ps3d-hud.compact.radar-lg .ps3d-radar{--rs:.68}
+.ps3d-hud.compact .ps3d-hint{bottom:84px;font-size:11px;padding:5px 10px}
 .ps3d-hud.compact .ps3d-panel{transform:scale(.8);transform-origin:left bottom;min-width:170px}
 .ps3d-hud.compact .ps3d-panel.p2{transform-origin:right bottom}
 .ps3d-hud.compact .ps3d-sb{transform:scale(.8);transform-origin:left top}
 .ps3d-hud.compact .ps3d-banner .big{font-size:40px}
 .ps3d-hud.compact .ps3d-stats{transform:translate(-50%,-50%) scale(.8)}
 .ps3d-hud.touch .ps3d-panel.p1{top:62px;bottom:auto;transform-origin:left top}
-.ps3d-hud.touch .ps3d-radar{bottom:6px}
-.ps3d-root.compact-touch .ps3d-btns{grid-template-columns:repeat(3,54px);gap:7px}
-.ps3d-root.compact-touch .ps3d-btns button{width:54px;height:54px;font-size:10px}
-.ps3d-root.compact-touch .ps3d-btns button.wide{width:100%;height:54px;border-radius:27px}
+.ps3d-hud.touch .ps3d-radar{left:auto;bottom:auto;right:max(12px,calc(env(safe-area-inset-right) + 8px));top:max(66px,calc(env(safe-area-inset-top) + 58px));--rs:.5;transform-origin:100% 0}
+.ps3d-hud.touch.radar-lg .ps3d-radar{--rs:.7}
+.ps3d-root.compact-touch .ps3d-btns{transform:scale(.82);transform-origin:100% 100%}
 .ps3d-touch .ps3d-joy{left:max(28px,calc(env(safe-area-inset-left) + 16px));bottom:max(28px,calc(env(safe-area-inset-bottom) + 16px))}
 .ps3d-touch .ps3d-btns{right:max(18px,calc(env(safe-area-inset-right) + 12px));bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px))}
 .ps3d-btns button{-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -91,7 +108,6 @@ const CSS = `
 .ps3d-hud.touch .ps3d-hint{white-space:normal;max-width:min(460px,calc(100% - 420px));min-width:220px}
 .ps3d-hud.touch .ps3d-contact{right:auto;left:50%;bottom:auto;top:26%;transform:translateX(-50%)}
 @media (orientation:portrait){
-.ps3d-hud.touch .ps3d-radar{left:auto;bottom:auto;right:max(12px,calc(env(safe-area-inset-right) + 8px));top:max(66px,calc(env(safe-area-inset-top) + 58px));transform:scale(.55);transform-origin:right top}
 .ps3d-hud.touch .ps3d-ticker{left:50%;transform:translateX(-50%);top:auto;bottom:max(290px,calc(env(safe-area-inset-bottom) + 280px));max-width:calc(100% - 24px)}
 .ps3d-hud.touch .ps3d-hint{bottom:max(330px,calc(env(safe-area-inset-bottom) + 320px));max-width:calc(100% - 24px);min-width:0}
 .ps3d-hud.touch .ps3d-banner .big{font-size:34px;padding:4px 18px}
@@ -239,6 +255,12 @@ function removeStyle() {
   if (--styleRefs === 0 && styleEl) { styleEl.remove(); styleEl = null; }
 }
 
+const RADAR_KEY = 'pitchside.hud.radar';
+const RADAR_MODES = ['small', 'large', 'off'];
+function readRadarMode() {
+  try { const v = localStorage.getItem(RADAR_KEY); return RADAR_MODES.includes(v) ? v : 'small'; } catch { return 'small'; }
+}
+
 export function keyName(code) {
   if (!code) return '?';
   const map = { ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', Space: 'Space', Mouse0: 'Left click', Mouse2: 'Right click', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl', NumpadDecimal: 'Num .', Enter: 'Enter' };
@@ -288,6 +310,10 @@ export class Hud {
     this.rctx = this.radar.getContext('2d');
     this.rctx.scale(dpr, dpr);
     this.hint = el('div', 'ps3d-hint', h);
+    this.advEl = el('div', 'ps3d-adv', h, 'ADVANTAGE');
+    this.advT = 0; this.advWatch = 0;
+    this.radarMode = readRadarMode();
+    this._applyRadar();
     this.replayEl = el('div', 'ps3d-replay', h, 'REPLAY<small>press any button to skip</small>');
     this.fadeEl = el('div', 'ps3d-fade', h);
     this.stats = el('div', 'ps3d-stats', h);
@@ -328,6 +354,19 @@ export class Hud {
     this.timedEl.style.background = col;
     this.timedPi = pi; this.timedT = 1.1;
   }
+  // Advantage cue. The sim exposes no advantage state or event yet (sim.adv is internal), so until it does the HUD infers
+  // it: a 'FOUL' toast followed by play that is still live a moment later means the whistle is being held. A caller may
+  // also call hud.advantage(secs) directly (preferred hook: see report).
+  advantage(secs = 2) { this.advT = secs; this.advWatch = 0; this.advEl.classList.add('show'); }
+  _applyRadar() {
+    this.el.classList.toggle('radar-off', this.radarMode === 'off');
+    this.el.classList.toggle('radar-lg', this.radarMode === 'large');
+  }
+  setRadarMode(m) {
+    this.radarMode = RADAR_MODES.includes(m) ? m : 'small';
+    try { localStorage.setItem(RADAR_KEY, this.radarMode); } catch { /* private mode */ }
+    this._applyRadar();
+  }
   ticker(text) {
     this.tickerEl.textContent = text;
     this.tickerEl.classList.add('show');
@@ -351,6 +390,7 @@ export class Hud {
     if (this.queue.length > 4) this.queue.shift();
   }
   toast(text, color = '#3fa9ff', dur = 1.8) {
+    if (text === 'FOUL') this.advWatch = 0.3;
     this.toastEl.textContent = text;
     this.toastEl.style.borderLeftColor = color;
     this.toastEl.classList.add('show');
@@ -381,6 +421,18 @@ export class Hud {
       this.compact = compact;
       this.el.classList.toggle('compact', compact);
       this.root.classList.toggle('compact-touch', compact && this.touch);
+    }
+    if (this.advWatch > 0 && view) {
+      this.advWatch -= dt;
+      if (this.advWatch <= 0) {
+        const lv0 = ctx.live || view;
+        if (lv0.ph === PHASE.PLAY) { this.advantage(2); this.toastEl.classList.remove('show'); this.toastT = 0; }
+      }
+    }
+    if (this.advT > 0) {
+      this.advT -= dt;
+      const lvp = ctx.live || view;
+      if (this.advT <= 0 || (lvp && lvp.ph !== PHASE.PLAY)) { this.advT = 0; this.advEl.classList.remove('show'); }
     }
     if (!view) return;
     // scoreboard (always the live state, also during replays)
@@ -451,6 +503,7 @@ export class Hud {
     }
     // hide unused
     const usedSlots = new Set(ctx.local.filter(Boolean));
+    if (this._two !== usedSlots.has('p2')) { this._two = usedSlots.has('p2'); this.el.classList.toggle('two', this._two); }
     if (!usedSlots.has('p1')) { this.panels[0].style.display = 'none'; this.tags[0].style.display = 'none'; this.pows[0].style.display = 'none'; }
     if (!usedSlots.has('p2')) { this.panels[1].style.display = 'none'; this.tags[1].style.display = 'none'; this.pows[1].style.display = 'none'; }
     // next-player indicator (who the switch key would select)
@@ -628,9 +681,27 @@ export class Hud {
     if (this.teamInfo && (info.localSides || []).length) btn('Team management', () => this._menuTeam(info, info.localSides[0], 'subs'));
     if (this.onAdmin) btn('♛ Admin effects', () => this.onAdmin(), 'admin');
     btn('Instant replay', () => this.onReplay());
+    btn('Settings', () => this._menuSettings(info));
     btn('Controls', () => this._menuControls(info));
     btn('Quit match', () => this.onQuit(), 'quit');
     setTimeout(() => first.focus(), 0);
+  }
+  _menuSettings(info) {
+    const b = this.menuBox;
+    b.classList.remove('is-team');
+    b.innerHTML = '<h2>SETTINGS</h2>';
+    const btn = (label, fn, cls = '') => { const e = el('button', cls, b, esc(label)); e.addEventListener('click', fn); return e; };
+    const lab = { small: 'Small', large: 'Large', off: 'Off' };
+    const radar = btn(`Radar: ${lab[this.radarMode]}`, () => {
+      this.setRadarMode(RADAR_MODES[(RADAR_MODES.indexOf(this.radarMode) + 1) % RADAR_MODES.length]);
+      radar.textContent = `Radar: ${lab[this.radarMode]}`;
+    });
+    const cam = btn(`Camera: ${this.camMode === 'pro' ? 'Pro (behind player)' : 'Broadcast'}`, () => {
+      this.camMode = this.onCamera();
+      cam.textContent = `Camera: ${this.camMode === 'pro' ? 'Pro (behind player)' : 'Broadcast'}`;
+    });
+    btn('Back', () => this._menuMain(info));
+    setTimeout(() => radar.focus(), 0);
   }
   // In-match team management (owner, Sep 30: "make it look like FC"): the XI as real cards on a pitch, the bench
   // as cards, stamina + match rating under each. Tap a player, then a substitute (sub) or another player (swap).

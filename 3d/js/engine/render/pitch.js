@@ -1,7 +1,7 @@
 // Pitch surface, markings, goals with deformable nets, corner flags.
 import * as THREE from '../../../vendor/three.module.min.js';
 import { PITCH, GOAL } from '../core/constants.js';
-import { pitchTexture, apronTexture, netTexture, PITCH_MARGIN } from './textures.js';
+import { pitchTexture, apronTexture, netTexture, grassDetailTexture, PITCH_MARGIN } from './textures.js';
 
 const HL = PITCH.HL, HW = PITCH.HW;
 const PITCH_CACHE = new Map();
@@ -20,6 +20,19 @@ export function buildPitch(scene, q, maxAniso, track) {
   const geo = track(new THREE.PlaneGeometry(LW, LH, 1, 1));
   geo.rotateX(-Math.PI / 2);
   const mat = track(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0 }));
+  // fine grass detail multiplied over the base map, fading out with distance (one extra fetch)
+  const detail = track(grassDetailTexture(Math.min(maxAniso, q.aniso)));
+  const dUni = { uDetail: { value: detail }, uDetailScale: { value: new THREE.Vector2(LW / 1.4, LH / 1.4) } };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, dUni);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uDetail; uniform vec2 uDetailScale;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      { float fade = 1.0 - smoothstep(18.0, 80.0, length(vViewPosition));
+        float dt = texture2D(uDetail, vMapUv * uDetailScale).r;
+        diffuseColor.rgb *= 1.0 + (dt - 0.5) * 0.9 * fade; }`);
+  };
+  mat.customProgramCacheKey = () => 'pitchDetail1';
   const pitch = new THREE.Mesh(geo, mat);
   pitch.receiveShadow = q.shadows;
   group.add(pitch);

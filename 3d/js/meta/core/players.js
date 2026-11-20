@@ -4,6 +4,7 @@ import { NATIONS, NATION_BY_CODE, NAME_REGIONS, LEAGUES, CLUBS, LEAGUE_BY_ID, PO
 import { buildRealPlayers } from './realplayers.js';
 import { genPhysique, ensurePhysique, ensureAlts } from './physique.js';
 import { buildPromoCards, promoCardFromId, informBoost, upgradeStyles, isPromoSpecial, PROMO_BY_ID, setOvr } from './promos.js';
+import { buildRealPromoCards } from './realpromobuild.js';
 
 export const DB_SEED = 'pitchside-db-v1';
 export const FACE = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
@@ -371,9 +372,13 @@ export function getDB() {
   for (const p of real.futIcons) specials.push(p);
 
   const futExtra = real.futBase;
-  const all = players.concat(specials, futExtra);
+  // fut.gg LATE base cards (futplayers_late.js) and the real promo cards (realpromos.js) go after everything else: nothing seeded before them moves
+  const futLate = real.futLate;
+  const all = players.concat(specials, futExtra, futLate);
+  const realPromos = buildRealPromoCards({ byId: new Map(all.map((p) => [p.id, p])), computeOvr, tierOf, marketValue });
+  for (const p of realPromos) all.push(p);
   const byId = new Map(all.map((p) => [p.id, p]));
-  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, lateRegulars, promos, futExtra, futIcons: real.futIcons };
+  _db = { players, specials, all, byId, icons: real.icons, stars: real.stars, real: real.icons.concat(real.stars), regulars: real.regulars, lateRegulars, promos, futExtra, futLate, realPromos, futIcons: real.futIcons };
   for (const c of _foreign.values()) if (!byId.has(c.id)) byId.set(c.id, c);
   return _db;
 }

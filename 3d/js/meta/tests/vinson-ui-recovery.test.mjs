@@ -290,7 +290,7 @@ const opening = fightController.openBattle();
 assert.equal(await fightController.openBattle(),false,'only one module load/launch runs at a time');
 fightApp.ut = structuredClone(fightState);
 assert.equal(await opening, true, 'same-account state replacement must not cancel opening');
-assert.equal(body.querySelectorAll('.vb-screen').length,1,'battle or usable fallback is displayed');
+assert.equal(body.querySelectorAll('.vb-screen').length + body.querySelectorAll('.eb-screen').length,1,'battle or usable fallback is displayed'); // the ban screen now opens the new boss fight (.eb-screen)
 fightController.destroy();
 const closingController = startVinsonExperience(fightOnline,{initialState:structuredClone(fightState),ephemeral:true});
 const closingOpen = closingController.openBattle();

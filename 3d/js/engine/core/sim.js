@@ -2656,6 +2656,7 @@ export class MatchSim {
       if (card === 'yellow' && !this._lastMan(victim, off) && this.rng() < 0.55) card = null;
       if (card) this._card(off, card);
       this.adv = { victimTeam: victim.team, x: victim.x, z: victim.z, t: this.t };
+      this.fxPush('adv', { team: victim.team }); // HUD shows ADVANTAGE while play goes on
       return;
     }
     this.fxPush('whistle', { n: 1 });

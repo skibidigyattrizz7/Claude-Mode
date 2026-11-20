@@ -718,3 +718,8 @@ html .ps3d-ticker, html .ps3d-banner .big, html .ps3d-replay, html .ps3d-hud em,
   html body .screen--menu .tile[data-tile="ut"] .tile-media, html body .screen--menu .tile--local .tile-media { opacity: .28; }
   html body .screen--menu .tile[data-tile="ut"] .tile-text, html body .screen--menu .tile--local .tile-text { background: linear-gradient(transparent, rgba(8,10,13,.92) 38%); }
 }
+
+/* Match HUD admin badge: the crown glyph (U+265B) is missing from many system fonts and showed as an empty box.
+   Draw the crown with CSS instead. */
+.ps3d-adm-crown b { font-size: 0 !important; width: 16px; height: 12px; display: inline-block; background: currentColor; clip-path: polygon(0 100%, 0 25%, 25% 55%, 50% 0, 75% 55%, 100% 25%, 100% 100%); }
+.ps3d-adm-crown kbd { display: none; }

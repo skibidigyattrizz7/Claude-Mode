@@ -6,7 +6,7 @@ import { shirtTexture, luminance as luma } from './textures.js';
 import { pickPattern } from '../core/kits.js';
 
 // ---------------------------------------------------------------- dimensions
-const THIGH = 0.42, SHIN = 0.42, FOOT_H = 0.075, HIP_DY = -0.06, HIP_DX = 0.092;
+const THIGH = 0.42, SHIN = 0.42, FOOT_H = 0.075, HIP_DY = -0.06, HIP_DX = 0.1;
 const STAND_Y = -HIP_DY + THIGH + SHIN + FOOT_H; // pelvis height when standing straight (0.975)
 const TORSO_H = 0.47;
 
@@ -76,7 +76,8 @@ function mergeColored(parts) {
     pos.set(g.attributes.position.array, o * 3);
     nor.set(g.attributes.normal.array, o * 3);
     if (g.attributes.uv) uv.set(g.attributes.uv.array, o * 2);
-    for (let i = 0; i < cnt; i++) { col[(o + i) * 3] = c[0]; col[(o + i) * 3 + 1] = c[1]; col[(o + i) * 3 + 2] = c[2]; }
+    const gc = g.attributes.color;
+    for (let i = 0; i < cnt; i++) { const m = gc ? gc.getX(i) : 1; col[(o + i) * 3] = c[0] * m; col[(o + i) * 3 + 1] = c[1] * m; col[(o + i) * 3 + 2] = c[2] * m; }
     o += cnt;
   }
   const out = new THREE.BufferGeometry();
@@ -88,30 +89,51 @@ function mergeColored(parts) {
   return out;
 }
 
+// Smooth tapered solid of revolution from [y, r] profile points (any order). Rebuilt so normals face outward.
+function lathe(pts, seg = 14, vRange = null) {
+  const mk = (arr) => new THREE.LatheGeometry(arr.map(([y, r]) => new THREE.Vector2(Math.max(r, 0.0001), y)), seg);
+  let g = mk(pts);
+  const p = g.attributes.position, n = g.attributes.normal;
+  let k = 0;
+  for (let i = 0; i < p.count; i++) { const r = Math.hypot(p.getX(i), p.getZ(i)); if (r > 0.01) { k += (p.getX(i) * n.getX(i) + p.getZ(i) * n.getZ(i)) / r; } }
+  if (k < 0) { g.dispose(); g = mk(pts.slice().reverse()); }
+  if (vRange) { // v follows height so a painted texture isn't stretched along uneven point spacing
+    const q = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < q.count; i++) uv.setY(i, clamp((q.getY(i) - vRange[0]) / (vRange[1] - vRange[0]), 0, 1));
+  }
+  return g;
+}
+function blobGeo(r, sx, sy, sz, x, y, z, rx = 0, rz = 0, w = 10, h = 8) {
+  const s = new THREE.SphereGeometry(r, w, h); s.scale(sx, sy, sz);
+  if (rx) s.rotateX(rx); if (rz) s.rotateZ(rz);
+  s.translate(x, y, z); return s;
+}
+// vertex-colour brightness by height (hair fades, shaved sides): f(y) -> 0..1
+function tint(g, f) {
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const v = f(p.getX(i), p.getY(i), p.getZ(i)); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = v; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
+}
+
 function buildGeometry() {
   const g = {};
-  g.pelvis = new THREE.CylinderGeometry(0.158, 0.172, 0.22, 14, 1);
-  g.pelvis.translate(0, -0.03, 0);
-  g.torso = new THREE.CylinderGeometry(0.205, 0.158, TORSO_H, 16, 4);
-  g.torso.translate(0, TORSO_H / 2, 0);
-  // taper chest (pectoral bulge) a bit: push front vertices forward in upper-middle band
-  {
-    const p = g.torso.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const y = p.getY(i) / TORSO_H, z = p.getZ(i);
-      const k = Math.sin(Math.PI * clamp((y - 0.35) / 0.6, 0, 1));
-      if (z > 0) p.setZ(i, z * (1 + 0.12 * k));
-      p.setX(i, p.getX(i) * (1 + 0.04 * k));
-    }
-    g.torso.computeVertexNormals();
-  }
-  g.shoulderCap = new THREE.SphereGeometry(0.078, 10, 8);
-  g.neck = new THREE.CylinderGeometry(0.058, 0.066, 0.12, 10);
-  g.neck.translate(0, 0.045, 0);
+  // pelvis / shorts waist
+  g.pelvis = lathe([[-0.14, 0], [-0.14, 0.14], [-0.08, 0.166], [0.0, 0.16], [0.03, 0.148]], 20);
+  g.pelvis.translate(0, -0.0, 0);
+  // torso: waist, broad chest, sloping shoulders into the neck (scaled in x/z when merged)
+  g.torso = lathe([[-0.11, 0.172], [-0.04, 0.178], [0.02, 0.162], [0.07, 0.148], [0.14, 0.15], [0.25, 0.18], [0.34, 0.2], [0.405, 0.2], [0.44, 0.17], [0.462, 0.105], [0.475, 0.066]], 32, [0, TORSO_H]);
+  g.shoulderCap = blobGeo(0.07, 1, 0.95, 1, 0, 0, 0, 0, 0, 16, 12);
+  g.elbow = blobGeo(0.044, 1, 1, 1, 0, 0, 0, 0, 0, 10, 8);
+  // neck: slim with trapezius flare at the base
+  g.neck = lathe([[-0.03, 0.078], [0.0, 0.066], [0.05, 0.053], [0.1, 0.052]], 12);
+  g.collar = lathe([[-0.012, 0.092], [-0.012, 0.07], [0.02, 0.064], [0.02, 0.07]], 18);
+  g.collar.translate(0, 0.0, 0.0);
   // head with face features (vertex colours: white skin areas get skin tint from material colour)
   {
-    const skull = new THREE.SphereGeometry(0.104, 16, 12); skull.scale(0.9, 1.1, 1.0); skull.translate(0, 0.1, 0);
-    const jaw = new THREE.SphereGeometry(0.075, 10, 8); jaw.scale(1.0, 0.8, 1.0); jaw.translate(0, 0.035, 0.03);
+    const skull = new THREE.SphereGeometry(0.104, 18, 14); skull.scale(0.9, 1.1, 1.0); skull.translate(0, 0.1, 0);
+    const jaw = new THREE.SphereGeometry(0.075, 12, 8); jaw.scale(1.0, 0.8, 1.0); jaw.translate(0, 0.035, 0.03);
+    const chin = blobGeo(0.04, 1, 0.8, 0.9, 0, 0.0, 0.07);
     const nose = new THREE.ConeGeometry(0.018, 0.045, 6); nose.rotateX(Math.PI / 2 + 0.25); nose.translate(0, 0.09, 0.105);
     const earL = new THREE.SphereGeometry(0.024, 6, 5); earL.scale(0.5, 1, 0.8); earL.translate(0.093, 0.1, 0);
     const earR = earL.clone(); earR.translate(-0.186, 0, 0);
@@ -122,55 +144,122 @@ function buildGeometry() {
     const mouth = new THREE.BoxGeometry(0.035, 0.007, 0.01); mouth.translate(0, 0.045, 0.1);
     const W = [1, 1, 1], E = [0.06, 0.05, 0.05], B = [0.2, 0.14, 0.1], M = [0.55, 0.32, 0.3];
     g.head = mergeColored([
-      { geo: skull, color: W }, { geo: jaw, color: W }, { geo: nose, color: [0.95, 0.9, 0.88] }, { geo: earL, color: [0.92, 0.88, 0.86] }, { geo: earR, color: [0.92, 0.88, 0.86] },
+      { geo: skull, color: W }, { geo: jaw, color: W }, { geo: chin, color: W }, { geo: nose, color: [0.95, 0.9, 0.88] }, { geo: earL, color: [0.92, 0.88, 0.86] }, { geo: earR, color: [0.92, 0.88, 0.86] },
       { geo: eyeL, color: E }, { geo: eyeR, color: E }, { geo: browL, color: B }, { geo: browR, color: B }, { geo: mouth, color: M },
     ]);
   }
-  // hair styles
+  // ---- hair: 8 distinct styles (index 8 = bald). Hair colour comes from the palette, brightness from vertex tint.
   g.hair = [];
-  // cap tilted backwards: hairline high at the front, low at the nape
   const cap = (r, T, tilt, sx, sy, sz, dy, dz) => {
-    const h = new THREE.SphereGeometry(r, 16, 10, 0, Math.PI * 2, 0, T);
+    const h = new THREE.SphereGeometry(r, 18, 12, 0, Math.PI * 2, 0, T);
     h.rotateX(-tilt); h.scale(sx, sy, sz); h.translate(0, 0.1 + dy, dz);
     return h;
   };
-  g.hair.push(cap(0.111, 1.35, 0.45, 0.93, 1.1, 1.03, 0.004, -0.004)); // short crop
-  g.hair.push(cap(0.118, 1.5, 0.5, 0.97, 1.1, 1.08, 0.0, -0.012)); // longer
-  g.hair.push(cap(0.138, 1.4, 0.45, 1.0, 1.0, 1.0, 0.018, -0.02)); // afro
-  g.hair.push(cap(0.108, 1.05, 0.3, 0.92, 1.1, 1.0, 0.006, -0.004)); // buzz
-  { const h = cap(0.112, 1.3, 0.45, 0.93, 1.1, 1.03, 0.004, -0.004);
-    const bun = new THREE.SphereGeometry(0.045, 8, 6); bun.translate(0, 0.2, -0.085);
-    g.hair.push(mergeColored([{ geo: h, color: [1, 1, 1] }, { geo: bun, color: [1, 1, 1] }])); } // top bun
-  g.sleeve = new THREE.CylinderGeometry(0.07, 0.064, 0.19, 10); g.sleeve.translate(0, -0.07, 0);
-  g.upperArm = new THREE.CapsuleGeometry(0.047, 0.24, 4, 8); g.upperArm.translate(0, -0.16, 0);
-  g.foreArm = new THREE.CapsuleGeometry(0.04, 0.21, 4, 8); g.foreArm.translate(0, -0.145, 0);
-  g.gkSleeve = new THREE.CylinderGeometry(0.05, 0.043, 0.26, 8); g.gkSleeve.translate(0, -0.13, 0);
-  g.hand = new THREE.SphereGeometry(0.045, 8, 6); g.hand.scale(0.72, 1.45, 0.95); g.hand.translate(0, -0.315, 0.005);
-  g.glove = new THREE.SphereGeometry(0.058, 8, 6); g.glove.scale(0.8, 1.35, 1.05); g.glove.translate(0, -0.32, 0.005);
-  g.thighShort = new THREE.CylinderGeometry(0.098, 0.088, 0.2, 12); g.thighShort.translate(0, -0.075, 0);
-  g.thigh = new THREE.CapsuleGeometry(0.068, 0.3, 4, 10); g.thigh.translate(0, -0.23, 0);
-  g.knee = new THREE.SphereGeometry(0.056, 8, 6);
-  g.sock = new THREE.CylinderGeometry(0.058, 0.042, 0.36, 10); g.sock.translate(0, -0.22, 0);
-  // calf bulge
+  const W1 = [1, 1, 1];
+  let sd = 1234567;
+  const rnd = () => { sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0; return sd / 4294967296; };
+  // 0 short fade: tight on the sides (darker, skin-ward), longer on top
+  g.hair.push(tint(cap(0.109, 1.28, 0.38, 0.93, 1.1, 1.03, 0.004, -0.004), (x, y) => clamp(0.3 + (y - 0.12) * 9, 0.38, 1)));
+  // 1 buzz cut: very thin and a touch dark
+  g.hair.push(tint(cap(0.1065, 1.15, 0.3, 0.915, 1.1, 1.0, 0.003, -0.004), (x, y) => 0.5 + clamp((y - 0.1) * 3, 0, 0.3)));
+  // 2 curly top: short sides, a cluster of curls on top
   {
-    const p = g.sock.attributes.position;
+    const parts = [{ geo: tint(cap(0.108, 1.1, 0.25, 0.93, 1.1, 1.02, 0.004, -0.004), (x, y) => clamp(0.4 + (y - 0.12) * 7, 0.45, 1)), color: W1 }];
+    for (let i = 0; i < 22; i++) {
+      const a = rnd() * Math.PI * 2, pol = Math.sqrt(rnd()) * 0.95, r = 0.112;
+      parts.push({ geo: blobGeo(0.028 + rnd() * 0.012, 1, 0.9, 1, Math.sin(pol) * Math.cos(a) * r * 0.93, 0.1 + Math.cos(pol) * r * 1.1 + 0.005, Math.sin(pol) * Math.sin(a) * r - 0.005, 0, 0, 7, 5), color: [0.9 + rnd() * 0.1, 0.9 + rnd() * 0.1, 0.9 + rnd() * 0.1] });
+    }
+    g.hair.push(mergeColored(parts));
+  }
+  // 3 afro: big lumpy dome, trimmed at the nape
+  {
+    const a = new THREE.IcosahedronGeometry(0.152, 2);
+    const p = a.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), l = Math.hypot(x, y, z);
+      const n = 1 + 0.05 * Math.sin(x * 90) * Math.sin(y * 80 + 1) * Math.sin(z * 85 + 2);
+      p.setXYZ(i, x / l * l * n, Math.max(y * n, -0.04) , z * n * 0.98);
+    }
+    a.translate(0, 0.15, -0.025);
+    g.hair.push(tint(a, (x, y, z) => (z > 0.08 && y < 0.17 ? 0.0 : 1) * 0.15 + 0.85 * clamp(0.75 + (y - 0.1) * 2, 0.6, 1)));
+    // carve the face opening: push the front/lower vertices behind the forehead (keeps the hairline)
+    const q = a.attributes.position;
+    for (let i = 0; i < q.count; i++) if (q.getZ(i) > 0.07 && q.getY(i) < 0.19) q.setZ(i, Math.min(q.getZ(i), 0.07 - (0.19 - q.getY(i)) * 0.0));
+    a.computeVertexNormals();
+  }
+  // 4 long, tied back: longer cap, nape cover and a ponytail
+  {
+    const pony = new THREE.CapsuleGeometry(0.03, 0.17, 4, 8); pony.rotateX(0.5); pony.translate(0, 0.07, -0.145);
+    const tie = blobGeo(0.032, 1, 0.5, 1, 0, 0.165, -0.115);
+    g.hair.push(mergeColored([{ geo: cap(0.118, 1.6, 0.55, 0.97, 1.1, 1.08, 0.0, -0.014), color: W1 }, { geo: pony, color: W1 }, { geo: tie, color: [0.35, 0.35, 0.35] }]));
+  }
+  // 5 man bun
+  {
+    const bun = new THREE.SphereGeometry(0.048, 10, 8); bun.translate(0, 0.215, -0.085);
+    g.hair.push(mergeColored([{ geo: tint(cap(0.111, 1.3, 0.45, 0.93, 1.1, 1.03, 0.004, -0.004), (x, y) => clamp(0.45 + (y - 0.12) * 6, 0.5, 1)), color: W1 }, { geo: bun, color: W1 }]));
+  }
+  // 6 quiff: swept-up fringe on the front
+  {
+    const quiff = blobGeo(0.062, 1.15, 0.55, 1.0, 0, 0.218, 0.05, -0.35);
+    g.hair.push(mergeColored([{ geo: tint(cap(0.111, 1.25, 0.42, 0.93, 1.1, 1.03, 0.004, -0.004), (x, y) => clamp(0.4 + (y - 0.12) * 8, 0.45, 1)), color: W1 }, { geo: quiff, color: W1 }]));
+  }
+  // 7 mohawk strip with shaved sides
+  {
+    const strip = blobGeo(0.026, 1, 1, 1, 0, 0.222, 0, 0, 0, 8, 6); strip.scale(1, 0.75, 4.2); strip.translate(0, 0.0, -0.005);
+    g.hair.push(mergeColored([{ geo: tint(cap(0.1065, 1.1, 0.3, 0.915, 1.1, 1.0, 0.003, -0.004), () => 0.42), color: W1 }, { geo: strip, color: W1 }]));
+  }
+  // ---- beards (hair colour): stubble, full, goatee
+  const jawShell = (r, th0, th1, sy = 0.8) => { const s = new THREE.SphereGeometry(r, 16, 8, Math.PI * 0.12, Math.PI * 0.76, Math.PI * th0, Math.PI * (th1 - th0)); s.scale(1.0, sy, 1.0); s.translate(0, 0.035, 0.03); return s; };
+  g.beard = [
+    null,
+    tint(jawShell(0.0775, 0.42, 0.98), () => 0.55), // stubble: thin and dark
+    mergeColored([{ geo: jawShell(0.087, 0.3, 1.0, 0.85), color: [0.9, 0.9, 0.9] }, { geo: blobGeo(0.026, 1.6, 0.4, 0.7, 0, 0.061, 0.099), color: W1 }, { geo: blobGeo(0.032, 1.1, 1.0, 0.9, 0, -0.012, 0.078), color: W1 }]), // full
+    mergeColored([{ geo: blobGeo(0.028, 1.0, 1.2, 0.9, 0, 0.002, 0.092), color: W1 }, { geo: blobGeo(0.024, 1.7, 0.4, 0.7, 0, 0.061, 0.1), color: W1 }]), // goatee + moustache
+  ];
+  // ---- arms
+  g.sleeve = lathe([[0.045, 0.058], [0.02, 0.07], [-0.05, 0.068], [-0.13, 0.063], [-0.18, 0.06]], 14);
+  g.cuff = lathe([[-0.16, 0.0635], [-0.162, 0.0665], [-0.2, 0.0665], [-0.2, 0.0615]], 14);
+  g.upperArm = lathe([[0.04, 0.001], [0.03, 0.045], [0.0, 0.055], [-0.1, 0.053], [-0.2, 0.046], [-0.29, 0.041], [-0.325, 0.036], [-0.335, 0.001]], 12);
+  g.foreArm = lathe([[0.03, 0.001], [0.02, 0.04], [-0.03, 0.048], [-0.12, 0.044], [-0.22, 0.034], [-0.27, 0.03], [-0.285, 0.001]], 12);
+  g.gkSleeve = lathe([[0.02, 0.054], [-0.03, 0.058], [-0.15, 0.052], [-0.26, 0.044]], 12);
+  {
+    const palm = blobGeo(0.048, 0.8, 1.35, 0.55, 0, -0.335, 0.004);
+    const thumb = blobGeo(0.018, 0.9, 1.9, 0.9, 0.035, -0.3, 0.025, 0, -0.3);
+    g.hand = mergeColored([{ geo: palm, color: W1 }, { geo: thumb, color: W1 }]);
+    const gp = blobGeo(0.056, 0.85, 1.3, 0.75, 0, -0.335, 0.004);
+    const gt = blobGeo(0.024, 0.9, 1.7, 0.9, 0.04, -0.3, 0.025, 0, -0.3);
+    g.glove = mergeColored([{ geo: gp, color: W1 }, { geo: gt, color: W1 }]);
+  }
+  // ---- legs
+  g.thighShort = lathe([[0.06, 0.112], [0.0, 0.118], [-0.1, 0.118], [-0.19, 0.122], [-0.205, 0.117]], 16);
+  g.shortStripeL = new THREE.BoxGeometry(0.008, 0.2, 0.03); g.shortStripeL.translate(0.121, -0.085, 0);
+  g.shortStripeR = new THREE.BoxGeometry(0.008, 0.2, 0.03); g.shortStripeR.translate(-0.121, -0.085, 0);
+  g.thigh = lathe([[0.04, 0.001], [0.03, 0.065], [0.0, 0.082], [-0.1, 0.082], [-0.22, 0.073], [-0.34, 0.06], [-0.43, 0.052], [-0.47, 0.001]], 14);
+  g.knee = new THREE.SphereGeometry(0.056, 10, 8);
+  g.sock = lathe([[-0.04, 0.056], [-0.1, 0.06], [-0.19, 0.056], [-0.3, 0.043], [-0.38, 0.045], [-0.415, 0.05]], 14);
+  g.sockTop = lathe([[-0.045, 0.0585], [-0.047, 0.0625], [-0.085, 0.0625], [-0.088, 0.0585]], 14);
+  {
+    const p = g.sock.attributes.position; // calf bulge at the back
     for (let i = 0; i < p.count; i++) {
       const y = -p.getY(i) / 0.42; const k = Math.sin(Math.PI * clamp((y - 0.05) / 0.6, 0, 1));
-      if (p.getZ(i) < 0) p.setZ(i, p.getZ(i) * (1 + 0.35 * k));
+      if (p.getZ(i) < 0) p.setZ(i, p.getZ(i) * (1 + 0.3 * k));
     }
     g.sock.computeVertexNormals();
   }
-  g.shinSkin = new THREE.CylinderGeometry(0.052, 0.055, 0.06, 8); g.shinSkin.translate(0, -0.03, 0);
+  g.shinSkin = new THREE.CylinderGeometry(0.052, 0.056, 0.07, 10); g.shinSkin.translate(0, -0.03, 0);
   {
-    const b = new THREE.CapsuleGeometry(0.046, 0.17, 4, 8); b.rotateX(Math.PI / 2); b.scale(1, 0.85, 1); b.translate(0, -0.035, 0.055);
-    g.boot = b;
-    const s = new THREE.BoxGeometry(0.085, 0.012, 0.26); s.translate(0, -0.071, 0.055);
+    const toe = blobGeo(0.05, 0.95, 0.78, 2.1, 0, -0.045, 0.075, 0, 0, 12, 8);
+    const heel = blobGeo(0.046, 1, 0.9, 1, 0, -0.04, -0.035, 0, 0, 10, 8);
+    const collar = new THREE.CylinderGeometry(0.046, 0.05, 0.07, 10); collar.translate(0, 0.0, 0.0);
+    g.boot = mergeColored([{ geo: toe, color: W1 }, { geo: heel, color: W1 }, { geo: collar, color: W1 }]);
+    const s = blobGeo(0.05, 1, 0.22, 3.0, 0, -0.072, 0.062, 0, 0, 12, 6);
     g.sole = s;
   }
   // flat ground shadow blob
   g.blob = new THREE.PlaneGeometry(1, 1); g.blob.rotateX(-Math.PI / 2);
   return g;
 }
+
 
 export function acquireGeometry() {
   if (!GEO) GEO = buildGeometry();
@@ -226,7 +315,7 @@ function makeBones() {
   const head = B('head', 0, 0.055, 0); neck.add(head);
   const arms = [], legs = [];
   for (const s of [1, -1]) {
-    const sh = B('sh', 0.19 * s, TORSO_H - 0.06, -0.005, 'ZXY'); spine.add(sh);
+    const sh = B('sh', 0.212 * s, TORSO_H - 0.06, -0.005, 'ZXY'); spine.add(sh);
     const elbow = B('el', 0, -0.32, 0); sh.add(elbow);
     arms.push({ sh, elbow });
   }
@@ -242,8 +331,8 @@ function makeBones() {
 }
 
 const MERGED = new Map();
-function mergedGeometry(geo, hairStyle, isGK) {
-  const key = hairStyle + '|' + (isGK ? 1 : 0);
+function mergedGeometry(geo, hairStyle, isGK, beard = 0) {
+  const key = hairStyle + '|' + (isGK ? 1 : 0) + '|' + beard;
   if (MERGED.has(key)) return MERGED.get(key);
   const sk = makeBones();
   sk.body.updateMatrixWorld(true);
@@ -252,28 +341,34 @@ function mergedGeometry(geo, hairStyle, isGK) {
   const add = (g, bone, slot, m, torso = false) => parts.push({ g, bone, slot, m, torso });
   const S = (x, y, z) => new THREE.Matrix4().makeScale(x, y, z);
   const T = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
-  add(geo.torso, sk.spine, C.shirt, S(1, 1, 0.64), true);
-  add(geo.pelvis, sk.pelvis, C.shorts, S(1, 1, 0.72));
+  add(geo.torso, sk.spine, C.shirt, S(1.1, 1, 0.68), true);
+  add(geo.pelvis, sk.pelvis, C.shorts, S(1, 1, 0.7));
   add(geo.neck, sk.neck, C.skin, null);
-  add(geo.head, sk.head, C.skin, null);
-  if (hairStyle < geo.hair.length) add(geo.hair[hairStyle], sk.head, C.hair, null);
+  add(geo.collar, sk.neck, C.trim, null);
+  add(geo.head, sk.head, C.skin, S(1.12, 1.12, 1.12));
+  if (hairStyle < geo.hair.length) add(geo.hair[hairStyle], sk.head, C.hair, S(1.12, 1.12, 1.12));
+  if (beard && geo.beard[beard]) add(geo.beard[beard], sk.head, C.hair, S(1.12, 1.12, 1.12));
   for (const a of sk.arms) {
     add(geo.shoulderCap, a.sh, C.shirt, T(0, -0.01, 0));
     add(geo.sleeve, a.sh, C.shirt, null);
+    add(geo.cuff, a.sh, C.trim, null);
     add(geo.upperArm, a.sh, C.skin, null);
     add(geo.foreArm, a.elbow, C.skin, null);
+    add(geo.elbow, a.elbow, C.skin, null);
     if (isGK) add(geo.gkSleeve, a.elbow, C.shirt, null);
     add(isGK ? geo.glove : geo.hand, a.elbow, isGK ? C.glove : C.skin, null);
   }
-  for (const l of sk.legs) {
+  sk.legs.forEach((l, li) => {
     add(geo.thighShort, l.hip, C.shorts, null);
+    add(li ? geo.shortStripeR : geo.shortStripeL, l.hip, C.trim, null);
     add(geo.thigh, l.hip, C.skin, null);
     add(geo.knee, l.knee, C.skin, null);
     add(geo.shinSkin, l.knee, C.skin, null);
     add(geo.sock, l.knee, C.socks, null);
+    add(geo.sockTop, l.knee, C.trim, null);
     add(geo.boot, l.ankle, C.boot, null);
     add(geo.sole, l.ankle, C.sole, null);
-  }
+  });
   // torso first (group 0), rest after (group 1)
   parts.sort((a, b) => (b.torso ? 1 : 0) - (a.torso ? 1 : 0));
   let n = 0;
@@ -325,6 +420,7 @@ export class PlayerRig {
     this.root = new THREE.Group();
     this.torsoMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.75 });
     this.hairStyle = 0;
+    this.beard = 0;
     this._buildMesh(0);
     // state
     this.pose = new Float32Array(NP);
@@ -346,14 +442,14 @@ export class PlayerRig {
     this._setStand();
   }
 
-  _buildMesh(hairStyle) {
+  _buildMesh(hairStyle, beard = 0) {
     if (this.mesh) {
       this.root.remove(this.mesh);
       this.mesh.geometry.dispose();
       this.mesh.skeleton.dispose();
     }
-    this.hairStyle = hairStyle;
-    const base = mergedGeometry(this.geo, hairStyle, this.isGK);
+    this.hairStyle = hairStyle; this.beard = beard;
+    const base = mergedGeometry(this.geo, hairStyle, this.isGK, beard);
     const g = base.clone();
     g.userData = base.userData;
     g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(base.attributes.position.count * 3), 3));
@@ -398,7 +494,8 @@ export class PlayerRig {
     this.cyc = (h % 1000) / 1000 * Math.PI * 2;
     const skin = h % SKINS.length;
     const hairI = (h >>> 5) % HAIRS.length;
-    const hairStyle = (h >>> 9) % 6; // 5 = bald
+    const hairStyle = (h >>> 9) % 9; // 8 = bald
+    const beard = [0, 1, 2, 3, 0, 0, 1, 0][(h >>> 21) % 8];
     const bootI = (h >>> 13) % BOOTS.length;
     this.leftFoot = pd?.foot === 'L' || (pd?.foot !== 'R' && ((h >>> 17) % 5) === 0);
     // "The Shawky" (core/teams.js `glitch`): unique acrobatic shot animations (see _oneShot's KICK case).
@@ -413,7 +510,7 @@ export class PlayerRig {
     pal[C.skin] = col(SKINS[skin]); pal[C.hair] = col(HAIRS[hairI]); pal[C.boot] = col(BOOTS[bootI]); pal[C.sole] = col('#1e1e1e');
     pal[C.glove] = col(luma(kit.primary) > 0.6 ? '#2a2a2a' : '#eeeeee'); pal[C.trim] = col(kit.secondary || kit.primary);
     this.palette = pal;
-    if (hairStyle !== this.hairStyle) this._buildMesh(hairStyle);
+    if (hairStyle !== this.hairStyle || beard !== this.beard) this._buildMesh(hairStyle, beard);
     else this._paint();
     // shirt
     const pattern = pickPattern(kit);

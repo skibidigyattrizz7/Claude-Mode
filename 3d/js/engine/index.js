@@ -497,6 +497,7 @@ export function createMatch(container, opts = {}) {
           if (!sim) safe(onEvent, { type: 'goal', team: SIDES[f.team], playerId: pd.id, playerName: pd.name, minute, ownGoal: !!f.og, score: [...view.sc] });
           break;
         }
+        case 'adv': hud.advantage(2); break;
         case 'foul': {
           if (f.pen) { hud.bannerMsg('PENALTY!', '', '', 2.2); audio.cheer(0.6); commentary.say('penalty', {}); }
           else hud.toast('FOUL', '#ff9f1a');

@@ -52,40 +52,74 @@ export function ensureUTView(app) {
 // ---------- onboarding ----------
 const SWATCHES = [['#19F5A4', '#0B0F1A'], ['#E63946', '#FFFFFF'], ['#1D4ED8', '#F5D130'], ['#111111', '#F4B400'], ['#7B2CBF', '#27E1C1'], ['#FFFFFF', '#0A2463'], ['#FF7A00', '#111827'], ['#0F7B3F', '#FFFFFF']];
 
+const kitShirtSVG = (c1, c2, short) => `<svg class="pm-ob-shirt" viewBox="0 0 240 230" role="img" aria-label="Home shirt preview">
+  <path d="M82 14 L28 42 L6 104 L50 120 L64 94 L64 216 L176 216 L176 94 L190 120 L234 104 L212 42 L158 14 C150 34 90 34 82 14Z" fill="${c1}" stroke="rgba(0,0,0,.45)" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M6 104 L50 120 L56 108 L16 92Z M234 104 L190 120 L184 108 L224 92Z" fill="${c2}"/>
+  <path d="M82 14 C90 34 150 34 158 14 L150 10 C140 24 100 24 90 10Z" fill="${c2}"/>
+  <rect x="64" y="196" width="112" height="20" fill="${c2}" opacity=".9"/>
+  <text x="120" y="92" text-anchor="middle" font-family="Bahnschrift, 'Arial Narrow', sans-serif" font-weight="800" font-size="30" fill="${c2}" letter-spacing="2">${short}</text>
+</svg>`;
+
 function onboardView() {
   return {
     title: 'Create your club', kicker: 'Pitchside Ultimate Team',
     render(main, app) {
-      const st = { name: 'Pitchside FC', short: 'PFC', c1: SWATCHES[0][0], c2: SWATCHES[0][1] };
-      const preview = h('div', { class: 'pm-ob-crest' });
-      const drawPreview = () => { clear(preview); preview.appendChild(frag(crestSVG({ id: 'UT-' + st.short, name: st.name, short: st.short, colors: { primary: st.c1, secondary: st.c2 } }, 'pm-crest pm-crest--xl'))); };
-      const name = h('input', { class: 'pm-input', value: st.name, maxlength: '24', 'aria-label': 'Club name', 'data-autofocus': '1' });
-      const short = h('input', { class: 'pm-input pm-input--short', value: st.short, maxlength: '3', 'aria-label': 'Short name (3 letters)' });
-      name.addEventListener('input', () => {
-        st.name = name.value.trim() || 'Pitchside FC';
-        const ini = st.name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().replace(/[^A-Z]/g, '');
-        if (!short.dataset.touched) { st.short = (ini + 'FC').slice(0, 3); short.value = st.short; }
-        drawPreview();
-      });
-      short.addEventListener('input', () => { short.dataset.touched = '1'; st.short = (short.value.toUpperCase().replace(/[^A-Z]/g, '') + 'XXX').slice(0, 3); drawPreview(); });
-      const c1 = h('input', { type: 'color', value: st.c1, 'aria-label': 'Primary colour' });
-      const c2 = h('input', { type: 'color', value: st.c2, 'aria-label': 'Secondary colour' });
-      c1.addEventListener('input', () => { st.c1 = c1.value.toUpperCase(); drawPreview(); });
-      c2.addEventListener('input', () => { st.c2 = c2.value.toUpperCase(); drawPreview(); });
-      drawPreview();
-      add(main, h('section', { class: 'pm-panel pm-ob' },
-        preview,
-        h('div', { class: 'pm-form' },
-          h('label', null, h('span', null, 'Club name'), name),
-          h('label', null, h('span', null, 'Short name'), short),
-          h('div', { class: 'pm-lbl' }, 'Kit colours'),
-          h('div', { class: 'pm-swatches' }, SWATCHES.map(([a, b]) => h('button', {
-            class: 'pm-swatch', 'aria-label': `Colours ${a} and ${b}`, style: { background: `linear-gradient(135deg, ${a} 50%, ${b} 50%)` },
-            onclick: () => { st.c1 = a; st.c2 = b; c1.value = a; c2.value = b; drawPreview(); },
-          })), h('label', { class: 'pm-colorpick' }, c1, c2)),
-          h('p', { class: 'pm-dim' }, 'You start with 10,000 coins, a starter squad and two welcome packs. All coins are earned by playing, no real money, ever.'),
+      const st = { name: 'Pitchside FC', short: 'PFC', c1: SWATCHES[0][0], c2: SWATCHES[0][1], step: 0 };
+      const STEPS = ['Name', 'Kit colours', 'Kick off'];
+      const preview = h('section', { class: 'pm-ob-stage', 'aria-label': 'Live club preview' });
+      const side = h('section', { class: 'pm-ob-side' });
+      const crest = () => crestSVG({ id: 'UT-' + st.short, name: st.name, short: st.short, colors: { primary: st.c1, secondary: st.c2 } }, 'pm-crest pm-crest--xl');
+      const drawPreview = () => {
+        clear(preview);
+        preview.appendChild(frag(`<div class="pm-ob-kit">${kitShirtSVG(st.c1, st.c2, st.short.replace(/[<>&"]/g, ''))}</div>`));
+        preview.appendChild(h('div', { class: 'pm-ob-id' }, frag(crest()),
+          h('div', null, h('b', null, st.name), h('span', null, `${st.short} · Home kit`))));
+      };
+      const kitMini = (a, b) => `<svg viewBox="0 0 240 230" aria-hidden="true"><path d="M82 14 L28 42 L6 104 L50 120 L64 94 L64 216 L176 216 L176 94 L190 120 L234 104 L212 42 L158 14 C150 34 90 34 82 14Z" fill="${a}" stroke="rgba(0,0,0,.4)" stroke-width="5"/><path d="M6 104 L50 120 L56 108 L16 92Z M234 104 L190 120 L184 108 L224 92Z" fill="${b}"/><rect x="64" y="188" width="112" height="28" fill="${b}"/></svg>`;
+      const swatchBtns = [];
+      const markSwatches = () => swatchBtns.forEach(([btn, a, b]) => { const on = a === st.c1 && b === st.c2; btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); });
+      const drawSide = () => {
+        clear(side);
+        swatchBtns.length = 0;
+        add(side, h('ol', { class: 'pm-ob-steps' }, STEPS.map((t, i) => h('li', { class: i === st.step ? 'on' : i < st.step ? 'done' : '' }, h('i', null, String(i + 1)), h('span', null, t)))));
+        if (st.step === 0) {
+          const name = h('input', { class: 'pm-input pm-ob-input', value: st.name, maxlength: '24', 'aria-label': 'Club name', 'data-autofocus': '1' });
+          const short = h('input', { class: 'pm-input pm-input--short pm-ob-input pm-ob-short', value: st.short, maxlength: '3', 'aria-label': 'Short name (3 letters)' });
+          name.addEventListener('input', () => {
+            st.name = name.value.trim() || 'Pitchside FC';
+            const ini = st.name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().replace(/[^A-Z]/g, '');
+            if (!short.dataset.touched) { st.short = (ini + 'FC').slice(0, 3); short.value = st.short; }
+            drawPreview();
+          });
+          short.addEventListener('input', () => { short.dataset.touched = '1'; st.short = (short.value.toUpperCase().replace(/[^A-Z]/g, '') + 'XXX').slice(0, 3); drawPreview(); });
+          add(side, h('h2', null, 'Name your club'), h('p', { class: 'pm-dim' }, 'This is what shows on your shirt, your crest and the scoreboard.'),
+            h('div', { class: 'pm-form' },
+              h('label', null, h('span', null, 'Club name'), name),
+              h('label', null, h('span', null, 'Short name (3 letters)'), short)));
+        } else if (st.step === 1) {
+          const c1 = h('input', { type: 'color', value: st.c1, 'aria-label': 'Primary colour' });
+          const c2 = h('input', { type: 'color', value: st.c2, 'aria-label': 'Secondary colour' });
+          const pick = () => { st.c1 = c1.value.toUpperCase(); st.c2 = c2.value.toUpperCase(); markSwatches(); drawPreview(); };
+          c1.addEventListener('input', pick); c2.addEventListener('input', pick);
+          add(side, h('h2', null, 'Pick your colours'), h('p', { class: 'pm-dim' }, 'Choose a kit, or mix your own below.'),
+            h('div', { class: 'pm-swatches' }, SWATCHES.map(([a, b]) => {
+              const btn = h('button', { type: 'button', class: 'pm-swatch', 'aria-label': `Colours ${a} and ${b}`, onclick: () => { st.c1 = a; st.c2 = b; c1.value = a; c2.value = b; markSwatches(); drawPreview(); } });
+              btn.appendChild(frag(kitMini(a, b)));
+              swatchBtns.push([btn, a, b]);
+              return btn;
+            })),
+            h('div', { class: 'pm-ob-custom' }, h('label', null, h('span', null, 'Shirt'), c1), h('label', null, h('span', null, 'Trim'), c2)));
+          markSwatches();
+        } else {
+          add(side, h('h2', null, 'Ready to play'), h('p', { class: 'pm-dim' }, `${st.name} start with 10,000 coins, a starter squad and two welcome packs. All coins are earned by playing, no real money, ever.`),
+            h('ul', { class: 'pm-ob-list' }, h('li', null, h('b', null, '10,000'), ' coins'), h('li', null, h('b', null, '2'), ' welcome packs'), h('li', null, h('b', null, '1'), ' starter squad')));
+        }
+        const last = st.step === STEPS.length - 1;
+        add(side, h('div', { class: 'pm-ob-nav' },
+          st.step ? h('button', { class: 'pm-btn', onclick: () => { st.step--; drawSide(); } }, 'Back') : h('span'),
           h('button', {
             class: 'pm-btn pm-btn--primary pm-btn--lg', onclick: () => {
+              if (!last) { st.step++; drawSide(); return; }
               app.ut = UT.createUTState({ clubName: st.name, short: st.short, primary: st.c1, secondary: st.c2 });
               app.wallet = { mode: 'local', checked: false, pending: Promise.resolve(), inflight: 0 };
               persist(app);
@@ -93,12 +127,15 @@ function onboardView() {
               app.replace(utHomeView());
               app.toast('Club created! Head to the Store to open your welcome packs.', 'good');
             },
-          }, 'Create club'))));
+          }, last ? 'Create club' : 'Next')));
+        const f = side.querySelector('[data-autofocus]'); if (f) setTimeout(() => f.focus(), 0);
+      };
+      drawPreview(); drawSide();
+      add(main, h('div', { class: 'pm-ob2' }, preview, side));
     },
   };
 }
 
-// ---------- FC-style section tabs (first row of every UT section) ----------
 const UT_TABS = [['home', 'Home'], ['squad', 'Squad'], ['sbc', 'SBC'], ['objectives', 'Objectives'], ['transfers', 'Transfers'], ['store', 'Store'], ['swaps', 'Swaps'], ['club', 'Club']];
 // Capture listeners are presentation helpers; handlers must also reject Doom navigation.
 export function guardVinsonDoomAction(app,event) {
@@ -250,7 +287,7 @@ export function utHomeView() {
           h('div', null, h('h2', null, s.clubName),
             h('div', { class: 'pm-chiprow' },
               h('span', { class: 'pm-stat-chip' }, h('span', null, 'Record'), h('b', null, `${s.stats.wins}-${s.stats.draws}-${s.stats.losses}`)),
-              h('small', { class: 'pm-dim pm-walletnote' }, app.wallet.mode === 'online' ? 'Coins shown: your online balance (server).' : 'Coins shown: local balance on this device.'))),
+              )),
           h('div', { class: 'pm-clubhead-btns' }, displayButton(app), friendsButton(app), giftsButton(app), adminBadge(app))),
         h('div', { class: 'pm-uthub' },
           squadTile, storeTile, sbcTile, battlesTile, objTile, rivals, marketTile, promoTile,
