@@ -104,6 +104,20 @@ export function createRenderer(container, opts = {}) {
     scene.add(fill);
   }
 
+  let vignette = null;
+  if (opts.quality === 'high') {
+    const vg = track(new THREE.BufferGeometry());
+    vg.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+    const vm = track(new THREE.ShaderMaterial({
+      transparent: true, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: 'varying vec2 vP; void main(){ float d = length(vP * vec2(0.8, 0.95)); float v = smoothstep(0.55, 1.45, d); gl_FragColor = vec4(0.02, 0.025, 0.04, v * 0.42); }',
+    }));
+    const vmesh = new THREE.Mesh(vg, vm); vmesh.frustumCulled = false;
+    const vs = new THREE.Scene(); vs.add(vmesh);
+    vignette = { scene: vs, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
+  }
+
   // ---------------------------------------------------------------- world
   const pitch = buildPitch(scene, q, maxAniso, track);
   const goals = buildGoals(scene, q, track);
@@ -397,7 +411,11 @@ export function createRenderer(container, opts = {}) {
     flags.update(t);
     stadium.update(t, dt, excite);
     if (weatherFx) weatherFx.update(dt);
-    if (!dbg.noDraw) renderer.render(scene, camera);
+    if (!dbg.noDraw) {
+      renderer.render(scene, camera);
+      // high tier only: soft vignette + faint warm grade as a single blended full-screen triangle (no extra render targets)
+      if (vignette) { const ac = renderer.autoClear; renderer.autoClear = false; renderer.render(vignette.scene, vignette.cam); renderer.autoClear = ac; }
+    }
   }
 
   function setCamera(mode) {

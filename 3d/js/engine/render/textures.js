@@ -136,6 +136,25 @@ export function pitchTexture(size, aniso) {
   return tex;
 }
 
+// Tileable grey grass-blade detail (mean ~0.5), multiplied over the pitch close to the camera so
+// the grass doesn't turn to smooth paint up close. Wraps because the noise is hashed mod size.
+export function grassDetailTexture(aniso = 4) {
+  const S = 256, cv = makeCanvas(S, S), g = cv.getContext('2d');
+  const img = g.createImageData(S, S), d = img.data;
+  const wrapN = (x, y, f) => valueNoise((x % (S / f)) * 1 + 0, (y % (S / f)) * 1 + 0);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    // blades: fine noise stretched along y, plus mid clumps; both periodic over S
+    const blade = hash2(x, (y >> 3) & 31) * 0.55 + hash2(x >> 1, y) * 0.45;
+    const clump = (hash2((x >> 4) & 15, (y >> 4) & 15) - 0.5) * 0.5;
+    const v = Math.max(0, Math.min(1, 0.5 + (blade - 0.5) * 0.55 + clump * 0.4));
+    const o = (y * S + x) * 4, c = v * 255;
+    d[o] = d[o + 1] = d[o + 2] = c; d[o + 3] = 255;
+  }
+  void wrapN;
+  g.putImageData(img, 0, 0);
+  return canvasTex(cv, { srgb: false, repeat: true, aniso });
+}
+
 // Tiled rough grass / apron texture for the surround
 export function apronTexture() {
   const S = 256, cv = makeCanvas(S, S), g = cv.getContext('2d');
@@ -355,14 +374,37 @@ export function adStripTexture(offset = 0, panelW = 512, H = 64, count = 8) {
 }
 
 export function skyTexture(night) {
-  const W = 16, H = 512, cv = makeCanvas(W, H), g = cv.getContext('2d');
+  // equirect-ish dome: vertical gradient plus painted soft clouds (day) / faint haze bands (night)
+  const W = 1024, H = 512, cv = makeCanvas(W, H), g = cv.getContext('2d');
   const gr = g.createLinearGradient(0, 0, 0, H);
   if (night) {
     gr.addColorStop(0, '#02040b'); gr.addColorStop(0.45, '#070d1f'); gr.addColorStop(0.5, '#1b2440'); gr.addColorStop(0.53, '#34405e'); gr.addColorStop(1, '#0b0f18');
   } else {
-    gr.addColorStop(0, '#2f6fbf'); gr.addColorStop(0.35, '#6aa6e0'); gr.addColorStop(0.5, '#cfe3f3'); gr.addColorStop(0.53, '#e8eef2'); gr.addColorStop(1, '#8a9aa6');
+    gr.addColorStop(0, '#2a66b8'); gr.addColorStop(0.3, '#4f91d6'); gr.addColorStop(0.44, '#9cc6ec'); gr.addColorStop(0.5, '#d6e6f2'); gr.addColorStop(0.53, '#e8eef2'); gr.addColorStop(1, '#8a9aa6');
   }
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  let sd = night ? 7 : 11;
+  const r = () => { sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0; return sd / 4294967296; };
+  const blob = (x, y, rx, ry, rgb, a) => {
+    for (const ox of [-W, 0, W]) {
+      const gg = g.createRadialGradient(x + ox, y, 0, x + ox, y, rx);
+      gg.addColorStop(0, `rgba(${rgb},${a})`); gg.addColorStop(1, `rgba(${rgb},0)`);
+      g.save(); g.translate(0, y); g.scale(1, ry / rx); g.translate(0, -y);
+      g.fillStyle = gg; g.fillRect(x + ox - rx, y - rx, rx * 2, rx * 2); g.restore();
+    }
+  };
+  if (!night) {
+    // cloud puffs sit between 18% and 46% of the dome height; flatter and denser toward the horizon
+    for (let i = 0; i < 46; i++) {
+      const cx = r() * W, cy = H * (0.2 + r() * 0.25), n = 6 + ((r() * 6) | 0), sc = 18 + r() * 30;
+      for (let k = 0; k < n; k++) blob(cx + (r() - 0.5) * sc * 4, cy + (r() - 0.5) * sc * 0.5, sc * (0.8 + r()), sc * (0.28 + r() * 0.15), '255,255,255', 0.16 + r() * 0.14);
+      blob(cx, cy + sc * 0.3, sc * 3, sc * 0.35, '170,190,215', 0.08);
+    }
+    blob(W * 0.62, H * 0.38, 90, 70, '255,244,214', 0.35); // sun glow
+  } else {
+    blob(W * 0.3, H * 0.47, 220, 40, '70,90,150', 0.25);
+    blob(W * 0.8, H * 0.47, 260, 50, '90,70,120', 0.18);
+  }
   return canvasTex(cv, {});
 }
 
