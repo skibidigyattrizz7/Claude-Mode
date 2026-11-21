@@ -1,0 +1,109 @@
+/* Draft (FC FUT Draft style) — loaded by js/meta/ui/draftpick.js. Cards are the shared .pm-card renderer. */
+
+/* ---- captain stage: 5 cards centred in the visible area ---- */
+.dp-stage { min-height: var(--dp-h, 70vh); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; }
+.dp-title h2 { margin: 0; font: 700 clamp(24px, 3vw, 34px)/1.05 var(--font-display); text-transform: uppercase; letter-spacing: .02em; }
+.dp-title p { margin: 6px 0 0; color: var(--mut); font-size: 15px; }
+
+/* ---- dealt row ---- */
+.dp-row { --dp-card: clamp(10px, min(1.5vw, 2.7vh), 17px); display: flex; justify-content: center; align-items: flex-start; gap: clamp(10px, 1.6vw, 22px); }
+.dp-row--cap { --dp-card: clamp(10px, min(1.55vw, calc(var(--dp-h, 600px) / 33)), 20px); }
+.dp-row .pm-card { font-size: var(--dp-card); }
+.dp-opt { display: grid; justify-items: center; gap: 8px; perspective: 1100px; transition: opacity .16s ease-out, transform .16s ease-out; }
+.dp-flip { position: relative; transform-style: preserve-3d; }
+.dp-opt .pm-card[role="button"] { transition: transform .16s var(--ease-out, ease-out); }
+.dp-opt .pm-card[role="button"]:hover, .dp-opt .pm-card[role="button"]:focus-visible { transform: translateY(-10px) scale(1.035); }
+.dp-note { font-size: 14px; color: var(--mut); white-space: nowrap; }
+.dp-note b { color: var(--txt); font-weight: 700; }
+.dp-row.is-picked .dp-opt:not(.is-chosen) { opacity: 0; transform: translateY(18px) scale(.94); pointer-events: none; }
+
+/* card back (face-down while it is dealt) */
+.pm-card.dp-back { position: absolute; inset: 0; width: auto; height: auto; font-size: var(--dp-card);
+  --bord: linear-gradient(160deg, #5a616d, #22262d 55%, #3b414b); }
+.pm-card.dp-back .pc-in { background:
+    radial-gradient(circle at 50% 44%, transparent 0 17%, rgba(205,251,60,.55) 17.5% 19%, transparent 19.5%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 6px, transparent 6px 12px),
+    linear-gradient(180deg, #1a1e24, #0e1115); }
+
+/* deal: slide in face-down from the left, flip, small landing bounce; then a light sweep over the face */
+.dp-row.is-dealing .dp-flip { animation: dp-deal 820ms cubic-bezier(.2, .7, .25, 1) calc(var(--i) * 140ms) both; }
+.dp-row.is-dealing .dp-back { animation: dp-backface 820ms linear calc(var(--i) * 140ms) both; }
+.dp-row.is-dealing .dp-flip > .pm-card:not(.dp-back) { animation: dp-frontface 820ms linear calc(var(--i) * 140ms) both; }
+.dp-row.is-dealing .dp-flip .pc-shine { animation: dp-sweep 620ms ease-out calc(var(--i) * 140ms + 700ms) both; }
+@keyframes dp-deal {
+  0%   { transform: translateX(-70vw) rotateY(180deg) rotateZ(-9deg) scale(.86); opacity: 0; }
+  12%  { opacity: 1; }
+  50%  { transform: translateX(0) rotateY(180deg) rotateZ(0deg) scale(.92); }
+  70%  { transform: translateX(0) rotateY(90deg) rotateZ(0deg) scale(1); }
+  87%  { transform: translateX(0) rotateY(0deg) rotateZ(0deg) scale(1.07); }
+  100% { transform: translateX(0) rotateY(0deg) rotateZ(0deg) scale(1); opacity: 1; }
+}
+@keyframes dp-backface { 0%, 69.9% { opacity: 1; } 70%, 100% { opacity: 0; } }
+@keyframes dp-frontface { 0%, 69.9% { opacity: 0; } 70%, 100% { opacity: 1; } }
+@keyframes dp-sweep { from { transform: translateX(-130%); } to { transform: translateX(130%); } }
+
+/* ---- picker overlay over the pitch ---- */
+.dp-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; overflow: auto;
+  background: rgba(5, 7, 9, .8); animation: dp-dim .15s ease-out both; }
+@keyframes dp-dim { from { background: rgba(5, 7, 9, 0); } }
+.dp-pickpanel { width: min(100%, 1060px); display: grid; gap: clamp(12px, 3vh, 26px); }
+.dp-pickhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.dp-pickhead h2 { margin: 0; font: 700 clamp(22px, 2.6vw, 32px)/1.05 var(--font-display); text-transform: uppercase; letter-spacing: .02em; }
+.dp-pickhead p { margin: 4px 0 0; color: var(--mut); font-size: 14px; }
+.dp-close { min-width: 88px; }
+
+/* ---- board: pitch + subs (+ match panel) centred ---- */
+.dp-board { min-height: var(--dp-h, 70vh); display: flex; flex-direction: column; gap: 14px; }
+.dp-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.dp-bar .pm-stat-chip { min-height: 40px; align-items: center; }
+.dp-rule { color: var(--mut); font-size: 14px; }
+.dp-bar .dp-forfeit { margin-left: 8px; }
+.dp-field { flex: 1; display: flex; justify-content: center; align-items: center; gap: clamp(16px, 2.4vw, 32px); }
+.pm-pitch.dp-pitch { flex: none; width: min(100%, 640px, max(300px, calc((var(--dp-h, 600px) - 72px) * 5 / 6))); aspect-ratio: 5 / 6; }
+.dp-pitch .pm-slot { display: block; }
+@media (min-width: 900px) and (min-height: 640px) { .dp-pitch .pm-card--xs, .dp-bench .pm-card--xs { font-size: 7.2px; } }
+.dp-slot { cursor: pointer; }
+.dp-slot .pm-card--empty { transition: transform .15s var(--ease-out, ease-out); }
+.dp-slot:hover .pm-card--empty, .dp-slot:focus-visible .pm-card--empty { transform: translateY(-3px); --bord: linear-gradient(160deg, var(--acc), rgba(205,251,60,.35)); }
+.dp-slot:focus-visible { outline: none; }
+.dp-slot:focus-visible .pm-card { outline: 2px solid var(--acc); outline-offset: 3px; border-radius: 6px; }
+.dp-slot .pc-emptypos { color: var(--txt); }
+
+.dp-benchwrap { display: grid; gap: 10px; align-content: center; justify-items: center; }
+.dp-benchwrap h3 { margin: 0; font: 700 18px/1 var(--font-display); text-transform: uppercase; letter-spacing: .04em; }
+.dp-benchwrap h3 span { color: var(--mut); font-weight: 600; margin-left: 6px; }
+.dp-bench { display: grid; grid-template-columns: repeat(2, auto); gap: 12px 12px; }
+.dp-sub { display: grid; justify-items: center; gap: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+.dp-sub small { font-size: 12px; color: var(--mut); font-weight: 600; letter-spacing: .04em; }
+.dp-side { width: min(100%, 330px); align-self: center; }
+
+.dp-ghost { position: fixed; z-index: 90; margin: 0; pointer-events: none; transform-origin: center; will-change: transform; }
+
+/* phones portrait: 3+2 card grid, subs under the pitch */
+@media (max-width: 640px), (max-aspect-ratio: 1/1) {
+  .dp-field { flex-direction: column; align-items: center; justify-content: flex-start; }
+  .pm-pitch.dp-pitch { aspect-ratio: 3 / 4; width: min(100%, 560px, max(290px, calc((var(--dp-h, 600px) - 250px) * 3 / 4))); }
+  .dp-bench { grid-template-columns: repeat(4, auto); }
+  .dp-side { order: -1; width: 100%; }
+}
+@media (max-width: 560px) {
+  .dp-row, .dp-row--cap { --dp-card: min(11.5px, calc((100vw - 64px) / 30)); display: grid; grid-template-columns: repeat(6, auto); justify-content: center; gap: 12px 8px; }
+  .dp-opt { grid-column: span 2; }
+  .dp-opt:nth-child(4) { grid-column: 2 / span 2; }
+  .dp-note { font-size: 12.5px; }
+  .dp-bar .pm-stat-chip b { font-size: 18px; }
+  .dp-rule { flex-basis: 100%; text-align: center; }
+}
+/* short landscape phones: smaller pitch cards, header tight */
+@media (max-height: 500px) {
+  .dp-pitch .pm-card--xs, .dp-bench .pm-card--xs { font-size: 5.3px; }
+  .dp-bench { grid-template-columns: repeat(4, auto); gap: 8px; }
+  .dp-stage { gap: 12px; }
+  .dp-title p { display: none; }
+  .dp-pickhead h2 { font-size: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-row .dp-flip, .dp-row .dp-back, .dp-row .dp-flip > .pm-card, .dp-row .pc-shine, .dp-overlay { animation: none !important; }
+  .dp-opt, .dp-opt .pm-card[role="button"], .dp-slot .pm-card--empty { transition: none; }
+}

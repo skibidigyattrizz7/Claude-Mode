@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo credits · Pitchside 3D</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0b0d10; color: #e8ebef; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 32px 0 8px; }
+  p { color: #b4bcc8; margin: 8px 0; }
+  a { color: #b8f34a; }
+  a:focus-visible, input:focus-visible { outline: 3px solid #b8f34a; outline-offset: 2px; }
+  input { width: 100%; max-width: 360px; padding: 10px 12px; margin: 12px 0 4px; border-radius: 8px; border: 1px solid #353b46; background: #15181d; color: inherit; font: inherit; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #262b33; vertical-align: top; }
+  th { color: #a3abb8; font-weight: 600; }
+  td.who { font-weight: 600; white-space: nowrap; }
+  td.lic { white-space: nowrap; }
+  .back { display: inline-block; margin-bottom: 16px; }
+  @media (max-width: 640px) {
+    table, thead, tbody, tr, th, td { display: block; }
+    thead { display: none; }
+    tr { padding: 10px 0; border-bottom: 1px solid #262b33; }
+    td { border: 0; padding: 2px 0; }
+    td.who, td.lic { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="./">Back to the game</a>
+  <h1>Photo credits</h1>
+  <p>Player and manager photos on the cards come from Wikimedia Commons (through Wikidata). Each one is under a free licence: CC0, public domain, CC BY or CC BY-SA. The photos were cropped and resized for the cards. Thank you to the photographers.</p>
+  <p>Players without a photo here keep a drawn face.</p>
+  <label for="q" hidden>Search</label>
+  <input id="q" type="search" placeholder="Search a name, author or licence" autocomplete="off">
+  <p id="status" role="status">Loading…</p>
+  <section id="players"></section>
+  <section id="managers"></section>
+</main>
+<script>
+(function () {
+  var SETS = [
+    { id: 'players', title: 'Players', url: 'assets/players/credits.json' },
+    { id: 'managers', title: 'Managers', url: 'assets/managers/credits.json' }
+  ];
+  var q = document.getElementById('q');
+  var status = document.getElementById('status');
+  var data = {};
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function safeUrl(u) { return /^https:\/\/commons\.wikimedia\.org\//.test(u) ? u : ''; }
+  function render() {
+    var term = q.value.trim().toLowerCase();
+    var shown = 0, total = 0;
+    SETS.forEach(function (set) {
+      var rows = data[set.id] || [];
+      total += rows.length;
+      var list = rows.filter(function (r) { return !term || (r.name + ' ' + r.author + ' ' + r.license).toLowerCase().indexOf(term) >= 0; });
+      shown += list.length;
+      var el = document.getElementById(set.id);
+      if (!rows.length) { el.innerHTML = ''; return; }
+      el.innerHTML = '<h2>' + set.title + ' (' + list.length + ')</h2><table><thead><tr><th>Name</th><th>Photo by</th><th>Licence</th><th>Source</th></tr></thead><tbody>' +
+        list.map(function (r) {
+          var u = safeUrl(r.url);
+          return '<tr><td class="who">' + esc(r.name) + '</td><td>' + esc(r.author) + '</td><td class="lic">' + esc(r.license) + '</td><td>' +
+            (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">Commons page</a>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    });
+    status.textContent = total ? shown + ' of ' + total + ' photos' : 'No credits found.';
+  }
+  Promise.all(SETS.map(function (set) {
+    return fetch(set.url).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; }).then(function (j) {
+      data[set.id] = Object.keys(j).map(function (k) { return j[k]; }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    });
+  })).then(render);
+  q.addEventListener('input', render);
+})();
+</script>
+</body>
+</html>
